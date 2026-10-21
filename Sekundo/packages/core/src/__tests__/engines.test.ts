@@ -225,7 +225,7 @@ describe('Sekundo Universal Engines', () => {
                 value: 'Concluído com sucesso',
                 email: 'pesquisador@sekundo.app',
                 meta: {
-                  researcherName: 'Dr. Lucas',
+                  researcherName: 'Pesquisador 01',
                   status: 'submitted',
                   synthesisText:
                     'O IndexedDB oferece capacidade superior a 50MB no browser, eliminando os gargalos do localStorage.',
@@ -244,7 +244,7 @@ describe('Sekundo Universal Engines', () => {
                 value: '',
                 email: '',
                 meta: {
-                  researcherName: 'Ana',
+                  researcherName: 'Pesquisador 02',
                   status: 'in_progress',
                 },
                 children: [],
@@ -270,7 +270,7 @@ describe('Sekundo Universal Engines', () => {
       const markdown = generateExecutiveSummary(tree, 'Sekundo Architecture');
 
       expect(markdown).toContain('# 📚 Resumo Executivo Consolidado — Sekundo Architecture');
-      expect(markdown).toContain('Dr. Lucas');
+      expect(markdown).toContain('Pesquisador 01');
       expect(markdown).toContain('O IndexedDB oferece capacidade superior a 50MB');
       expect(markdown).toContain('Zero quota errors em dados geoespaciais');
       expect(markdown).toContain('W3C IndexedDB Spec');

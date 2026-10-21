@@ -34,7 +34,7 @@ export interface ChatResponse {
 
 // ── API Config ───────────────────────────────────────────────────────────────
 
-const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.sekundo.local';
 
 // ── Context Builder ──────────────────────────────────────────────────────────
 

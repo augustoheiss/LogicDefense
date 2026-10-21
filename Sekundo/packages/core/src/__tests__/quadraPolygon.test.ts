@@ -34,12 +34,12 @@ describe('Quadra & Perimeter Streets GIS Engine', () => {
   });
 
   it('parses address lines into street and number', () => {
-    const r1 = parseAddressLine('Rua Azaleias, 202 (AP-2, JD. Karla)');
-    expect(r1.street).toBe('Rua Azaleias');
-    expect(r1.number).toBe('202 (AP-2, JD. Karla)');
+    const r1 = parseAddressLine('Via Operacional 01, 202 (Bloco A)');
+    expect(r1.street).toBe('Via Operacional 01');
+    expect(r1.number).toBe('202 (Bloco A)');
 
-    const r2 = parseAddressLine('R. Mal. Floriano Peixoto, 1064');
-    expect(r2.street).toBe('R. Mal. Floriano Peixoto');
+    const r2 = parseAddressLine('Av. Eixo Central, 1064');
+    expect(r2.street).toBe('Av. Eixo Central');
     expect(r2.number).toBe('1064');
 
     const r3 = parseAddressLine('Rua Sem Virgula - 50');
@@ -61,21 +61,21 @@ describe('Quadra & Perimeter Streets GIS Engine', () => {
       {
         key: '02-01-01',
         type: 'header',
-        label: 'T02.01.01 — Pinhais - Jardim Karla',
+        label: 'T02.01.01 — Setor Sul - Quadra 01',
         value: '',
         meta: {
           territory_number: 'T02.01.01',
-          locality: 'Pinhais - Jardim Karla',
-          perimeter_streets: ['Rua Azaleias', 'R. Flor de Lótus', 'R. Alecrim', 'Rua Íris'],
+          locality: 'Setor Sul - Quadra 01',
+          perimeter_streets: ['Via Operacional 01', 'Via Operacional 02', 'Via Operacional 03', 'Via Operacional 04'],
         },
       },
       {
         key: '02-01-01-01',
         type: 'territory',
-        label: 'Rua Azaleias, 202 (AP-1)',
+        label: 'Via Operacional 01, 202 (AP-1)',
         value: 'Trabalhado',
         meta: {
-          line: 'Rua Azaleias, 202 (AP-1)',
+          line: 'Via Operacional 01, 202 (AP-1)',
           territory_number: 'T02.01.01',
           lat: -25.4175,
           lng: -49.1521,
@@ -85,10 +85,10 @@ describe('Quadra & Perimeter Streets GIS Engine', () => {
       {
         key: '02-01-01-02',
         type: 'territory',
-        label: 'Rua Azaleias, 204',
+        label: 'Via Operacional 01, 204',
         value: '',
         meta: {
-          line: 'Rua Azaleias, 204',
+          line: 'Via Operacional 01, 204',
           territory_number: 'T02.01.01',
           lat: -25.4176,
           lng: -49.1522,
@@ -98,10 +98,10 @@ describe('Quadra & Perimeter Streets GIS Engine', () => {
       {
         key: '02-01-01-03',
         type: 'territory',
-        label: 'R. Flor de Lótus, 127',
+        label: 'Via Operacional 02, 127',
         value: '',
         meta: {
-          line: 'R. Flor de Lótus, 127',
+          line: 'Via Operacional 02, 127',
           territory_number: 'T02.01.01',
           lat: -25.4236,
           lng: -49.1504,
@@ -123,12 +123,12 @@ describe('Quadra & Perimeter Streets GIS Engine', () => {
     expect(q.boundaryPolygon.length).toBeGreaterThanOrEqual(3); // Polygon created around points
 
     // Check streets group
-    expect(q.streets.length).toBe(2); // Rua Azaleias and R. Flor de Lótus
-    const azaleias = q.streets.find((s) => s.streetName === 'Rua Azaleias');
-    expect(azaleias).toBeDefined();
-    expect(azaleias?.totalUnits).toBe(2);
-    expect(azaleias?.workedUnits).toBe(1);
-    expect(azaleias?.coveragePercent).toBe(50);
+    expect(q.streets.length).toBe(2); // Via Operacional 01 and Via Operacional 02
+    const viaOp01 = q.streets.find((s) => s.streetName === 'Via Operacional 01');
+    expect(viaOp01).toBeDefined();
+    expect(viaOp01?.totalUnits).toBe(2);
+    expect(viaOp01?.workedUnits).toBe(1);
+    expect(viaOp01?.coveragePercent).toBe(50);
   });
 
   it('respects customColor and polygonExpansion overrides', () => {

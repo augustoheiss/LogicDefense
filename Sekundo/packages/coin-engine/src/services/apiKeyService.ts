@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const API_URL = (
   process.env.EXPO_PUBLIC_AI_BACKEND_URL ||
   process.env.EXPO_PUBLIC_API_URL ||
-  'https://ocorrencias-pdf-writer.onrender.com'
+  'https://api.sekundo.local'
 ).replace(/\/+$/, '');
 
 export async function getApiStorageItem(key: string): Promise<string | null> {

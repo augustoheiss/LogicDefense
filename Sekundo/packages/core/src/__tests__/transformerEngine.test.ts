@@ -29,7 +29,7 @@ describe('Engine Transformer (Metamórfica & Universal)', () => {
           value: '',
           email: '',
           meta: {
-            responsavel: 'Carlos Silva',
+            responsavel: 'Participante 01',
             horario_inicio: '09:00',
             duracao_planejada_seg: 600,
             duracao_real_seg: 720, // +120s drift
@@ -49,7 +49,7 @@ describe('Engine Transformer (Metamórfica & Universal)', () => {
           value: '',
           email: '',
           meta: {
-            responsavel: 'Carlos Silva', // Double booking with 01-01 at 09:00!
+            responsavel: 'Participante 01', // Double booking with 01-01 at 09:00!
             horario_inicio: '09:00',
             duracao_planejada_seg: 1800,
             duracao_real_seg: 1800,
@@ -69,7 +69,7 @@ describe('Engine Transformer (Metamórfica & Universal)', () => {
           value: '',
           email: '',
           meta: {
-            responsavel: 'Mariana Lima',
+            responsavel: 'Participante 02',
             horario_inicio: '11:00',
             duracao_planejada_seg: 900,
             duracao_real_seg: 900,
@@ -123,7 +123,7 @@ describe('Engine Transformer (Metamórfica & Universal)', () => {
       const metrics = calculateTransformerMetrics(sampleTree, config);
       expect(metrics.activeModules).toContain('roster_conflicts');
       expect(metrics.moduleResults.roster_conflicts.conflictsDetected).toBe(1);
-      expect(metrics.alerts.some((a) => a.title.includes('Double-Booking: Carlos Silva'))).toBe(true);
+      expect(metrics.alerts.some((a) => a.title.includes('Double-Booking: Participante 01'))).toBe(true);
     });
 
     it('does NOT run roster_conflicts when it is toggled OFF', () => {
@@ -230,21 +230,21 @@ describe('Engine Transformer (Metamórfica & Universal)', () => {
 
       const firstLine = csv.split('\n')[0];
       expect(firstLine).toBe('key;tipo;nome;responsavel;duracao_min;veiculo;observacoes');
-      expect(csv).toContain('Carlos Silva');
+      expect(csv).toContain('Participante 01');
     });
 
     it('imports CSV containing custom columns and stores them directly into node metadata', () => {
       const customCsv = `key,tipo,nome,responsavel,duracao_min,veiculo,pontos
 01,root,Evento Global,,,,
-01-01,leaf,Operação Sul,Carlos Silva,45,Van Alpha,100
-01-02,leaf,Operação Norte,Mariana Lima,30,Moto Beta,80`;
+01-01,leaf,Operação Sul,Participante 01,45,Van Alpha,100
+01-02,leaf,Operação Norte,Participante 02,30,Moto Beta,80`;
 
       const res = importGranularCSV([], customCsv);
       expect(res.quarantinedRows).toHaveLength(0);
       expect(res.validRows).toHaveLength(3);
 
       const row0101 = res.validRows.find((r) => r._key === '01-01');
-      expect(row0101?.responsavel).toBe('Carlos Silva');
+      expect(row0101?.responsavel).toBe('Participante 01');
       expect(row0101?.veiculo).toBe('Van Alpha');
       expect(row0101?.pontos).toBe('100');
     });
@@ -254,7 +254,7 @@ describe('Engine Transformer (Metamórfica & Universal)', () => {
     it('detects transformer engine when CSV contains multi-domain attributes or explicit keywords', () => {
       const compositeCsv = `key,tipo,nome,endereco,latitude,longitude,responsavel,horario_inicio,duracao_planejada_seg
 01,raiz,Geral,,,,,,
-01-01,item,Ponto 1,"Rua X, 10",-23.5,-46.6,Carlos,09:00,300`;
+01-01,item,Ponto 1,"Rua X, 10",-23.5,-46.6,Participante 01,09:00,300`;
 
       const report = detectEnginesFromCSV(compositeCsv);
       const transformerMatch = report.matches.find((m) => m.engineId === 'transformer');

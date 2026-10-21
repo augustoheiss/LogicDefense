@@ -197,7 +197,7 @@ export default function SettingsScreen() {
       const apiBaseUrl = (
         process.env.EXPO_PUBLIC_AI_BACKEND_URL ||
         process.env.EXPO_PUBLIC_API_URL ||
-        'https://ocorrencias-pdf-writer.onrender.com'
+        'https://api.sekundo.local'
       ).replace(/\/+$/, '');
       const response = await fetch(`${apiBaseUrl}/api/license/recover`, {
         method: 'POST',

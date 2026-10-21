@@ -30,6 +30,7 @@ import {
   exportSingleEngineSampleCsv,
   getSheetsForEngineId,
   importOmniCsvBundle,
+  groupCoinLedgerRowsByTable,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
   deriveActiveEnginesFromOmniBundle,
@@ -188,7 +189,10 @@ export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]
 
     for (const table of db?.tables || []) {
       if (table.isDeleted) continue;
-      const tableEnvelope: Record<string, any> = {};
+      const tableEnvelope: Record<string, any> = {
+        tableId: table.id || 'coin-default',
+        tableName: table.name || '🪙 Assistente Moeda — Geral',
+      };
       if (table.goals) tableEnvelope.goals = table.goals;
       if (table.investorProfile) tableEnvelope.investorProfile = table.investorProfile;
       if (table.schema) tableEnvelope.schema = table.schema;
@@ -198,7 +202,30 @@ export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]
       if (table.description) tableEnvelope.description = table.description;
       const hasTableEnvelope = Object.keys(tableEnvelope).length > 0;
 
-      (table.rows || []).forEach((r, rowIdx) => {
+      const tableRows = table.rows || [];
+      if (tableRows.length === 0) {
+        collected.push({
+          id: `__table_header__${table.id || 'coin-default'}`,
+          date: (table.updatedAt || table.createdAt || new Date().toISOString()).slice(0, 10),
+          category: table.name || 'Planilha Vazia',
+          description: table.description || table.name || 'Cabeçalho de Planilha Vazia',
+          amount: 0,
+          entryType: 'unresolved',
+          paymentMethod: 'PIX',
+          status: 'paid',
+          recurrence: 'unico',
+          tableId: table.id || 'coin-default',
+          tableName: table.name || '🪙 Assistente Moeda — Geral',
+          isTableHeaderOnly: true,
+          tableEnvelope: hasTableEnvelope ? tableEnvelope : undefined,
+          metadataJson: hasTableEnvelope
+            ? JSON.stringify({ isTableHeaderOnly: true, tableEnvelope })
+            : JSON.stringify({ isTableHeaderOnly: true }),
+        });
+        continue;
+      }
+
+      tableRows.forEach((r, rowIdx) => {
         const rawEntry = (r.entryType || 'revenue').toLowerCase().trim();
         const entryType = (
           validEntryTypes.has(rawEntry) ? rawEntry : 'expense'
@@ -253,143 +280,187 @@ export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]
 
 /**
  * Persists imported `OmniCoinLedgerRowItem[]` into Assistente Moeda's `@sekundo/coin-engine` DB
- * so opening `/coin` immediately reflects the imported Planilha Financeira with zero data loss.
+ * demultiplexed by `tableId` (`_container_id`), ensuring that multiple financial spreadsheets
+ * exported in the same CSV are restored as independent `CoinTable` instances without mixing values.
  */
 export async function saveCoinLedgerRowsToCoinDB(
   coinRows: OmniCoinLedgerRowItem[]
 ): Promise<void> {
   if (!Array.isArray(coinRows) || coinRows.length === 0) return;
   try {
+    const partitions = groupCoinLedgerRowsByTable(coinRows);
+    if (partitions.length === 0) return;
+
     const db = await loadDB();
     const nowIso = new Date().toISOString();
     const currentYear = new Date().getFullYear();
+    const existingTables = Array.isArray(db?.tables) ? [...db.tables] : [];
+    const partitionTableIds = new Set(partitions.map((p) => p.tableId));
 
-    let discoveredEnvelope: Record<string, any> | undefined;
-    for (const item of coinRows) {
-      if (item.tableEnvelope && typeof item.tableEnvelope === 'object') {
-        discoveredEnvelope = item.tableEnvelope;
-        break;
-      }
-      if (item.metadataJson) {
-        try {
-          const parsedMeta = JSON.parse(item.metadataJson);
-          if (parsedMeta?.tableEnvelope && typeof parsedMeta.tableEnvelope === 'object') {
-            discoveredEnvelope = parsedMeta.tableEnvelope;
+    for (let partitionIdx = 0; partitionIdx < partitions.length; partitionIdx++) {
+      const partition = partitions[partitionIdx];
+      let discoveredEnvelope: Record<string, any> | undefined = partition.tableEnvelope;
+
+      if (!discoveredEnvelope) {
+        for (const item of partition.rows) {
+          if (item.tableEnvelope && typeof item.tableEnvelope === 'object') {
+            discoveredEnvelope = item.tableEnvelope;
             break;
           }
-        } catch {
-          // ignore invalid json
-        }
-      }
-    }
-
-    const mappedRows: TableRow[] = coinRows.map((item, idx) => {
-      const rawType = (item.entryType || 'revenue').toLowerCase().trim();
-      const normalizedEntryType: TableRow['entryType'] =
-        rawType === 'income' || rawType === 'revenue'
-          ? 'revenue'
-          : rawType === 'investment' || rawType === 'deposit'
-          ? 'deposit'
-          : rawType === 'waiver'
-          ? 'waiver'
-          : rawType === 'partner_in'
-          ? 'partner_in'
-          : rawType === 'partner_out'
-          ? 'partner_out'
-          : rawType === 'unresolved'
-          ? 'unresolved'
-          : 'expense';
-
-      let customValues = item.customValues;
-      if (!customValues && item.metadataJson) {
-        try {
-          const parsedMeta = JSON.parse(item.metadataJson);
-          if (parsedMeta?.customValues && typeof parsedMeta.customValues === 'object') {
-            customValues = parsedMeta.customValues;
+          if (item.metadataJson) {
+            try {
+              const parsedMeta = JSON.parse(item.metadataJson);
+              if (parsedMeta?.tableEnvelope && typeof parsedMeta.tableEnvelope === 'object') {
+                discoveredEnvelope = parsedMeta.tableEnvelope;
+                break;
+              }
+            } catch {
+              // ignore invalid json
+            }
           }
-        } catch {
-          // ignore
         }
       }
 
-      const row: TableRow = {
-        id: item.id || `coin-row-${idx + 1}`,
-        date: item.date || nowIso.slice(0, 10),
-        value: Number(item.amount) || 0,
-        description: item.description || item.category || 'Lançamento Importado',
-        category: item.category || 'Operacional',
-        tags: item.tags || item.paymentMethod || 'PIX',
-        entryType: normalizedEntryType,
-        createdAt: nowIso,
-      };
+      const mappedRows: TableRow[] = partition.rows.map((item, idx) => {
+        const rawType = (item.entryType || 'revenue').toLowerCase().trim();
+        const normalizedEntryType: TableRow['entryType'] =
+          rawType === 'income' || rawType === 'revenue'
+            ? 'revenue'
+            : rawType === 'investment' || rawType === 'deposit'
+            ? 'deposit'
+            : rawType === 'waiver'
+            ? 'waiver'
+            : rawType === 'partner_in'
+            ? 'partner_in'
+            : rawType === 'partner_out'
+            ? 'partner_out'
+            : rawType === 'unresolved'
+            ? 'unresolved'
+            : 'expense';
 
-      if (typeof item.monthlyValue === 'number') row.monthlyValue = item.monthlyValue;
-      if (typeof item.monthCount === 'number') row.monthCount = item.monthCount;
-      if (item.periodStart) row.periodStart = item.periodStart;
-      if (item.periodEnd) row.periodEnd = item.periodEnd;
-      if (item.ticker) row.ticker = item.ticker;
-      if (typeof item.quantity === 'number') row.quantity = item.quantity;
-      if (typeof item.unitPrice === 'number') row.unitPrice = item.unitPrice;
-      if (customValues && Object.keys(customValues).length > 0) row.customValues = customValues;
+        let customValues = item.customValues;
+        if (!customValues && item.metadataJson) {
+          try {
+            const parsedMeta = JSON.parse(item.metadataJson);
+            if (parsedMeta?.customValues && typeof parsedMeta.customValues === 'object') {
+              customValues = parsedMeta.customValues;
+            }
+          } catch {
+            // ignore
+          }
+        }
 
-      return row;
-    });
+        const row: TableRow = {
+          id: item.id || `coin-row-${partition.tableId}-${idx + 1}`,
+          date: item.date || nowIso.slice(0, 10),
+          value: Number(item.amount) || 0,
+          description: item.description || item.category || 'Lançamento Importado',
+          category: item.category || 'Operacional',
+          tags: Array.isArray(item.tags)
+            ? item.tags.join(',')
+            : item.tags || item.paymentMethod || 'PIX',
+          entryType: normalizedEntryType,
+          createdAt: nowIso,
+        };
 
-    const existingTables = Array.isArray(db?.tables) ? [...db.tables] : [];
-    const targetTableId = coinRows[0]?.tableId || 'coin-default';
-    const targetTableName = coinRows[0]?.tableName || '🪙 Assistente Moeda — Geral';
-    const existingIdx = existingTables.findIndex(
-      (t) => !t.isDeleted && (t.id === targetTableId || t.id === 'coin-default')
-    );
+        if (typeof item.monthlyValue === 'number') row.monthlyValue = item.monthlyValue;
+        if (typeof item.monthCount === 'number') row.monthCount = item.monthCount;
+        if (item.periodStart) row.periodStart = item.periodStart;
+        if (item.periodEnd) row.periodEnd = item.periodEnd;
+        if (item.ticker) row.ticker = item.ticker;
+        if (typeof item.quantity === 'number') row.quantity = item.quantity;
+        if (typeof item.unitPrice === 'number') row.unitPrice = item.unitPrice;
+        if (customValues && Object.keys(customValues).length > 0) row.customValues = customValues;
 
-    const applyEnvelope = (base: CoinTable): CoinTable => ({
-      ...base,
-      name: coinRows[0]?.tableName || base.name || targetTableName,
-      description:
-        discoveredEnvelope?.description ||
-        base.description ||
-        'Planilha importada via Sekundo Multi-Planilha CSV',
-      updatedAt: nowIso,
-      rows: mappedRows,
-      goals: discoveredEnvelope?.goals || base.goals || {
-        dailyGoals: { [currentYear]: 150 },
-        weeklyGoals: { [currentYear]: 1050 },
-        annualCosts: { [currentYear]: 36000 },
-      },
-      investorProfile: discoveredEnvelope?.investorProfile || base.investorProfile,
-      schema: discoveredEnvelope?.schema || base.schema,
-      activeSectors: discoveredEnvelope?.activeSectors || base.activeSectors,
-      dashboardConfig: discoveredEnvelope?.dashboardConfig || base.dashboardConfig,
-      sectorParams: discoveredEnvelope?.sectorParams || base.sectorParams,
-    });
+        return row;
+      });
 
-    if (existingIdx >= 0) {
-      existingTables[existingIdx] = applyEnvelope(existingTables[existingIdx]);
-    } else if (existingTables.length > 0 && !existingTables[0].isDeleted) {
-      existingTables[0] = applyEnvelope(existingTables[0]);
-    } else {
-      const newTable: CoinTable = applyEnvelope({
+      const targetTableId = partition.tableId || 'coin-default';
+      const targetTableName =
+        partition.tableName ||
+        discoveredEnvelope?.tableName ||
+        '🪙 Assistente Moeda — Geral';
+
+      const applyEnvelope = (base: CoinTable): CoinTable => ({
+        ...base,
         id: targetTableId,
-        name: targetTableName,
-        description: 'Planilha importada via Sekundo Multi-Planilha CSV',
-        createdAt: nowIso,
+        name: targetTableName || base.name,
+        description:
+          discoveredEnvelope?.description ||
+          base.description ||
+          'Planilha importada via Sekundo Multi-Planilha CSV',
         updatedAt: nowIso,
         rows: mappedRows,
-        goals: {
+        goals: discoveredEnvelope?.goals || base.goals || {
           dailyGoals: { [currentYear]: 150 },
           weeklyGoals: { [currentYear]: 1050 },
           annualCosts: { [currentYear]: 36000 },
         },
+        investorProfile: discoveredEnvelope?.investorProfile || base.investorProfile,
+        schema: discoveredEnvelope?.schema || base.schema,
+        activeSectors: discoveredEnvelope?.activeSectors || base.activeSectors,
+        dashboardConfig: discoveredEnvelope?.dashboardConfig || base.dashboardConfig,
+        sectorParams: discoveredEnvelope?.sectorParams || base.sectorParams,
       });
-      existingTables.unshift(newTable);
+
+      // 1. Match estrito pelo ID da tabela (`t.id === targetTableId`)
+      let targetIdx = existingTables.findIndex(
+        (t) => !t.isDeleted && t.id === targetTableId
+      );
+
+      // 2. Somente na 1ª partição, se o banco tiver apenas uma tabela inicial vazia (sem lançamentos)
+      // e cujo ID não pertence a nenhuma outra partição do lote, substituímos essa tabela vazia inicial.
+      if (
+        targetIdx === -1 &&
+        partitionIdx === 0 &&
+        existingTables.length === 1 &&
+        !existingTables[0].isDeleted &&
+        (existingTables[0].rows || []).length === 0 &&
+        !partitionTableIds.has(existingTables[0].id)
+      ) {
+        targetIdx = 0;
+      }
+
+      if (targetIdx >= 0) {
+        existingTables[targetIdx] = applyEnvelope(existingTables[targetIdx]);
+      } else {
+        const newTable: CoinTable = applyEnvelope({
+          id: targetTableId,
+          name: targetTableName,
+          description: 'Planilha importada via Sekundo Multi-Planilha CSV',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          rows: mappedRows,
+          goals: {
+            dailyGoals: { [currentYear]: 150 },
+            weeklyGoals: { [currentYear]: 1050 },
+            annualCosts: { [currentYear]: 36000 },
+          },
+        });
+        existingTables.push(newTable);
+      }
     }
+
+    const firstImportedTableId = partitions[0].tableId || 'coin-default';
+    const firstActiveIdx = existingTables.findIndex(
+      (t) => !t.isDeleted && t.id === firstImportedTableId
+    );
+    const resolvedActiveIdx = firstActiveIdx >= 0 ? firstActiveIdx : 0;
 
     await saveDB({
       ...(db || { tables: [] }),
-      activeTableId: existingTables[0]?.id || targetTableId,
+      activeTableId: existingTables[resolvedActiveIdx]?.id || firstImportedTableId,
       tables: existingTables,
-      activeTableIndex: 0,
+      activeTableIndex: resolvedActiveIdx,
     } as any);
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try {
+        window.dispatchEvent(new CustomEvent('coin_db_external_updated'));
+      } catch {
+        // ignore in non-DOM environments
+      }
+    }
   } catch {
     // ignore storage errors
   }

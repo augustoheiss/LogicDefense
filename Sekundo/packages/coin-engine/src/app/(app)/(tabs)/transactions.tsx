@@ -542,6 +542,46 @@ export default function TransactionsScreen() {
     const dataToUse = dataOverride || pendingImportResult;
     if (!dataToUse) return;
     try {
+      if (Array.isArray(dataToUse.tablePartitions) && dataToUse.tablePartitions.length > 1) {
+        for (const part of dataToUse.tablePartitions) {
+          const partSectors = Array.from(
+            new Set([
+              ...(part.metadata?.activeSectors || []),
+              ...(part.detectedSectors || []),
+            ])
+          );
+          await db.importSpreadsheet({
+            rows: part.rows,
+            tableId: mode === 'new' ? undefined : part.tableId,
+            name: part.metadata?.name,
+            description: part.metadata?.description,
+            goals: part.metadata?.goals || part.metadata?.tableGoals,
+            mode,
+            isolateByTableId: mode !== 'new',
+            schema: part.metadata?.schema,
+            investorProfile: part.metadata?.investorProfile,
+            activeSectors: partSectors.length > 0 ? partSectors : undefined,
+            dashboardConfig: part.metadata?.dashboardConfig,
+            sectorParams: part.metadata?.sectorParams,
+          });
+        }
+
+        setTimeout(() => {
+          const successTitle = 'Importação Multi-Planilha Concluída! 🎉';
+          const tableNames = dataToUse.tablePartitions
+            .map((p: any) => `"${p.metadata?.name || p.tableId}"`)
+            .join(', ');
+          const successMsg = `Sucesso! ${dataToUse.rows.length} transações foram organizadas em ${dataToUse.tablePartitions.length} planilhas separadas (${tableNames}).`;
+
+          if (Platform.OS === 'web') {
+            window.alert(`${successTitle}\n\n${successMsg}`);
+          } else {
+            Alert.alert(successTitle, successMsg);
+          }
+        }, 100);
+        return;
+      }
+
       const mergedSectors = Array.from(
         new Set([
           ...(dataToUse.metadata?.activeSectors || []),

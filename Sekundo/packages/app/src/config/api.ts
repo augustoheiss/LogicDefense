@@ -5,8 +5,8 @@
  *    This configuration is COMPLETELY INDEPENDENT from Assistente-Moeda.
  *    - Does NOT read VITE_API_URL
  *    - Does NOT use X-Spreadsheet-Key headers
- *    - Does NOT connect to ocorrencias-pdf-writer.onrender.com
- *    - Targets its own dedicated Render deployment
+ *    - Does NOT connect to external legacy endpoints
+ *    - Targets its own dedicated Sekundo deployment
  *
  * The Sekundo API is a stateless microservice with:
  *    - PDF processing (extract fields, detect anchors, fill)

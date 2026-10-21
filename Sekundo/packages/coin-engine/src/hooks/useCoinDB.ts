@@ -102,6 +102,7 @@ export interface CoinDBState {
     dashboardConfig?: DashboardConfig;
     sectorParams?: SectorSimulationParams;
     mode?: 'replace' | 'merge' | 'new';
+    isolateByTableId?: boolean;
   }) => Promise<{
     success: boolean;
     tableId: string;
@@ -227,6 +228,7 @@ function useCoinDBInternal(): CoinDBState {
           // Auto-purge any historical tombstoned/zombie tables
           const cleaned = db.tables.filter((t) => !t.isDeleted);
           const ensured = ensureActiveSectors(cleaned);
+          tablesRef.current = ensured;
           setTables(ensured);
           if (typeof db.activeTableIndex === 'number' && db.activeTableIndex >= 0) {
             setActiveTableIndex(Math.min(db.activeTableIndex, Math.max(0, ensured.length - 1)));
@@ -243,6 +245,30 @@ function useCoinDBInternal(): CoinDBState {
       setIsLoading(false);
     }
     init();
+
+    const handleExternalUpdate = () => {
+      loadDB()
+        .then((db) => {
+          if (db && Array.isArray(db.tables) && db.tables.length > 0) {
+            const cleaned = db.tables.filter((t) => !t.isDeleted);
+            const ensured = ensureActiveSectors(cleaned);
+            tablesRef.current = ensured;
+            setTables(ensured);
+            if (typeof db.activeTableIndex === 'number' && db.activeTableIndex >= 0) {
+              setActiveTableIndex(Math.min(db.activeTableIndex, Math.max(0, ensured.length - 1)));
+            }
+          }
+        })
+        .catch(() => {});
+    };
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('coin_db_external_updated', handleExternalUpdate);
+      return () => {
+        window.removeEventListener('coin_db_external_updated', handleExternalUpdate);
+      };
+    }
+    return undefined;
   }, []);
 
   const setPrivacyMode = useCallback((enabled: boolean) => {
@@ -1327,6 +1353,7 @@ function useCoinDBInternal(): CoinDBState {
     activeSectors?: string[];
     dashboardConfig?: DashboardConfig;
     sectorParams?: SectorSimulationParams;
+    isolateByTableId?: boolean;
   }) => {
     const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
     const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
@@ -1357,15 +1384,26 @@ function useCoinDBInternal(): CoinDBState {
       baseTables = [...currentTables, newTable];
       targetTable = newTable;
     } else {
-      // 1. Preservar table_id: Se tableId for fornecido pelo CSV v3, procurar planilha existente com essa ID
+      // 1. Preservar table_id: Se tableId for fornecido pelo CSV v3 / Omni-CSV, procurar planilha existente com essa ID
       if (payload.tableId) {
         targetTable = currentTables.find((t: CoinTable) => !t.isDeleted && t.id === payload.tableId);
       }
 
       if (!targetTable) {
-        targetTable = (activeTableIndex >= 0 && activeTableIndex < activeTablesList.length)
-          ? activeTablesList[activeTableIndex]
-          : activeTablesList[0];
+        if (payload.isolateByTableId && payload.tableId) {
+          // Em importação multi-planilha com tableId explícito, só reaproveita a tabela inicial se ela estiver vazia e intocada
+          if (
+            activeTablesList.length === 1 &&
+            (activeTablesList[0].rows || []).length === 0 &&
+            activeTablesList[0].id === 'coin-default'
+          ) {
+            targetTable = activeTablesList[0];
+          }
+        } else {
+          targetTable = (activeTableIndex >= 0 && activeTableIndex < activeTablesList.length)
+            ? activeTablesList[activeTableIndex]
+            : activeTablesList[0];
+        }
       }
 
       if (!targetTable) {

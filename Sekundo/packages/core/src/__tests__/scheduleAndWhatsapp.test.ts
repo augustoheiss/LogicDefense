@@ -100,18 +100,18 @@ describe('Agnostic Schedule Parser & 9-Week Seed Ingestion', () => {
     const bundleJson = JSON.stringify({
       unitName: 'Unidade Local Teste',
       participants: [
-        { id: 'p1', name: 'Ana Beatriz', groupTag: 'Grupo 1', capabilityTags: ['Orador'] },
+        { id: 'p1', name: 'Participante 01', groupTag: 'Grupo 1', capabilityTags: ['Orador'] },
       ],
       rawScheduleText: [
-        '9 de outubro de 2026 | TEMA 01 Presidente Ana Beatriz',
+        '9 de outubro de 2026 | TEMA 01 Presidente Participante 01',
         'SEÇÃO INICIAL',
-        '1. Introdução (10 mins.) Ana Beatriz',
+        '1. Introdução (10 mins.) Participante 01',
       ].join('\n'),
       s13TerritoryRecords: [
         {
           territoryNumber: 'T01.01.01',
           locality: 'Setor Alfa',
-          cycles2027: [{ assignedTo: 'Ana Beatriz', assignedAt: '01/10/2026', serviceYear: 2027 }],
+          cycles2027: [{ assignedTo: 'Participante 01', assignedAt: '01/10/2026', serviceYear: 2027 }],
           cycles2026: [],
         },
       ],

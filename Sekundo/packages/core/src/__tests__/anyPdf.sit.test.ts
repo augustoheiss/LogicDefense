@@ -149,7 +149,7 @@ async function ingestLikeApp(bytes: Uint8Array, mode: 'overlay' | 'rebuild' = 'o
 }
 
 const registry1 = [
-  { key: '01-01', label: 'Leitura', value: 'Joao da Silva', type: 'slot', status: 'active', meta: { date: '2026-10-15', room: 'Sala A' } },
+  { key: '01-01', label: 'Leitura', value: 'Participante 01', type: 'slot', status: 'active', meta: { date: '2026-10-15', room: 'Sala A' } },
 ] as any[];
 
 describe('QA R1 + SIT Acceptance Suite (Part 4 Targets)', () => {
@@ -326,7 +326,7 @@ describe('QA R1 + SIT Acceptance Suite (Part 4 Targets)', () => {
       '      CPF: "123.456.789-00"',
       '      Telefone: "(11) 98888-7777"',
       '      Endereco_Residencial: "Av. Paulista, 1000"',
-      '      Nome_Completo: "Ana Beatriz Silva"',
+      '      Nome_Completo: "Participante 01"',
     ].join('\n');
 
     const parsedForm = parseFormRecordYaml(formYaml);
@@ -339,7 +339,7 @@ describe('QA R1 + SIT Acceptance Suite (Part 4 Targets)', () => {
       '123.456.789-00',
       '(11) 98888-7777',
       'Av. Paulista, 1000',
-      'Ana Beatriz Silva',
+      'Participante 01',
     ]);
     expect(new Set(renderedTexts).size).toBe(4);
   });
@@ -374,7 +374,7 @@ describe('QA R1 + SIT Acceptance Suite (Part 4 Targets)', () => {
 
   it('H3 — emoji, Cyrillic, curly quotes, and accents succeed without throwing', async () => {
     const bytes = await makeForm({ fields: [{ name: 'Nome', x: 72, y: 700, w: 200, h: 18 }] });
-    for (const val of ['Maria 😀', 'Мария', '“Joana” – ok', 'José Ação']) {
+    for (const val of ['Operador 😀', 'Оператор', '“Participante” – ok', 'Sessão Ação']) {
       const r = await fillAcroForm(bytes, { Nome: val }, { flatten: true });
       expect(r.filledFieldCount).toBe(1);
       expect(r.matchedFields).toEqual(['Nome']);
@@ -417,7 +417,7 @@ describe('QA R1 + SIT Acceptance Suite (Part 4 Targets)', () => {
     const doc = await PDFDocument.create();
     const reg = await doc.embedFont(StandardFonts.Helvetica);
     const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-    const samples = ['DESIGNAÇÃO ÁÉÍÓÚ', 'Programação da Reunião', 'WWWWMMMM', 'Joao da Silva'];
+    const samples = ['DESIGNAÇÃO ÁÉÍÓÚ', 'Programação da Reunião', 'WWWWMMMM', 'Participante 01'];
 
     for (const s of samples) {
       const realReg = reg.widthOfTextAtSize(s, 10) / PT_PER_MM;
@@ -440,7 +440,7 @@ describe('QA R1 + SIT Acceptance Suite (Part 4 Targets)', () => {
       fields: [{ id: 'f', from: 'acroform', name: 'Nome', page: 1, rect: [20, 20, 30, 6], bind: 'value' }],
       layers: [],
     };
-    const fullText = 'Maria Aparecida dos Santos Oliveira Pereira';
+    const fullText = 'Coordenador Operacional Regional do Setor Central Alpha';
     const dl = solveLayout(doc, [{ key: 'k', label: 'l', value: fullText } as any]);
     const op: any = dl.pages[0].ops[0];
     expect(dl.warnings.length).toBeGreaterThan(0);
@@ -495,9 +495,9 @@ describe('QA R1 + SIT Acceptance Suite (Part 4 Targets)', () => {
     const hlcA = createHLC('peer_A', 1000);
     const hlcB = tickHLC(hlcA, 'peer_B', 1005);
 
-    const opA = createSetFieldValueOp('rec_1', 'CPF', '111.111.111-11', hlcA, 'Alice');
-    const opB = createSetFieldValueOp('rec_1', 'CPF', '222.222.222-22', hlcB, 'Bruno');
-    const opTel = createSetFieldValueOp('rec_1', 'Telefone', '(11) 99999-0000', hlcA, 'Alice');
+    const opA = createSetFieldValueOp('rec_1', 'CPF', '111.111.111-11', hlcA, 'Participante 01');
+    const opB = createSetFieldValueOp('rec_1', 'CPF', '222.222.222-22', hlcB, 'Participante 02');
+    const opTel = createSetFieldValueOp('rec_1', 'Telefone', '(11) 99999-0000', hlcA, 'Participante 01');
 
     const env = encodeDocSyncEnvelope('sha256:test', [opB, opA, opTel]);
     const decoded = decodeDocSyncEnvelope(env);

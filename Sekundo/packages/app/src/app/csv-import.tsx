@@ -38,6 +38,7 @@ import {
   exportSingleEngineSampleCsv,
   isOmniCsvText,
   importOmniCsvBundle,
+  groupCoinLedgerRowsByTable,
   getEffectiveCapabilityColumns,
   type CSVDiffResult,
   type CSVRow,
@@ -422,9 +423,18 @@ export default function CSVImport() {
                 </View>
                 <View style={styles.metricPill}>
                   <Text style={styles.metricValue}>
-                    {(omniBundlePreview.coinLedgerRows || []).length}
+                    {(omniBundlePreview.coinLedgerRows || []).filter((r) => !r.isTableHeaderOnly).length}
                   </Text>
-                  <Text style={styles.metricLabel}>🪙 Moeda</Text>
+                  <Text style={styles.metricLabel}>
+                    {(() => {
+                      const coinPartitions = groupCoinLedgerRowsByTable(
+                        omniBundlePreview.coinLedgerRows || []
+                      );
+                      return coinPartitions.length > 1
+                        ? `🪙 Moeda (${coinPartitions.length} planilhas)`
+                        : '🪙 Moeda';
+                    })()}
+                  </Text>
                 </View>
               </View>
 

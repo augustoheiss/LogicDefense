@@ -4,6 +4,7 @@ import {
   exportOmniCsvBundle,
   exportSingleEngineSampleCsv,
   importOmniCsvBundle,
+  groupCoinLedgerRowsByTable,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
   deriveActiveEnginesFromOmniBundle,
@@ -237,6 +238,164 @@ describe('Sekundo Multi-Planilha Master CSV ("CSV Geral") & Single-Engine Planil
     );
     expect(extractedSchedule.length).toBe(bundle.scheduleRegistry.length);
     expect(extractedSchedule.some((s) => s.type === 'territory')).toBe(false);
+  });
+
+  it('SIT-04: demultiplexes multiple financial spreadsheets (distinct tableIds in #PLANILHA,coin_ledger_row) on round-trip without mixing values, envelopes, or dropping empty tables', () => {
+    const multiTableCoinRows = [
+      {
+        id: 'pf-1',
+        date: '2026-10-01',
+        category: 'Salário',
+        description: 'Pró-labore PF',
+        amount: 8000,
+        entryType: 'revenue' as const,
+        paymentMethod: 'PIX',
+        status: 'paid' as const,
+        recurrence: 'mensal',
+        tableId: 'coin-pessoal-01',
+        tableName: 'Finanças Pessoais',
+        tableEnvelope: {
+          tableId: 'coin-pessoal-01',
+          tableName: 'Finanças Pessoais',
+          description: 'Carteira PF',
+          investorProfile: { currentAge: 32, targetRetirementAge: 55 },
+          goals: { dailyGoals: { '2026': 120 } },
+        },
+      },
+      {
+        id: 'pf-2',
+        date: '2026-10-05',
+        category: 'Moradia',
+        description: 'Aluguel Residencial',
+        amount: 2500,
+        entryType: 'expense' as const,
+        paymentMethod: 'Boleto',
+        status: 'paid' as const,
+        recurrence: 'mensal',
+        tableId: 'coin-pessoal-01',
+        tableName: 'Finanças Pessoais',
+      },
+      {
+        id: 'pj-1',
+        date: '2026-10-02',
+        category: 'Faturamento',
+        description: 'Receita Clínica PJ',
+        amount: 22000,
+        entryType: 'revenue' as const,
+        paymentMethod: 'TED',
+        status: 'paid' as const,
+        recurrence: 'mensal',
+        tableId: 'coin-empresa-02',
+        tableName: 'Caixa Clínica PJ',
+        tableEnvelope: {
+          tableId: 'coin-empresa-02',
+          tableName: 'Caixa Clínica PJ',
+          description: 'Conta Empresarial',
+          investorProfile: { currentAge: 45, targetRetirementAge: 65 },
+          activeSectors: ['smb_accounting', 'legal_taxes'],
+        },
+      },
+      {
+        id: 'pj-2',
+        date: '2026-10-10',
+        category: 'Tributos',
+        description: 'DAS Simples Nacional',
+        amount: 3300,
+        entryType: 'expense' as const,
+        paymentMethod: 'Boleto',
+        status: 'paid' as const,
+        recurrence: 'mensal',
+        tableId: 'coin-empresa-02',
+        tableName: 'Caixa Clínica PJ',
+      },
+      {
+        id: '__table_header__coin-reserva-03',
+        date: '2026-10-15',
+        category: 'Reserva Vazia',
+        description: 'Fundo de Emergência (Sem lançamentos ainda)',
+        amount: 0,
+        entryType: 'unresolved' as const,
+        paymentMethod: 'PIX',
+        status: 'paid' as const,
+        recurrence: 'unico',
+        tableId: 'coin-reserva-03',
+        tableName: 'Reserva Vazia',
+        isTableHeaderOnly: true,
+        tableEnvelope: {
+          tableId: 'coin-reserva-03',
+          tableName: 'Reserva Vazia',
+          goals: { annualCosts: { '2026': 50000 } },
+        },
+      },
+    ];
+
+    const exportedCsv = exportOmniCsvBundle(
+      {
+        unitName: 'Unidade Multi-Moeda',
+        participants: [],
+        scheduleRegistry: [],
+        territoryRegistry: [],
+        events: [],
+        studioDocuments: [],
+        hojeManifestYaml: '',
+        hojeRituals: [],
+        coinLedgerRows: multiTableCoinRows,
+      },
+      { onlySheets: ['coin_ledger_row'], onlyEngineId: 'financial_ledger' }
+    );
+
+    const reimported = importOmniCsvBundle(exportedCsv);
+    const partitions = groupCoinLedgerRowsByTable(reimported.coinLedgerRows);
+
+    expect(partitions.length).toBe(3);
+
+    const p1 = partitions[0];
+    expect(p1.tableId).toBe('coin-pessoal-01');
+    expect(p1.tableName).toBe('Finanças Pessoais');
+    expect(p1.rows.length).toBe(2);
+    expect(p1.rows.map((r) => r.amount)).toEqual([8000, 2500]);
+    expect(p1.tableEnvelope?.investorProfile?.currentAge).toBe(32);
+
+    const p2 = partitions[1];
+    expect(p2.tableId).toBe('coin-empresa-02');
+    expect(p2.tableName).toBe('Caixa Clínica PJ');
+    expect(p2.rows.length).toBe(2);
+    expect(p2.rows.map((r) => r.amount)).toEqual([22000, 3300]);
+    expect(p2.tableEnvelope?.investorProfile?.currentAge).toBe(45);
+    expect(p2.tableEnvelope?.activeSectors).toEqual(['smb_accounting', 'legal_taxes']);
+
+    const p3 = partitions[2];
+    expect(p3.tableId).toBe('coin-reserva-03');
+    expect(p3.tableName).toBe('Reserva Vazia');
+    expect(p3.rows.length).toBe(0);
+    expect(p3.tableEnvelope?.goals?.annualCosts?.['2026']).toBe(50000);
+  });
+
+  it('SIT-05: respects manual _container_id edits in CSV (including tableId::tableName syntax) without leaking stale _meta_json tableName or tableEnvelope', () => {
+    const singleCsv = exportSingleEngineSampleCsv('financial_ledger');
+    const lines = singleCsv.split('\n');
+    // Change the 3rd data row's _container_id from coin-main-01 to coin-custom-02::Carteira Filial 02
+    let dataRowSeen = 0;
+    const editedLines = lines.map((line) => {
+      if (line.startsWith('coin-main-01,')) {
+        dataRowSeen += 1;
+        if (dataRowSeen >= 6) {
+          return line.replace(/^coin-main-01,/, 'coin-custom-02::Carteira Filial 02,');
+        }
+      }
+      return line;
+    });
+
+    const bundle = importOmniCsvBundle(editedLines.join('\n'));
+    const partitions = groupCoinLedgerRowsByTable(bundle.coinLedgerRows);
+
+    expect(partitions.length).toBe(2);
+    expect(partitions[0].tableId).toBe('coin-main-01');
+    expect(partitions[0].rows.length).toBe(5);
+    expect(partitions[1].tableId).toBe('coin-custom-02');
+    expect(partitions[1].tableName).toBe('Carteira Filial 02');
+    expect(partitions[1].rows.length).toBe(5);
+    expect(partitions[1].tableEnvelope).toBeUndefined();
   });
 });
 

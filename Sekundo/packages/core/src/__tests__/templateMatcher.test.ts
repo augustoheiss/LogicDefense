@@ -89,7 +89,7 @@ describe('PDF Template Matcher & Field Auto-Recognizer', () => {
         key: '01-01',
         type: 'slot',
         label: 'Primeira Conversa',
-        value: 'Carlos Drummond',
+        value: 'Participante 01',
         meta: {
           date: '15/10/2026',
           room: 'Sala B',
@@ -105,7 +105,7 @@ describe('PDF Template Matcher & Field Auto-Recognizer', () => {
 
     const f1 = result.mappings.find((m) => m.pdfFieldName === 'Nome_Do_Estudante');
     expect(f1?.matchedAttribute).toBe('value');
-    expect(f1?.suggestedValue).toBe('Carlos Drummond');
+    expect(f1?.suggestedValue).toBe('Participante 01');
 
     const f2 = result.mappings.find((m) => m.pdfFieldName === 'Data_Reuniao');
     expect(f2?.matchedAttribute).toBe('meta.date');

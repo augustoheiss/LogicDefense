@@ -49,12 +49,18 @@ import {
   roundRing,
   buildTerritoriosS13HistoricalRegistry,
   selectEnginePartitionNodes,
+  calculateMapRoute,
+  buildWalkingSequenceRoute,
+  formatRouteDistance,
+  formatRouteDuration,
 } from '@sekundo/core';
 import type {
   FlatSkeletonEntry,
   TerritoryRecencySort,
   TerritoryRecencyItem,
   QuadraSummary,
+  RouteCalculationResult,
+  WalkingSequenceRoute,
 } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import {
@@ -78,6 +84,7 @@ import {
   type MapSymbologyConfig,
 } from '../components/territory/mapSymbologyEngine';
 import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
+import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
 
 const BUFFER_OPTIONS_METERS = [-5, 0, 3, 6, 10, 20, 40];
 
@@ -234,6 +241,30 @@ export default function TerritoryMapScreen() {
   const [draftRing, setDraftRing] = useState<LatLngTuple[]>([]);
   const [ringHistory, setRingHistory] = useState<LatLngTuple[][]>([]);
   const [showUnlocated, setShowUnlocated] = useState<boolean>(false);
+
+  // Live GPS telemetry & In-Map Routing states
+  const {
+    gpsEnabled,
+    userLocation,
+    gpsError,
+    panToUserRequest,
+    toggleGps,
+    enableGpsAndGetPosition,
+    centerOnUser,
+  } = useLiveGpsLocation();
+  const [activeRoute, setActiveRoute] = useState<RouteCalculationResult | null>(null);
+  const [routeDestinationMeta, setRouteDestinationMeta] = useState<{
+    label: string;
+    lat: number;
+    lng: number;
+    city?: string;
+    streetName?: string;
+  } | null>(null);
+  const [routingBusy, setRoutingBusy] = useState<boolean>(false);
+  const [showWalkingSequence, setShowWalkingSequence] = useState<boolean>(false);
+  const [walkingOrderMode, setWalkingOrderMode] = useState<
+    'sidewalk' | 'sequential' | 'nearest_neighbor'
+  >('sidewalk');
 
   // Compute territory recency list and lookup map
   const recencyList = useMemo(() => {
@@ -472,15 +503,51 @@ export default function TerritoryMapScreen() {
   }, [displayedPins]);
 
   // Only located units go to the map; the rest are listed so nothing silently disappears.
-  const { mapPins, unlocatedPins } = useMemo(() => {
+  const { rawMapPins, unlocatedPins } = useMemo(() => {
     const located: MapPin[] = [];
     const missing: PinItem[] = [];
     for (const p of displayedPins) {
       if (p.lat === null || p.lng === null) missing.push(p);
       else located.push({ ...p, lat: p.lat, lng: p.lng });
     }
-    return { mapPins: located, unlocatedPins: missing };
+    return { rawMapPins: located, unlocatedPins: missing };
   }, [displayedPins]);
+
+  // Walking sequence route across filtered pins when "Direção" is enabled
+  const walkingSequence = useMemo<WalkingSequenceRoute | null>(() => {
+    if (!showWalkingSequence || rawMapPins.length === 0) return null;
+    return buildWalkingSequenceRoute(
+      rawMapPins.map((p) => {
+        const lineStr = p.line || p.label;
+        const commaIdx = lineStr.indexOf(',');
+        const streetName = commaIdx >= 0 ? lineStr.slice(0, commaIdx).trim() : lineStr;
+        const numberOrComplement = commaIdx >= 0 ? lineStr.slice(commaIdx + 1).trim() : undefined;
+        return {
+          key: p.key,
+          label: lineStr,
+          lat: p.lat,
+          lng: p.lng,
+          streetName,
+          numberOrComplement,
+          worked: p.worked,
+        };
+      }),
+      walkingOrderMode,
+      userLocation ? { lat: userLocation.lat, lng: userLocation.lng } : null
+    );
+  }, [showWalkingSequence, rawMapPins, walkingOrderMode, userLocation]);
+
+  const mapPins = useMemo<MapPin[]>(() => {
+    if (!walkingSequence) return rawMapPins;
+    const orderByKey = new Map<string, number>();
+    for (const s of walkingSequence) {
+      orderByKey.set(s.key, s.order);
+    }
+    return rawMapPins.map((p) => ({
+      ...p,
+      walkOrder: orderByKey.get(p.key),
+    }));
+  }, [rawMapPins, walkingSequence]);
 
   // Selected Pin Item
   const selectedPin = useMemo(() => {
@@ -516,22 +583,64 @@ export default function TerritoryMapScreen() {
     await updateNodes(patches);
   };
 
-  // Open external navigation without a vendor lock-in: `geo:` on Android, OpenStreetMap elsewhere.
+  // Open address or directions in Google Maps (universal helper)
   const handleOpenGPS = (pin: PinItem) => {
-    const isAndroid =
-      Platform.OS === 'android' ||
-      (Platform.OS === 'web' && typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent));
-    const address = [pin.line || pin.label, pin.city].filter(Boolean).join(', ');
-    if (pin.lat !== null && pin.lng !== null) {
-      const url = isAndroid
-        ? `geo:${pin.lat},${pin.lng}?q=${pin.lat},${pin.lng}`
-        : `https://www.openstreetmap.org/?mlat=${pin.lat}&mlon=${pin.lng}#map=18/${pin.lat}/${pin.lng}`;
-      Linking.openURL(url);
-    } else {
-      const url = isAndroid
-        ? `geo:0,0?q=${encodeURIComponent(address)}`
-        : `https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`;
-      Linking.openURL(url);
+    openExternalGoogleMaps({
+      lat: pin.lat,
+      lng: pin.lng,
+      line: pin.line,
+      label: pin.label,
+      neighborhood: pin.line2,
+      city: pin.city,
+      state: pin.state,
+      postalcode: pin.postalcode,
+      originLat: userLocation?.lat,
+      originLng: userLocation?.lng,
+      mode: 'directions',
+    });
+  };
+
+  // Trace route inside our own Leaflet map (OSRM street routing + automatic 100% offline Haversine fallback)
+  const handleTraceRouteInMap = async (dest: {
+    lat: number;
+    lng: number;
+    label: string;
+    city?: string;
+    streetName?: string;
+  }) => {
+    setRoutingBusy(true);
+    try {
+      let origin: { lat: number; lng: number } | null = userLocation
+        ? { lat: userLocation.lat, lng: userLocation.lng }
+        : null;
+      if (!origin) {
+        const gpsFix = await enableGpsAndGetPosition(2800);
+        if (gpsFix) {
+          origin = { lat: gpsFix.lat, lng: gpsFix.lng };
+        }
+      }
+      if (!origin) {
+        // Fallback origin: first located pin in the territory (distinct from destination) or quadra centroid
+        const candidatePin =
+          rawMapPins.find(
+            (p) => Math.abs(p.lat - dest.lat) > 0.0001 || Math.abs(p.lng - dest.lng) > 0.0001
+          ) || rawMapPins[0];
+        if (candidatePin) {
+          origin = { lat: candidatePin.lat, lng: candidatePin.lng };
+        } else if (displayedQuadras.length > 0) {
+          origin = {
+            lat: displayedQuadras[0].centerLat,
+            lng: displayedQuadras[0].centerLng,
+          };
+        } else {
+          origin = { lat: dest.lat - 0.0025, lng: dest.lng - 0.0025 };
+        }
+      }
+      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 3000);
+      setActiveRoute(route);
+      setRouteDestinationMeta(dest);
+    } finally {
+      setRoutingBusy(false);
     }
   };
 
@@ -882,54 +991,76 @@ export default function TerritoryMapScreen() {
             setMapViewMode('quadras');
             setSelectedPinKey(null);
           }
-          requestFit();
+          // Preserve current viewport (camera center & zoom) when switching between Quadras and Pontos
         },
         renderCustomControls: (closePopover) => (
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Pressable
-              testID="cad-mode-select-quadras"
-              onPress={() => {
-                setMapViewMode('quadras');
-                setSelectedPinKey(null);
-                requestFit();
-                closePopover();
-              }}
-              style={[
-                styles.viewModeBtn,
-                { flex: 1, alignItems: 'center' },
-                mapViewMode === 'quadras' && styles.viewModeBtnActive,
-              ]}
-            >
-              <Text
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <Pressable
+                testID="cad-mode-select-quadras"
+                onPress={() => {
+                  setMapViewMode('quadras');
+                  setSelectedPinKey(null);
+                  closePopover();
+                }}
                 style={[
-                  styles.viewModeBtnText,
-                  mapViewMode === 'quadras' && styles.viewModeBtnTextActive,
+                  styles.viewModeBtn,
+                  { flex: 1, alignItems: 'center' },
+                  mapViewMode === 'quadras' && styles.viewModeBtnActive,
                 ]}
               >
-                🔷 Quadras ({allQuadras.length})
-              </Text>
-            </Pressable>
-            <Pressable
-              testID="cad-mode-select-pins"
-              onPress={() => {
-                setMapViewMode('pins');
-                setSelectedQuadraKey(null);
-                requestFit();
-                closePopover();
-              }}
-              style={[
-                styles.viewModeBtn,
-                { flex: 1, alignItems: 'center' },
-                mapViewMode === 'pins' && styles.viewModeBtnActive,
-              ]}
-            >
-              <Text
+                <Text
+                  style={[
+                    styles.viewModeBtnText,
+                    mapViewMode === 'quadras' && styles.viewModeBtnTextActive,
+                  ]}
+                >
+                  🔷 Quadras ({allQuadras.length})
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="cad-mode-select-pins"
+                onPress={() => {
+                  setMapViewMode('pins');
+                  setSelectedQuadraKey(null);
+                  closePopover();
+                }}
                 style={[
-                  styles.viewModeBtnText,
-                  mapViewMode === 'pins' && styles.viewModeBtnTextActive,
+                  styles.viewModeBtn,
+                  { flex: 1, alignItems: 'center' },
+                  mapViewMode === 'pins' && styles.viewModeBtnActive,
                 ]}
               >
-                📍 Pontos ({allPins.length})
+                <Text
+                  style={[
+                    styles.viewModeBtnText,
+                    mapViewMode === 'pins' && styles.viewModeBtnTextActive,
+                  ]}
+                >
+                  📍 Pontos ({allPins.length})
+                </Text>
+              </Pressable>
+            </View>
+            <Pressable
+              testID="cad-toggle-walking-sequence"
+              onPress={() => {
+                const next = !showWalkingSequence;
+                setShowWalkingSequence(next);
+                if (next && mapViewMode !== 'pins') {
+                  setMapViewMode('pins');
+                  setSelectedQuadraKey(null);
+                }
+              }}
+              style={[
+                styles.mergeTerritoryBtn,
+                { marginTop: 0 },
+                showWalkingSequence && styles.mergeTerritoryBtnActive,
+              ]}
+            >
+              <Text style={styles.mergeTerritoryBtnText}>
+                {showWalkingSequence
+                  ? '✓ Direção numerada dos pontos: ATIVA'
+                  : '👣 Mostrar direção numerada de caminhada'}
               </Text>
             </Pressable>
           </View>
@@ -1318,6 +1449,7 @@ export default function TerritoryMapScreen() {
     territoryColorMap,
     recencyMap,
     showStreetLabels,
+    showWalkingSequence,
     mergeTerritoryMode,
     offlineTileCount,
     offlineCachingStatus,
@@ -1374,6 +1506,10 @@ export default function TerritoryMapScreen() {
             showStreetLabels={showStreetLabels}
             selectedKey={mapViewMode === 'quadras' ? selectedQuadraKey : selectedPinKey}
             fitRequest={fitRequest}
+            userLocation={userLocation}
+            panToUserRequest={panToUserRequest}
+            activeRoute={activeRoute}
+            walkingSequence={walkingSequence}
             onSelectPin={(key) => {
               setSelectedPinKey(key);
               setSelectedQuadraKey(null);
@@ -1395,6 +1531,48 @@ export default function TerritoryMapScreen() {
                 setShowPinStyleModal(true);
               }
             }}
+            onOpenGoogleMapsPin={(key) => {
+              const found = allPins.find((p) => p.key === key);
+              if (found) handleOpenGPS(found);
+            }}
+            onRouteToPinInMap={(key) => {
+              const found = allPins.find((p) => p.key === key);
+              if (found && found.lat !== null && found.lng !== null) {
+                handleTraceRouteInMap({
+                  lat: found.lat,
+                  lng: found.lng,
+                  label: found.line || found.label,
+                  city: found.city,
+                });
+              }
+            }}
+            onOpenGoogleMapsQuadra={(qKey) => {
+              const q = allQuadras.find((x) => x.key === qKey);
+              if (q) {
+                openExternalGoogleMaps({
+                  lat: q.centerLat,
+                  lng: q.centerLng,
+                  streetName: q.perimeterStreets[0] || q.label,
+                  label: q.label,
+                  city: cityList[0],
+                  originLat: userLocation?.lat,
+                  originLng: userLocation?.lng,
+                  mode: 'directions',
+                });
+              }
+            }}
+            onRouteToQuadraInMap={(qKey) => {
+              const q = allQuadras.find((x) => x.key === qKey);
+              if (q) {
+                handleTraceRouteInMap({
+                  lat: q.centerLat,
+                  lng: q.centerLng,
+                  label: q.label,
+                  city: cityList[0],
+                  streetName: q.perimeterStreets[0],
+                });
+              }
+            }}
             editSession={activeEditSession}
             onPolygonDraft={handlePolygonDraftChange}
           />
@@ -1408,8 +1586,85 @@ export default function TerritoryMapScreen() {
             }
           />
 
-          {mapViewMode === 'pins' && unlocatedPins.length > 0 ? (
-            <View style={styles.mapOverlay} pointerEvents="box-none">
+          {/* Top-right floating tactical controls (1-click Quadras/Pontos switch preserving zoom, Live GPS, Walking Direction, Unlocated) */}
+          <View style={styles.mapOverlay} pointerEvents="box-none">
+            <Pressable
+              testID="map-quick-toggle-mode"
+              onPress={() => {
+                if (mapViewMode === 'quadras') {
+                  setMapViewMode('pins');
+                  setSelectedQuadraKey(null);
+                } else {
+                  setMapViewMode('quadras');
+                  setSelectedPinKey(null);
+                }
+                // Deliberately preserves current map center & zoom!
+              }}
+              style={[
+                styles.mapOverlayBtn,
+                { borderColor: '#38BDF8', backgroundColor: 'rgba(15, 23, 42, 0.92)' },
+              ]}
+            >
+              <Text style={[styles.mapOverlayBtnText, { color: '#38BDF8' }]}>
+                {mapViewMode === 'quadras'
+                  ? `📍 Ver Pontos (${allPins.length})`
+                  : `🔷 Ver Quadras (${allQuadras.length})`}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              testID="map-toggle-walking-seq-btn"
+              onPress={() => {
+                const next = !showWalkingSequence;
+                setShowWalkingSequence(next);
+                if (next && mapViewMode !== 'pins') {
+                  setMapViewMode('pins');
+                  setSelectedQuadraKey(null);
+                }
+              }}
+              style={[
+                styles.mapOverlayBtn,
+                showWalkingSequence && {
+                  borderColor: '#38BDF8',
+                  backgroundColor: 'rgba(56, 189, 248, 0.22)',
+                },
+              ]}
+            >
+              <Text style={styles.mapOverlayBtnText}>
+                {showWalkingSequence ? '👣 Direção: ON' : '👣 Direção'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              testID="map-toggle-gps-btn"
+              onPress={toggleGps}
+              style={[
+                styles.mapOverlayBtn,
+                gpsEnabled && {
+                  borderColor: '#38BDF8',
+                  backgroundColor: 'rgba(37, 99, 235, 0.3)',
+                },
+              ]}
+            >
+              <Text style={styles.mapOverlayBtnText}>
+                {gpsEnabled ? '🛰️ GPS Ativo' : '🛰️ Meu GPS'}
+              </Text>
+            </Pressable>
+
+            {gpsEnabled && userLocation ? (
+              <Pressable
+                testID="map-center-gps-btn"
+                onPress={centerOnUser}
+                style={[
+                  styles.mapOverlayBtn,
+                  { borderColor: '#38BDF8', backgroundColor: 'rgba(37, 99, 235, 0.25)' },
+                ]}
+              >
+                <Text style={styles.mapOverlayBtnText}>🎯 Centralizar</Text>
+              </Pressable>
+            ) : null}
+
+            {mapViewMode === 'pins' && unlocatedPins.length > 0 ? (
               <Pressable
                 onPress={() => setShowUnlocated(!showUnlocated)}
                 style={[styles.mapOverlayBtn, styles.mapOverlayBtnWarn]}
@@ -1418,6 +1673,60 @@ export default function TerritoryMapScreen() {
                   📍 {unlocatedPins.length} sem coord.
                 </Text>
               </Pressable>
+            ) : null}
+          </View>
+
+          {/* Active In-Map Route Banner */}
+          {activeRoute ? (
+            <View style={styles.activeRouteBanner} testID="map-active-route-banner">
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activeRouteTitle} numberOfLines={1}>
+                  🧭 Rota para {routeDestinationMeta?.label || 'Destino'}
+                </Text>
+                <Text style={styles.activeRouteSub}>
+                  🚶 {formatRouteDistance(activeRoute.distanceMeters)} •{' '}
+                  {formatRouteDuration(activeRoute.durationSeconds)} •{' '}
+                  {activeRoute.source === 'osrm'
+                    ? 'Ruas OpenStreetMap'
+                    : `Vetor Offline (${activeRoute.cardinalDirection})`}
+                </Text>
+              </View>
+              {routeDestinationMeta ? (
+                <Pressable
+                  testID="active-route-open-gmaps-btn"
+                  onPress={() =>
+                    openExternalGoogleMaps({
+                      lat: routeDestinationMeta.lat,
+                      lng: routeDestinationMeta.lng,
+                      streetName: routeDestinationMeta.streetName,
+                      label: routeDestinationMeta.label,
+                      city: routeDestinationMeta.city || cityList[0],
+                      originLat: userLocation?.lat,
+                      originLng: userLocation?.lng,
+                      mode: 'directions',
+                    })
+                  }
+                  style={styles.activeRouteGmapsBtn}
+                >
+                  <Text style={styles.activeRouteGmapsBtnText}>🗺️ Google Maps</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                testID="active-route-clear-btn"
+                onPress={() => {
+                  setActiveRoute(null);
+                  setRouteDestinationMeta(null);
+                }}
+                style={styles.activeRouteCloseBtn}
+              >
+                <Text style={styles.activeRouteCloseText}>✕ Limpar</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {gpsError ? (
+            <View style={styles.gpsErrorToast}>
+              <Text style={styles.gpsErrorText}>⚠️ {gpsError}</Text>
             </View>
           ) : null}
 
@@ -1426,20 +1735,28 @@ export default function TerritoryMapScreen() {
               <Text style={styles.unlocatedTitle}>Endereços sem coordenada (não aparecem no mapa)</Text>
               <ScrollView style={{ maxHeight: 220 }} contentContainerStyle={{ gap: 6 }}>
                 {unlocatedPins.map((p) => (
-                  <Pressable
-                    key={p.key}
-                    onPress={() => {
-                      const target = flatRegistry.find((n) => pathKey.equals(n.key, p.key));
-                      if (target) setEditingAddressItem(target);
-                    }}
-                    style={styles.unlocatedRow}
-                  >
-                    <Text style={styles.unlocatedRowText} numberOfLines={1}>
-                      {p.worked === 1 ? '✓ ' : ''}
-                      {p.line || p.label}
-                    </Text>
-                    <Text style={styles.unlocatedRowHint}>✏️ adicionar</Text>
-                  </Pressable>
+                  <View key={p.key} style={styles.unlocatedRow}>
+                    <Pressable
+                      onPress={() => {
+                        const target = flatRegistry.find((n) => pathKey.equals(n.key, p.key));
+                        if (target) setEditingAddressItem(target);
+                      }}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                    >
+                      <Text style={styles.unlocatedRowText} numberOfLines={1}>
+                        {p.worked === 1 ? '✓ ' : ''}
+                        {p.line || p.label}
+                      </Text>
+                      <Text style={styles.unlocatedRowHint}>✏️ coord.</Text>
+                    </Pressable>
+                    <Pressable
+                      testID={`unlocated-gmaps-${p.key}`}
+                      onPress={() => handleOpenGPS(p)}
+                      style={styles.miniGmapsChip}
+                    >
+                      <Text style={styles.miniGmapsChipText}>🗺️ Maps</Text>
+                    </Pressable>
+                  </View>
                 ))}
               </ScrollView>
             </View>
@@ -1497,6 +1814,53 @@ export default function TerritoryMapScreen() {
             </View>
 
             <ScrollView style={styles.drawerContent} contentContainerStyle={{ gap: 14 }}>
+              {/* Quick Navigation & Route Bar for Selected Quadra */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  testID="quadra-drawer-gmaps-btn"
+                  onPress={() =>
+                    openExternalGoogleMaps({
+                      lat: selectedQuadra.centerLat,
+                      lng: selectedQuadra.centerLng,
+                      streetName: selectedQuadra.perimeterStreets[0] || selectedQuadra.label,
+                      label: selectedQuadra.label,
+                      city: cityList[0],
+                      originLat: userLocation?.lat,
+                      originLng: userLocation?.lng,
+                      mode: 'directions',
+                    })
+                  }
+                  style={[styles.gpsNavBtn, { flex: 1 }]}
+                >
+                  <Text style={styles.gpsNavBtnText}>🗺️ Google Maps / Rota</Text>
+                </Pressable>
+                <Pressable
+                  testID="quadra-drawer-route-btn"
+                  disabled={routingBusy}
+                  onPress={() =>
+                    handleTraceRouteInMap({
+                      lat: selectedQuadra.centerLat,
+                      lng: selectedQuadra.centerLng,
+                      label: selectedQuadra.label,
+                      city: cityList[0],
+                      streetName: selectedQuadra.perimeterStreets[0],
+                    })
+                  }
+                  style={[
+                    styles.gpsNavBtn,
+                    {
+                      flex: 1,
+                      backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                      borderColor: 'rgba(16, 185, 129, 0.45)',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
+                    {routingBusy ? '⏳ Calculando...' : '🧭 Rota no Nosso Mapa'}
+                  </Text>
+                </Pressable>
+              </View>
+
               {/* Perimeter Enclosing Streets Banner */}
               <View style={styles.perimeterCard}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1517,6 +1881,24 @@ export default function TerritoryMapScreen() {
                   {selectedQuadra.perimeterStreets.map((street, idx) => (
                     <View key={idx} style={styles.perimeterStreetPill}>
                       <Text style={styles.perimeterStreetText}>{street}</Text>
+                      <Pressable
+                        testID={`perimeter-street-gmaps-${idx}`}
+                        onPress={() =>
+                          openExternalGoogleMaps({
+                            streetName: street,
+                            city: cityList[0],
+                            lat: selectedQuadra.centerLat,
+                            lng: selectedQuadra.centerLng,
+                            originLat: userLocation?.lat,
+                            originLng: userLocation?.lng,
+                            mode: 'directions',
+                          })
+                        }
+                        style={styles.miniGmapsIconBtn}
+                        accessibilityLabel={`Abrir ${street} no Google Maps`}
+                      >
+                        <Text style={styles.miniGmapsIconText}>🗺️</Text>
+                      </Pressable>
                       <Pressable
                         onPress={() => handleRemovePerimeterStreet(selectedQuadra.key, street)}
                         style={styles.removeStreetBtn}
@@ -1726,7 +2108,24 @@ export default function TerritoryMapScreen() {
                   return (
                     <View key={sIdx} style={styles.streetGroupCard}>
                       <View style={styles.streetGroupHeader}>
-                        <Text style={styles.streetGroupName}>📍 {group.streetName}</Text>
+                        <Text style={[styles.streetGroupName, { flex: 1 }]}>📍 {group.streetName}</Text>
+                        <Pressable
+                          testID={`quadra-street-gmaps-${sIdx}`}
+                          onPress={() =>
+                            openExternalGoogleMaps({
+                              streetName: group.streetName,
+                              city: cityList[0],
+                              lat: group.units[0]?.lat ?? selectedQuadra.centerLat,
+                              lng: group.units[0]?.lng ?? selectedQuadra.centerLng,
+                              originLat: userLocation?.lat,
+                              originLng: userLocation?.lng,
+                              mode: 'directions',
+                            })
+                          }
+                          style={styles.miniGmapsChip}
+                        >
+                          <Text style={styles.miniGmapsChipText}>🗺️ Maps</Text>
+                        </Pressable>
                         <Text style={styles.streetGroupBadge}>
                           {group.workedUnits}/{group.totalUnits}
                         </Text>
@@ -1736,31 +2135,79 @@ export default function TerritoryMapScreen() {
                         {group.units.map((unit) => {
                           const isDone = unit.worked === 1;
                           return (
-                            <Pressable
+                            <View
                               key={unit.key}
-                              onPress={() => handleToggleWork(unit.key)}
                               style={[
                                 styles.unitCard,
                                 isDone ? styles.unitCardWorked : styles.unitCardPending,
                               ]}
                             >
-                              <View style={styles.unitTopRow}>
-                                <Text style={[styles.unitNumber, isDone && styles.unitNumberWorked]}>
-                                  Nº {unit.numberOrComplement || 'S/N'}
+                              <Pressable
+                                testID={`quadra-unit-toggle-${unit.key}`}
+                                onPress={() => handleToggleWork(unit.key)}
+                                style={{ gap: 2 }}
+                              >
+                                <View style={styles.unitTopRow}>
+                                  <Text style={[styles.unitNumber, isDone && styles.unitNumberWorked]}>
+                                    Nº {unit.numberOrComplement || 'S/N'}
+                                  </Text>
+                                  <Text style={isDone ? styles.unitCheckWorked : styles.unitCheckPending}>
+                                    {isDone ? '✓' : '⬜'}
+                                  </Text>
+                                </View>
+                                {unit.propertyType ? (
+                                  <Text style={styles.unitPropertyType} numberOfLines={1}>
+                                    {unit.propertyType === 'comercial' ? '🏢 Comércio' : unit.propertyType === 'predio' ? '🏙️ Prédio' : '🏠 Casa'}
+                                  </Text>
+                                ) : null}
+                                <Text style={[styles.unitActionLabel, isDone && styles.unitActionLabelWorked]}>
+                                  {isDone ? 'Concluído' : 'Pendente'}
                                 </Text>
-                                <Text style={isDone ? styles.unitCheckWorked : styles.unitCheckPending}>
-                                  {isDone ? '✓' : '⬜'}
-                                </Text>
+                              </Pressable>
+                              <View style={styles.unitMiniActionsRow}>
+                                <Pressable
+                                  testID={`quadra-unit-gmaps-${unit.key}`}
+                                  onPress={() =>
+                                    openExternalGoogleMaps({
+                                      lat: unit.lat,
+                                      lng: unit.lng,
+                                      streetName: group.streetName,
+                                      numberOrComplement: unit.numberOrComplement,
+                                      label: unit.fullLabel,
+                                      city: cityList[0],
+                                      originLat: userLocation?.lat,
+                                      originLng: userLocation?.lng,
+                                      mode: 'directions',
+                                    })
+                                  }
+                                  style={styles.unitMiniActionBtn}
+                                >
+                                  <Text style={styles.unitMiniActionText}>🗺️ Maps</Text>
+                                </Pressable>
+                                {unit.lat !== undefined && unit.lng !== undefined ? (
+                                  <Pressable
+                                    testID={`quadra-unit-route-${unit.key}`}
+                                    onPress={() =>
+                                      handleTraceRouteInMap({
+                                        lat: unit.lat as number,
+                                        lng: unit.lng as number,
+                                        label: `${group.streetName}, ${unit.numberOrComplement || 'S/N'}`,
+                                        city: cityList[0],
+                                        streetName: group.streetName,
+                                      })
+                                    }
+                                    style={[
+                                      styles.unitMiniActionBtn,
+                                      { borderColor: 'rgba(56, 189, 248, 0.45)' },
+                                    ]}
+                                  >
+                                    <Text style={[styles.unitMiniActionText, { color: '#38BDF8' }]}>
+                                      🧭 Rota
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
                               </View>
-                              {unit.propertyType ? (
-                                <Text style={styles.unitPropertyType} numberOfLines={1}>
-                                  {unit.propertyType === 'comercial' ? '🏢 Comércio' : unit.propertyType === 'predio' ? '🏙️ Prédio' : '🏠 Casa'}
-                                </Text>
-                              ) : null}
-                              <Text style={[styles.unitActionLabel, isDone && styles.unitActionLabelWorked]}>
-                                {isDone ? 'Concluído' : 'Pendente'}
-                              </Text>
-                            </Pressable>
+                            </View>
                           );
                         })}
                       </View>
@@ -1799,7 +2246,16 @@ export default function TerritoryMapScreen() {
             <ScrollView style={styles.drawerContent} contentContainerStyle={{ gap: 12 }}>
               {/* Address details */}
               <View style={styles.drawerSection}>
-                <Text style={styles.drawerSectionLabel}>ENDEREÇO COMPLETO</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.drawerSectionLabel}>ENDEREÇO COMPLETO</Text>
+                  <Pressable
+                    testID="pin-section-gmaps-chip"
+                    onPress={() => handleOpenGPS(selectedPin)}
+                    style={styles.miniGmapsChip}
+                  >
+                    <Text style={styles.miniGmapsChipText}>🗺️ Ver no Google Maps</Text>
+                  </Pressable>
+                </View>
                 {selectedPin.line2 ? (
                   <Text style={styles.drawerDetailRow}>Bairro: <Text style={styles.drawerDetailVal}>{selectedPin.line2}</Text></Text>
                 ) : null}
@@ -1870,6 +2326,42 @@ export default function TerritoryMapScreen() {
                   </Text>
                 </Pressable>
 
+                {/* Open in Google Maps */}
+                <Pressable
+                  testID="pin-drawer-gmaps-btn"
+                  onPress={() => handleOpenGPS(selectedPin)}
+                  style={styles.gpsNavBtn}
+                >
+                  <Text style={styles.gpsNavBtnText}>🗺️ Abrir no Google Maps / Traçar Rota</Text>
+                </Pressable>
+
+                {/* Trace Route Inside Our Map */}
+                {selectedPin.lat !== null && selectedPin.lng !== null ? (
+                  <Pressable
+                    testID="pin-drawer-route-btn"
+                    disabled={routingBusy}
+                    onPress={() =>
+                      handleTraceRouteInMap({
+                        lat: selectedPin.lat as number,
+                        lng: selectedPin.lng as number,
+                        label: selectedPin.line || selectedPin.label,
+                        city: selectedPin.city,
+                      })
+                    }
+                    style={[
+                      styles.gpsNavBtn,
+                      {
+                        backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                        borderColor: 'rgba(16, 185, 129, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
+                      {routingBusy ? '⏳ Calculando rota...' : '🧭 Traçar Rota no Nosso Mapa'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+
                 {/* Customize Pin Style (Shape & Color) */}
                 <Pressable
                   onPress={() => {
@@ -1890,14 +2382,6 @@ export default function TerritoryMapScreen() {
                   style={styles.editFullBtn}
                 >
                   <Text style={styles.editFullBtnText}>✏️ Editar Endereço Completo</Text>
-                </Pressable>
-
-                {/* Open in external GPS */}
-                <Pressable
-                  onPress={() => handleOpenGPS(selectedPin)}
-                  style={styles.gpsNavBtn}
-                >
-                  <Text style={styles.gpsNavBtnText}>🧭 Abrir no app de navegação</Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -3201,6 +3685,124 @@ const styles = StyleSheet.create({
   editBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '700',
+  },
+  activeRouteBanner: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    top: 10,
+    maxWidth: 540,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    zIndex: 1005,
+  },
+  activeRouteTitle: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  activeRouteSub: {
+    color: '#7DD3FC',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  activeRouteGmapsBtn: {
+    backgroundColor: 'rgba(59, 130, 246, 0.22)',
+    borderWidth: 1,
+    borderColor: '#60A5FA',
+    borderRadius: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  activeRouteGmapsBtnText: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  activeRouteCloseBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  activeRouteCloseText: {
+    color: '#FCA5A5',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  gpsErrorToast: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    backgroundColor: 'rgba(18, 21, 28, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.6)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    zIndex: 1002,
+  },
+  gpsErrorText: {
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  miniGmapsChip: {
+    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.45)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  miniGmapsChipText: {
+    color: '#93C5FD',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  miniGmapsIconBtn: {
+    marginLeft: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+  },
+  miniGmapsIconText: {
+    fontSize: 10,
+  },
+  unitMiniActionsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 6,
+    paddingTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  unitMiniActionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    borderRadius: 5,
+    backgroundColor: 'rgba(59, 130, 246, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.35)',
+  },
+  unitMiniActionText: {
+    color: '#93C5FD',
+    fontSize: 9.5,
     fontWeight: '700',
   },
 });

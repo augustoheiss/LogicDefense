@@ -139,6 +139,117 @@ export interface OmniCoinLedgerRowItem {
   metadata_json?: string;
   customValues?: Record<string, string | number | boolean>;
   tableEnvelope?: Record<string, any>;
+  /**
+   * Quando `true`, indica que esta linha no CSV representa apenas o cabeçalho/envelope
+   * de uma `CoinTable` sem lançamentos (`rows.length === 0`), não devendo gerar um `TableRow`.
+   */
+  isTableHeaderOnly?: boolean;
+}
+
+/**
+ * Representa uma planilha financeira individual reconstruída a partir da seção
+ * `#PLANILHA,coin_ledger_row` de um pacote Omni-CSV.
+ */
+export interface OmniCoinTablePartition {
+  /** Identificador único da planilha financeira (`_container_id` / `CoinTable.id`) */
+  tableId: string;
+  /** Nome amigável da planilha financeira (`CoinTable.name`) */
+  tableName: string;
+  /** Envelope de metadados exclusivos desta planilha (metas, perfil investidor, schema, setores) */
+  tableEnvelope?: Record<string, any>;
+  /** Lançamentos pertencentes exclusivamente a esta planilha (excluindo linhas-sentinela de cabeçalho vazio) */
+  rows: OmniCoinLedgerRowItem[];
+}
+
+/**
+ * Demultiplexa uma lista plana de `OmniCoinLedgerRowItem` em partições isoladas por `tableId`.
+ * Garante que múltiplas planilhas financeiras exportadas no mesmo CSV nunca tenham seus valores misturados.
+ */
+export function groupCoinLedgerRowsByTable(
+  coinRows: OmniCoinLedgerRowItem[]
+): OmniCoinTablePartition[] {
+  if (!Array.isArray(coinRows) || coinRows.length === 0) return [];
+
+  const partitionsMap = new Map<
+    string,
+    {
+      tableId: string;
+      explicitName?: string;
+      envelope?: Record<string, any>;
+      rows: OmniCoinLedgerRowItem[];
+    }
+  >();
+
+  for (const row of coinRows) {
+    if (!row || typeof row !== 'object') continue;
+    const rawTableId = (row.tableId || row.tableEnvelope?.tableId || 'coin-default').trim();
+    const tableId = rawTableId || 'coin-default';
+
+    let partition = partitionsMap.get(tableId);
+    if (!partition) {
+      partition = {
+        tableId,
+        explicitName: undefined,
+        envelope: undefined,
+        rows: [],
+      };
+      partitionsMap.set(tableId, partition);
+    }
+
+    if (row.tableEnvelope && typeof row.tableEnvelope === 'object' && !partition.envelope) {
+      partition.envelope = row.tableEnvelope;
+    }
+
+    const candidateName = (
+      row.tableName ||
+      (row.tableEnvelope && typeof row.tableEnvelope.tableName === 'string'
+        ? row.tableEnvelope.tableName
+        : '')
+    ).trim();
+
+    if (
+      candidateName &&
+      (!partition.explicitName ||
+        partition.explicitName === 'Assistente Moeda — Geral' ||
+        partition.explicitName === 'Minha Planilha')
+    ) {
+      partition.explicitName = candidateName;
+    }
+
+    if (!row.isTableHeaderOnly) {
+      partition.rows.push(row);
+    }
+  }
+
+  const partitions: OmniCoinTablePartition[] = [];
+  const usedNames = new Map<string, number>();
+  let idx = 0;
+
+  for (const part of partitionsMap.values()) {
+    idx += 1;
+    let baseName =
+      part.explicitName ||
+      (partitionsMap.size > 1
+        ? `Planilha Financeira #${idx} (${part.tableId})`
+        : 'Assistente Moeda — Geral');
+
+    // Se há múltiplas planilhas com tableIds diferentes, mas todas vieram com o mesmo nome genérico,
+    // desambiguamos a partir da 2ª planilha para clareza visual no seletor de planilhas:
+    const prevCount = usedNames.get(baseName) || 0;
+    usedNames.set(baseName, prevCount + 1);
+    if (prevCount > 0 && partitionsMap.size > 1) {
+      baseName = `${baseName} (${part.tableId})`;
+    }
+
+    partitions.push({
+      tableId: part.tableId,
+      tableName: baseName,
+      tableEnvelope: part.envelope,
+      rows: part.rows,
+    });
+  }
+
+  return partitions;
 }
 
 export const DEFAULT_COIN_LEDGER_ROWS: OmniCoinLedgerRowItem[] = [
@@ -922,7 +1033,7 @@ export function exportOmniCsvBundle(
       rows.push({
         _container_id: row.tableId || 'coin-default',
         _key: row.id,
-        _type: 'leaf',
+        _type: row.isTableHeaderOnly ? 'header' : 'leaf',
         _engines: 'financial_ledger',
         group_or_tier: neutralizeCsvFormula(row.category || 'Outros'),
         date_or_cycle: row.date || '',
@@ -1432,12 +1543,37 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           ? safeJsonParse<Record<string, any>>(metadataJsonVal, {}).customValues ||
             safeJsonParse<Record<string, any>>(metadataJsonVal, undefined)
           : undefined;
-      const tableEnvelopeVal =
-        meta.tableEnvelope && typeof meta.tableEnvelope === 'object'
-          ? meta.tableEnvelope
-          : row._table_envelope_json
+      const [parsedContainerId, explicitContainerName] = containerId.includes('::')
+        ? containerId.split('::').map((s) => s.trim())
+        : [containerId, ''];
+      const metaTableId = typeof meta.tableId === 'string' ? meta.tableId.trim() : '';
+      const resolvedTableId = parsedContainerId || metaTableId || 'coin-default';
+      // Se o usuário editou manualmente a coluna `_container_id` no CSV (diferente do `meta.tableId` original),
+      // não herdamos `tableName` nem `tableEnvelope` estagnados da tabela antiga contidos em `_meta_json`.
+      const containerChangedManually = Boolean(
+        parsedContainerId && metaTableId && parsedContainerId !== metaTableId
+      );
+
+      const tableEnvelopeVal = containerChangedManually
+        ? row._table_envelope_json
           ? safeJsonParse<Record<string, any>>(row._table_envelope_json, undefined)
-          : undefined;
+          : undefined
+        : meta.tableEnvelope && typeof meta.tableEnvelope === 'object'
+        ? meta.tableEnvelope
+        : row._table_envelope_json
+        ? safeJsonParse<Record<string, any>>(row._table_envelope_json, undefined)
+        : undefined;
+
+      const resolvedTableName =
+        row._table_name ||
+        explicitContainerName ||
+        (!containerChangedManually ? meta.tableName : undefined) ||
+        (containerChangedManually ? parsedContainerId : undefined);
+
+      const isTableHeaderOnly =
+        type === 'header' ||
+        Boolean(meta.isTableHeaderOnly) ||
+        key.startsWith('__table_header__');
 
       coinLedgerRows.push({
         id: key || row.id || meta.id || `coin-${coinLedgerRows.length + 1}`,
@@ -1452,10 +1588,9 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           row.time_or_duration ||
           meta.recurrence ||
           (monthCountRaw && monthCountRaw > 1 ? `rateio_${monthCountRaw}m` : 'unico'),
-        tableId: containerId || meta.tableId || 'coin-default',
-        ...(row._table_name || meta.tableName
-          ? { tableName: String(row._table_name || meta.tableName) }
-          : {}),
+        tableId: resolvedTableId,
+        ...(resolvedTableName ? { tableName: String(resolvedTableName) } : {}),
+        ...(isTableHeaderOnly ? { isTableHeaderOnly: true } : {}),
         ...(monthlyValueRaw !== undefined && Number.isFinite(monthlyValueRaw)
           ? { monthlyValue: monthlyValueRaw }
           : {}),

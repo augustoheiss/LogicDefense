@@ -135,6 +135,13 @@ export function normalizeEntryType(input: string): TableRow['entryType'] {
   return s as TableRow['entryType'];
 }
 
+export interface CSVTablePartitionOutput {
+  tableId: string;
+  rows: (TableRow | Omit<TableRow, 'id'>)[];
+  metadata: NonNullable<CSVParseOutput['metadata']>;
+  detectedSectors: string[];
+}
+
 export interface CSVParseOutput {
   rows: (TableRow | Omit<TableRow, 'id'>)[];
   errors: string[];
@@ -155,6 +162,12 @@ export interface CSVParseOutput {
     dashboardConfig?: import('../core/types').DashboardConfig;
     sectorParams?: import('../core/types').SectorSimulationParams;
   };
+  /**
+   * Quando um pacote Sekundo Omni-CSV (`#PLANILHA,coin_ledger_row`) contém uma ou mais
+   * planilhas financeiras identificadas por `_container_id` distintos, cada partição
+   * é retornada separadamente para impedir a fusão indevida de valores.
+   */
+  tablePartitions?: CSVTablePartitionOutput[];
 }
 
 function findHeaderIdx(headers: string[], aliases: string[]): number {
@@ -532,6 +545,15 @@ export function parseCSVText(
     let currentSheet = '';
     let activeOmniHeaders: string[] = [];
     const hasSheetMarkers = allLines.some((l) => /^#?PLANILHA[,:]/i.test(l));
+    const partitionsMap = new Map<
+      string,
+      {
+        tableId: string;
+        explicitName?: string;
+        metadata: NonNullable<CSVParseOutput['metadata']>;
+        rows: TableRow[];
+      }
+    >();
 
     for (let i = 0; i < allLines.length; i++) {
       const line = allLines[i];
@@ -573,20 +595,73 @@ export function parseCSVText(
         }
       }
 
-      if (meta.tableName && (!metaObj.name || metaObj.name === 'Minha Planilha')) {
-        metaObj.name = String(meta.tableName);
+      const rawContainerCell = (rowMap._container_id || '').trim();
+      const [parsedContainerId, explicitContainerName] = rawContainerCell.includes('::')
+        ? rawContainerCell.split('::').map((s) => s.trim())
+        : [rawContainerCell, ''];
+      const metaTableId = typeof meta.tableId === 'string' ? meta.tableId.trim() : '';
+      const resolvedTableId = parsedContainerId || metaTableId || 'coin-default';
+      const containerChangedManually = Boolean(
+        parsedContainerId && metaTableId && parsedContainerId !== metaTableId
+      );
+
+      let partition = partitionsMap.get(resolvedTableId);
+      if (!partition) {
+        partition = {
+          tableId: resolvedTableId,
+          explicitName: undefined,
+          metadata: {
+            tableId: resolvedTableId,
+            name: 'Minha Planilha',
+            description: '',
+            goals: {},
+            tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+          },
+          rows: [],
+        };
+        partitionsMap.set(resolvedTableId, partition);
       }
-      if ((rowMap._container_id || meta.tableId) && !metaObj.tableId) {
-        metaObj.tableId = String(rowMap._container_id || meta.tableId);
+
+      const candidateTableName =
+        explicitContainerName ||
+        (!containerChangedManually && meta.tableName ? String(meta.tableName) : '') ||
+        (!containerChangedManually && meta.tableEnvelope?.tableName
+          ? String(meta.tableEnvelope.tableName)
+          : '') ||
+        (containerChangedManually ? parsedContainerId : '');
+
+      if (
+        candidateTableName &&
+        (!partition.explicitName ||
+          partition.explicitName === 'Minha Planilha' ||
+          partition.explicitName === 'Assistente Moeda — Geral')
+      ) {
+        partition.explicitName = candidateTableName;
+        partition.metadata.name = candidateTableName;
       }
-      if (meta.tableEnvelope && typeof meta.tableEnvelope === 'object') {
+
+      if (
+        !containerChangedManually &&
+        meta.tableEnvelope &&
+        typeof meta.tableEnvelope === 'object'
+      ) {
         const env = meta.tableEnvelope;
-        if (env.goals) metaObj.tableGoals = env.goals;
-        if (env.investorProfile) metaObj.investorProfile = env.investorProfile;
-        if (env.schema) metaObj.schema = env.schema;
-        if (env.activeSectors) metaObj.activeSectors = env.activeSectors;
-        if (env.dashboardConfig) metaObj.dashboardConfig = env.dashboardConfig;
-        if (env.sectorParams) metaObj.sectorParams = env.sectorParams;
+        if (env.description) partition.metadata.description = String(env.description);
+        if (env.goals) partition.metadata.tableGoals = env.goals;
+        if (env.investorProfile) partition.metadata.investorProfile = env.investorProfile;
+        if (env.schema) partition.metadata.schema = env.schema;
+        if (env.activeSectors) partition.metadata.activeSectors = env.activeSectors;
+        if (env.dashboardConfig) partition.metadata.dashboardConfig = env.dashboardConfig;
+        if (env.sectorParams) partition.metadata.sectorParams = env.sectorParams;
+      }
+
+      const isHeaderSentinel =
+        (rowMap._type || '').trim().toLowerCase() === 'header' ||
+        Boolean(meta.isTableHeaderOnly) ||
+        (rowMap._key || '').startsWith('__table_header__');
+
+      if (isHeaderSentinel) {
+        continue;
       }
 
       const parsedVal =
@@ -636,7 +711,55 @@ export function parseCSVText(
         newRow.customValues = meta.customValues;
       }
 
+      partition.rows.push(newRow);
       rows.push(newRow);
+    }
+
+    const tablePartitions: CSVTablePartitionOutput[] = [];
+    const usedNames = new Map<string, number>();
+    let partIdx = 0;
+    for (const part of partitionsMap.values()) {
+      partIdx += 1;
+      let resolvedName =
+        part.explicitName ||
+        (partitionsMap.size > 1
+          ? `Planilha Financeira #${partIdx} (${part.tableId})`
+          : 'Minha Planilha');
+      const count = usedNames.get(resolvedName) || 0;
+      usedNames.set(resolvedName, count + 1);
+      if (count > 0 && partitionsMap.size > 1) {
+        resolvedName = `${resolvedName} (${part.tableId})`;
+      }
+      part.metadata.name = resolvedName;
+
+      const partRowSectors = detectSectorsFromRows(part.rows);
+      const partDetectedSectors = Array.from(
+        new Set(['personal_finance', ...(part.metadata.activeSectors || []), ...partRowSectors])
+      );
+
+      tablePartitions.push({
+        tableId: part.tableId,
+        rows: part.rows,
+        metadata: part.metadata,
+        detectedSectors: partDetectedSectors,
+      });
+    }
+
+    if (tablePartitions.length > 0) {
+      const firstPart = tablePartitions[0];
+      metaObj.tableId = firstPart.metadata.tableId;
+      metaObj.name = firstPart.metadata.name;
+      if (firstPart.metadata.description) metaObj.description = firstPart.metadata.description;
+      if (firstPart.metadata.tableGoals) metaObj.tableGoals = firstPart.metadata.tableGoals;
+      if (firstPart.metadata.investorProfile) {
+        metaObj.investorProfile = firstPart.metadata.investorProfile;
+      }
+      if (firstPart.metadata.schema) metaObj.schema = firstPart.metadata.schema;
+      if (firstPart.metadata.activeSectors) metaObj.activeSectors = firstPart.metadata.activeSectors;
+      if (firstPart.metadata.dashboardConfig) {
+        metaObj.dashboardConfig = firstPart.metadata.dashboardConfig;
+      }
+      if (firstPart.metadata.sectorParams) metaObj.sectorParams = firstPart.metadata.sectorParams;
     }
 
     const rowSectors = detectSectorsFromRows(rows as TableRow[]);
@@ -649,6 +772,7 @@ export function parseCSVText(
       skippedCount,
       detectedSectors,
       metadata: metaObj,
+      tablePartitions,
     };
   }
 

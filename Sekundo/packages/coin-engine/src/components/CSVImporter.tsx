@@ -87,10 +87,63 @@ export function CSVImporter({
     rowsToCommit: (TableRow | Omit<TableRow, 'id'>)[],
     metadata?: any,
     detectedSectors?: string[],
-    importMode: 'merge' | 'replace' | 'new' = 'merge'
+    importMode: 'merge' | 'replace' | 'new' = 'merge',
+    tablePartitions?: Array<{
+      tableId: string;
+      rows: (TableRow | Omit<TableRow, 'id'>)[];
+      metadata: any;
+      detectedSectors: string[];
+    }>
   ) => {
     setIsProcessing(true);
     try {
+      if (tablePartitions && tablePartitions.length > 1) {
+        let lastImportRes: any = null;
+        for (const part of tablePartitions) {
+          const partSectors = Array.from(
+            new Set([
+              ...(part.metadata?.activeSectors || []),
+              ...(part.detectedSectors || []),
+            ])
+          );
+          lastImportRes = await importSpreadsheet({
+            rows: part.rows,
+            tableId: importMode === 'new' ? undefined : part.tableId,
+            apiKey: part.metadata?.apiKey,
+            lastEventSeq: part.metadata?.lastEventSeq,
+            name: part.metadata?.name,
+            description: part.metadata?.description,
+            goals: part.metadata?.goals || part.metadata?.tableGoals,
+            mode: importMode,
+            isolateByTableId: importMode !== 'new',
+            schema: part.metadata?.schema,
+            investorProfile: part.metadata?.investorProfile,
+            activeSectors: partSectors.length > 0 ? partSectors : undefined,
+            dashboardConfig: part.metadata?.dashboardConfig,
+            sectorParams: part.metadata?.sectorParams,
+          });
+        }
+
+        setCsvText('');
+        if (onSuccess) {
+          onSuccess();
+        }
+        setTimeout(() => {
+          const successTitle = 'Importação Multi-Planilha Concluída! 🎉';
+          const tableNames = tablePartitions.map((p) => `"${p.metadata?.name || p.tableId}"`).join(', ');
+          let successMsg = `Sucesso! ${rowsToCommit.length} transações foram distribuídas em ${tablePartitions.length} planilhas financeiras separadas (${tableNames}).`;
+          if (lastImportRes?.keyWasAutoRenewed) {
+            successMsg += '\n\n🔑 Chaves API locais atualizadas automaticamente.';
+          }
+          if (Platform.OS === 'web') {
+            window.alert(`${successTitle}\n\n${successMsg}`);
+          } else {
+            Alert.alert(successTitle, successMsg);
+          }
+        }, 100);
+        return;
+      }
+
       const mergedSectors = Array.from(
         new Set([
           ...(metadata?.activeSectors || []),
@@ -203,7 +256,13 @@ export function CSVImporter({
         return;
       }
 
-      await commitRows(parsed.rows, parsed.metadata, parsed.detectedSectors, importMode);
+      await commitRows(
+        parsed.rows,
+        parsed.metadata,
+        parsed.detectedSectors,
+        importMode,
+        parsed.tablePartitions
+      );
     } catch (err: any) {
       const errMsg = err.message || 'Falha ao processar o arquivo CSV';
       setErrorLogs([`Erro geral de importação: ${errMsg}`]);

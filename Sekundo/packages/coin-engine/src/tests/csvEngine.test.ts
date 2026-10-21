@@ -76,4 +76,29 @@ describe('Relatório de Teste 02: Reconciliação e Integridade do Motor CSV', (
     expect(secondParse.rows[0].description).toBe(firstParse.rows[0].description);
     expect(secondParse.rows[0].entryType).toBe(firstParse.rows[0].entryType);
   });
+
+  it('Deve particionar múltiplas planilhas financeiras de um Sekundo Omni-CSV (#PLANILHA,coin_ledger_row) sem fundir tableIds distintos', () => {
+    const omniMultiTableCsv = [
+      '#PLANILHA,coin_ledger_row,Assistente Moeda',
+      '_container_id,_key,_type,_engines,group_or_tier,date_or_cycle,time_or_duration,title_or_name,primary_assignee,secondary_assignee,status_or_readiness,capabilities_or_tags,contact_or_location,notes_or_payload,_meta_json',
+      'coin-pf-01,r1,leaf,financial_ledger,Salário,2026-10-01,mensal,Receita PF,7500,revenue,paid,PIX,Assistente Moeda,7500,"{""tableId"":""coin-pf-01"",""tableName"":""Planilha PF"",""tableEnvelope"":{""goals"":{""dailyGoals"":{""2026"":110}}}}"',
+      'coin-pf-01,r2,leaf,financial_ledger,Moradia,2026-10-03,mensal,Aluguel PF,2200,expense,paid,Boleto,Assistente Moeda,2200,"{""tableId"":""coin-pf-01"",""tableName"":""Planilha PF""}"',
+      'coin-pj-02,r3,leaf,financial_ledger,Faturamento,2026-10-05,mensal,Honorários PJ,18400,revenue,paid,TED,Assistente Moeda,18400,"{""tableId"":""coin-pj-02"",""tableName"":""Planilha PJ"",""tableEnvelope"":{""goals"":{""dailyGoals"":{""2026"":400}}}}"',
+      '#ABA_PLANILHA,coin_ledger_row,FIM_DA_PLANILHA',
+    ].join('\n');
+
+    const parsed = parseCSVText(omniMultiTableCsv);
+
+    expect(parsed.errors.length).toBe(0);
+    expect(parsed.rows.length).toBe(3);
+    expect(parsed.tablePartitions?.length).toBe(2);
+    expect(parsed.tablePartitions?.[0].tableId).toBe('coin-pf-01');
+    expect(parsed.tablePartitions?.[0].metadata.name).toBe('Planilha PF');
+    expect(parsed.tablePartitions?.[0].rows.length).toBe(2);
+    expect(parsed.tablePartitions?.[0].rows[0].value).toBe(7500);
+    expect(parsed.tablePartitions?.[1].tableId).toBe('coin-pj-02');
+    expect(parsed.tablePartitions?.[1].metadata.name).toBe('Planilha PJ');
+    expect(parsed.tablePartitions?.[1].rows.length).toBe(1);
+    expect(parsed.tablePartitions?.[1].rows[0].value).toBe(18400);
+  });
 });

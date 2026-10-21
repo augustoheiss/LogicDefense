@@ -33,12 +33,26 @@ import {
   resolveTerritoryNumber,
   buildTerritoriosS13HistoricalRegistry,
   selectEnginePartitionNodes,
+  extractQuadrasFromRegistry,
+  parseLatLng,
+  calculateMapRoute,
+  buildWalkingSequenceRoute,
+  formatRouteDistance,
+  formatRouteDuration,
 } from '@sekundo/core';
-import type { FlatSkeletonEntry } from '@sekundo/core';
+import type {
+  FlatSkeletonEntry,
+  QuadraSummary,
+  RouteCalculationResult,
+  WalkingSequenceRoute,
+} from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { TerritoryAccordionHeader } from '../components/territory/TerritoryAccordionHeader';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
 import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
+import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
+import type { MapPin } from '../components/map/mapTypes';
+import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
 
 interface ChecklistGroup {
   groupKey: string;
@@ -103,6 +117,93 @@ export default function TerritoryChecklistScreen() {
   const [activeNoteKey, setActiveNoteKey] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<string>('');
   const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
+
+  // Embedded Territory Map (Modo Campo inline inside Checklist) + Live GPS & In-Map Routing
+  const [inlineMapTerritory, setInlineMapTerritory] = useState<string | null>(null);
+  const [inlineMapMode, setInlineMapMode] = useState<'quadras' | 'pins'>('quadras');
+  const [inlineMapWalkOrder, setInlineMapWalkOrder] = useState<boolean>(true);
+  const [inlineMapFitRequest, setInlineMapFitRequest] = useState<number>(0);
+  const [inlineSelectedKey, setInlineSelectedKey] = useState<string | null>(null);
+  const {
+    gpsEnabled,
+    userLocation,
+    gpsError,
+    panToUserRequest,
+    toggleGps,
+    enableGpsAndGetPosition,
+    centerOnUser,
+  } = useLiveGpsLocation();
+  const [activeRoute, setActiveRoute] = useState<RouteCalculationResult | null>(null);
+  const [routeDestinationMeta, setRouteDestinationMeta] = useState<{
+    label: string;
+    lat: number;
+    lng: number;
+    city?: string;
+    streetName?: string;
+  } | null>(null);
+  const [routingBusy, setRoutingBusy] = useState<boolean>(false);
+
+  const allQuadras = useMemo<QuadraSummary[]>(
+    () => extractQuadrasFromRegistry(flatRegistry),
+    [flatRegistry]
+  );
+
+  const toggleInlineMapForTerritory = (territoryNum: string) => {
+    setInlineMapTerritory((prev) => {
+      if (prev === territoryNum) return null;
+      setInlineMapFitRequest((n) => n + 1);
+      return territoryNum;
+    });
+  };
+
+  const handleTraceRouteInChecklistMap = async (
+    territoryNum: string,
+    dest: {
+      lat: number;
+      lng: number;
+      label: string;
+      city?: string;
+      streetName?: string;
+    }
+  ) => {
+    setRoutingBusy(true);
+    if (inlineMapTerritory !== territoryNum) {
+      setInlineMapTerritory(territoryNum);
+      setInlineMapFitRequest((n) => n + 1);
+    }
+    try {
+      let origin: { lat: number; lng: number } | null = userLocation
+        ? { lat: userLocation.lat, lng: userLocation.lng }
+        : null;
+      if (!origin) {
+        const gpsFix = await enableGpsAndGetPosition(2800);
+        if (gpsFix) origin = { lat: gpsFix.lat, lng: gpsFix.lng };
+      }
+      if (!origin) {
+        const tQuadras = allQuadras.filter((q) => q.territoryNumber === territoryNum);
+        const firstUnit = tQuadras
+          .flatMap((q) => q.streets.flatMap((s) => s.units))
+          .find(
+            (u) =>
+              u.lat !== undefined &&
+              u.lng !== undefined &&
+              (Math.abs(u.lat - dest.lat) > 0.0001 || Math.abs(u.lng - dest.lng) > 0.0001)
+          );
+        if (firstUnit && firstUnit.lat !== undefined && firstUnit.lng !== undefined) {
+          origin = { lat: firstUnit.lat, lng: firstUnit.lng };
+        } else if (tQuadras[0]) {
+          origin = { lat: tQuadras[0].centerLat, lng: tQuadras[0].centerLng };
+        } else {
+          origin = { lat: dest.lat - 0.0025, lng: dest.lng - 0.0025 };
+        }
+      }
+      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 3000);
+      setActiveRoute(route);
+      setRouteDestinationMeta(dest);
+    } finally {
+      setRoutingBusy(false);
+    }
+  };
 
   // Extract territory items and group by closest parent group
   const { groups, overallStats } = useMemo(() => {
@@ -599,6 +700,297 @@ export default function TerritoryChecklistScreen() {
             // A territory with a single group is not double-nested.
             const single = section.groups.length === 1;
             const sectionOpen = single || isExpanded(`T:${section.territory}`);
+            const isMapOpenForSection = inlineMapTerritory === section.territory;
+            const sectionQuadras = allQuadras.filter((q) => q.territoryNumber === section.territory);
+            const firstSectionItem = section.groups[0]?.items[0];
+            const firstSectionMeta = (firstSectionItem?.meta || {}) as Record<string, any>;
+            const sectionCity = String(firstSectionMeta.city || firstSectionMeta.cidade || '');
+
+            const renderInlineTerritoryMap = () => {
+              if (!isMapOpenForSection) return null;
+              const rawSectionPins: MapPin[] = [];
+              for (const g of section.groups) {
+                for (const item of g.items) {
+                  const m = (item.meta || {}) as Record<string, any>;
+                  const coords = parseLatLng(m);
+                  if (!coords) continue;
+                  rawSectionPins.push({
+                    key: item.key,
+                    label: item.label,
+                    worked: Number(m.worked) === 1 ? 1 : 0,
+                    lat: coords.lat,
+                    lng: coords.lng,
+                    color: Number(m.worked) === 1 ? '#10B981' : '#FFB800',
+                    shape: 'circle',
+                    territoryNumber: section.territory,
+                    city: String(m.city || m.cidade || sectionCity),
+                    line: m.line ? String(m.line) : item.label,
+                    propertyType: String(m.property_type || 'residencial'),
+                    isForeign: Boolean(m.is_foreign || m.language),
+                  });
+                }
+              }
+              const walkingSeq: WalkingSequenceRoute | null =
+                inlineMapWalkOrder && rawSectionPins.length > 0
+                  ? buildWalkingSequenceRoute(
+                      rawSectionPins.map((p) => {
+                        const lStr = p.line || p.label;
+                        const cIdx = lStr.indexOf(',');
+                        return {
+                          key: p.key,
+                          label: lStr,
+                          lat: p.lat,
+                          lng: p.lng,
+                          streetName: cIdx >= 0 ? lStr.slice(0, cIdx).trim() : lStr,
+                          numberOrComplement: cIdx >= 0 ? lStr.slice(cIdx + 1).trim() : undefined,
+                          worked: p.worked,
+                        };
+                      }),
+                      'sidewalk',
+                      userLocation ? { lat: userLocation.lat, lng: userLocation.lng } : null
+                    )
+                  : null;
+              const orderMap = new Map<string, number>();
+              if (walkingSeq) {
+                for (const st of walkingSeq) orderMap.set(st.key, st.order);
+              }
+              const sectionPins: MapPin[] = rawSectionPins.map((p) => ({
+                ...p,
+                walkOrder: orderMap.get(p.key),
+              }));
+
+              return (
+                <View
+                  style={styles.inlineMapPanel}
+                  testID={`checklist-inline-map-panel-${section.territory}`}
+                >
+                  <View style={styles.inlineMapToolbar}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      <Pressable
+                        testID={`checklist-map-mode-quadras-${section.territory}`}
+                        onPress={() => setInlineMapMode('quadras')}
+                        style={[
+                          styles.inlineMapToolBtn,
+                          inlineMapMode === 'quadras' && styles.inlineMapToolBtnActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inlineMapToolBtnText,
+                            inlineMapMode === 'quadras' && styles.inlineMapToolBtnTextActive,
+                          ]}
+                        >
+                          🔷 Quadras ({sectionQuadras.length})
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID={`checklist-map-mode-pins-${section.territory}`}
+                        onPress={() => setInlineMapMode('pins')}
+                        style={[
+                          styles.inlineMapToolBtn,
+                          inlineMapMode === 'pins' && styles.inlineMapToolBtnActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inlineMapToolBtnText,
+                            inlineMapMode === 'pins' && styles.inlineMapToolBtnTextActive,
+                          ]}
+                        >
+                          📍 Pontos ({sectionPins.length})
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID={`checklist-map-direction-${section.territory}`}
+                        onPress={() => setInlineMapWalkOrder((prev) => !prev)}
+                        style={[
+                          styles.inlineMapToolBtn,
+                          inlineMapWalkOrder && styles.inlineMapToolBtnActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inlineMapToolBtnText,
+                            inlineMapWalkOrder && styles.inlineMapToolBtnTextActive,
+                          ]}
+                        >
+                          {inlineMapWalkOrder ? '👣 Direção: ON' : '👣 Direção'}
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID={`checklist-map-gps-${section.territory}`}
+                        onPress={toggleGps}
+                        style={[
+                          styles.inlineMapToolBtn,
+                          gpsEnabled && styles.inlineMapToolBtnActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inlineMapToolBtnText,
+                            gpsEnabled && styles.inlineMapToolBtnTextActive,
+                          ]}
+                        >
+                          {gpsEnabled ? '🛰️ GPS Ativo' : '🛰️ Meu GPS'}
+                        </Text>
+                      </Pressable>
+
+                      {gpsEnabled && userLocation ? (
+                        <Pressable
+                          testID={`checklist-map-center-gps-${section.territory}`}
+                          onPress={centerOnUser}
+                          style={styles.inlineMapToolBtn}
+                        >
+                          <Text style={styles.inlineMapToolBtnText}>🎯 Centralizar</Text>
+                        </Pressable>
+                      ) : null}
+
+                      <Pressable
+                        testID={`checklist-map-fit-${section.territory}`}
+                        onPress={() => setInlineMapFitRequest((n) => n + 1)}
+                        style={styles.inlineMapToolBtn}
+                      >
+                        <Text style={styles.inlineMapToolBtnText}>⌖ Enquadrar</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() =>
+                          router.push(
+                            `/territory-map?id=${eventId}&territory=${encodeURIComponent(section.territory)}`
+                          )
+                        }
+                        style={styles.inlineMapToolBtn}
+                      >
+                        <Text style={styles.inlineMapToolBtnText}>↗ Mapa CAD</Text>
+                      </Pressable>
+                    </View>
+
+                    {activeRoute ? (
+                      <View
+                        style={styles.inlineRouteBanner}
+                        testID={`checklist-active-route-${section.territory}`}
+                      >
+                        <Text style={styles.inlineRouteText} numberOfLines={1}>
+                          🧭 {routeDestinationMeta?.label || 'Destino'} • 🚶{' '}
+                          {formatRouteDistance(activeRoute.distanceMeters)} (
+                          {formatRouteDuration(activeRoute.durationSeconds)})
+                        </Text>
+                        {routeDestinationMeta ? (
+                          <Pressable
+                            onPress={() =>
+                              openExternalGoogleMaps({
+                                lat: routeDestinationMeta.lat,
+                                lng: routeDestinationMeta.lng,
+                                streetName: routeDestinationMeta.streetName,
+                                label: routeDestinationMeta.label,
+                                city: routeDestinationMeta.city || sectionCity,
+                                originLat: userLocation?.lat,
+                                originLng: userLocation?.lng,
+                                mode: 'directions',
+                              })
+                            }
+                            style={styles.inlineGmapsChip}
+                          >
+                            <Text style={styles.inlineGmapsChipText}>🗺️ Google Maps</Text>
+                          </Pressable>
+                        ) : null}
+                        <Pressable
+                          onPress={() => {
+                            setActiveRoute(null);
+                            setRouteDestinationMeta(null);
+                          }}
+                          style={styles.inlineRouteClearBtn}
+                        >
+                          <Text style={styles.inlineRouteClearText}>✕ Limpar</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <View style={{ height: 340, width: '100%' }}>
+                    <TerritoryLeafletMap
+                      mode={inlineMapMode}
+                      pins={sectionPins}
+                      quadras={sectionQuadras}
+                      outlines={[]}
+                      showStreetLabels
+                      showQuadraPopup
+                      selectedKey={inlineSelectedKey}
+                      fitRequest={inlineMapFitRequest}
+                      userLocation={userLocation}
+                      panToUserRequest={panToUserRequest}
+                      activeRoute={activeRoute}
+                      walkingSequence={walkingSeq}
+                      onSelectPin={(k) => setInlineSelectedKey(k)}
+                      onSelectQuadra={(k) => setInlineSelectedKey(k)}
+                      onToggleWork={(k) => handleToggleItem(k)}
+                      onEditPin={(k) => {
+                        const found = flatRegistry.find((n) => pathKey.equals(n.key, k));
+                        if (found) setEditingAddressItem(found);
+                      }}
+                      onCustomizePin={() => undefined}
+                      onOpenGoogleMapsPin={(k) => {
+                        const p = sectionPins.find((x) => x.key === k);
+                        if (p) {
+                          openExternalGoogleMaps({
+                            lat: p.lat,
+                            lng: p.lng,
+                            line: p.line,
+                            label: p.label,
+                            city: p.city || sectionCity,
+                            originLat: userLocation?.lat,
+                            originLng: userLocation?.lng,
+                            mode: 'directions',
+                          });
+                        }
+                      }}
+                      onRouteToPinInMap={(k) => {
+                        const p = sectionPins.find((x) => x.key === k);
+                        if (p) {
+                          handleTraceRouteInChecklistMap(section.territory, {
+                            lat: p.lat,
+                            lng: p.lng,
+                            label: p.line || p.label,
+                            city: p.city || sectionCity,
+                          });
+                        }
+                      }}
+                      onOpenGoogleMapsQuadra={(qKey) => {
+                        const q = sectionQuadras.find((x) => x.key === qKey);
+                        if (q) {
+                          openExternalGoogleMaps({
+                            lat: q.centerLat,
+                            lng: q.centerLng,
+                            streetName: q.perimeterStreets[0] || q.label,
+                            label: q.label,
+                            city: sectionCity,
+                            originLat: userLocation?.lat,
+                            originLng: userLocation?.lng,
+                            mode: 'directions',
+                          });
+                        }
+                      }}
+                      onRouteToQuadraInMap={(qKey) => {
+                        const q = sectionQuadras.find((x) => x.key === qKey);
+                        if (q) {
+                          handleTraceRouteInChecklistMap(section.territory, {
+                            lat: q.centerLat,
+                            lng: q.centerLng,
+                            label: q.label,
+                            city: sectionCity,
+                            streetName: q.perimeterStreets[0],
+                          });
+                        }
+                      }}
+                    />
+                  </View>
+                </View>
+              );
+            };
+
             return (
           <View key={`T:${section.territory}`} style={single ? undefined : styles.territorySection}>
             {!single ? (
@@ -609,15 +1001,39 @@ export default function TerritoryChecklistScreen() {
                 total={section.total}
                 expanded={sectionOpen}
                 daysSinceCompleted={section.daysSinceCompleted}
+                mapOpen={isMapOpenForSection}
                 onToggle={() => toggleExpanded(`T:${section.territory}`)}
+                onToggleMap={() => toggleInlineMapForTerritory(section.territory)}
+                onOpenGoogleMaps={() => {
+                  const q0 = sectionQuadras[0];
+                  openExternalGoogleMaps({
+                    lat: q0?.centerLat,
+                    lng: q0?.centerLng,
+                    streetName: q0?.perimeterStreets[0] || firstSectionMeta.line || section.territory,
+                    label: `Território ${section.territory}`,
+                    city: sectionCity,
+                    originLat: userLocation?.lat,
+                    originLng: userLocation?.lng,
+                    mode: 'directions',
+                  });
+                }}
                 onBatchToggle={() => handleToggleTerritory(section)}
                 onOpenPublisher={() =>
                   router.push(`/publisher?id=${eventId}&territory=${encodeURIComponent(section.territory)}`)
                 }
               />
             ) : null}
+
+            {!single && sectionOpen ? renderInlineTerritoryMap() : null}
+
           {sectionOpen && section.groups.map((group) => {
             const groupOpen = isExpanded(`G:${group.groupKey}`);
+            const groupQuadra =
+              sectionQuadras.find((q) => q.key === group.groupKey) || sectionQuadras[0];
+            const firstGroupItem = group.items[0];
+            const firstGroupMeta = (firstGroupItem?.meta || {}) as Record<string, any>;
+            const firstGroupCoords = parseLatLng(firstGroupMeta);
+
             return (
             <View key={group.groupKey} style={[styles.groupCard, !single && styles.groupCardNested]}>
               {/* Group Header */}
@@ -632,17 +1048,73 @@ export default function TerritoryChecklistScreen() {
                   <Text style={styles.groupKeyBadge}>{group.groupKey}</Text>
                   <Text style={styles.groupTitle} numberOfLines={groupOpen ? undefined : 1}>{group.groupLabel}</Text>
                 </Pressable>
-                <Pressable
-                  onPress={() => handleToggleQuadra(group)}
-                  style={[
-                    styles.batchToggleBtn,
-                    group.isAllWorked ? styles.batchBtnReset : styles.batchBtnComplete,
-                  ]}
-                >
-                  <Text style={styles.batchBtnText}>
-                    {group.isAllWorked ? 'Desmarcar Quadra' : '✓ Concluir Quadra'}
-                  </Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Pressable
+                    testID={`checklist-group-map-btn-${group.groupKey}`}
+                    onPress={() => toggleInlineMapForTerritory(section.territory)}
+                    style={[
+                      styles.inlineGmapsChip,
+                      isMapOpenForSection && {
+                        backgroundColor: 'rgba(56, 189, 248, 0.28)',
+                        borderColor: '#38BDF8',
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.inlineGmapsChipText,
+                        isMapOpenForSection && { color: '#38BDF8', fontWeight: '900' },
+                      ]}
+                    >
+                      {isMapOpenForSection ? '🗺️ Ocultar Mapa' : '🗺️ Mapa'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`checklist-group-gmaps-${group.groupKey}`}
+                    onPress={() =>
+                      openExternalGoogleMaps({
+                        lat: groupQuadra?.centerLat ?? firstGroupCoords?.lat,
+                        lng: groupQuadra?.centerLng ?? firstGroupCoords?.lng,
+                        streetName:
+                          groupQuadra?.perimeterStreets[0] ||
+                          firstGroupMeta.line ||
+                          group.groupLabel,
+                        label: group.groupLabel,
+                        city: String(firstGroupMeta.city || firstGroupMeta.cidade || sectionCity),
+                        originLat: userLocation?.lat,
+                        originLng: userLocation?.lng,
+                        mode: 'directions',
+                      })
+                    }
+                    style={styles.inlineGmapsChip}
+                  >
+                    <Text style={styles.inlineGmapsChipText}>🗺️ Google Maps</Text>
+                  </Pressable>
+                  {single ? (
+                    <Pressable
+                      testID={`checklist-group-campo-${group.groupKey}`}
+                      onPress={() =>
+                        router.push(
+                          `/publisher?id=${eventId}&territory=${encodeURIComponent(section.territory)}`
+                        )
+                      }
+                      style={styles.inlineGmapsChip}
+                    >
+                      <Text style={styles.inlineGmapsChipText}>📱 Campo</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    onPress={() => handleToggleQuadra(group)}
+                    style={[
+                      styles.batchToggleBtn,
+                      group.isAllWorked ? styles.batchBtnReset : styles.batchBtnComplete,
+                    ]}
+                  >
+                    <Text style={styles.batchBtnText}>
+                      {group.isAllWorked ? 'Desmarcar Quadra' : '✓ Concluir Quadra'}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
 
               {/* Group Recency & Progress Meta */}
@@ -670,9 +1142,65 @@ export default function TerritoryChecklistScreen() {
                 ) : null}
               </View>
 
+              {/* Embedded Territory Map when toggled on a single-group territory */}
+              {single && isMapOpenForSection ? (
+                <View style={{ paddingHorizontal: 14, paddingBottom: 10 }}>
+                  {renderInlineTerritoryMap()}
+                </View>
+              ) : null}
+
               {/* Items in Quadra (not rendered while collapsed) */}
               {groupOpen ? (
               <View style={styles.itemsList}>
+                {/* Prominent Territory Map & Google Maps Bar inside opened territory */}
+                <View style={styles.openedTerritoryActionRow}>
+                  <Pressable
+                    testID={`checklist-open-inline-map-${section.territory}`}
+                    onPress={() => toggleInlineMapForTerritory(section.territory)}
+                    style={[
+                      styles.openedTerritoryActionBtn,
+                      isMapOpenForSection && styles.openedTerritoryActionBtnActive,
+                    ]}
+                  >
+                    <Text style={styles.openedTerritoryActionBtnText}>
+                      {isMapOpenForSection
+                        ? `🗺️ Ocultar Mapa de ${section.territory}`
+                        : `🗺️ Ver Mapa deste Território (${section.territory} — Igual Modo Campo)`}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`checklist-opened-gmaps-${group.groupKey}`}
+                    onPress={() =>
+                      openExternalGoogleMaps({
+                        lat: groupQuadra?.centerLat ?? firstGroupCoords?.lat,
+                        lng: groupQuadra?.centerLng ?? firstGroupCoords?.lng,
+                        streetName:
+                          groupQuadra?.perimeterStreets[0] ||
+                          firstGroupMeta.line ||
+                          group.groupLabel,
+                        label: group.groupLabel,
+                        city: String(firstGroupMeta.city || firstGroupMeta.cidade || sectionCity),
+                        originLat: userLocation?.lat,
+                        originLng: userLocation?.lng,
+                        mode: 'directions',
+                      })
+                    }
+                    style={styles.inlineGmapsChip}
+                  >
+                    <Text style={styles.inlineGmapsChipText}>🗺️ Abrir Quadra no Google Maps</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      router.push(
+                        `/publisher?id=${eventId}&territory=${encodeURIComponent(section.territory)}`
+                      )
+                    }
+                    style={styles.inlineGmapsChip}
+                  >
+                    <Text style={styles.inlineGmapsChipText}>📱 Abrir Modo Campo</Text>
+                  </Pressable>
+                </View>
+
                 {group.items.map((item) => {
                   const meta = (item.meta || {}) as Record<string, any>;
                   const isWorked = Number(meta.worked) === 1;
@@ -716,100 +1244,176 @@ export default function TerritoryChecklistScreen() {
                       </Pressable>
 
                       {/* Middle: Full Address Breakdown */}
-                      <Pressable
-                        onPress={() => setEditingAddressItem(item)}
-                        style={styles.itemInfo}
-                      >
-                        <View style={styles.itemKeyRow}>
-                          <Text style={styles.itemKeyText}>{item.key}</Text>
-                          {meta.territory_number ? (
-                            <View style={styles.territoryNumberBadge}>
-                              <Text style={styles.territoryNumberText}>{meta.territory_number}</Text>
+                      <View style={styles.itemInfo}>
+                        <Pressable onPress={() => setEditingAddressItem(item)}>
+                          <View style={styles.itemKeyRow}>
+                            <Text style={styles.itemKeyText}>{item.key}</Text>
+                            {meta.territory_number ? (
+                              <View style={styles.territoryNumberBadge}>
+                                <Text style={styles.territoryNumberText}>{meta.territory_number}</Text>
+                              </View>
+                            ) : null}
+                            <View style={styles.propTypeBadge}>
+                              <Text style={styles.propTypeText}>{propTypeLabels[propType] || '🏠 Residência'}</Text>
                             </View>
-                          ) : null}
-                          <View style={styles.propTypeBadge}>
-                            <Text style={styles.propTypeText}>{propTypeLabels[propType] || '🏠 Residência'}</Text>
+                            {isForeign ? (
+                              <View style={styles.foreignBadge}>
+                                <Text style={styles.foreignBadgeText}>
+                                  🌐 {foreignLang ? foreignLang : 'Estrangeiro'}
+                                </Text>
+                              </View>
+                            ) : null}
+                            {meta.notes ? (
+                              <View style={styles.noteIndicatorBadge}>
+                                <Text style={styles.noteIndicatorText}>📝 Nota</Text>
+                              </View>
+                            ) : null}
                           </View>
-                          {isForeign ? (
-                            <View style={styles.foreignBadge}>
-                              <Text style={styles.foreignBadgeText}>
-                                🌐 {foreignLang ? foreignLang : 'Estrangeiro'}
-                              </Text>
-                            </View>
+
+                          {/* Main Address / Street Line */}
+                          <Text style={styles.itemLabel}>
+                            {line || item.label}
+                          </Text>
+
+                          {/* Subtitle: Neighborhood, City, CEP */}
+                          {(line2 || city || postalcode) ? (
+                            <Text style={styles.addressSubDetail}>
+                              {[line2, city, postalcode ? `CEP: ${postalcode}` : null]
+                                .filter(Boolean)
+                                .join(' • ')}
+                            </Text>
                           ) : null}
+
+                          {/* Coordinates */}
+                          {latNum != null && lngNum != null && !isNaN(latNum) && !isNaN(lngNum) ? (
+                            <Text style={styles.coordsText}>
+                              🧭 {latNum.toFixed(5)}, {lngNum.toFixed(5)}
+                            </Text>
+                          ) : null}
+
+                          {/* Dates Row: Assigned & Completed */}
+                          {(() => {
+                            const itemAssigned = meta.assignedAt || meta.assigned_date || meta.data_designacao;
+                            const itemCompleted = meta.completedAt || meta.completed_date || meta.data_conclusao;
+                            const itemDays = itemCompleted ? calculateDaysDifference(String(itemCompleted)) : null;
+
+                            if (!itemAssigned && !itemCompleted) return null;
+
+                            return (
+                              <View style={styles.itemDatesRow}>
+                                {itemAssigned ? (
+                                  <View style={styles.itemDateBadge}>
+                                    <Text style={styles.itemDateText}>
+                                      📅 Desig: {String(itemAssigned)}
+                                    </Text>
+                                  </View>
+                                ) : null}
+                                {itemCompleted ? (
+                                  <View style={styles.itemDateBadgeCompleted}>
+                                    <Text style={styles.itemDateTextCompleted}>
+                                      ✓ Concl: {String(itemCompleted)}
+                                      {itemDays !== null
+                                        ? itemDays === 0
+                                          ? ' (hoje)'
+                                          : itemDays === 1
+                                          ? ' (ontem)'
+                                          : ` (há ${itemDays}d)`
+                                        : ''}
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                            );
+                          })()}
+
+                          {/* Field Notes Snippet */}
                           {meta.notes ? (
-                            <View style={styles.noteIndicatorBadge}>
-                              <Text style={styles.noteIndicatorText}>📝 Nota</Text>
-                            </View>
+                            <Text style={styles.itemNoteSnippet} numberOfLines={2}>
+                              "{meta.notes}"
+                            </Text>
+                          ) : null}
+                        </Pressable>
+
+                        {/* Easy-to-find Google Maps & In-Map Route row right under the street/address */}
+                        <View style={styles.itemQuickGmapsRow}>
+                          <Pressable
+                            testID={`checklist-item-gmaps-${item.key}`}
+                            onPress={() =>
+                              openExternalGoogleMaps({
+                                lat: latNum,
+                                lng: lngNum,
+                                line: line || item.label,
+                                label: item.label,
+                                neighborhood: line2,
+                                city: city || sectionCity,
+                                state: meta.state || meta.uf,
+                                postalcode,
+                                originLat: userLocation?.lat,
+                                originLng: userLocation?.lng,
+                                mode: 'directions',
+                              })
+                            }
+                            style={styles.inlineGmapsChip}
+                          >
+                            <Text style={styles.inlineGmapsChipText}>
+                              🗺️ Abrir no Google Maps / Rota
+                            </Text>
+                          </Pressable>
+
+                          {latNum != null && lngNum != null && !isNaN(latNum) && !isNaN(lngNum) ? (
+                            <Pressable
+                              testID={`checklist-item-route-${item.key}`}
+                              disabled={routingBusy}
+                              onPress={() =>
+                                handleTraceRouteInChecklistMap(section.territory, {
+                                  lat: latNum,
+                                  lng: lngNum,
+                                  label: line || item.label,
+                                  city: city || sectionCity,
+                                })
+                              }
+                              style={[
+                                styles.inlineGmapsChip,
+                                {
+                                  backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                                  borderColor: 'rgba(16, 185, 129, 0.45)',
+                                },
+                              ]}
+                            >
+                              <Text style={[styles.inlineGmapsChipText, { color: '#34D399' }]}>
+                                🧭 Traçar Rota no Mapa
+                              </Text>
+                            </Pressable>
                           ) : null}
                         </View>
-
-                        {/* Main Address / Street Line */}
-                        <Text style={styles.itemLabel}>
-                          {line || item.label}
-                        </Text>
-
-                        {/* Subtitle: Neighborhood, City, CEP */}
-                        {(line2 || city || postalcode) ? (
-                          <Text style={styles.addressSubDetail}>
-                            {[line2, city, postalcode ? `CEP: ${postalcode}` : null]
-                              .filter(Boolean)
-                              .join(' • ')}
-                          </Text>
-                        ) : null}
-
-                        {/* Coordinates */}
-                        {latNum != null && lngNum != null && !isNaN(latNum) && !isNaN(lngNum) ? (
-                          <Text style={styles.coordsText}>
-                            🧭 {latNum.toFixed(5)}, {lngNum.toFixed(5)}
-                          </Text>
-                        ) : null}
-
-                        {/* Dates Row: Assigned & Completed */}
-                        {(() => {
-                          const itemAssigned = meta.assignedAt || meta.assigned_date || meta.data_designacao;
-                          const itemCompleted = meta.completedAt || meta.completed_date || meta.data_conclusao;
-                          const itemDays = itemCompleted ? calculateDaysDifference(String(itemCompleted)) : null;
-
-                          if (!itemAssigned && !itemCompleted) return null;
-
-                          return (
-                            <View style={styles.itemDatesRow}>
-                              {itemAssigned ? (
-                                <View style={styles.itemDateBadge}>
-                                  <Text style={styles.itemDateText}>
-                                    📅 Desig: {String(itemAssigned)}
-                                  </Text>
-                                </View>
-                              ) : null}
-                              {itemCompleted ? (
-                                <View style={styles.itemDateBadgeCompleted}>
-                                  <Text style={styles.itemDateTextCompleted}>
-                                    ✓ Concl: {String(itemCompleted)}
-                                    {itemDays !== null
-                                      ? itemDays === 0
-                                        ? ' (hoje)'
-                                        : itemDays === 1
-                                        ? ' (ontem)'
-                                        : ` (há ${itemDays}d)`
-                                      : ''}
-                                  </Text>
-                                </View>
-                              ) : null}
-                            </View>
-                          );
-                        })()}
-
-                        {/* Field Notes Snippet */}
-                        {meta.notes ? (
-                          <Text style={styles.itemNoteSnippet} numberOfLines={2}>
-                            "{meta.notes}"
-                          </Text>
-                        ) : null}
-                      </Pressable>
+                      </View>
 
                       {/* Right: Actions */}
                       <View style={styles.actionButtonsCol}>
+                        <Pressable
+                          testID={`checklist-item-gmaps-icon-${item.key}`}
+                          onPress={() =>
+                            openExternalGoogleMaps({
+                              lat: latNum,
+                              lng: lngNum,
+                              line: line || item.label,
+                              label: item.label,
+                              neighborhood: line2,
+                              city: city || sectionCity,
+                              state: meta.state || meta.uf,
+                              postalcode,
+                              originLat: userLocation?.lat,
+                              originLng: userLocation?.lng,
+                              mode: 'directions',
+                            })
+                          }
+                          style={styles.editAddressBtn}
+                          accessibilityLabel="Abrir no Google Maps"
+                          {...({ title: 'Abrir no Google Maps / Traçar Rota' } as any)}
+                        >
+                          <Text style={styles.editAddressBtnText}>🗺️</Text>
+                        </Pressable>
+
                         <Pressable
                           onPress={() => setEditingAddressItem(item)}
                           style={styles.editAddressBtn}
@@ -1472,5 +2076,121 @@ const styles = StyleSheet.create({
     color: '#062016',
     fontSize: 13,
     fontWeight: '700',
+  },
+  inlineMapPanel: {
+    marginTop: 8,
+    marginBottom: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.45)',
+    backgroundColor: '#141923',
+  },
+  inlineMapToolbar: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#161B26',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 8,
+  },
+  inlineMapToolBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  inlineMapToolBtnActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.22)',
+    borderColor: '#38BDF8',
+  },
+  inlineMapToolBtnText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  inlineMapToolBtnTextActive: {
+    color: '#38BDF8',
+    fontWeight: '900',
+  },
+  inlineRouteBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  inlineRouteText: {
+    flex: 1,
+    color: '#E0F2FE',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  inlineRouteClearBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+  },
+  inlineRouteClearText: {
+    color: '#FCA5A5',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  inlineGmapsChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
+    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.45)',
+  },
+  inlineGmapsChipText: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  openedTerritoryActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.28)',
+  },
+  openedTerritoryActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+  },
+  openedTerritoryActionBtnActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.35)',
+  },
+  openedTerritoryActionBtnText: {
+    color: '#E0F2FE',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  itemQuickGmapsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
   },
 });

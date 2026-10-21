@@ -88,14 +88,14 @@ const SAMPLE_ROWS: TableRow[] = [
     date: '2026-03-04',
     value: 500,
     entryType: 'partner_in',
-    description: 'Adiantamento Sócio João',
+    description: 'Adiantamento Sócio Participante 01',
   },
   {
     id: 'p2',
     date: '2026-03-06',
     value: 500,
     entryType: 'partner_out',
-    description: 'Repasse Sócio João',
+    description: 'Repasse Sócio Participante 01',
   },
 ];
 
@@ -201,7 +201,7 @@ describe('Local AI-Analyst Synthesizer — Core Parity & Formats', () => {
     expect(res.metadata.anonymized).toBe(true);
     // Personal descriptions must NOT appear when anonymized
     expect(res.content.includes('Projeto Cliente Alpha')).toBe(false);
-    expect(res.content.includes('Adiantamento Sócio João')).toBe(false);
+    expect(res.content.includes('Adiantamento Sócio Participante 01')).toBe(false);
     // Category brackets should replace personal descriptions
     expect(res.content.includes('[FREELANCE]')).toBe(true);
   });

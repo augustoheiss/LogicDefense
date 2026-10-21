@@ -79,7 +79,7 @@ describe('Universal Engine Auto-Detection', () => {
   it('detects roster_assignments from speaker, duration and room headers', () => {
     const sample = `_key,_type,label,value,email,_meta_json
 01,root,Reunião de Meio de Semana,,,"{}"
-01-01-01,leaf,Discurso Inicial,Carlos Silva,carlos@email.com,"{""assignedTo"":""Carlos Silva"",""room"":""Auditório Principal"",""durationMinutes"":10}"`;
+01-01-01,leaf,Discurso Inicial,Participante 01,participante01@unidade.local,"{""assignedTo"":""Participante 01"",""room"":""Auditório Principal"",""durationMinutes"":10}"`;
     const report = detectEnginesFromCSV(sample);
     expect(report.primaryEngine).toBe('roster_assignments');
     expect(report.matches[0].confidence).toBeGreaterThan(50);
@@ -94,7 +94,7 @@ describe('Universal Engine Auto-Detection', () => {
 
   it('detects incident_command from ICS roles and radio channels', () => {
     const sample = `key,funcao_ics,oficial,radio,efetivo
-01-01-01,INCIDENT_COMMANDER,Silva,Canal 1 (Comando),1`;
+01-01-01,INCIDENT_COMMANDER,Operador 01,Canal 1 (Comando),1`;
     const report = detectEnginesFromCSV(sample);
     expect(report.primaryEngine).toBe('incident_command');
   });
@@ -115,9 +115,9 @@ describe('Universal Engine Auto-Detection', () => {
 
   it('detects canvassing_logistics from contact codes CNT, NH, DNC', () => {
     const sample = `key,endereco_porta,codigo_contato,ordem_rota,voluntario
-01-01-01,Porta 1,CNT,1,Mariana
-01-01-02,Porta 2,NH,2,Mariana
-01-01-03,Porta 3,DNC,3,Mariana`;
+01-01-01,Porta 1,CNT,1,Participante 02
+01-01-02,Porta 2,NH,2,Participante 02
+01-01-03,Porta 3,DNC,3,Participante 02`;
     const report = detectEnginesFromCSV(sample);
     expect(report.primaryEngine).toBe('canvassing_logistics');
   });
@@ -135,7 +135,7 @@ describe('Universal Engine Auto-Detection', () => {
     const compositeCSV = `key,tipo,nome,trabalhado,latitude,longitude,designado,sala,duracao_min
 01,root,Evento Grande,,,,,,
 01-01,branch,Setor Campo,,,,,,
-01-01-01,leaf,Ponto Apoio 1,1,-23.55,-46.63,Carlos Silva,Auditório 1,30`;
+01-01-01,leaf,Ponto Apoio 1,1,-23.55,-46.63,Participante 01,Auditório 1,30`;
     const report = detectEnginesFromCSV(compositeCSV);
     expect(report.isMultiEngineCandidate).toBe(true);
     expect(report.suggestedEngines).toContain('territory_logistics');
@@ -189,7 +189,7 @@ describe('Granular Ingestion & Staging Quarantine (LEGO Assembly)', () => {
   const currentRegistry: FlatRegistry = [
     { key: '01', type: 'territory', label: 'Território Geral', value: '', email: '', meta: {} },
     { key: '01-01', type: 'header', label: 'Quadra 1', value: '', email: '', meta: {} },
-    { key: '01-01-01', type: 'slot', label: 'Casa 10', value: 'Trabalhado', email: '', meta: { worked: 1, workerName: 'Carlos' } },
+    { key: '01-01-01', type: 'slot', label: 'Casa 10', value: 'Trabalhado', email: '', meta: { worked: 1, workerName: 'Participante 01' } },
     { key: '01-02', type: 'header', label: 'Quadra 2', value: '', email: '', meta: {} },
     { key: '01-02-01', type: 'slot', label: 'Casa 20', value: '', email: '', meta: { worked: 0 } },
   ];

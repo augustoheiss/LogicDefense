@@ -10,7 +10,7 @@ import {
 describe('Phase F2 (Red Teaming V3) — Template & YAML Security Guarantees', () => {
   it('renders prototype pollution and constructor code-execution attempts as inert literal strings', () => {
     const ctx = {
-      value: 'Maria Clara',
+      value: 'Participante 01',
       meta: { date: '2026-10-15' },
     };
 
@@ -24,7 +24,7 @@ describe('Phase F2 (Red Teaming V3) — Template & YAML Security Guarantees', ()
     expect(renderTemplateString(malicious3, ctx)).toBe(malicious3);
 
     const valid = "Olá, {{value | upper}} em {{meta.date | date:'dd/MM/yyyy'}}!";
-    expect(renderTemplateString(valid, ctx)).toBe('Olá, MARIA CLARA em 15/10/2026!');
+    expect(renderTemplateString(valid, ctx)).toBe('Olá, PARTICIPANTE 01 em 15/10/2026!');
   });
 
   it('aborts with SdocLimitError(LIMIT_PAGES) when repeat would generate more than 500 pages', () => {

@@ -85,7 +85,7 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineCSVTemplate> = {
       '01-01-01,leaf,Apresentação de Abertura,Participante 01,alex@email.com,"{""assignedTo"":""Participante 01"",""room"":""Auditório Principal"",""durationMinutes"":15,""confirmed"":true,""materialReference"":""Diretriz Operacional 2026""}"',
       '01-01-02,leaf,Relatório Geral de Atividades,Participante 05,enzo@email.com,"{""assignedTo"":""Participante 05"",""room"":""Auditório Principal"",""durationMinutes"":10,""confirmed"":false}"',
       '01-02,branch,Workshops & Mesas Temáticas,,,"{}"',
-      '01-02-01,leaf,Oficina de Boas Práticas,Participante 02,ana@email.com,"{""assignedTo"":""Participante 02"",""assistantTo"":""Participante 04"",""room"":""Sala de Treinamento B"",""durationMinutes"":45,""confirmed"":true}"',
+      '01-02-01,leaf,Oficina de Boas Práticas,Participante 02,participante02@unidade.local,"{""assignedTo"":""Participante 02"",""assistantTo"":""Participante 04"",""room"":""Sala de Treinamento B"",""durationMinutes"":45,""confirmed"":true}"',
       '01-02-02,leaf,Painel de Metodologia e Processos,Participante 03,caio@email.com,"{""assignedTo"":""Participante 03"",""room"":""Sala de Treinamento B"",""durationMinutes"":30,""confirmed"":true}"',
     ].join('\n'),
     cleanHumanCsv: [
@@ -95,7 +95,7 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineCSVTemplate> = {
       '01-01-01,item,Apresentação de Abertura,Participante 01,alex@email.com,,Auditório Principal,15,sim,Diretriz Operacional 2026',
       '01-01-02,item,Relatório Geral de Atividades,Participante 05,enzo@email.com,,Auditório Principal,10,nao,',
       '01-02,secao,Workshops & Mesas Temáticas,,,,,,,,',
-      '01-02-01,item,Oficina de Boas Práticas,Participante 02,ana@email.com,Participante 04,Sala de Treinamento B,45,sim,Manual de Procedimentos',
+      '01-02-01,item,Oficina de Boas Práticas,Participante 02,participante02@unidade.local,Participante 04,Sala de Treinamento B,45,sim,Manual de Procedimentos',
       '01-02-02,item,Painel de Metodologia e Processos,Participante 03,caio@email.com,,Sala de Treinamento B,30,sim,Guia de Execução',
     ].join('\n'),
     columnGuides: [
@@ -122,7 +122,7 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineCSVTemplate> = {
       '01,root,Simpósio: Tecnologias Livres 2026,,,"{}"',
       '01-01,branch,Módulo 1: Bancos Vetoriais Offline,,,"{}"',
       '01-01-01,leaf,Benchmarking HNSW vs IVF,Dr. Aris,aris@lab.org,"{""researcherName"":""Dr. Aris"",""status"":""submitted"",""synthesisText"":""HNSW obteve 98% recall com latência sub-5ms em CPU local."",""keyFindings"":[""Zero dependência de GPU"",""Consumo de memória 45MB""]}"',
-      '01-01-02,leaf,Quantização Int8 em WebAssembly,Participante 03,lucas@lab.org,"{""researcherName"":""Participante 03"",""status"":""in_progress"",""synthesisText"":""Em fase de testes comparativos."",""keyFindings"":[""Perda de acurácia menor que 1.1%""]}"',
+      '01-01-02,leaf,Quantização Int8 em WebAssembly,Participante 03,participante03@lab.org,"{""researcherName"":""Participante 03"",""status"":""in_progress"",""synthesisText"":""Em fase de testes comparativos."",""keyFindings"":[""Perda de acurácia menor que 1.1%""]}"',
       '01-02,branch,Módulo 2: Criptografia P2P Local-First,,,"{}"',
       '01-02-01,leaf,Auditoria XChaCha20-Poly1305,Helena Rios,helena@lab.org,"{""researcherName"":""Helena Rios"",""status"":""reviewed"",""synthesisText"":""Algoritmo validado contra ataques de replay e adulteração de tags."",""keyFindings"":[""Velocidade 3x superior ao AES em CPU mobile""]}"',
     ].join('\n'),
@@ -131,7 +131,7 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineCSVTemplate> = {
       '01,raiz,Simpósio: Tecnologias Livres 2026,,,,,,,',
       '01-01,modulo,Módulo 1: Bancos Vetoriais Offline,,,,,,,',
       '01-01-01,topico,Benchmarking HNSW vs IVF,Dr. Aris,aris@lab.org,submitted,"HNSW obteve 98% recall com sub-5ms","Zero GPU; Consumo 45MB","Malkov (2018)"',
-      '01-01-02,topico,Quantização Int8 em WebAssembly,Participante 03,lucas@lab.org,in_progress,"Em fase de testes comparativos","Perda < 1.1%","Wasm SIMD Spec"',
+      '01-01-02,topico,Quantização Int8 em WebAssembly,Participante 03,participante03@lab.org,in_progress,"Em fase de testes comparativos","Perda < 1.1%","Wasm SIMD Spec"',
       '01-02,modulo,Módulo 2: Criptografia P2P Local-First,,,,,,,',
       '01-02-01,topico,Auditoria XChaCha20-Poly1305,Helena Rios,helena@lab.org,reviewed,"Validado contra ataques de replay","Velocidade 3x em mobile","RFC 8439"',
     ].join('\n'),
@@ -195,7 +195,7 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineCSVTemplate> = {
       '01-01-02,leaf,Oficial de Segurança,Moreira,moreira@defesacivil.gov,"{""icsRole"":""SAFETY_OFFICER"",""radioChannel"":""Canal 2 (Segurança)"",""allocatedPersonnel"":4}"',
       '01-02,branch,Seção de Operações,,,"{""supervisorName"":""Maj. Cavalcanti""}"',
       '01-02-01,leaf,Divisão Alfa - Busca Aquática,Cavalcanti,cavalcanti@defesacivil.gov,"{""icsRole"":""OPERATIONS"",""radioChannel"":""Canal 3 (Operações)"",""allocatedPersonnel"":12}"',
-      '01-02-02,leaf,Divisão Beta - Evacuação Terrestre,Peixoto,peixoto@defesacivil.gov,"{""icsRole"":""OPERATIONS"",""radioChannel"":""Canal 4 (Tático)"",""allocatedPersonnel"":8}"',
+      '01-02-02,leaf,Divisão Beta - Evacuação Terrestre,Operador 04,operador04@defesacivil.gov,"{""icsRole"":""OPERATIONS"",""radioChannel"":""Canal 4 (Tático)"",""allocatedPersonnel"":8}"',
     ].join('\n'),
     cleanHumanCsv: [
       'key,tipo,funcao_ics,oficial,email,radio,efetivo,supervisor',
@@ -205,7 +205,7 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineCSVTemplate> = {
       '01-01-02,posto,Oficial de Segurança,Moreira,moreira@defesacivil.gov,Canal 2 (Segurança),4,Nogueira',
       '01-02,secao,Seção de Operações,,,,,,Maj. Cavalcanti',
       '01-02-01,posto,Divisão Alfa - Busca Aquática,Cavalcanti,cavalcanti@defesacivil.gov,Canal 3 (Operações),12,Maj. Cavalcanti',
-      '01-02-02,posto,Divisão Beta - Evacuação Terrestre,Peixoto,peixoto@defesacivil.gov,Canal 4 (Tático),8,Maj. Cavalcanti',
+      '01-02-02,posto,Divisão Beta - Evacuação Terrestre,Operador 04,operador04@defesacivil.gov,Canal 4 (Tático),8,Maj. Cavalcanti',
     ].join('\n'),
     columnGuides: [
       { column: '_key / key', description: 'Código do posto no organograma ICS (01, 01-01, etc)', example: '01-01-01' },

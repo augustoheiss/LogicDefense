@@ -106,7 +106,7 @@ export function parseProgramScheduleText(
 
   // Regex for session header: e.g. "9 de outubro de 2026 | MÓDULO 01"
   const sessionHeaderRegex = /^(\d{1,2}\s+de\s+[a-zA-Zçãõáéíóú]+\s+de\s+\d{4})\s*\|\s*(.+)$/i;
-  // Regex for timed part: e.g. "1. Análise de Cenário (10 mins.) Roberto Almeida"
+  // Regex for timed part: e.g. "1. Análise de Cenário (10 mins.) Participante 01"
   const numberedPartRegex = /^(\d+)\.\s+(.+?)\s*\((\d+)\s*mins?\.?\)\s*(.*)$/i;
 
   for (let i = 0; i < lines.length; i++) {

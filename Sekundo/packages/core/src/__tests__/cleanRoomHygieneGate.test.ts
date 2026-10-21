@@ -18,11 +18,11 @@ function collectSourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === '__tests__' || entry.name === 'node_modules' || entry.name === 'dist') {
+      if (entry.name === 'node_modules' || entry.name === 'dist') {
         continue;
       }
       collectSourceFiles(full, out);
-    } else if (/\.(ts|tsx)$/.test(entry.name)) {
+    } else if (/\.(ts|tsx)$/.test(entry.name) && entry.name !== 'cleanRoomHygieneGate.test.ts') {
       out.push(full);
     }
   }
@@ -94,7 +94,19 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
     const legacyArrayIdentifier = ['LEGACY', 'SENSITIVE', 'REPLACEMENTS'].join('_');
     const legacyRenderHost = ['ocorrencias', 'pdf', 'writer'].join('-');
     const forbiddenPiiPattern = new RegExp(
-      '\\b(' + ['Jo\\u00e3o', 'Bruno', 'Carlos', 'Marcos', 'Andr\\u00e9'].join('|') + ')\\b'
+      '\\b(' +
+        [
+          'Jo\\u00e3o',
+          '\\u0042runo',
+          '\\u0043arlos',
+          '\\u004darcos',
+          'Andr\\u00e9',
+          '\\u0052oberto',
+          '\\u004eelson',
+          '\\u0050inhais',
+          '\\u0041zaleias',
+        ].join('|') +
+        ')\\b'
     );
 
     const violations: string[] = [];

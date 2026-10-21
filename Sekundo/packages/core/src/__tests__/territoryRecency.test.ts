@@ -130,7 +130,7 @@ describe('Territory Recency & Coverage Ranking', () => {
           line: 'Rua das Flores, 101',
           lat: -23.55,
           lng: -46.63,
-          workerName: 'Carlos Silva',
+          workerName: 'Participante 01',
           assignedAt: '2026-06-01',
           completedAt: '2026-06-14',
           notes: 'Visita concluída com sucesso',

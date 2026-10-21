@@ -3,18 +3,26 @@
  *
  * Leaflet rendered straight into the React DOM — no iframe, no srcDoc, no postMessage.
  * - The map instance is created once; data updates only swap layers, so pan/zoom survive
- *   every toggle, filter or edit. The viewport moves only on first load or `fitRequest`.
+ *   every toggle, mode switch (`quadras` <-> `pins`), filter or edit. The viewport moves
+ *   only on first load, `fitRequest`, or `panToUserRequest`.
+ * - Dedicated `userLocationLayerRef` renders live GPS telemetry (accuracy halo + pulsing
+ *   blue dot) without disrupting `dataLayerRef` or hijacking the camera.
+ * - Dedicated `routeLayerRef` renders in-map routes (OSRM street geometry or offline
+ *   Haversine vector) and walking sequence trails (`1 -> 2 -> 3...`).
  * - Every user-provided string is written with `textContent` (no innerHTML), and user
  *   colors are applied through the CSSOM, which ignores invalid values.
- * - Leaflet and Geoman are bundled from npm (no CDN), loaded lazily so static rendering
- *   never touches `window`.
  */
 
 import React, { useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import type * as Leaflet from 'leaflet';
-import type { LatLngTuple, MapPin, TerritoryLeafletMapProps } from './mapTypes';
+import {
+  buildGoogleMapsDirectionsUrl,
+  formatRouteDistance,
+  formatRouteDuration,
+} from '@sekundo/core';
+import type { LatLngTuple, MapPin, MapQuadra, TerritoryLeafletMapProps } from './mapTypes';
 
 type LeafletNS = typeof Leaflet;
 
@@ -43,10 +51,15 @@ const PROPERTY_LABELS: Record<string, string> = {
 };
 
 /** Tiny DOM builder: text is always set via textContent. */
-function el(tag: string, opts: { cls?: string; text?: string; style?: Partial<CSSStyleDeclaration> } = {}, children: HTMLElement[] = []) {
+function el(
+  tag: string,
+  opts: { cls?: string; text?: string; style?: Partial<CSSStyleDeclaration>; testId?: string } = {},
+  children: HTMLElement[] = []
+) {
   const node = document.createElement(tag);
   if (opts.cls) node.className = opts.cls;
   if (opts.text !== undefined) node.textContent = opts.text;
+  if (opts.testId) node.setAttribute('data-testid', opts.testId);
   if (opts.style) Object.assign(node.style, opts.style);
   children.forEach((c) => node.appendChild(c));
   return node;
@@ -59,14 +72,23 @@ function daysLabel(days: number | null | undefined): string {
   return ` (há ${days}d)`;
 }
 
+function openExternalUrlSafe(url: string) {
+  if (typeof window !== 'undefined' && typeof window.open === 'function') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
 export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const LRef = useRef<LeafletNS | null>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const dataLayerRef = useRef<Leaflet.FeatureGroup | null>(null);
+  const routeLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const userLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const editLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const didInitialFitRef = useRef(false);
   const lastFitRequestRef = useRef(props.fitRequest);
+  const lastPanToUserRequestRef = useRef(props.panToUserRequest ?? 0);
   const [ready, setReady] = React.useState(false);
 
   // Leaflet handlers read callbacks through this ref, so they never go stale.
@@ -88,11 +110,17 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
       const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true }).setView([0, 0], 2);
       L.tileLayer(OSM_TILE_URL, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(map);
       dataLayerRef.current = L.featureGroup().addTo(map);
+      routeLayerRef.current = L.layerGroup().addTo(map);
+      userLocationLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+      (window as unknown as { __sekundoLeafletMap?: Leaflet.Map }).__sekundoLeafletMap = map;
       setReady(true);
     })();
     return () => {
       cancelled = true;
+      if ((window as unknown as { __sekundoLeafletMap?: Leaflet.Map }).__sekundoLeafletMap === mapRef.current) {
+        delete (window as unknown as { __sekundoLeafletMap?: Leaflet.Map }).__sekundoLeafletMap;
+      }
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -115,7 +143,7 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
     if (!ready || !L || !group) return;
     group.clearLayers();
 
-    const { mode, pins, quadras, outlines, showStreetLabels, selectedKey, editSession } = props;
+    const { mode, pins, quadras, outlines, showStreetLabels, showQuadraPopup, selectedKey, editSession } = props;
 
     if (mode === 'quadras') {
       for (const mt of outlines) {
@@ -155,11 +183,29 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
             style: { fontSize: '11px', color: '#374151', marginTop: '2px' },
           }),
           ...(q.perimeterStreets.length > 0
-            ? [el('div', { text: `🛣️ ${q.perimeterStreets.slice(0, 4).join(', ')}`, style: { fontSize: '10px', color: '#6B7280', marginTop: '3px', maxWidth: '220px', whiteSpace: 'normal' } })]
+            ? [
+                el('div', {
+                  text: `🛣️ ${q.perimeterStreets.slice(0, 4).join(', ')}`,
+                  style: { fontSize: '10px', color: '#6B7280', marginTop: '3px', maxWidth: '220px', whiteSpace: 'normal' },
+                }),
+              ]
             : []),
         ]);
         poly.bindTooltip(tip, { sticky: true });
+
+        if (showQuadraPopup) {
+          poly.bindPopup(buildQuadraPopupCard(q, propsRef));
+        }
+
         group.addLayer(poly);
+        const polyEl = poly.getElement();
+        if (polyEl) {
+          polyEl.setAttribute('data-testid', `quadra-polygon-${q.key}`);
+          polyEl.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            propsRef.current.onSelectQuadra(q.key);
+          });
+        }
 
         if (showStreetLabels && q.perimeterStreets.length > 0) {
           const label = L.marker(q.centroid, {
@@ -176,6 +222,7 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
                   fontWeight: '700',
                   color: '#111827',
                   textShadow: '0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff',
+                  pointerEvents: 'none',
                 },
               }),
               iconSize: [0, 0],
@@ -194,14 +241,181 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
       didInitialFitRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, props.mode, props.pins, props.quadras, props.outlines, props.showStreetLabels, props.selectedKey, props.editSession?.quadraKey]);
+  }, [
+    ready,
+    props.mode,
+    props.pins,
+    props.quadras,
+    props.outlines,
+    props.showStreetLabels,
+    props.showQuadraPopup,
+    props.selectedKey,
+    props.editSession?.quadraKey,
+  ]);
 
-  // 3. Explicit re-frame requests (territory chip, "Enquadrar" button, mode switch).
+  // 3. Explicit re-frame requests (territory chip, "Enquadrar" button — NEVER on mode switch).
   useEffect(() => {
     if (!ready || props.fitRequest === lastFitRequestRef.current) return;
     lastFitRequestRef.current = props.fitRequest;
     if (fitToData()) didInitialFitRef.current = true;
   }, [ready, props.fitRequest]);
+
+  // 3b. Live GPS Telemetry layer (`userLocationLayerRef`) — updates position without moving camera.
+  useEffect(() => {
+    const L = LRef.current;
+    const userGrp = userLocationLayerRef.current;
+    if (!ready || !L || !userGrp) return;
+    userGrp.clearLayers();
+
+    const loc = props.userLocation;
+    if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return;
+
+    const radius = Math.max(10, Math.min(loc.accuracy || 20, 250));
+    const halo = L.circle([loc.lat, loc.lng], {
+      radius,
+      color: '#3B82F6',
+      weight: 1.5,
+      opacity: 0.7,
+      fillColor: '#3B82F6',
+      fillOpacity: 0.14,
+      interactive: false,
+    });
+    userGrp.addLayer(halo);
+
+    const dotEl = el(
+      'div',
+      {
+        testId: 'leaflet-user-gps-dot',
+        style: {
+          width: '18px',
+          height: '18px',
+          borderRadius: '50%',
+          background: '#2563EB',
+          border: '3px solid #FFFFFF',
+          boxShadow: '0 0 0 4px rgba(37, 99, 235, 0.38), 0 3px 8px rgba(0,0,0,0.6)',
+        },
+      },
+      []
+    );
+
+    const gpsMarker = L.marker([loc.lat, loc.lng], {
+      zIndexOffset: 2500,
+      icon: L.divIcon({
+        className: 'sk-user-gps-marker',
+        html: dotEl,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      }),
+    });
+    gpsMarker.bindTooltip(
+      `🛰️ Sua localização GPS (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} • ±${Math.round(loc.accuracy || 15)}m)`,
+      { direction: 'top' }
+    );
+    userGrp.addLayer(gpsMarker);
+  }, [ready, props.userLocation]);
+
+  // 3c. Explicit pan-to-user GPS request (`panToUserRequest`).
+  useEffect(() => {
+    const map = mapRef.current;
+    const req = props.panToUserRequest ?? 0;
+    if (!ready || !map || req === lastPanToUserRequestRef.current) return;
+    lastPanToUserRequestRef.current = req;
+    const loc = props.userLocation;
+    if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) {
+      map.setView([loc.lat, loc.lng], Math.max(map.getZoom(), 17), { animate: true });
+    }
+  }, [ready, props.panToUserRequest, props.userLocation]);
+
+  // 3d. Route & Walking Sequence Layer (`routeLayerRef`).
+  useEffect(() => {
+    const L = LRef.current;
+    const routeGrp = routeLayerRef.current;
+    if (!ready || !L || !routeGrp) return;
+    routeGrp.clearLayers();
+
+    // Walking sequence trail (`1 -> 2 -> 3...`)
+    if (props.walkingSequence && props.walkingSequence.length >= 1) {
+      const coords = props.walkingSequence.map((s) => [s.lat, s.lng] as LatLngTuple);
+      if (coords.length >= 2) {
+        const seqLine = L.polyline(coords, {
+          color: '#F59E0B',
+          weight: 3,
+          dashArray: '6, 6',
+          opacity: 0.88,
+          interactive: false,
+        });
+        routeGrp.addLayer(seqLine);
+      }
+
+      if (props.mode === 'quadras') {
+        for (const stop of props.walkingSequence) {
+          const badgeNode = el('div', {
+            text: String(stop.order),
+            style: {
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              background: stop.worked === 1 ? '#10B981' : '#F59E0B',
+              color: '#0D1117',
+              fontWeight: '900',
+              fontSize: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1.5px solid #FFFFFF',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
+              pointerEvents: 'none',
+            },
+          });
+          const seqMarker = L.marker([stop.lat, stop.lng], {
+            interactive: false,
+            keyboard: false,
+            zIndexOffset: 900,
+            icon: L.divIcon({
+              className: 'sk-walk-stop',
+              html: badgeNode,
+              iconSize: [20, 20],
+              iconAnchor: [10, 10],
+            }),
+          });
+          routeGrp.addLayer(seqMarker);
+        }
+      }
+    }
+
+    // Active Navigation Route (OSRM or Offline Haversine)
+    const route = props.activeRoute;
+    if (route && route.coordinates && route.coordinates.length >= 2) {
+      const casing = L.polyline(route.coordinates, {
+        color: '#0F172A',
+        weight: 8,
+        opacity: 0.75,
+        interactive: false,
+      });
+      const mainLine = L.polyline(route.coordinates, {
+        color: route.source === 'osrm' ? '#06B6D4' : '#38BDF8',
+        weight: 5,
+        opacity: 0.95,
+        dashArray: route.source === 'offline_haversine' ? '10, 8' : undefined,
+      });
+      const summaryText = `🧭 Rota ${route.source === 'osrm' ? 'pelas ruas (OSRM)' : 'direta (Offline)'}: ${formatRouteDistance(route.distanceMeters)} (${formatRouteDuration(route.durationSeconds)})${route.label ? ` → ${route.label}` : ''}`;
+      mainLine.bindTooltip(summaryText, { sticky: true });
+
+      routeGrp.addLayer(casing);
+      routeGrp.addLayer(mainLine);
+
+      const destPt = route.coordinates[route.coordinates.length - 1];
+      const destRing = L.circleMarker(destPt, {
+        radius: 10,
+        color: '#06B6D4',
+        weight: 3,
+        fillColor: '#22D3EE',
+        fillOpacity: 0.35,
+        interactive: false,
+      });
+      routeGrp.addLayer(destRing);
+    }
+  }, [ready, props.activeRoute, props.walkingSequence, props.mode]);
 
   // 4. Vertex editor (Leaflet-Geoman Free, bundled, with snapping, Undo revision & touch long-press).
   useEffect(() => {
@@ -421,15 +635,118 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
   );
 }
 
+function buildQuadraPopupCard(q: MapQuadra, propsRef: React.MutableRefObject<TerritoryLeafletMapProps>) {
+  const button = (
+    text: string,
+    bg: string,
+    color: string,
+    onClick: () => void,
+    testId?: string
+  ) => {
+    const b = el('button', {
+      text,
+      testId,
+      style: {
+        flex: '1',
+        border: 'none',
+        padding: '7px 8px',
+        fontSize: '11px',
+        fontWeight: '700',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        background: bg,
+        color,
+      },
+    });
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    return b;
+  };
+
+  const openGmaps = () => {
+    if (propsRef.current.onOpenGoogleMapsQuadra) {
+      propsRef.current.onOpenGoogleMapsQuadra(q.key);
+      return;
+    }
+    const url = buildGoogleMapsDirectionsUrl({
+      lat: q.centroid?.[0],
+      lng: q.centroid?.[1],
+      street: q.perimeterStreets?.[0] || q.label,
+      locality: q.locality,
+      city: q.city,
+      travelMode: 'walking',
+    });
+    openExternalUrlSafe(url);
+  };
+
+  return el(
+    'div',
+    {
+      style: {
+        minWidth: '215px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      },
+    },
+    [
+      el('div', {
+        text: `🏢 ${q.label}`,
+        style: { fontWeight: '800', fontSize: '14px', color: '#111827', marginBottom: '4px' },
+      }),
+      el('div', {
+        text: `${q.workedUnits}/${q.totalUnits} concluídos (${q.coveragePercent}%)`,
+        style: { fontSize: '11px', color: '#374151', marginBottom: '6px' },
+      }),
+      ...(q.perimeterStreets.length > 0
+        ? [
+            el('div', {
+              text: `🛣️ ${q.perimeterStreets.join(', ')}`,
+              style: { fontSize: '11px', color: '#4B5563', marginBottom: '8px' },
+            }),
+          ]
+        : []),
+      el('div', { style: { display: 'flex', gap: '5px', marginTop: '6px' } }, [
+        button('🗺️ Google Maps', '#2563EB', '#FFFFFF', openGmaps, `popup-quadra-gmaps-${q.key}`),
+        ...(propsRef.current.onRouteToQuadraInMap
+          ? [
+              button(
+                '🧭 Rota no Mapa',
+                '#0891B2',
+                '#FFFFFF',
+                () => propsRef.current.onRouteToQuadraInMap?.(q.key),
+                `popup-quadra-route-${q.key}`
+              ),
+            ]
+          : []),
+      ]),
+    ]
+  );
+}
+
 function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObject<TerritoryLeafletMapProps>) {
   const isWorked = pin.worked === 1;
   const isSelected = propsRef.current.selectedKey === pin.key;
   const baseShape = SHAPE_CSS[pin.shape] ? pin.shape : 'circle';
   const shape = isSelected && baseShape === 'circle' ? 'pin' : baseShape;
 
+  const badgeText =
+    pin.walkOrder !== undefined
+      ? isWorked
+        ? `✓${pin.walkOrder}`
+        : String(pin.walkOrder)
+      : isWorked
+      ? '✓'
+      : '•';
+
   const inner = el('span', {
-    text: isWorked ? '✓' : '•',
-    style: shape === 'pin' ? { transform: 'rotate(45deg)', marginTop: '-2px' } : shape === 'triangle' ? { marginTop: '6px' } : {},
+    text: badgeText,
+    style:
+      shape === 'pin'
+        ? { transform: 'rotate(45deg)', marginTop: '-2px', fontSize: pin.walkOrder !== undefined ? '10px' : '12px' }
+        : shape === 'triangle'
+        ? { marginTop: '6px', fontSize: pin.walkOrder !== undefined ? '10px' : '12px' }
+        : { fontSize: pin.walkOrder !== undefined ? '10px' : '12px' },
   });
   const badge = el(
     'div',
@@ -464,10 +781,29 @@ function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObj
   });
   marker.on('click', () => propsRef.current.onSelectPin(pin.key));
 
-  const button = (text: string, bg: string, color: string, onClick: () => void, extra: Partial<CSSStyleDeclaration> = {}) => {
+  const button = (
+    text: string,
+    bg: string,
+    color: string,
+    onClick: () => void,
+    extra: Partial<CSSStyleDeclaration> = {},
+    testId?: string
+  ) => {
     const b = el('button', {
       text,
-      style: { flex: '1', border: 'none', padding: '7px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', background: bg, color, ...extra },
+      testId,
+      style: {
+        flex: '1',
+        border: 'none',
+        padding: '7px 8px',
+        fontSize: '11px',
+        fontWeight: '700',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        background: bg,
+        color,
+        ...extra,
+      },
     });
     b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -476,37 +812,138 @@ function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObj
     return b;
   };
 
-  const tags: HTMLElement[] = [el('span', { cls: 'sk-tag', text: PROPERTY_LABELS[pin.propertyType] || PROPERTY_LABELS.residencial })];
+  const openPinGoogleMaps = () => {
+    if (propsRef.current.onOpenGoogleMapsPin) {
+      propsRef.current.onOpenGoogleMapsPin(pin.key);
+      return;
+    }
+    const uLoc = propsRef.current.userLocation;
+    const url = buildGoogleMapsDirectionsUrl({
+      lat: pin.lat,
+      lng: pin.lng,
+      line: pin.line || pin.label,
+      line2: pin.line2,
+      city: pin.city,
+      postalcode: pin.postalcode,
+      originLat: uLoc?.lat,
+      originLng: uLoc?.lng,
+      travelMode: 'walking',
+    });
+    openExternalUrlSafe(url);
+  };
+
+  const tags: HTMLElement[] = [
+    el('span', { cls: 'sk-tag', text: PROPERTY_LABELS[pin.propertyType] || PROPERTY_LABELS.residencial }),
+  ];
+  if (pin.walkOrder !== undefined) {
+    tags.push(el('span', { cls: 'sk-tag', text: `👣 ${pin.walkOrder}º na rua` }));
+  }
   if (pin.isForeign) tags.push(el('span', { cls: 'sk-tag', text: `🌐 ${pin.language || 'Estrangeiro'}` }));
   if (pin.notes) tags.push(el('span', { cls: 'sk-tag', text: '📝 Anotação' }));
   tags.forEach((t) =>
-    Object.assign(t.style, { fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.06)', color: '#374151' })
+    Object.assign(t.style, {
+      fontSize: '10px',
+      padding: '2px 6px',
+      borderRadius: '4px',
+      background: 'rgba(0,0,0,0.06)',
+      color: '#374151',
+    })
   );
 
   const dates: HTMLElement[] = [];
   if (pin.assignedAt) dates.push(el('div', { text: `📅 Desig: ${pin.assignedAt}`, style: { color: '#6D28D9' } }));
-  if (pin.completedAt) dates.push(el('div', { text: `✓ Concl: ${pin.completedAt}${daysLabel(pin.daysSinceCompleted)}`, style: { color: '#047857', fontWeight: '700' } }));
+  if (pin.completedAt)
+    dates.push(
+      el('div', {
+        text: `✓ Concl: ${pin.completedAt}${daysLabel(pin.daysSinceCompleted)}`,
+        style: { color: '#047857', fontWeight: '700' },
+      })
+    );
 
-  const card = el('div', { style: { minWidth: '220px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' } }, [
-    el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' } }, [
-      el('span', {
-        text: pin.territoryNumber,
-        style: { fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace', border: `1px solid ${pin.color}`, color: '#111827' },
-      }),
-      el('span', { text: pin.city, style: { fontSize: '11px', color: '#6B7280' } }),
-    ]),
-    el('div', { text: pin.line || pin.label, style: { fontWeight: '700', fontSize: '14px', marginBottom: '4px' } }),
-    ...(pin.line2 ? [el('div', { text: `${pin.line2}${pin.postalcode ? ` • CEP ${pin.postalcode}` : ''}`, style: { fontSize: '11px', color: '#6B7280', marginBottom: '8px' } })] : []),
-    el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' } }, tags),
-    ...(dates.length ? [el('div', { style: { fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '8px' } }, dates)] : []),
-    el('div', { style: { display: 'flex', gap: '5px', marginTop: '8px' } }, [
-      button(isWorked ? 'Marcar pendente' : '✓ Concluído', isWorked ? '#EF4444' : '#10B981', isWorked ? '#FFFFFF' : '#062016', () =>
-        propsRef.current.onToggleWork(pin.key)
+  const card = el(
+    'div',
+    { style: { minWidth: '228px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' } },
+    [
+      el(
+        'div',
+        { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' } },
+        [
+          el('span', {
+            text: pin.territoryNumber,
+            style: {
+              fontSize: '10px',
+              fontWeight: '800',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              fontFamily: 'monospace',
+              border: `1px solid ${pin.color}`,
+              color: '#111827',
+            },
+          }),
+          el('span', { text: pin.city, style: { fontSize: '11px', color: '#6B7280' } }),
+        ]
       ),
-      button('🎨 Ícone', 'rgba(255,184,0,0.18)', '#92400E', () => propsRef.current.onCustomizePin(pin.key), { flex: '0.8' }),
-      button('✏️ Editar', 'rgba(0,0,0,0.08)', '#111827', () => propsRef.current.onEditPin(pin.key), { flex: '0.6' }),
-    ]),
-  ]);
+      el('div', { text: pin.line || pin.label, style: { fontWeight: '700', fontSize: '14px', marginBottom: '4px' } }),
+      ...(pin.line2
+        ? [
+            el('div', {
+              text: `${pin.line2}${pin.postalcode ? ` • CEP ${pin.postalcode}` : ''}`,
+              style: { fontSize: '11px', color: '#6B7280', marginBottom: '8px' },
+            }),
+          ]
+        : []),
+      el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' } }, tags),
+      ...(dates.length
+        ? [el('div', { style: { fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '8px' } }, dates)]
+        : []),
+      el('div', { style: { display: 'flex', gap: '5px', marginTop: '8px' } }, [
+        button(
+          isWorked ? 'Marcar pendente' : '✓ Concluído',
+          isWorked ? '#EF4444' : '#10B981',
+          isWorked ? '#FFFFFF' : '#062016',
+          () => propsRef.current.onToggleWork(pin.key),
+          {},
+          `popup-pin-toggle-${pin.key}`
+        ),
+        button(
+          '🎨 Ícone',
+          'rgba(255,184,0,0.18)',
+          '#92400E',
+          () => propsRef.current.onCustomizePin(pin.key),
+          { flex: '0.8' }
+        ),
+        button(
+          '✏️ Editar',
+          'rgba(0,0,0,0.08)',
+          '#111827',
+          () => propsRef.current.onEditPin(pin.key),
+          { flex: '0.6' }
+        ),
+      ]),
+      el('div', { style: { display: 'flex', gap: '5px', marginTop: '6px' } }, [
+        button(
+          '🗺️ Google Maps / Rota',
+          '#2563EB',
+          '#FFFFFF',
+          openPinGoogleMaps,
+          {},
+          `popup-pin-gmaps-${pin.key}`
+        ),
+        ...(propsRef.current.onRouteToPinInMap
+          ? [
+              button(
+                '🧭 Rota Aqui',
+                '#0891B2',
+                '#FFFFFF',
+                () => propsRef.current.onRouteToPinInMap?.(pin.key),
+                { flex: '0.85' },
+                `popup-pin-route-${pin.key}`
+              ),
+            ]
+          : []),
+      ]),
+    ]
+  );
 
   marker.bindPopup(card);
   return marker;

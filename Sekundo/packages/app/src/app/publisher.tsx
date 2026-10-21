@@ -35,11 +35,25 @@ import {
   resolveTerritoryNumber,
   parseLatLng,
   calculateDaysDifference,
+  buildTerritoriosS13HistoricalRegistry,
+  selectEnginePartitionNodes,
+  calculateMapRoute,
+  buildWalkingSequenceRoute,
+  formatRouteDistance,
+  formatRouteDuration,
 } from '@sekundo/core';
-import type { FlatSkeletonEntry, QuadraSummary, QuadraAddressUnit } from '@sekundo/core';
+import type {
+  FlatSkeletonEntry,
+  QuadraSummary,
+  QuadraAddressUnit,
+  RouteCalculationResult,
+  WalkingSequenceRoute,
+} from '@sekundo/core';
 import { DeltaSyncModal } from '../components/territory/DeltaSyncModal';
 import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
 import type { MapPin } from '../components/map/mapTypes';
+import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
+import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
 
 function extractNumericHouseNumber(numStr?: string): number | null {
   if (!numStr) return null;
@@ -76,17 +90,78 @@ function sortUnitsByWalkingMode(
 export default function PublisherModeScreen() {
   const router = useRouter();
   const { id, territory } = useLocalSearchParams();
-  const eventId = typeof id === 'string' ? id : '';
+  const rawEventId = typeof id === 'string' ? id : '';
   const initialTerritory = typeof territory === 'string' ? territory : '';
 
   const { events } = useLocalEvent();
-  const event = events.find((e) => e.config.id === eventId);
-  const { flatRegistry, updateNode, updateNodes, saveSkeleton, loading } = useSkeleton(eventId);
+  const fallbackEvent =
+    events.find((e) => e.config.id === rawEventId) ||
+    events.find((e) => e.config.id === 'seed-territorios-s13') ||
+    events.find((e) => (e.config.engines || []).includes('territory_logistics')) ||
+    events[0] ||
+    null;
+  const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-s13';
+  const {
+    flatRegistry: rawRegistry,
+    updateNode,
+    updateNodes,
+    saveSkeleton,
+    loading,
+  } = useSkeleton(eventId);
+  const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[]>([]);
+  useEffect(() => {
+    loadSavedTerritoryRegistry()
+      .then((reg) => {
+        if (reg && reg.length > 0) setSavedTerritoryRegistry(reg);
+      })
+      .catch(() => undefined);
+  }, [rawRegistry]);
+
+  const flatRegistry = useMemo<FlatSkeletonEntry[]>(() => {
+    const partitioned = selectEnginePartitionNodes(rawRegistry || [], 'territory_logistics');
+    if (partitioned.length > 0) return partitioned;
+    const savedPartitioned = selectEnginePartitionNodes(
+      savedTerritoryRegistry,
+      'territory_logistics'
+    );
+    if (savedPartitioned.length > 0) return savedPartitioned;
+    return buildTerritoriosS13HistoricalRegistry();
+  }, [rawRegistry, savedTerritoryRegistry]);
+
+  const resolveRawKey = (cleanKey: string): string => {
+    if (rawRegistry && rawRegistry.some((n) => n.key === `T::${cleanKey}`)) {
+      return `T::${cleanKey}`;
+    }
+    return cleanKey;
+  };
 
   const [daylightMode, setDaylightMode] = useState<boolean>(false);
   const [walkMode, setWalkMode] = useState<'sequential' | 'sidewalk'>('sidewalk');
   const [editingAssignee, setEditingAssignee] = useState<boolean>(false);
   const [assigneeDraft, setAssigneeDraft] = useState<string>('');
+
+  // Field Map states: Quadras <-> Pontos (preserving camera zoom!), walking direction, GPS & route
+  const [fieldMapMode, setFieldMapMode] = useState<'quadras' | 'pins'>('quadras');
+  const [showWalkingOrder, setShowWalkingOrder] = useState<boolean>(true);
+  const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(null);
+  const {
+    gpsEnabled,
+    userLocation,
+    gpsError,
+    panToUserRequest,
+    toggleGps,
+    enableGpsAndGetPosition,
+    centerOnUser,
+  } = useLiveGpsLocation();
+  const [activeRoute, setActiveRoute] = useState<RouteCalculationResult | null>(null);
+  const [routeDestinationMeta, setRouteDestinationMeta] = useState<{
+    label: string;
+    lat: number;
+    lng: number;
+    city?: string;
+    streetName?: string;
+  } | null>(null);
+  const [routingBusy, setRoutingBusy] = useState<boolean>(false);
 
   useEffect(() => {
     storage.getItem('sekundo:daylight-mode').then((v) => {
@@ -136,6 +211,16 @@ export default function PublisherModeScreen() {
     [allQuadras, effectiveTerritory]
   );
 
+  const defaultCity = useMemo(() => {
+    for (const n of flatRegistry) {
+      if (resolveTerritoryNumber(n) === effectiveTerritory) {
+        const m = (n.meta || {}) as Record<string, any>;
+        if (m.city || m.cidade) return String(m.city || m.cidade);
+      }
+    }
+    return '';
+  }, [flatRegistry, effectiveTerritory]);
+
   // Extract current territory assignment metadata (workerName & assignedAt)
   const assignmentInfo = useMemo(() => {
     let workerName = '';
@@ -164,7 +249,7 @@ export default function PublisherModeScreen() {
     if (targetUnits.length > 0) {
       await updateNodes(
         targetUnits.map((n) => ({
-          key: n.key,
+          key: resolveRawKey(n.key),
           updates: {
             meta: {
               ...(n.meta || {}),
@@ -185,7 +270,7 @@ export default function PublisherModeScreen() {
     return { total, worked, percent };
   }, [territoryQuadras]);
 
-  const mapPins = useMemo<MapPin[]>(() => {
+  const rawMapPins = useMemo<MapPin[]>(() => {
     const list: MapPin[] = [];
     const parentKeys = new Set<string>();
     for (const node of flatRegistry) {
@@ -217,12 +302,47 @@ export default function PublisherModeScreen() {
     return list;
   }, [flatRegistry, effectiveTerritory]);
 
+  const walkingSequence = useMemo<WalkingSequenceRoute | null>(() => {
+    if (!showWalkingOrder || rawMapPins.length === 0) return null;
+    return buildWalkingSequenceRoute(
+      rawMapPins.map((p) => {
+        const lineStr = p.line || p.label;
+        const commaIdx = lineStr.indexOf(',');
+        const streetName = commaIdx >= 0 ? lineStr.slice(0, commaIdx).trim() : lineStr;
+        const numberOrComplement = commaIdx >= 0 ? lineStr.slice(commaIdx + 1).trim() : undefined;
+        return {
+          key: p.key,
+          label: lineStr,
+          lat: p.lat,
+          lng: p.lng,
+          streetName,
+          numberOrComplement,
+          worked: p.worked,
+        };
+      }),
+      walkMode,
+      userLocation ? { lat: userLocation.lat, lng: userLocation.lng } : null
+    );
+  }, [showWalkingOrder, rawMapPins, walkMode, userLocation]);
+
+  const mapPins = useMemo<MapPin[]>(() => {
+    if (!walkingSequence) return rawMapPins;
+    const orderMap = new Map<string, number>();
+    for (const s of walkingSequence) {
+      orderMap.set(s.key, s.order);
+    }
+    return rawMapPins.map((p) => ({
+      ...p,
+      walkOrder: orderMap.get(p.key),
+    }));
+  }, [rawMapPins, walkingSequence]);
+
   const handleToggleUnit = async (unitKey: string) => {
     const target = flatRegistry.find((n) => pathKey.equals(n.key, unitKey));
     if (!target) return;
     const meta = (target.meta || {}) as Record<string, any>;
     const nextWorked: 0 | 1 = Number(meta.worked) === 1 ? 0 : 1;
-    await updateNode(unitKey, {
+    await updateNode(resolveRawKey(target.key), {
       value: nextWorked === 1 ? (meta.workerName || 'Trabalhado') : '',
       meta: buildWorkedMeta(meta, nextWorked),
     });
@@ -236,7 +356,7 @@ export default function PublisherModeScreen() {
       .map((u) => flatRegistry.find((n) => pathKey.equals(n.key, u.key)))
       .filter((n): n is FlatSkeletonEntry => Boolean(n))
       .map((n) => ({
-        key: n.key,
+        key: resolveRawKey(n.key),
         updates: {
           value: nextWorked === 1 ? ((n.meta as any)?.workerName || 'Trabalhado') : '',
           meta: buildWorkedMeta(n.meta, nextWorked, now),
@@ -245,7 +365,50 @@ export default function PublisherModeScreen() {
     await updateNodes(patches);
   };
 
-  if (loading || !event) {
+  const handleTraceRouteInMap = async (dest: {
+    lat: number;
+    lng: number;
+    label: string;
+    city?: string;
+    streetName?: string;
+  }) => {
+    setRoutingBusy(true);
+    if (viewMode !== 'map') {
+      setViewMode('map');
+    }
+    try {
+      let origin: { lat: number; lng: number } | null = userLocation
+        ? { lat: userLocation.lat, lng: userLocation.lng }
+        : null;
+      if (!origin) {
+        const gpsFix = await enableGpsAndGetPosition(2800);
+        if (gpsFix) origin = { lat: gpsFix.lat, lng: gpsFix.lng };
+      }
+      if (!origin) {
+        const candidatePin =
+          rawMapPins.find(
+            (p) => Math.abs(p.lat - dest.lat) > 0.0001 || Math.abs(p.lng - dest.lng) > 0.0001
+          ) || rawMapPins[0];
+        if (candidatePin) {
+          origin = { lat: candidatePin.lat, lng: candidatePin.lng };
+        } else if (territoryQuadras.length > 0) {
+          origin = {
+            lat: territoryQuadras[0].centerLat,
+            lng: territoryQuadras[0].centerLng,
+          };
+        } else {
+          origin = { lat: dest.lat - 0.0025, lng: dest.lng - 0.0025 };
+        }
+      }
+      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 3000);
+      setActiveRoute(route);
+      setRouteDestinationMeta(dest);
+    } finally {
+      setRoutingBusy(false);
+    }
+  };
+
+  if (loading && flatRegistry.length === 0) {
     return (
       <View style={[styles.loadingContainer, daylightMode && styles.containerDaylight]}>
         <ActivityIndicator size="large" color="#FFB800" />
@@ -288,6 +451,7 @@ export default function PublisherModeScreen() {
 
             <View style={[styles.modeSwitch, daylightMode && styles.modeSwitchDaylight]}>
               <Pressable
+                testID="publisher-view-cards-btn"
                 onPress={() => setViewMode('cards')}
                 style={[styles.modeBtn, viewMode === 'cards' && styles.modeBtnActive]}
               >
@@ -296,6 +460,7 @@ export default function PublisherModeScreen() {
                 </Text>
               </Pressable>
               <Pressable
+                testID="publisher-view-map-btn"
                 onPress={() => {
                   setViewMode('map');
                   setFitRequest((n) => n + 1);
@@ -322,6 +487,7 @@ export default function PublisherModeScreen() {
               return (
                 <Pressable
                   key={tNum}
+                  testID={`publisher-territory-chip-${tNum}`}
                   onPress={() => {
                     setActiveTerritory(tNum);
                     setFitRequest((n) => n + 1);
@@ -367,6 +533,26 @@ export default function PublisherModeScreen() {
                     : '👤 + Designar operador'}
                 </Text>
               </Pressable>
+              {territoryQuadras[0] ? (
+                <Pressable
+                  testID="publisher-territory-gmaps-btn"
+                  onPress={() =>
+                    openExternalGoogleMaps({
+                      lat: territoryQuadras[0].centerLat,
+                      lng: territoryQuadras[0].centerLng,
+                      streetName: territoryQuadras[0].perimeterStreets[0] || territoryQuadras[0].label,
+                      label: `Território ${effectiveTerritory}`,
+                      city: defaultCity,
+                      originLat: userLocation?.lat,
+                      originLng: userLocation?.lng,
+                      mode: 'directions',
+                    })
+                  }
+                  style={styles.gmapsHeaderChip}
+                >
+                  <Text style={styles.gmapsHeaderChipText}>🗺️ Abrir no Google Maps</Text>
+                </Pressable>
+              ) : null}
             </View>
             <Text style={[styles.progressCount, daylightMode && { color: '#047857' }]}>
               {stats.worked}/{stats.total} casas ({stats.percent}%)
@@ -403,19 +589,239 @@ export default function PublisherModeScreen() {
       {/* Main Content: Cards or Map */}
       {viewMode === 'map' ? (
         <View style={styles.mapWrapper}>
-          <TerritoryLeafletMap
-            mode="quadras"
-            pins={mapPins}
-            quadras={territoryQuadras}
-            outlines={[]}
-            showStreetLabels
-            fitRequest={fitRequest}
-            onSelectPin={(k) => handleToggleUnit(k)}
-            onSelectQuadra={() => undefined}
-            onToggleWork={(k) => handleToggleUnit(k)}
-            onEditPin={() => undefined}
-            onCustomizePin={() => undefined}
-          />
+          {/* Field Map Control Bar: Quadras <-> Pontos (preserving camera zoom!), Walking Direction, Live GPS, Fit */}
+          <View style={[styles.fieldMapToolbar, daylightMode && styles.headerDaylight]}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              <Pressable
+                testID="field-map-mode-quadras"
+                onPress={() => {
+                  setFieldMapMode('quadras');
+                  // Preserves current camera zoom & center!
+                }}
+                style={[
+                  styles.fieldMapToolBtn,
+                  fieldMapMode === 'quadras' && styles.fieldMapToolBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.fieldMapToolBtnText,
+                    fieldMapMode === 'quadras' && styles.fieldMapToolBtnTextActive,
+                  ]}
+                >
+                  🔷 Quadras ({territoryQuadras.length})
+                </Text>
+              </Pressable>
+
+              <Pressable
+                testID="field-map-mode-pins"
+                onPress={() => {
+                  setFieldMapMode('pins');
+                  // Preserves current camera zoom & center!
+                }}
+                style={[
+                  styles.fieldMapToolBtn,
+                  fieldMapMode === 'pins' && styles.fieldMapToolBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.fieldMapToolBtnText,
+                    fieldMapMode === 'pins' && styles.fieldMapToolBtnTextActive,
+                  ]}
+                >
+                  📍 Pontos ({mapPins.length})
+                </Text>
+              </Pressable>
+
+              <Pressable
+                testID="field-map-toggle-direction"
+                onPress={() => setShowWalkingOrder((prev) => !prev)}
+                style={[
+                  styles.fieldMapToolBtn,
+                  showWalkingOrder && {
+                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                    borderColor: '#38BDF8',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.fieldMapToolBtnText,
+                    showWalkingOrder && { color: '#38BDF8', fontWeight: '800' },
+                  ]}
+                >
+                  {showWalkingOrder
+                    ? `👣 Direção (${walkMode === 'sidewalk' ? 'Ímpar/Par' : 'Seq.'}): ON`
+                    : '👣 Direção'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                testID="field-map-toggle-gps"
+                onPress={toggleGps}
+                style={[
+                  styles.fieldMapToolBtn,
+                  gpsEnabled && {
+                    backgroundColor: 'rgba(37, 99, 235, 0.25)',
+                    borderColor: '#38BDF8',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.fieldMapToolBtnText,
+                    gpsEnabled && { color: '#60A5FA', fontWeight: '800' },
+                  ]}
+                >
+                  {gpsEnabled ? '🛰️ GPS Ativo' : '🛰️ Meu GPS'}
+                </Text>
+              </Pressable>
+
+              {gpsEnabled && userLocation ? (
+                <Pressable
+                  testID="field-map-center-gps"
+                  onPress={centerOnUser}
+                  style={[
+                    styles.fieldMapToolBtn,
+                    { backgroundColor: 'rgba(37, 99, 235, 0.2)', borderColor: '#38BDF8' },
+                  ]}
+                >
+                  <Text style={[styles.fieldMapToolBtnText, { color: '#38BDF8' }]}>
+                    🎯 Centralizar
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              <Pressable
+                testID="field-map-fit-btn"
+                onPress={() => setFitRequest((n) => n + 1)}
+                style={styles.fieldMapToolBtn}
+              >
+                <Text style={styles.fieldMapToolBtnText}>⌖ Enquadrar</Text>
+              </Pressable>
+            </View>
+
+            {activeRoute ? (
+              <View style={styles.fieldRouteBanner} testID="field-map-active-route-banner">
+                <Text style={styles.fieldRouteText} numberOfLines={1}>
+                  🧭 {routeDestinationMeta?.label || 'Destino'} • 🚶{' '}
+                  {formatRouteDistance(activeRoute.distanceMeters)} (
+                  {formatRouteDuration(activeRoute.durationSeconds)})
+                </Text>
+                {routeDestinationMeta ? (
+                  <Pressable
+                    onPress={() =>
+                      openExternalGoogleMaps({
+                        lat: routeDestinationMeta.lat,
+                        lng: routeDestinationMeta.lng,
+                        streetName: routeDestinationMeta.streetName,
+                        label: routeDestinationMeta.label,
+                        city: routeDestinationMeta.city || defaultCity,
+                        originLat: userLocation?.lat,
+                        originLng: userLocation?.lng,
+                        mode: 'directions',
+                      })
+                    }
+                    style={styles.gmapsHeaderChip}
+                  >
+                    <Text style={styles.gmapsHeaderChipText}>🗺️ Google Maps</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  testID="field-map-clear-route-btn"
+                  onPress={() => {
+                    setActiveRoute(null);
+                    setRouteDestinationMeta(null);
+                  }}
+                  style={styles.fieldRouteClearBtn}
+                >
+                  <Text style={styles.fieldRouteClearText}>✕ Limpar</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {gpsError ? (
+              <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '700' }}>
+                ⚠️ {gpsError}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <TerritoryLeafletMap
+              mode={fieldMapMode}
+              pins={mapPins}
+              quadras={territoryQuadras}
+              outlines={[]}
+              showStreetLabels
+              showQuadraPopup
+              selectedKey={selectedFieldKey}
+              fitRequest={fitRequest}
+              userLocation={userLocation}
+              panToUserRequest={panToUserRequest}
+              activeRoute={activeRoute}
+              walkingSequence={walkingSequence}
+              onSelectPin={(k) => setSelectedFieldKey(k)}
+              onSelectQuadra={(k) => setSelectedFieldKey(k)}
+              onToggleWork={(k) => handleToggleUnit(k)}
+              onEditPin={() => undefined}
+              onCustomizePin={() => undefined}
+              onOpenGoogleMapsPin={(k) => {
+                const p = mapPins.find((x) => x.key === k);
+                if (p) {
+                  openExternalGoogleMaps({
+                    lat: p.lat,
+                    lng: p.lng,
+                    line: p.line,
+                    label: p.label,
+                    city: p.city || defaultCity,
+                    originLat: userLocation?.lat,
+                    originLng: userLocation?.lng,
+                    mode: 'directions',
+                  });
+                }
+              }}
+              onRouteToPinInMap={(k) => {
+                const p = mapPins.find((x) => x.key === k);
+                if (p) {
+                  handleTraceRouteInMap({
+                    lat: p.lat,
+                    lng: p.lng,
+                    label: p.line || p.label,
+                    city: p.city || defaultCity,
+                  });
+                }
+              }}
+              onOpenGoogleMapsQuadra={(qKey) => {
+                const q = territoryQuadras.find((x) => x.key === qKey);
+                if (q) {
+                  openExternalGoogleMaps({
+                    lat: q.centerLat,
+                    lng: q.centerLng,
+                    streetName: q.perimeterStreets[0] || q.label,
+                    label: q.label,
+                    city: defaultCity,
+                    originLat: userLocation?.lat,
+                    originLng: userLocation?.lng,
+                    mode: 'directions',
+                  });
+                }
+              }}
+              onRouteToQuadraInMap={(qKey) => {
+                const q = territoryQuadras.find((x) => x.key === qKey);
+                if (q) {
+                  handleTraceRouteInMap({
+                    lat: q.centerLat,
+                    lng: q.centerLng,
+                    label: q.label,
+                    city: defaultCity,
+                    streetName: q.perimeterStreets[0],
+                  });
+                }
+              }}
+            />
+          </View>
         </View>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -433,22 +839,66 @@ export default function PublisherModeScreen() {
                     {formatQuadraPerimeterDescription(quadra.perimeterStreets)}
                   </Text>
                 </View>
-                <Pressable
-                  onPress={() => handleToggleQuadra(quadra)}
-                  style={[
-                    styles.quadraToggleBtn,
-                    quadra.isCompleted && styles.quadraToggleBtnDone,
-                  ]}
-                >
-                  <Text
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Pressable
+                    testID={`field-quadra-gmaps-${quadra.key}`}
+                    onPress={() =>
+                      openExternalGoogleMaps({
+                        lat: quadra.centerLat,
+                        lng: quadra.centerLng,
+                        streetName: quadra.perimeterStreets[0] || quadra.label,
+                        label: quadra.label,
+                        city: defaultCity,
+                        originLat: userLocation?.lat,
+                        originLng: userLocation?.lng,
+                        mode: 'directions',
+                      })
+                    }
+                    style={styles.gmapsHeaderChip}
+                  >
+                    <Text style={styles.gmapsHeaderChipText}>🗺️ Google Maps</Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`field-quadra-route-${quadra.key}`}
+                    disabled={routingBusy}
+                    onPress={() =>
+                      handleTraceRouteInMap({
+                        lat: quadra.centerLat,
+                        lng: quadra.centerLng,
+                        label: quadra.label,
+                        city: defaultCity,
+                        streetName: quadra.perimeterStreets[0],
+                      })
+                    }
                     style={[
-                      styles.quadraToggleText,
-                      quadra.isCompleted && styles.quadraToggleTextDone,
+                      styles.gmapsHeaderChip,
+                      {
+                        backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                        borderColor: 'rgba(16, 185, 129, 0.45)',
+                      },
                     ]}
                   >
-                    {quadra.isCompleted ? '↺ Reabrir' : '✓ Concluir Quadra'}
-                  </Text>
-                </Pressable>
+                    <Text style={[styles.gmapsHeaderChipText, { color: '#34D399' }]}>
+                      🧭 Rota no Mapa
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleToggleQuadra(quadra)}
+                    style={[
+                      styles.quadraToggleBtn,
+                      quadra.isCompleted && styles.quadraToggleBtnDone,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.quadraToggleText,
+                        quadra.isCompleted && styles.quadraToggleTextDone,
+                      ]}
+                    >
+                      {quadra.isCompleted ? '↺ Reabrir' : '✓ Concluir Quadra'}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
 
               {quadra.streets.map((street, sIdx) => {
@@ -459,10 +909,27 @@ export default function PublisherModeScreen() {
                     style={[styles.streetBlock, daylightMode && styles.streetBlockDaylight]}
                   >
                     <View style={styles.streetHeader}>
-                      <Text style={[styles.streetName, daylightMode && { color: '#B45309' }]}>
+                      <Text style={[styles.streetName, { flex: 1 }, daylightMode && { color: '#B45309' }]}>
                         📍 {street.streetName}
                       </Text>
-                      <Text style={[styles.streetCount, daylightMode && { color: '#334155' }]}>
+                      <Pressable
+                        testID={`field-street-gmaps-${quadra.key}-${sIdx}`}
+                        onPress={() =>
+                          openExternalGoogleMaps({
+                            streetName: street.streetName,
+                            city: defaultCity,
+                            lat: street.units[0]?.lat ?? quadra.centerLat,
+                            lng: street.units[0]?.lng ?? quadra.centerLng,
+                            originLat: userLocation?.lat,
+                            originLng: userLocation?.lng,
+                            mode: 'directions',
+                          })
+                        }
+                        style={styles.gmapsHeaderChip}
+                      >
+                        <Text style={styles.gmapsHeaderChipText}>🗺️ Abrir Rua no Maps</Text>
+                      </Pressable>
+                      <Text style={[styles.streetCount, { marginLeft: 8 }, daylightMode && { color: '#334155' }]}>
                         {street.workedUnits}/{street.totalUnits}
                       </Text>
                     </View>
@@ -470,9 +937,8 @@ export default function PublisherModeScreen() {
                       {orderedUnits.map((unit) => {
                         const done = unit.worked === 1;
                         return (
-                          <Pressable
+                          <View
                             key={unit.key}
-                            onPress={() => handleToggleUnit(unit.key)}
                             style={[
                               styles.unitBtn,
                               done
@@ -483,28 +949,79 @@ export default function PublisherModeScreen() {
                                 ? styles.unitBtnDaylight
                                 : styles.unitBtnPending,
                             ]}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Casa ${unit.numberOrComplement || unit.street}, ${done ? 'concluída' : 'pendente'}`}
                           >
-                            <Text
-                              style={[
-                                styles.unitNum,
-                                daylightMode && styles.textDaylight,
-                                done && (daylightMode ? { color: '#065F46' } : styles.unitNumDone),
-                              ]}
+                            <Pressable
+                              testID={`field-unit-toggle-${unit.key}`}
+                              onPress={() => handleToggleUnit(unit.key)}
+                              style={{ alignItems: 'center', gap: 4, width: '100%' }}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Casa ${unit.numberOrComplement || unit.street}, ${done ? 'concluída' : 'pendente'}`}
                             >
-                              Nº {unit.numberOrComplement || 'S/N'}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.unitStatus,
-                                daylightMode && { color: '#475569' },
-                                done && (daylightMode ? { color: '#047857' } : styles.unitStatusDone),
-                              ]}
-                            >
-                              {done ? '✓ Feito' : '⬜ Pendente'}
-                            </Text>
-                          </Pressable>
+                              <Text
+                                style={[
+                                  styles.unitNum,
+                                  daylightMode && styles.textDaylight,
+                                  done && (daylightMode ? { color: '#065F46' } : styles.unitNumDone),
+                                ]}
+                              >
+                                Nº {unit.numberOrComplement || 'S/N'}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.unitStatus,
+                                  daylightMode && { color: '#475569' },
+                                  done && (daylightMode ? { color: '#047857' } : styles.unitStatusDone),
+                                ]}
+                              >
+                                {done ? '✓ Feito' : '⬜ Pendente'}
+                              </Text>
+                            </Pressable>
+                            <View style={styles.fieldUnitActionsRow}>
+                              <Pressable
+                                testID={`field-unit-gmaps-${unit.key}`}
+                                onPress={() =>
+                                  openExternalGoogleMaps({
+                                    lat: unit.lat,
+                                    lng: unit.lng,
+                                    streetName: street.streetName,
+                                    numberOrComplement: unit.numberOrComplement,
+                                    label: unit.fullLabel,
+                                    city: defaultCity,
+                                    originLat: userLocation?.lat,
+                                    originLng: userLocation?.lng,
+                                    mode: 'directions',
+                                  })
+                                }
+                                style={styles.fieldUnitMiniBtn}
+                                accessibilityLabel={`Abrir Nº ${unit.numberOrComplement || 'S/N'} no Google Maps`}
+                              >
+                                <Text style={styles.fieldUnitMiniBtnText}>🗺️ Maps</Text>
+                              </Pressable>
+                              {unit.lat !== undefined && unit.lng !== undefined ? (
+                                <Pressable
+                                  testID={`field-unit-route-${unit.key}`}
+                                  onPress={() =>
+                                    handleTraceRouteInMap({
+                                      lat: unit.lat as number,
+                                      lng: unit.lng as number,
+                                      label: `${street.streetName}, ${unit.numberOrComplement || 'S/N'}`,
+                                      city: defaultCity,
+                                      streetName: street.streetName,
+                                    })
+                                  }
+                                  style={[
+                                    styles.fieldUnitMiniBtn,
+                                    { borderColor: 'rgba(56, 189, 248, 0.45)' },
+                                  ]}
+                                  accessibilityLabel={`Traçar rota para Nº ${unit.numberOrComplement || 'S/N'} no mapa`}
+                                >
+                                  <Text style={[styles.fieldUnitMiniBtnText, { color: '#38BDF8' }]}>
+                                    🧭 Rota
+                                  </Text>
+                                </Pressable>
+                              ) : null}
+                            </View>
+                          </View>
                         );
                       })}
                     </View>
@@ -863,6 +1380,103 @@ const styles = StyleSheet.create({
   },
   unitStatusDone: {
     color: '#10B981',
+  },
+  gmapsHeaderChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.45)',
+  },
+  gmapsHeaderChipText: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  fieldMapToolbar: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#141923',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 8,
+  },
+  fieldMapToolBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  fieldMapToolBtnActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+    borderColor: '#38BDF8',
+  },
+  fieldMapToolBtnText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  fieldMapToolBtnTextActive: {
+    color: '#38BDF8',
+    fontWeight: '900',
+  },
+  fieldRouteBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  fieldRouteText: {
+    flex: 1,
+    color: '#E0F2FE',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  fieldRouteClearBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+  },
+  fieldRouteClearText: {
+    color: '#FCA5A5',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  fieldUnitActionsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    width: '100%',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  fieldUnitMiniBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.4)',
+  },
+  fieldUnitMiniBtnText: {
+    color: '#93C5FD',
+    fontSize: 10,
+    fontWeight: '800',
   },
   bottomBar: {
     padding: 14,

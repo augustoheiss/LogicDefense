@@ -24,6 +24,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import type { FlatSkeletonEntry } from '@sekundo/core';
+import { openExternalGoogleMaps } from '../../hooks/useLiveGpsLocation';
 
 interface AddressEditModalProps {
   visible: boolean;
@@ -322,7 +323,38 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
             {/* 3. Coordenadas GPS */}
             <View style={styles.section}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.sectionHeader}>🧭 GEOLOCALIZAÇÃO (MAPA)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <Text style={styles.sectionHeader}>🧭 GEOLOCALIZAÇÃO (MAPA)</Text>
+                  <Pressable
+                    testID="address-edit-open-gmaps-btn"
+                    onPress={() => {
+                      const latParsed = parseFloat(lat.replace(',', '.'));
+                      const lngParsed = parseFloat(lng.replace(',', '.'));
+                      openExternalGoogleMaps({
+                        lat: Number.isFinite(latParsed) ? latParsed : null,
+                        lng: Number.isFinite(lngParsed) ? lngParsed : null,
+                        line: line || label,
+                        label,
+                        neighborhood: line2,
+                        city,
+                        state,
+                        postalcode,
+                        mode: 'directions',
+                      });
+                    }}
+                    style={[
+                      styles.gpsCaptureBtn,
+                      {
+                        backgroundColor: 'rgba(59, 130, 246, 0.16)',
+                        borderColor: 'rgba(96, 165, 250, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.gpsCaptureBtnText, { color: '#93C5FD' }]}>
+                      🗺️ Abrir no Google Maps / Rota
+                    </Text>
+                  </Pressable>
+                </View>
                 <Pressable
                   onPress={handleCaptureCurrentGPS}
                   disabled={capturingGPS}

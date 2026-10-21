@@ -180,7 +180,7 @@ export function expandPolygon(vertices: [number, number][], factor = 1.0005): [n
 
 /**
  * Parses raw address label into street name and number/complement.
- * Example: "Rua Azaleias, 202 (AP-2, JD. Karla)" -> { street: "Rua Azaleias", number: "202 (AP-2, JD. Karla)" }
+ * Example: "Via Operacional, 202 (Bloco A)" -> { street: "Via Operacional", number: "202 (Bloco A)" }
  */
 export function parseAddressLine(rawLine: string): { street: string; number: string } {
   if (!rawLine) return { street: 'Logradouro Geral', number: 'S/N' };
@@ -334,11 +334,20 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
       }
     }
 
-    // Strategy B: If no explicit ancestor in quadraMap, fallback to territory container (depth 3)
+    // Strategy B: If no explicit ancestor in quadraMap, fallback to territory container (depth 3, or territoryNumber for flat 1-level nodes)
     if (!targetQuadraKey) {
-      const fallbackKey = parts.slice(0, Math.min(3, parts.length - 1)).join('-');
+      const tNum = resolveTerritoryNumber(entry);
+      const fallbackKey =
+        parts.length > 1
+          ? parts.slice(0, Math.min(3, parts.length - 1)).join('-')
+          : tNum || entry.key || '01';
       if (!quadraMap.has(fallbackKey)) {
-        const tNum = resolveTerritoryNumber(entry);
+        const explicitPoly =
+          Array.isArray(meta.boundaryPolygon) && meta.boundaryPolygon.length >= 3
+            ? meta.boundaryPolygon
+            : Array.isArray(meta.polygon) && meta.polygon.length >= 3
+            ? meta.polygon
+            : undefined;
         quadraMap.set(fallbackKey, {
           key: fallbackKey,
           quadraNumber: fallbackKey,
@@ -346,6 +355,7 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
           territoryNumber: tNum,
           locality: meta.locality,
           city: meta.city || meta.cidade,
+          explicitPolygon: explicitPoly,
           units: [],
           points: [],
         });

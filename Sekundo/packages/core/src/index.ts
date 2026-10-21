@@ -223,6 +223,31 @@ export {
 } from './geo/geoUtils';
 export { pointInPolygon, isSelfIntersecting, roundRing, validateBoundary } from './geo/polygonOps';
 export type { BoundaryValidation } from './geo/polygonOps';
+export {
+  resolveBestAddressQuery,
+  buildGoogleMapsDirectionsUrl,
+  buildGoogleMapsSearchUrl,
+} from './geo/googleMapsLinks';
+export type {
+  GoogleMapsTargetInput,
+  ResolvedGoogleMapsQuery,
+} from './geo/googleMapsLinks';
+export {
+  computeHaversineMeters,
+  computeBearingDegrees,
+  bearingToCardinalPt,
+  formatRouteDistance,
+  formatRouteDuration,
+  computeOfflineRoute,
+  calculateMapRoute,
+  buildWalkingSequenceRoute,
+} from './geo/routingEngine';
+export type {
+  RouteStepSummary,
+  MapRouteResult,
+  WalkingSequenceUnitInput,
+  WalkingSequenceStop,
+} from './geo/routingEngine';
 
 // Subtree Delegation (CBAC)
 export * as tokenManager from './delegation/tokenManager';
@@ -576,6 +601,7 @@ export {
   exportOmniCsvBundle,
   exportSingleEngineSampleCsv,
   importOmniCsvBundle,
+  groupCoinLedgerRowsByTable,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
   deriveActiveEnginesFromOmniBundle,
@@ -590,6 +616,7 @@ export type {
   OmniStudioDocItem,
   OmniHojeRitualItem,
   OmniCoinLedgerRowItem,
+  OmniCoinTablePartition,
   SekundoOmniStateBundle,
   ExportOmniCsvOptions,
 } from './csv/omniCsvBundle';

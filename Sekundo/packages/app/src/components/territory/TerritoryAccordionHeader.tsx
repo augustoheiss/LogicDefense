@@ -16,9 +16,12 @@ interface Props {
   total: number;
   expanded: boolean;
   daysSinceCompleted?: number | null;
+  mapOpen?: boolean;
   onToggle: () => void;
   onBatchToggle?: () => void;
   onOpenPublisher?: () => void;
+  onToggleMap?: () => void;
+  onOpenGoogleMaps?: () => void;
 }
 
 export function TerritoryAccordionHeader({
@@ -28,9 +31,12 @@ export function TerritoryAccordionHeader({
   total,
   expanded,
   daysSinceCompleted,
+  mapOpen,
   onToggle,
   onBatchToggle,
   onOpenPublisher,
+  onToggleMap,
+  onOpenGoogleMaps,
 }: Props) {
   const percent = total > 0 ? Math.round((worked / total) * 100) : 0;
   const done = total > 0 && worked === total;
@@ -69,8 +75,39 @@ export function TerritoryAccordionHeader({
       </Pressable>
 
       <View style={styles.actions}>
+        {onToggleMap ? (
+          <Pressable
+            testID={`checklist-territory-map-btn-${territory}`}
+            onPress={onToggleMap}
+            style={[
+              styles.pubBtn,
+              mapOpen && {
+                backgroundColor: 'rgba(56, 189, 248, 0.28)',
+                borderColor: '#38BDF8',
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Ver mapa do território ${territory}`}
+          >
+            <Text style={[styles.pubBtnText, mapOpen && { color: '#38BDF8', fontWeight: '900' }]}>
+              {mapOpen ? '🗺️ Ocultar Mapa' : '🗺️ Mapa'}
+            </Text>
+          </Pressable>
+        ) : null}
+        {onOpenGoogleMaps ? (
+          <Pressable
+            testID={`checklist-territory-gmaps-btn-${territory}`}
+            onPress={onOpenGoogleMaps}
+            style={styles.pubBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Abrir território ${territory} no Google Maps`}
+          >
+            <Text style={styles.pubBtnText}>🗺️ Google Maps</Text>
+          </Pressable>
+        ) : null}
         {onOpenPublisher ? (
           <Pressable
+            testID={`checklist-territory-campo-btn-${territory}`}
             onPress={onOpenPublisher}
             style={styles.pubBtn}
             accessibilityRole="button"

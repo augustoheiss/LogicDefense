@@ -3,7 +3,7 @@
  *
  * Web renders Leaflet directly into the React DOM (no iframe, no postMessage bridge):
  * the map instance persists across data updates, so the viewport is only moved when
- * the caller explicitly asks for it via `fitRequest`.
+ * the caller explicitly asks for it via `fitRequest` or `panToUserRequest`.
  */
 
 export type LatLngTuple = [number, number];
@@ -28,6 +28,8 @@ export interface MapPin {
   assignedAt?: string;
   completedAt?: string;
   daysSinceCompleted?: number | null;
+  /** Optional 1-based walking order badge for field direction inspection. */
+  walkOrder?: number;
 }
 
 export interface MapQuadra {
@@ -40,6 +42,8 @@ export interface MapQuadra {
   totalUnits: number;
   coveragePercent: number;
   perimeterStreets: string[];
+  city?: string;
+  locality?: string;
 }
 
 export interface MapOutline {
@@ -64,6 +68,31 @@ export interface MapEditSession {
   revision?: number;
 }
 
+export interface MapUserLocation {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  heading?: number | null;
+}
+
+export interface MapActiveRoute {
+  coordinates: LatLngTuple[];
+  distanceMeters: number;
+  durationSeconds: number;
+  cardinalDirection?: string;
+  source: 'osrm' | 'offline_haversine';
+  label?: string;
+}
+
+export interface MapWalkingStop {
+  key: string;
+  lat: number;
+  lng: number;
+  order: number;
+  label: string;
+  worked: number;
+}
+
 export interface TerritoryLeafletMapProps {
   mode: 'quadras' | 'pins';
   pins: MapPin[];
@@ -71,6 +100,8 @@ export interface TerritoryLeafletMapProps {
   outlines: MapOutline[];
   /** Show perimeter street names as labels on quadra polygons. */
   showStreetLabels?: boolean;
+  /** When true, clicking a quadra also opens an interactive popup with Google Maps & Route actions. */
+  showQuadraPopup?: boolean;
   selectedKey?: string | null;
   /** Increment to re-frame the map on the current layers. The first data load frames automatically. */
   fitRequest: number;
@@ -79,6 +110,22 @@ export interface TerritoryLeafletMapProps {
   onToggleWork: (key: string) => void;
   onEditPin: (key: string) => void;
   onCustomizePin: (key: string) => void;
+  /** Live operator GPS coordinates rendered on a dedicated non-disruptive layer. */
+  userLocation?: MapUserLocation | null;
+  /** Increment to pan/zoom camera to `userLocation`. */
+  panToUserRequest?: number;
+  /** Active street/offline route drawn over the map. */
+  activeRoute?: MapActiveRoute | null;
+  /** Optional ordered walking sequence path (`1 -> 2 -> 3...`) across addresses. */
+  walkingSequence?: MapWalkingStop[];
+  /** Optional custom handler to open a pin in Google Maps; defaults to universal `maps/dir/?api=1`. */
+  onOpenGoogleMapsPin?: (key: string) => void;
+  /** Optional handler to trace an in-map route to a pin. */
+  onRouteToPinInMap?: (key: string) => void;
+  /** Optional handler to open a quadra in Google Maps. */
+  onOpenGoogleMapsQuadra?: (key: string) => void;
+  /** Optional handler to trace an in-map route to a quadra. */
+  onRouteToQuadraInMap?: (key: string) => void;
   /** When set, the map enters vertex-editing mode for one quadra boundary. */
   editSession?: MapEditSession | null;
   onPolygonDraft?: (ring: LatLngTuple[]) => void;

@@ -13,7 +13,7 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
     {
       key: '02-01-01-01',
       type: 'territory',
-      label: 'Rua Azaleias, 202',
+      label: 'Via Operacional, 202',
       value: '',
       meta: {
         worked: 0,
@@ -23,7 +23,7 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
     {
       key: '02-01-01-02',
       type: 'territory',
-      label: 'Rua Azaleias, 204',
+      label: 'Via Operacional, 204',
       value: '',
       meta: {
         worked: 0,
@@ -145,10 +145,10 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
 
   it('creates valid P2P sync messages for WebRTC DataChannel', () => {
     const op = createLedgerOperation('e1', 'k1', 'worked', 1, 'd1');
-    const msg = createP2PSyncMessage('e1', 'd1', [op], 'Nelson');
+    const msg = createP2PSyncMessage('e1', 'd1', [op], 'Participante 01');
 
     expect(msg.type).toBe('SEKUNDO_DELTA_SYNC');
     expect(msg.operations.length).toBe(1);
-    expect(msg.senderName).toBe('Nelson');
+    expect(msg.senderName).toBe('Participante 01');
   });
 });

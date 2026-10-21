@@ -21,7 +21,7 @@ export interface LedgerOperation {
   newValue: unknown;       // New value to apply
   timestamp: string;       // ISO 8601 UTC timestamp
   authorId: string;        // Sovereign device fingerprint
-  authorName?: string;     // Volunteer display name (e.g. 'Nelson')
+  authorName?: string;     // Operator display name (e.g. 'Participante 01')
   sequence?: number;       // Monotonic sequence number
   hlc?: string;            // Packed Hybrid Logical Clock string for deterministic ordering
 }

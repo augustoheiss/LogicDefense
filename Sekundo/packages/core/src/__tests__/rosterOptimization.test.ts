@@ -101,7 +101,7 @@ describe('Bitmask Schedule & Roster Optimization Engine', () => {
 
       const candidateA: VolunteerProfile = {
         id: 'vol_A',
-        name: 'Carlos (Qualified, Well-Rested)',
+        name: 'Participante 01 (Qualified, Well-Rested)',
         skillLevel: 'LEADER',
         scheduleMask: 0n,
         availabilityMask: createSlotMask(5, 'MORNING'),
@@ -111,7 +111,7 @@ describe('Bitmask Schedule & Roster Optimization Engine', () => {
 
       const candidateB: VolunteerProfile = {
         id: 'vol_B',
-        name: 'Bruno (Underqualified)',
+        name: 'Participante 02 (Underqualified)',
         skillLevel: 'BASIC',
         scheduleMask: 0n,
         availabilityMask: createSlotMask(5, 'MORNING'),
@@ -121,7 +121,7 @@ describe('Bitmask Schedule & Roster Optimization Engine', () => {
 
       const candidateC: VolunteerProfile = {
         id: 'vol_C',
-        name: 'Daniel (Qualified but Fatigued)',
+        name: 'Participante 03 (Qualified but Fatigued)',
         skillLevel: 'ADVANCED',
         scheduleMask: 0n,
         availabilityMask: createSlotMask(5, 'MORNING'),
