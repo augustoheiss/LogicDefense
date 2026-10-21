@@ -230,9 +230,11 @@ export {
 } from './geo/googleMapsLinks';
 export type {
   GoogleMapsTargetInput,
+  GoogleMapsWaypointItem,
   ResolvedGoogleMapsQuery,
 } from './geo/googleMapsLinks';
 export {
+  ROUTING_POLICY_CONFIG,
   computeHaversineMeters,
   computeBearingDegrees,
   bearingToCardinalPt,
@@ -240,11 +242,15 @@ export {
   formatRouteDuration,
   computeOfflineRoute,
   calculateMapRoute,
+  calculateMultiStopMapRoute,
   buildWalkingSequenceRoute,
 } from './geo/routingEngine';
 export type {
   RouteStepSummary,
   MapRouteResult,
+  RouteCalculationResult,
+  WalkingSequenceRoute,
+  RouteWaypointInput,
   WalkingSequenceUnitInput,
   WalkingSequenceStop,
 } from './geo/routingEngine';

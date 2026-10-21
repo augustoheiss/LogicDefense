@@ -12,11 +12,27 @@
  *   when coordinates are absent (e.g., street headers or ungeocoded addresses).
  */
 
+export type GoogleMapsWaypointItem =
+  | [number, number]
+  | string
+  | {
+      lat?: number | string | null;
+      lng?: number | string | null;
+      label?: string | null;
+      street?: string | null;
+      streetName?: string | null;
+      number?: string | null;
+      numberOrComplement?: string | null;
+      city?: string | null;
+    };
+
 export interface GoogleMapsTargetInput {
   lat?: number | string | null;
   lng?: number | string | null;
   street?: string | null;
+  streetName?: string | null;
   number?: string | null;
+  numberOrComplement?: string | null;
   line?: string | null;
   line2?: string | null;
   neighborhood?: string | null;
@@ -27,7 +43,9 @@ export interface GoogleMapsTargetInput {
   label?: string | null;
   originLat?: number | null;
   originLng?: number | null;
+  waypoints?: GoogleMapsWaypointItem[] | null;
   travelMode?: 'walking' | 'driving' | 'bicycling' | 'transit';
+  mode?: 'directions' | 'search';
 }
 
 export interface ResolvedGoogleMapsQuery {
@@ -71,8 +89,8 @@ export function resolveBestAddressQuery(input: GoogleMapsTargetInput): ResolvedG
 
   // Build street + number primary part
   const cleanLine = (input.line || '').trim();
-  const cleanStreet = (input.street || '').trim();
-  const cleanNumber = (input.number || '').trim();
+  const cleanStreet = (input.street || input.streetName || '').trim();
+  const cleanNumber = (input.number || input.numberOrComplement || '').trim();
   const cleanLabel = (input.label || '').trim();
 
   let primaryStreet = cleanLine;
@@ -129,6 +147,7 @@ export function resolveBestAddressQuery(input: GoogleMapsTargetInput): ResolvedG
 
 /**
  * Builds a universal Google Maps Directions URL (`https://www.google.com/maps/dir/?api=1&destination=...`).
+ * Supports optional multi-stop `&waypoints=w1|w2|...` and explicit `origin` (GPS coordinates).
  * When `originLat`/`originLng` are omitted, Google Maps automatically routes from the user's current GPS position.
  */
 export function buildGoogleMapsDirectionsUrl(input: GoogleMapsTargetInput): string {
@@ -152,6 +171,45 @@ export function buildGoogleMapsDirectionsUrl(input: GoogleMapsTargetInput): stri
     params.push(
       `origin=${encodeURIComponent(`${Number(oLat.toFixed(6))},${Number(oLng.toFixed(6))}`)}`
     );
+  }
+
+  if (Array.isArray(input.waypoints) && input.waypoints.length > 0) {
+    const wpTokens: string[] = [];
+    for (const wp of input.waypoints.slice(0, 20)) {
+      if (typeof wp === 'string') {
+        const trimmed = wp.trim();
+        if (trimmed) wpTokens.push(trimmed);
+      } else if (Array.isArray(wp) && wp.length >= 2) {
+        const wLat = parseFiniteCoord(wp[0]);
+        const wLng = parseFiniteCoord(wp[1]);
+        if (
+          wLat !== undefined &&
+          wLng !== undefined &&
+          wLat >= -90 &&
+          wLat <= 90 &&
+          wLng >= -180 &&
+          wLng <= 180 &&
+          !(wLat === 0 && wLng === 0)
+        ) {
+          wpTokens.push(`${Number(wLat.toFixed(6))},${Number(wLng.toFixed(6))}`);
+        }
+      } else if (wp && !Array.isArray(wp) && typeof wp === 'object') {
+        const wpResolved = resolveBestAddressQuery({
+          lat: wp.lat,
+          lng: wp.lng,
+          label: wp.label,
+          street: wp.street || wp.streetName,
+          number: wp.number || wp.numberOrComplement,
+          city: wp.city || input.city,
+        });
+        if (wpResolved.destinationParam && wpResolved.destinationParam !== 'Brasil') {
+          wpTokens.push(wpResolved.destinationParam);
+        }
+      }
+    }
+    if (wpTokens.length > 0) {
+      params.push(`waypoints=${encodeURIComponent(wpTokens.join('|'))}`);
+    }
   }
 
   if (input.travelMode) {

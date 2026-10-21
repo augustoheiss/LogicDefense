@@ -112,6 +112,11 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
       dataLayerRef.current = L.featureGroup().addTo(map);
       routeLayerRef.current = L.layerGroup().addTo(map);
       userLocationLayerRef.current = L.layerGroup().addTo(map);
+      map.on('click', (e: Leaflet.LeafletMouseEvent) => {
+        if (propsRef.current.pickingOriginMode && propsRef.current.onPickOriginOnMap) {
+          propsRef.current.onPickOriginOnMap(e.latlng.lat, e.latlng.lng);
+        }
+      });
       mapRef.current = map;
       (window as unknown as { __sekundoLeafletMap?: Leaflet.Map }).__sekundoLeafletMap = map;
       setReady(true);
@@ -251,6 +256,7 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
     props.showQuadraPopup,
     props.selectedKey,
     props.editSession?.quadraKey,
+    props.routeStopKeys,
   ]);
 
   // 3. Explicit re-frame requests (territory chip, "Enquadrar" button — NEVER on mode switch).
@@ -308,7 +314,9 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
       }),
     });
     gpsMarker.bindTooltip(
-      `🛰️ Sua localização GPS (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} • ±${Math.round(loc.accuracy || 15)}m)`,
+      loc.isManual
+        ? `📍 Seu ponto de partida (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})`
+        : `🛰️ Sua localização GPS (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} • ±${Math.round(loc.accuracy || 15)}m)`,
       { direction: 'top' }
     );
     userGrp.addLayer(gpsMarker);
@@ -327,93 +335,138 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
   }, [ready, props.panToUserRequest, props.userLocation]);
 
   // 3d. Route & Walking Sequence Layer (`routeLayerRef`).
+  // Never draws straight Euclidean spiderweb lines across territories; only renders real street geometry
+  // from `activeRoute` plus discrete numbered stop badges.
   useEffect(() => {
     const L = LRef.current;
     const routeGrp = routeLayerRef.current;
     if (!ready || !L || !routeGrp) return;
     routeGrp.clearLayers();
 
-    // Walking sequence trail (`1 -> 2 -> 3...`)
-    if (props.walkingSequence && props.walkingSequence.length >= 1) {
-      const coords = props.walkingSequence.map((s) => [s.lat, s.lng] as LatLngTuple);
-      if (coords.length >= 2) {
-        const seqLine = L.polyline(coords, {
-          color: '#F59E0B',
-          weight: 3,
-          dashArray: '6, 6',
-          opacity: 0.88,
-          interactive: false,
+    // Scoped walking order badges (`1, 2, 3...`) when in quadras mode and no active street route overrides them
+    if (
+      props.walkingSequence &&
+      props.walkingSequence.length >= 1 &&
+      props.walkingSequence.length <= 60 &&
+      !props.activeRoute &&
+      props.mode === 'quadras'
+    ) {
+      for (const stop of props.walkingSequence) {
+        const badgeNode = el('div', {
+          text: String(stop.order),
+          style: {
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            background: stop.worked === 1 ? '#10B981' : '#F59E0B',
+            color: '#0D1117',
+            fontWeight: '900',
+            fontSize: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1.5px solid #FFFFFF',
+            boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
+            pointerEvents: 'none',
+          },
         });
-        routeGrp.addLayer(seqLine);
-      }
-
-      if (props.mode === 'quadras') {
-        for (const stop of props.walkingSequence) {
-          const badgeNode = el('div', {
-            text: String(stop.order),
-            style: {
-              width: '20px',
-              height: '20px',
-              borderRadius: '50%',
-              background: stop.worked === 1 ? '#10B981' : '#F59E0B',
-              color: '#0D1117',
-              fontWeight: '900',
-              fontSize: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1.5px solid #FFFFFF',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
-              pointerEvents: 'none',
-            },
-          });
-          const seqMarker = L.marker([stop.lat, stop.lng], {
-            interactive: false,
-            keyboard: false,
-            zIndexOffset: 900,
-            icon: L.divIcon({
-              className: 'sk-walk-stop',
-              html: badgeNode,
-              iconSize: [20, 20],
-              iconAnchor: [10, 10],
-            }),
-          });
-          routeGrp.addLayer(seqMarker);
-        }
+        const seqMarker = L.marker([stop.lat, stop.lng], {
+          interactive: false,
+          keyboard: false,
+          zIndexOffset: 900,
+          icon: L.divIcon({
+            className: 'sk-walk-stop',
+            html: badgeNode,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10],
+          }),
+        });
+        routeGrp.addLayer(seqMarker);
       }
     }
 
-    // Active Navigation Route (OSRM or Offline Haversine)
+    // Active Street Navigation Route (OSRM Street Geometry from Operator's GPS Origin -> 1 or N Stops)
     const route = props.activeRoute;
     if (route && route.coordinates && route.coordinates.length >= 2) {
       const casing = L.polyline(route.coordinates, {
         color: '#0F172A',
-        weight: 8,
-        opacity: 0.75,
+        weight: 9,
+        opacity: 0.82,
         interactive: false,
       });
       const mainLine = L.polyline(route.coordinates, {
-        color: route.source === 'osrm' ? '#06B6D4' : '#38BDF8',
+        color: route.source === 'osrm' ? '#06B6D4' : '#F59E0B',
         weight: 5,
-        opacity: 0.95,
+        opacity: 0.96,
         dashArray: route.source === 'offline_haversine' ? '10, 8' : undefined,
       });
-      const summaryText = `🧭 Rota ${route.source === 'osrm' ? 'pelas ruas (OSRM)' : 'direta (Offline)'}: ${formatRouteDistance(route.distanceMeters)} (${formatRouteDuration(route.durationSeconds)})${route.label ? ` → ${route.label}` : ''}`;
+      const summaryText = `🧭 Rota ${
+        route.source === 'osrm' ? 'pelas ruas (OpenStreetMap)' : 'em linha reta (Sem internet)'
+      }: ${formatRouteDistance(route.distanceMeters)} (${formatRouteDuration(route.durationSeconds)})${
+        route.label ? ` → ${route.label}` : ''
+      }`;
       mainLine.bindTooltip(summaryText, { sticky: true });
 
       routeGrp.addLayer(casing);
       routeGrp.addLayer(mainLine);
 
-      const destPt = route.coordinates[route.coordinates.length - 1];
-      const destRing = L.circleMarker(destPt, {
-        radius: 10,
-        color: '#06B6D4',
-        weight: 3,
-        fillColor: '#22D3EE',
-        fillOpacity: 0.35,
+      // Origin marker (User's GPS / Start point)
+      const originPt = route.origin || route.coordinates[0];
+      const originRing = L.circleMarker(originPt, {
+        radius: 8,
+        color: '#FFFFFF',
+        weight: 2.5,
+        fillColor: '#2563EB',
+        fillOpacity: 1,
         interactive: false,
       });
-      routeGrp.addLayer(destRing);
+      routeGrp.addLayer(originRing);
+
+      // Numbered stop markers along the street route
+      if (route.stops && route.stops.length > 0) {
+        for (const stop of route.stops) {
+          const stopBadge = el('div', {
+            testId: `route-stop-badge-${stop.order}`,
+            text: String(stop.order),
+            style: {
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              background: '#06B6D4',
+              color: '#082F49',
+              fontWeight: '900',
+              fontSize: '11px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid #FFFFFF',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.65)',
+            },
+          });
+          const stopMarker = L.marker([stop.lat, stop.lng], {
+            zIndexOffset: 1800 + stop.order,
+            icon: L.divIcon({
+              className: 'sk-route-stop-marker',
+              html: stopBadge,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+            }),
+          });
+          stopMarker.bindTooltip(`🏁 Parada ${stop.order}: ${stop.label}`, { direction: 'top' });
+          routeGrp.addLayer(stopMarker);
+        }
+      } else {
+        const destPt = route.coordinates[route.coordinates.length - 1];
+        const destRing = L.circleMarker(destPt, {
+          radius: 10,
+          color: '#06B6D4',
+          weight: 3,
+          fillColor: '#22D3EE',
+          fillOpacity: 0.35,
+          interactive: false,
+        });
+        routeGrp.addLayer(destRing);
+      }
     }
   }, [ready, props.activeRoute, props.walkingSequence, props.mode]);
 
@@ -614,7 +667,15 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0, background: '#12151C' }} />
+      <div
+        ref={containerRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: '#12151C',
+          cursor: props.pickingOriginMode ? 'crosshair' : undefined,
+        }}
+      />
       {!ready ? (
         <div
           style={{
@@ -706,7 +767,7 @@ function buildQuadraPopupCard(q: MapQuadra, propsRef: React.MutableRefObject<Ter
             }),
           ]
         : []),
-      el('div', { style: { display: 'flex', gap: '5px', marginTop: '6px' } }, [
+      el('div', { style: { display: 'flex', gap: '5px', marginTop: '6px', flexWrap: 'wrap' } }, [
         button('🗺️ Google Maps', '#2563EB', '#FFFFFF', openGmaps, `popup-quadra-gmaps-${q.key}`),
         ...(propsRef.current.onRouteToQuadraInMap
           ? [
@@ -716,6 +777,17 @@ function buildQuadraPopupCard(q: MapQuadra, propsRef: React.MutableRefObject<Ter
                 '#FFFFFF',
                 () => propsRef.current.onRouteToQuadraInMap?.(q.key),
                 `popup-quadra-route-${q.key}`
+              ),
+            ]
+          : []),
+        ...(propsRef.current.onRouteToQuadraAddressesInMap
+          ? [
+              button(
+                '👣 Rota Endereços',
+                '#059669',
+                '#FFFFFF',
+                () => propsRef.current.onRouteToQuadraAddressesInMap?.(q.key),
+                `popup-quadra-route-addresses-${q.key}`
               ),
             ]
           : []),
@@ -922,7 +994,7 @@ function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObj
       ]),
       el('div', { style: { display: 'flex', gap: '5px', marginTop: '6px' } }, [
         button(
-          '🗺️ Google Maps / Rota',
+          '🗺️ Google Maps',
           '#2563EB',
           '#FFFFFF',
           openPinGoogleMaps,
@@ -932,12 +1004,24 @@ function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObj
         ...(propsRef.current.onRouteToPinInMap
           ? [
               button(
-                '🧭 Rota Aqui',
+                '🧭 Rota GPS',
                 '#0891B2',
                 '#FFFFFF',
                 () => propsRef.current.onRouteToPinInMap?.(pin.key),
-                { flex: '0.85' },
+                { flex: '0.9' },
                 `popup-pin-route-${pin.key}`
+              ),
+            ]
+          : []),
+        ...(propsRef.current.onAddPinToRoute
+          ? [
+              button(
+                (propsRef.current.routeStopKeys || []).includes(pin.key) ? '✓ Na Rota' : '➕ +Rota',
+                (propsRef.current.routeStopKeys || []).includes(pin.key) ? '#059669' : '#0F766E',
+                '#FFFFFF',
+                () => propsRef.current.onAddPinToRoute?.(pin.key),
+                { flex: '0.8' },
+                `popup-pin-add-route-${pin.key}`
               ),
             ]
           : []),

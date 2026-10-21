@@ -38,6 +38,7 @@ import {
   buildTerritoriosS13HistoricalRegistry,
   selectEnginePartitionNodes,
   calculateMapRoute,
+  calculateMultiStopMapRoute,
   buildWalkingSequenceRoute,
   formatRouteDistance,
   formatRouteDuration,
@@ -151,6 +152,7 @@ export default function PublisherModeScreen() {
     panToUserRequest,
     toggleGps,
     enableGpsAndGetPosition,
+    setManualOrigin,
     centerOnUser,
   } = useLiveGpsLocation();
   const [activeRoute, setActiveRoute] = useState<RouteCalculationResult | null>(null);
@@ -162,6 +164,8 @@ export default function PublisherModeScreen() {
     streetName?: string;
   } | null>(null);
   const [routingBusy, setRoutingBusy] = useState<boolean>(false);
+  const [pickingOriginMode, setPickingOriginMode] = useState<boolean>(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   useEffect(() => {
     storage.getItem('sekundo:daylight-mode').then((v) => {
@@ -365,6 +369,21 @@ export default function PublisherModeScreen() {
     await updateNodes(patches);
   };
 
+  const resolveOperatorOrigin = async (): Promise<{ lat: number; lng: number } | null> => {
+    if (userLocation) {
+      return { lat: userLocation.lat, lng: userLocation.lng };
+    }
+    const gpsFix = await enableGpsAndGetPosition(3500);
+    if (gpsFix) {
+      return { lat: gpsFix.lat, lng: gpsFix.lng };
+    }
+    setPickingOriginMode(true);
+    setRouteError(
+      'GPS indisponível. Clique no mapa onde você está agora para definir sua partida (ou ative a permissão de localização).'
+    );
+    return null;
+  };
+
   const handleTraceRouteInMap = async (dest: {
     lat: number;
     lng: number;
@@ -373,36 +392,81 @@ export default function PublisherModeScreen() {
     streetName?: string;
   }) => {
     setRoutingBusy(true);
+    setRouteError(null);
     if (viewMode !== 'map') {
       setViewMode('map');
     }
     try {
-      let origin: { lat: number; lng: number } | null = userLocation
-        ? { lat: userLocation.lat, lng: userLocation.lng }
-        : null;
-      if (!origin) {
-        const gpsFix = await enableGpsAndGetPosition(2800);
-        if (gpsFix) origin = { lat: gpsFix.lat, lng: gpsFix.lng };
-      }
-      if (!origin) {
-        const candidatePin =
-          rawMapPins.find(
-            (p) => Math.abs(p.lat - dest.lat) > 0.0001 || Math.abs(p.lng - dest.lng) > 0.0001
-          ) || rawMapPins[0];
-        if (candidatePin) {
-          origin = { lat: candidatePin.lat, lng: candidatePin.lng };
-        } else if (territoryQuadras.length > 0) {
-          origin = {
-            lat: territoryQuadras[0].centerLat,
-            lng: territoryQuadras[0].centerLng,
-          };
-        } else {
-          origin = { lat: dest.lat - 0.0025, lng: dest.lng - 0.0025 };
-        }
-      }
-      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 3000);
+      const origin = await resolveOperatorOrigin();
+      if (!origin) return;
+      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 4000);
       setActiveRoute(route);
       setRouteDestinationMeta(dest);
+    } finally {
+      setRoutingBusy(false);
+    }
+  };
+
+  const handleTraceQuadraAddressesRoute = async (quadraKey: string) => {
+    const q = territoryQuadras.find((x) => x.key === quadraKey);
+    if (!q) return;
+    setRoutingBusy(true);
+    setRouteError(null);
+    if (viewMode !== 'map') {
+      setViewMode('map');
+    }
+    try {
+      const origin = await resolveOperatorOrigin();
+      if (!origin) return;
+      const unitCoords = q.streets
+        .flatMap((s) =>
+          s.units.map((u) => ({
+            key: u.key,
+            label: `${s.streetName}, ${u.numberOrComplement}`,
+            streetName: s.streetName,
+            numberOrComplement: u.numberOrComplement,
+            lat: u.lat ?? q.centerLat,
+            lng: u.lng ?? q.centerLng,
+            worked: u.worked,
+          }))
+        )
+        .filter((u) => u.worked === 0);
+      const targetUnits =
+        unitCoords.length > 0
+          ? unitCoords
+          : q.streets.flatMap((s) =>
+              s.units.map((u) => ({
+                key: u.key,
+                label: `${s.streetName}, ${u.numberOrComplement}`,
+                streetName: s.streetName,
+                numberOrComplement: u.numberOrComplement,
+                lat: u.lat ?? q.centerLat,
+                lng: u.lng ?? q.centerLng,
+                worked: u.worked,
+              }))
+            );
+      const orderedStops = buildWalkingSequenceRoute(targetUnits, walkMode, origin);
+      const stops =
+        orderedStops.length > 0
+          ? orderedStops.map((s) => ({
+              key: s.key,
+              label: s.label,
+              lat: s.lat,
+              lng: s.lng,
+            }))
+          : [{ key: q.key, label: q.label, lat: q.centerLat, lng: q.centerLng }];
+      const route = await calculateMultiStopMapRoute(origin, stops, {
+        profile: 'foot',
+        timeoutMs: 4500,
+      });
+      setActiveRoute(route);
+      setRouteDestinationMeta({
+        label: `${q.label} (${stops.length} paradas pelas ruas)`,
+        lat: q.centerLat,
+        lng: q.centerLng,
+        city: defaultCity,
+        streetName: q.perimeterStreets[0],
+      });
     } finally {
       setRoutingBusy(false);
     }
@@ -694,6 +758,27 @@ export default function PublisherModeScreen() {
               ) : null}
 
               <Pressable
+                testID="field-map-pick-origin-btn"
+                onPress={() => setPickingOriginMode((v) => !v)}
+                style={[
+                  styles.fieldMapToolBtn,
+                  pickingOriginMode && {
+                    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+                    borderColor: '#10B981',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.fieldMapToolBtnText,
+                    pickingOriginMode && { color: '#34D399', fontWeight: '800' },
+                  ]}
+                >
+                  {pickingOriginMode ? '📍 Clique no Mapa...' : '📍 Definir Partida'}
+                </Text>
+              </Pressable>
+
+              <Pressable
                 testID="field-map-fit-btn"
                 onPress={() => setFitRequest((n) => n + 1)}
                 style={styles.fieldMapToolBtn}
@@ -741,9 +826,9 @@ export default function PublisherModeScreen() {
               </View>
             ) : null}
 
-            {gpsError ? (
+            {gpsError || routeError ? (
               <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '700' }}>
-                ⚠️ {gpsError}
+                ⚠️ {routeError || gpsError}
               </Text>
             ) : null}
           </View>
@@ -762,6 +847,12 @@ export default function PublisherModeScreen() {
               panToUserRequest={panToUserRequest}
               activeRoute={activeRoute}
               walkingSequence={walkingSequence}
+              pickingOriginMode={pickingOriginMode}
+              onPickOriginOnMap={(lat, lng) => {
+                setManualOrigin(lat, lng);
+                setPickingOriginMode(false);
+                setRouteError(null);
+              }}
               onSelectPin={(k) => setSelectedFieldKey(k)}
               onSelectQuadra={(k) => setSelectedFieldKey(k)}
               onToggleWork={(k) => handleToggleUnit(k)}
@@ -819,6 +910,9 @@ export default function PublisherModeScreen() {
                     streetName: q.perimeterStreets[0],
                   });
                 }
+              }}
+              onRouteToQuadraAddressesInMap={(qKey) => {
+                handleTraceQuadraAddressesRoute(qKey);
               }}
             />
           </View>

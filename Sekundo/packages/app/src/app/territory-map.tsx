@@ -49,7 +49,9 @@ import {
   roundRing,
   buildTerritoriosS13HistoricalRegistry,
   selectEnginePartitionNodes,
+  ROUTING_POLICY_CONFIG,
   calculateMapRoute,
+  calculateMultiStopMapRoute,
   buildWalkingSequenceRoute,
   formatRouteDistance,
   formatRouteDuration,
@@ -60,6 +62,7 @@ import type {
   TerritoryRecencyItem,
   QuadraSummary,
   RouteCalculationResult,
+  RouteWaypointInput,
   WalkingSequenceRoute,
 } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
@@ -242,7 +245,7 @@ export default function TerritoryMapScreen() {
   const [ringHistory, setRingHistory] = useState<LatLngTuple[][]>([]);
   const [showUnlocated, setShowUnlocated] = useState<boolean>(false);
 
-  // Live GPS telemetry & In-Map Routing states
+  // Live GPS telemetry & In-Map Street Routing states (Strict GPS Origin -> 1 or N Addresses)
   const {
     gpsEnabled,
     userLocation,
@@ -250,6 +253,7 @@ export default function TerritoryMapScreen() {
     panToUserRequest,
     toggleGps,
     enableGpsAndGetPosition,
+    setManualOrigin,
     centerOnUser,
   } = useLiveGpsLocation();
   const [activeRoute, setActiveRoute] = useState<RouteCalculationResult | null>(null);
@@ -257,6 +261,16 @@ export default function TerritoryMapScreen() {
     label: string;
     lat: number;
     lng: number;
+    city?: string;
+    streetName?: string;
+    waypoints?: Array<{ lat: number; lng: number; label?: string }>;
+  } | null>(null);
+  const [routeStopKeys, setRouteStopKeys] = useState<string[]>([]);
+  const [routeProfile, setRouteProfile] = useState<'foot' | 'driving'>('foot');
+  const [pickingOriginMode, setPickingOriginMode] = useState<boolean>(false);
+  const [pendingRouteRequest, setPendingRouteRequest] = useState<{
+    stops: RouteWaypointInput[];
+    label: string;
     city?: string;
     streetName?: string;
   } | null>(null);
@@ -513,11 +527,26 @@ export default function TerritoryMapScreen() {
     return { rawMapPins: located, unlocatedPins: missing };
   }, [displayedPins]);
 
-  // Walking sequence route across filtered pins when "Direção" is enabled
+  // Scoped walking sequence across the active quadra or filtered territory (never across all 450+ territories at once)
   const walkingSequence = useMemo<WalkingSequenceRoute | null>(() => {
     if (!showWalkingSequence || rawMapPins.length === 0) return null;
+    // Prevent global inter-territory spiderweb when 'all' territories are displayed
+    if (
+      selectedTerritory === 'all' &&
+      !selectedQuadra &&
+      rawMapPins.length > ROUTING_POLICY_CONFIG.maxPinsForAutoSequence
+    ) {
+      return null;
+    }
+    const scopedPins = selectedQuadra
+      ? rawMapPins.filter((p) =>
+          selectedQuadra.streets.some((s) => s.units.some((u) => pathKey.equals(u.key, p.key)))
+        )
+      : rawMapPins;
+    if (scopedPins.length === 0) return null;
+
     return buildWalkingSequenceRoute(
-      rawMapPins.map((p) => {
+      scopedPins.map((p) => {
         const lineStr = p.line || p.label;
         const commaIdx = lineStr.indexOf(',');
         const streetName = commaIdx >= 0 ? lineStr.slice(0, commaIdx).trim() : lineStr;
@@ -535,19 +564,20 @@ export default function TerritoryMapScreen() {
       walkingOrderMode,
       userLocation ? { lat: userLocation.lat, lng: userLocation.lng } : null
     );
-  }, [showWalkingSequence, rawMapPins, walkingOrderMode, userLocation]);
+  }, [showWalkingSequence, rawMapPins, selectedTerritory, selectedQuadra, walkingOrderMode, userLocation]);
 
   const mapPins = useMemo<MapPin[]>(() => {
-    if (!walkingSequence) return rawMapPins;
+    const activeStops = activeRoute?.stops || walkingSequence;
+    if (!activeStops) return rawMapPins;
     const orderByKey = new Map<string, number>();
-    for (const s of walkingSequence) {
+    for (const s of activeStops) {
       orderByKey.set(s.key, s.order);
     }
     return rawMapPins.map((p) => ({
       ...p,
       walkOrder: orderByKey.get(p.key),
     }));
-  }, [rawMapPins, walkingSequence]);
+  }, [rawMapPins, activeRoute, walkingSequence]);
 
   // Selected Pin Item
   const selectedPin = useMemo(() => {
@@ -600,47 +630,200 @@ export default function TerritoryMapScreen() {
     });
   };
 
-  // Trace route inside our own Leaflet map (OSRM street routing + automatic 100% offline Haversine fallback)
-  const handleTraceRouteInMap = async (dest: {
-    lat: number;
-    lng: number;
-    label: string;
-    city?: string;
-    streetName?: string;
-  }) => {
+  // Execute multi-stop street route from a verified operator origin (GPS or manual click)
+  const executeMultiStopRouteFromOrigin = async (
+    origin: { lat: number; lng: number },
+    stops: RouteWaypointInput[],
+    meta: { label: string; city?: string; streetName?: string },
+    profileOverride?: 'foot' | 'driving'
+  ) => {
+    if (stops.length === 0) return;
+    setRoutingBusy(true);
+    try {
+      const effectiveProfile = profileOverride ?? routeProfile;
+      const route = await calculateMultiStopMapRoute(origin, stops, {
+        profile: effectiveProfile,
+        optimizeOrder: true,
+        walkMode: stops.length > 2 ? walkingOrderMode : 'nearest_neighbor',
+        label: meta.label,
+      });
+      setActiveRoute(route);
+      const ordered = route.stops && route.stops.length > 0 ? route.stops : stops;
+      const finalStop = ordered[ordered.length - 1];
+      const intermediateWaypoints =
+        ordered.length > 1
+          ? ordered.slice(0, -1).map((s) => ({
+              lat: s.lat,
+              lng: s.lng,
+              label: s.label,
+            }))
+          : undefined;
+      setRouteDestinationMeta({
+        label: route.label || meta.label,
+        lat: finalStop.lat,
+        lng: finalStop.lng,
+        city: meta.city || cityList[0],
+        streetName: meta.streetName,
+        waypoints: intermediateWaypoints,
+      });
+    } finally {
+      setRoutingBusy(false);
+    }
+  };
+
+  // Trace street-following route from the operator's LIVE GPS (or explicit map origin) to 1 or N addresses.
+  // Governance Invariant: NEVER silently falls back to `rawMapPins[0]` (the first territory).
+  const handleTraceMultiStopRouteInMap = async (
+    stops: RouteWaypointInput[],
+    meta: { label: string; city?: string; streetName?: string },
+    profileOverride?: 'foot' | 'driving'
+  ) => {
+    if (stops.length === 0) return;
     setRoutingBusy(true);
     try {
       let origin: { lat: number; lng: number } | null = userLocation
         ? { lat: userLocation.lat, lng: userLocation.lng }
         : null;
       if (!origin) {
-        const gpsFix = await enableGpsAndGetPosition(2800);
+        const gpsFix = await enableGpsAndGetPosition(4500);
         if (gpsFix) {
           origin = { lat: gpsFix.lat, lng: gpsFix.lng };
         }
       }
       if (!origin) {
-        // Fallback origin: first located pin in the territory (distinct from destination) or quadra centroid
-        const candidatePin =
-          rawMapPins.find(
-            (p) => Math.abs(p.lat - dest.lat) > 0.0001 || Math.abs(p.lng - dest.lng) > 0.0001
-          ) || rawMapPins[0];
-        if (candidatePin) {
-          origin = { lat: candidatePin.lat, lng: candidatePin.lng };
-        } else if (displayedQuadras.length > 0) {
-          origin = {
-            lat: displayedQuadras[0].centerLat,
-            lng: displayedQuadras[0].centerLng,
-          };
-        } else {
-          origin = { lat: dest.lat - 0.0025, lng: dest.lng - 0.0025 };
-        }
+        // Never invent an origin from the first territory! Prompt the user to click their location on the map.
+        setPendingRouteRequest({
+          stops,
+          label: meta.label,
+          city: meta.city,
+          streetName: meta.streetName,
+        });
+        setPickingOriginMode(true);
+        return;
       }
-      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 3000);
-      setActiveRoute(route);
-      setRouteDestinationMeta(dest);
+      await executeMultiStopRouteFromOrigin(origin, stops, meta, profileOverride);
     } finally {
       setRoutingBusy(false);
+    }
+  };
+
+  // Single-destination convenience wrapper (100% compatible with existing pin/unit route buttons)
+  const handleTraceRouteInMap = async (dest: {
+    lat: number;
+    lng: number;
+    label: string;
+    city?: string;
+    streetName?: string;
+    key?: string;
+  }) => {
+    await handleTraceMultiStopRouteInMap(
+      [
+        {
+          key: dest.key,
+          lat: dest.lat,
+          lng: dest.lng,
+          label: dest.label,
+          streetName: dest.streetName,
+        },
+      ],
+      {
+        label: dest.label,
+        city: dest.city,
+        streetName: dest.streetName,
+      }
+    );
+  };
+
+  // Add or remove an address pin from the multi-stop route queue (`routeStopKeys`)
+  const handleTogglePinInRoute = async (pinKey: string) => {
+    const found = allPins.find((p) => pathKey.equals(p.key, pinKey));
+    if (!found || found.lat === null || found.lng === null) return;
+    const exists = routeStopKeys.some((k) => pathKey.equals(k, pinKey));
+    const nextKeys = exists
+      ? routeStopKeys.filter((k) => !pathKey.equals(k, pinKey))
+      : [...routeStopKeys, pinKey];
+    setRouteStopKeys(nextKeys);
+
+    if (nextKeys.length === 0) {
+      setActiveRoute(null);
+      setRouteDestinationMeta(null);
+      return;
+    }
+
+    const nextStops: RouteWaypointInput[] = nextKeys
+      .map((k) => allPins.find((p) => pathKey.equals(p.key, k)))
+      .filter((p): p is PinItem & { lat: number; lng: number } => Boolean(p && p.lat !== null && p.lng !== null))
+      .map((p) => ({
+        key: p.key,
+        lat: p.lat,
+        lng: p.lng,
+        label: p.line || p.label,
+        streetName: p.line,
+        worked: p.worked,
+      }));
+
+    if (nextStops.length > 0) {
+      const label =
+        nextStops.length === 1
+          ? nextStops[0].label || '1 endereço'
+          : `${nextStops.length} endereços selecionados`;
+      await handleTraceMultiStopRouteInMap(nextStops, {
+        label,
+        city: found.city || cityList[0],
+      });
+    }
+  };
+
+  // Trace street-following route from operator's GPS through all pending addresses of a Quadra
+  const handleTraceQuadraAddressesRoute = async (q: QuadraSummary) => {
+    const allQuadraUnits = q.streets
+      .flatMap((s) =>
+        s.units.map((u) => ({
+          key: u.key,
+          lat: u.lat,
+          lng: u.lng,
+          label: `${s.streetName}, ${u.numberOrComplement || 'S/N'}`,
+          streetName: s.streetName,
+          numberOrComplement: u.numberOrComplement,
+          worked: u.worked,
+        }))
+      )
+      .filter(
+        (u): u is typeof u & { lat: number; lng: number } =>
+          typeof u.lat === 'number' && typeof u.lng === 'number'
+      );
+
+    const pendingUnits = allQuadraUnits.filter((u) => u.worked === 0);
+    const targetUnits = pendingUnits.length > 0 ? pendingUnits : allQuadraUnits;
+
+    if (targetUnits.length > 0) {
+      await handleTraceMultiStopRouteInMap(targetUnits, {
+        label: `${q.label} (${targetUnits.length} endereços)`,
+        city: cityList[0],
+        streetName: q.perimeterStreets[0],
+      });
+    } else {
+      await handleTraceRouteInMap({
+        lat: q.centerLat,
+        lng: q.centerLng,
+        label: q.label,
+        city: cityList[0],
+        streetName: q.perimeterStreets[0],
+      });
+    }
+  };
+
+  const handlePickOriginOnMap = async (lat: number, lng: number) => {
+    const manualPos = setManualOrigin(lat, lng);
+    setPickingOriginMode(false);
+    if (manualPos && pendingRouteRequest) {
+      const req = pendingRouteRequest;
+      setPendingRouteRequest(null);
+      await executeMultiStopRouteFromOrigin(
+        { lat: manualPos.lat, lng: manualPos.lng },
+        req.stops,
+        { label: req.label, city: req.city, streetName: req.streetName }
+      );
     }
   };
 
@@ -1539,6 +1722,7 @@ export default function TerritoryMapScreen() {
               const found = allPins.find((p) => p.key === key);
               if (found && found.lat !== null && found.lng !== null) {
                 handleTraceRouteInMap({
+                  key: found.key,
                   lat: found.lat,
                   lng: found.lng,
                   label: found.line || found.label,
@@ -1546,6 +1730,12 @@ export default function TerritoryMapScreen() {
                 });
               }
             }}
+            onAddPinToRoute={(key) => {
+              handleTogglePinInRoute(key);
+            }}
+            routeStopKeys={routeStopKeys}
+            pickingOriginMode={pickingOriginMode}
+            onPickOriginOnMap={handlePickOriginOnMap}
             onOpenGoogleMapsQuadra={(qKey) => {
               const q = allQuadras.find((x) => x.key === qKey);
               if (q) {
@@ -1564,13 +1754,7 @@ export default function TerritoryMapScreen() {
             onRouteToQuadraInMap={(qKey) => {
               const q = allQuadras.find((x) => x.key === qKey);
               if (q) {
-                handleTraceRouteInMap({
-                  lat: q.centerLat,
-                  lng: q.centerLng,
-                  label: q.label,
-                  city: cityList[0],
-                  streetName: q.perimeterStreets[0],
-                });
+                handleTraceQuadraAddressesRoute(q);
               }
             }}
             editSession={activeEditSession}
@@ -1617,9 +1801,31 @@ export default function TerritoryMapScreen() {
               onPress={() => {
                 const next = !showWalkingSequence;
                 setShowWalkingSequence(next);
-                if (next && mapViewMode !== 'pins') {
-                  setMapViewMode('pins');
-                  setSelectedQuadraKey(null);
+                if (next) {
+                  if (mapViewMode !== 'pins') {
+                    setMapViewMode('pins');
+                  }
+                  // If a specific quadra or single territory is selected, trace the street-following route from user's GPS
+                  if (selectedQuadra) {
+                    handleTraceQuadraAddressesRoute(selectedQuadra);
+                  } else if (selectedTerritory !== 'all' && rawMapPins.length > 0 && rawMapPins.length <= ROUTING_POLICY_CONFIG.maxPinsForAutoSequence) {
+                    const pendingPins = rawMapPins.filter((p) => p.worked === 0);
+                    const targetPins = pendingPins.length > 0 ? pendingPins : rawMapPins;
+                    handleTraceMultiStopRouteInMap(
+                      targetPins.map((p) => ({
+                        key: p.key,
+                        lat: p.lat,
+                        lng: p.lng,
+                        label: p.line || p.label,
+                        streetName: p.line,
+                        worked: p.worked,
+                      })),
+                      {
+                        label: `${selectedTerritory} (${targetPins.length} endereços)`,
+                        city: cityList[0],
+                      }
+                    );
+                  }
                 }
               }}
               style={[
@@ -1640,18 +1846,38 @@ export default function TerritoryMapScreen() {
               onPress={toggleGps}
               style={[
                 styles.mapOverlayBtn,
-                gpsEnabled && {
+                (gpsEnabled || userLocation) && {
                   borderColor: '#38BDF8',
                   backgroundColor: 'rgba(37, 99, 235, 0.3)',
                 },
               ]}
             >
               <Text style={styles.mapOverlayBtnText}>
-                {gpsEnabled ? '🛰️ GPS Ativo' : '🛰️ Meu GPS'}
+                {userLocation?.isManual
+                  ? '📍 Partida Manual'
+                  : gpsEnabled
+                  ? '🛰️ GPS Ativo'
+                  : '🛰️ Meu GPS'}
               </Text>
             </Pressable>
 
-            {gpsEnabled && userLocation ? (
+            <Pressable
+              testID="map-pick-origin-btn"
+              onPress={() => setPickingOriginMode((prev) => !prev)}
+              style={[
+                styles.mapOverlayBtn,
+                pickingOriginMode && {
+                  borderColor: '#10B981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.28)',
+                },
+              ]}
+            >
+              <Text style={styles.mapOverlayBtnText}>
+                {pickingOriginMode ? '📍 Toque no Mapa...' : '📍 Definir Partida'}
+              </Text>
+            </Pressable>
+
+            {userLocation ? (
               <Pressable
                 testID="map-center-gps-btn"
                 onPress={centerOnUser}
@@ -1676,21 +1902,104 @@ export default function TerritoryMapScreen() {
             ) : null}
           </View>
 
-          {/* Active In-Map Route Banner */}
-          {activeRoute ? (
+          {/* Interactive Origin Picker Prompt when GPS is unavailable or manual origin is requested */}
+          {pickingOriginMode ? (
+            <View
+              style={[
+                styles.activeRouteBanner,
+                { borderColor: '#10B981', backgroundColor: 'rgba(6, 78, 59, 0.95)' },
+              ]}
+              testID="map-pick-origin-banner"
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.activeRouteTitle, { color: '#A7F3D0' }]}>
+                  📍 Onde você está agora? Toque no mapa para definir sua posição de partida
+                </Text>
+                <Text style={styles.activeRouteSub}>
+                  A rota será traçada pelas ruas exatas a partir do ponto onde você clicar (ou ative o GPS do navegador).
+                </Text>
+              </View>
+              <Pressable
+                onPress={async () => {
+                  const fix = await enableGpsAndGetPosition(5000);
+                  if (fix && pendingRouteRequest) {
+                    setPickingOriginMode(false);
+                    const req = pendingRouteRequest;
+                    setPendingRouteRequest(null);
+                    await executeMultiStopRouteFromOrigin(
+                      { lat: fix.lat, lng: fix.lng },
+                      req.stops,
+                      { label: req.label, city: req.city, streetName: req.streetName }
+                    );
+                  }
+                }}
+                style={styles.activeRouteGmapsBtn}
+              >
+                <Text style={styles.activeRouteGmapsBtnText}>🛰️ Tentar GPS</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setPickingOriginMode(false);
+                  setPendingRouteRequest(null);
+                }}
+                style={styles.activeRouteCloseBtn}
+              >
+                <Text style={styles.activeRouteCloseText}>✕ Cancelar</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Active In-Map Street Route Banner */}
+          {activeRoute && !pickingOriginMode ? (
             <View style={styles.activeRouteBanner} testID="map-active-route-banner">
               <View style={{ flex: 1 }}>
                 <Text style={styles.activeRouteTitle} numberOfLines={1}>
-                  🧭 Rota para {routeDestinationMeta?.label || 'Destino'}
+                  🧭 Partindo do seu GPS → {routeDestinationMeta?.label || 'Destino'}
                 </Text>
                 <Text style={styles.activeRouteSub}>
-                  🚶 {formatRouteDistance(activeRoute.distanceMeters)} •{' '}
+                  {activeRoute.profile === 'driving' ? '🚗' : '🚶'}{' '}
+                  {formatRouteDistance(activeRoute.distanceMeters)} •{' '}
                   {formatRouteDuration(activeRoute.durationSeconds)} •{' '}
                   {activeRoute.source === 'osrm'
-                    ? 'Ruas OpenStreetMap'
-                    : `Vetor Offline (${activeRoute.cardinalDirection})`}
+                    ? `🛣️ Pelas Ruas (${activeRoute.stops?.length || 1} parada${(activeRoute.stops?.length || 1) > 1 ? 's' : ''})`
+                    : `⚠️ Sem internet: direção reta (${activeRoute.cardinalDirection})`}
                 </Text>
               </View>
+              <Pressable
+                testID="active-route-profile-toggle"
+                onPress={async () => {
+                  const nextProfile = routeProfile === 'foot' ? 'driving' : 'foot';
+                  setRouteProfile(nextProfile);
+                  if (userLocation && activeRoute.stops && activeRoute.stops.length > 0) {
+                    await executeMultiStopRouteFromOrigin(
+                      { lat: userLocation.lat, lng: userLocation.lng },
+                      activeRoute.stops.map((s) => ({
+                        key: s.key,
+                        lat: s.lat,
+                        lng: s.lng,
+                        label: s.label,
+                        street: s.street,
+                        numberOrComplement: s.numberOrComplement,
+                        worked: s.worked,
+                      })),
+                      {
+                        label: routeDestinationMeta?.label || 'Destino',
+                        city: routeDestinationMeta?.city,
+                        streetName: routeDestinationMeta?.streetName,
+                      },
+                      nextProfile
+                    );
+                  }
+                }}
+                style={[
+                  styles.activeRouteGmapsBtn,
+                  { backgroundColor: 'rgba(15, 23, 42, 0.9)', borderWidth: 1, borderColor: '#38BDF8' },
+                ]}
+              >
+                <Text style={[styles.activeRouteGmapsBtnText, { color: '#38BDF8' }]}>
+                  {routeProfile === 'foot' ? '🚶 A pé' : '🚗 Carro'}
+                </Text>
+              </Pressable>
               {routeDestinationMeta ? (
                 <Pressable
                   testID="active-route-open-gmaps-btn"
@@ -1703,6 +2012,8 @@ export default function TerritoryMapScreen() {
                       city: routeDestinationMeta.city || cityList[0],
                       originLat: userLocation?.lat,
                       originLng: userLocation?.lng,
+                      waypoints: routeDestinationMeta.waypoints,
+                      travelMode: routeProfile === 'driving' ? 'driving' : 'walking',
                       mode: 'directions',
                     })
                   }
@@ -1716,6 +2027,7 @@ export default function TerritoryMapScreen() {
                 onPress={() => {
                   setActiveRoute(null);
                   setRouteDestinationMeta(null);
+                  setRouteStopKeys([]);
                 }}
                 style={styles.activeRouteCloseBtn}
               >
@@ -1837,15 +2149,7 @@ export default function TerritoryMapScreen() {
                 <Pressable
                   testID="quadra-drawer-route-btn"
                   disabled={routingBusy}
-                  onPress={() =>
-                    handleTraceRouteInMap({
-                      lat: selectedQuadra.centerLat,
-                      lng: selectedQuadra.centerLng,
-                      label: selectedQuadra.label,
-                      city: cityList[0],
-                      streetName: selectedQuadra.perimeterStreets[0],
-                    })
-                  }
+                  onPress={() => handleTraceQuadraAddressesRoute(selectedQuadra)}
                   style={[
                     styles.gpsNavBtn,
                     {
@@ -1856,7 +2160,7 @@ export default function TerritoryMapScreen() {
                   ]}
                 >
                   <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
-                    {routingBusy ? '⏳ Calculando...' : '🧭 Rota no Nosso Mapa'}
+                    {routingBusy ? '⏳ Calculando...' : '🧭 Rota pelas Ruas da Quadra'}
                   </Text>
                 </Pressable>
               </View>
@@ -2185,26 +2489,45 @@ export default function TerritoryMapScreen() {
                                   <Text style={styles.unitMiniActionText}>🗺️ Maps</Text>
                                 </Pressable>
                                 {unit.lat !== undefined && unit.lng !== undefined ? (
-                                  <Pressable
-                                    testID={`quadra-unit-route-${unit.key}`}
-                                    onPress={() =>
-                                      handleTraceRouteInMap({
-                                        lat: unit.lat as number,
-                                        lng: unit.lng as number,
-                                        label: `${group.streetName}, ${unit.numberOrComplement || 'S/N'}`,
-                                        city: cityList[0],
-                                        streetName: group.streetName,
-                                      })
-                                    }
-                                    style={[
-                                      styles.unitMiniActionBtn,
-                                      { borderColor: 'rgba(56, 189, 248, 0.45)' },
-                                    ]}
-                                  >
-                                    <Text style={[styles.unitMiniActionText, { color: '#38BDF8' }]}>
-                                      🧭 Rota
-                                    </Text>
-                                  </Pressable>
+                                  <>
+                                    <Pressable
+                                      testID={`quadra-unit-route-${unit.key}`}
+                                      onPress={() =>
+                                        handleTraceRouteInMap({
+                                          key: unit.key,
+                                          lat: unit.lat as number,
+                                          lng: unit.lng as number,
+                                          label: `${group.streetName}, ${unit.numberOrComplement || 'S/N'}`,
+                                          city: cityList[0],
+                                          streetName: group.streetName,
+                                        })
+                                      }
+                                      style={[
+                                        styles.unitMiniActionBtn,
+                                        { borderColor: 'rgba(56, 189, 248, 0.45)' },
+                                      ]}
+                                    >
+                                      <Text style={[styles.unitMiniActionText, { color: '#38BDF8' }]}>
+                                        🧭 Rota
+                                      </Text>
+                                    </Pressable>
+                                    <Pressable
+                                      testID={`quadra-unit-add-route-${unit.key}`}
+                                      onPress={() => handleTogglePinInRoute(unit.key)}
+                                      style={[
+                                        styles.unitMiniActionBtn,
+                                        {
+                                          borderColor: routeStopKeys.some((k) => pathKey.equals(k, unit.key))
+                                            ? '#10B981'
+                                            : 'rgba(16, 185, 129, 0.45)',
+                                        },
+                                      ]}
+                                    >
+                                      <Text style={[styles.unitMiniActionText, { color: '#34D399' }]}>
+                                        {routeStopKeys.some((k) => pathKey.equals(k, unit.key)) ? '✓ Na Rota' : '➕ +Rota'}
+                                      </Text>
+                                    </Pressable>
+                                  </>
                                 ) : null}
                               </View>
                             </View>
@@ -2335,31 +2658,58 @@ export default function TerritoryMapScreen() {
                   <Text style={styles.gpsNavBtnText}>🗺️ Abrir no Google Maps / Traçar Rota</Text>
                 </Pressable>
 
-                {/* Trace Route Inside Our Map */}
+                {/* Trace Route Inside Our Map (Single or Multi-Stop Queue) */}
                 {selectedPin.lat !== null && selectedPin.lng !== null ? (
-                  <Pressable
-                    testID="pin-drawer-route-btn"
-                    disabled={routingBusy}
-                    onPress={() =>
-                      handleTraceRouteInMap({
-                        lat: selectedPin.lat as number,
-                        lng: selectedPin.lng as number,
-                        label: selectedPin.line || selectedPin.label,
-                        city: selectedPin.city,
-                      })
-                    }
-                    style={[
-                      styles.gpsNavBtn,
-                      {
-                        backgroundColor: 'rgba(16, 185, 129, 0.14)',
-                        borderColor: 'rgba(16, 185, 129, 0.45)',
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
-                      {routingBusy ? '⏳ Calculando rota...' : '🧭 Traçar Rota no Nosso Mapa'}
-                    </Text>
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Pressable
+                      testID="pin-drawer-route-btn"
+                      disabled={routingBusy}
+                      onPress={() =>
+                        handleTraceRouteInMap({
+                          key: selectedPin.key,
+                          lat: selectedPin.lat as number,
+                          lng: selectedPin.lng as number,
+                          label: selectedPin.line || selectedPin.label,
+                          city: selectedPin.city,
+                        })
+                      }
+                      style={[
+                        styles.gpsNavBtn,
+                        {
+                          flex: 1,
+                          backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                          borderColor: 'rgba(16, 185, 129, 0.45)',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
+                        {routingBusy ? '⏳ Calculando...' : '🧭 Rota do Meu GPS'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID="pin-drawer-add-stop-btn"
+                      disabled={routingBusy}
+                      onPress={() => handleTogglePinInRoute(selectedPin.key)}
+                      style={[
+                        styles.gpsNavBtn,
+                        {
+                          flex: 1,
+                          backgroundColor: routeStopKeys.some((k) => pathKey.equals(k, selectedPin.key))
+                            ? 'rgba(16, 185, 129, 0.28)'
+                            : 'rgba(56, 189, 248, 0.14)',
+                          borderColor: routeStopKeys.some((k) => pathKey.equals(k, selectedPin.key))
+                            ? '#10B981'
+                            : 'rgba(56, 189, 248, 0.45)',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.gpsNavBtnText, { color: '#38BDF8' }]}>
+                        {routeStopKeys.some((k) => pathKey.equals(k, selectedPin.key))
+                          ? `✓ Na Rota (${routeStopKeys.length})`
+                          : `➕ Somar à Rota (${routeStopKeys.length})`}
+                      </Text>
+                    </Pressable>
+                  </View>
                 ) : null}
 
                 {/* Customize Pin Style (Shape & Color) */}

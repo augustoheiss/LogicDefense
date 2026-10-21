@@ -21,6 +21,7 @@ export interface LiveGpsPosition {
   accuracy?: number;
   heading?: number | null;
   timestamp: number;
+  isManual?: boolean;
 }
 
 export function openExternalGoogleMaps(input: GoogleMapsTargetInput): string {
@@ -35,12 +36,18 @@ export function openExternalGoogleMaps(input: GoogleMapsTargetInput): string {
 
 export function useLiveGpsLocation(initialEnabled = false) {
   const [gpsEnabled, setGpsEnabled] = useState<boolean>(initialEnabled);
-  const [userLocation, setUserLocation] = useState<LiveGpsPosition | null>(null);
+  const [userLocation, setUserLocationState] = useState<LiveGpsPosition | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [panToUserRequest, setPanToUserRequest] = useState<number>(0);
 
+  const userLocationRef = useRef<LiveGpsPosition | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const didPanOnActivationRef = useRef<boolean>(false);
+
+  const setUserLocation = useCallback((next: LiveGpsPosition | null) => {
+    userLocationRef.current = next;
+    setUserLocationState(next);
+  }, []);
 
   const stopWatch = useCallback(() => {
     if (
@@ -75,6 +82,7 @@ export function useLiveGpsLocation(initialEnabled = false) {
         accuracy: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : 15,
         heading: pos.coords.heading,
         timestamp: pos.timestamp || Date.now(),
+        isManual: false,
       };
       setUserLocation(nextPos);
       setGpsError(null);
@@ -86,12 +94,16 @@ export function useLiveGpsLocation(initialEnabled = false) {
     };
 
     const onError = (err: GeolocationPositionError) => {
+      if (userLocationRef.current?.isManual) {
+        // Keep manual origin active without overriding with error if user explicitly set position
+        return;
+      }
       if (err.code === 1) {
-        setGpsError('Permissão de GPS negada no navegador.');
+        setGpsError('Permissão de GPS negada. Permita o GPS no navegador ou clique em "📍 Definir Minha Posição no Mapa".');
       } else if (err.code === 2) {
-        setGpsError('Sinal de GPS indisponível no momento.');
+        setGpsError('Sinal de GPS indisponível. Você pode clicar em "📍 Definir Minha Posição no Mapa".');
       } else {
-        setGpsError('Tempo limite ao obter sinal GPS.');
+        setGpsError('Tempo limite ao obter sinal GPS. Tente novamente ou indique sua posição no mapa.');
       }
     };
 
@@ -116,7 +128,86 @@ export function useLiveGpsLocation(initialEnabled = false) {
     return () => {
       stopWatch();
     };
-  }, [gpsEnabled, stopWatch]);
+  }, [gpsEnabled, stopWatch, setUserLocation]);
+
+  const enableGpsAndGetPosition = useCallback(
+    (timeoutMs = 5000): Promise<LiveGpsPosition | null> => {
+      if (userLocationRef.current) {
+        return Promise.resolve(userLocationRef.current);
+      }
+      setGpsEnabled(true);
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        setGpsError('Geolocalização não suportada neste dispositivo. Indique sua posição tocando no mapa.');
+        return Promise.resolve(null);
+      }
+
+      return new Promise<LiveGpsPosition | null>((resolve) => {
+        let settled = false;
+        const finish = (pos: LiveGpsPosition | null) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(pos);
+        };
+
+        const timer = setTimeout(() => {
+          finish(userLocationRef.current);
+        }, Math.max(1000, timeoutMs));
+
+        try {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const nextPos: LiveGpsPosition = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : 15,
+                heading: pos.coords.heading,
+                timestamp: pos.timestamp || Date.now(),
+                isManual: false,
+              };
+              setUserLocation(nextPos);
+              setGpsError(null);
+              finish(nextPos);
+            },
+            (err) => {
+              if (err.code === 1) {
+                setGpsError('Permissão de GPS negada. Permita o GPS ou clique em "📍 Definir Minha Posição no Mapa".');
+              } else {
+                setGpsError('Não foi possível obter o GPS automaticamente. Clique em "📍 Definir Minha Posição no Mapa".');
+              }
+              finish(userLocationRef.current);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: Math.max(1000, timeoutMs - 200),
+              maximumAge: 10000,
+            }
+          );
+        } catch {
+          finish(userLocationRef.current);
+        }
+      });
+    },
+    [setUserLocation]
+  );
+
+  const setManualOrigin = useCallback(
+    (lat: number, lng: number) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      const manualPos: LiveGpsPosition = {
+        lat,
+        lng,
+        accuracy: 10,
+        heading: null,
+        timestamp: Date.now(),
+        isManual: true,
+      };
+      setUserLocation(manualPos);
+      setGpsError(null);
+      return manualPos;
+    },
+    [setUserLocation]
+  );
 
   const toggleGps = useCallback(() => {
     setGpsEnabled((prev) => {
@@ -131,18 +222,20 @@ export function useLiveGpsLocation(initialEnabled = false) {
   }, []);
 
   const centerOnUser = useCallback(() => {
-    if (!gpsEnabled) {
+    if (userLocationRef.current) {
+      setPanToUserRequest((n) => n + 1);
+    } else if (!gpsEnabled) {
       didPanOnActivationRef.current = false;
       setGpsEnabled(true);
-    } else if (userLocation) {
-      setPanToUserRequest((n) => n + 1);
     }
-  }, [gpsEnabled, userLocation]);
+  }, [gpsEnabled]);
 
   return {
     gpsEnabled,
     setGpsEnabled,
     toggleGps,
+    enableGpsAndGetPosition,
+    setManualOrigin,
     userLocation,
     setUserLocation,
     gpsError,

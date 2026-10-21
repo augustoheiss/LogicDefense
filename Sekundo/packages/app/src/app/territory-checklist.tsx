@@ -36,6 +36,7 @@ import {
   extractQuadrasFromRegistry,
   parseLatLng,
   calculateMapRoute,
+  calculateMultiStopMapRoute,
   buildWalkingSequenceRoute,
   formatRouteDistance,
   formatRouteDuration,
@@ -131,6 +132,7 @@ export default function TerritoryChecklistScreen() {
     panToUserRequest,
     toggleGps,
     enableGpsAndGetPosition,
+    setManualOrigin,
     centerOnUser,
   } = useLiveGpsLocation();
   const [activeRoute, setActiveRoute] = useState<RouteCalculationResult | null>(null);
@@ -142,6 +144,8 @@ export default function TerritoryChecklistScreen() {
     streetName?: string;
   } | null>(null);
   const [routingBusy, setRoutingBusy] = useState<boolean>(false);
+  const [pickingOriginMode, setPickingOriginMode] = useState<boolean>(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   const allQuadras = useMemo<QuadraSummary[]>(
     () => extractQuadrasFromRegistry(flatRegistry),
@@ -156,6 +160,21 @@ export default function TerritoryChecklistScreen() {
     });
   };
 
+  const resolveOperatorOrigin = async (): Promise<{ lat: number; lng: number } | null> => {
+    if (userLocation) {
+      return { lat: userLocation.lat, lng: userLocation.lng };
+    }
+    const gpsFix = await enableGpsAndGetPosition(3500);
+    if (gpsFix) {
+      return { lat: gpsFix.lat, lng: gpsFix.lng };
+    }
+    setPickingOriginMode(true);
+    setRouteError(
+      'GPS indisponível. Clique no mapa onde você está agora para definir sua partida (ou ative a permissão de localização).'
+    );
+    return null;
+  };
+
   const handleTraceRouteInChecklistMap = async (
     territoryNum: string,
     dest: {
@@ -167,39 +186,87 @@ export default function TerritoryChecklistScreen() {
     }
   ) => {
     setRoutingBusy(true);
+    setRouteError(null);
     if (inlineMapTerritory !== territoryNum) {
       setInlineMapTerritory(territoryNum);
       setInlineMapFitRequest((n) => n + 1);
     }
     try {
-      let origin: { lat: number; lng: number } | null = userLocation
-        ? { lat: userLocation.lat, lng: userLocation.lng }
-        : null;
-      if (!origin) {
-        const gpsFix = await enableGpsAndGetPosition(2800);
-        if (gpsFix) origin = { lat: gpsFix.lat, lng: gpsFix.lng };
-      }
-      if (!origin) {
-        const tQuadras = allQuadras.filter((q) => q.territoryNumber === territoryNum);
-        const firstUnit = tQuadras
-          .flatMap((q) => q.streets.flatMap((s) => s.units))
-          .find(
-            (u) =>
-              u.lat !== undefined &&
-              u.lng !== undefined &&
-              (Math.abs(u.lat - dest.lat) > 0.0001 || Math.abs(u.lng - dest.lng) > 0.0001)
-          );
-        if (firstUnit && firstUnit.lat !== undefined && firstUnit.lng !== undefined) {
-          origin = { lat: firstUnit.lat, lng: firstUnit.lng };
-        } else if (tQuadras[0]) {
-          origin = { lat: tQuadras[0].centerLat, lng: tQuadras[0].centerLng };
-        } else {
-          origin = { lat: dest.lat - 0.0025, lng: dest.lng - 0.0025 };
-        }
-      }
-      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 3000);
+      const origin = await resolveOperatorOrigin();
+      if (!origin) return;
+      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 4000);
       setActiveRoute(route);
       setRouteDestinationMeta(dest);
+    } finally {
+      setRoutingBusy(false);
+    }
+  };
+
+  const handleTraceQuadraAddressesInChecklistMap = async (
+    territoryNum: string,
+    quadraKey: string,
+    sectionCity?: string
+  ) => {
+    const q = allQuadras.find((x) => x.territoryNumber === territoryNum && x.key === quadraKey);
+    if (!q) return;
+    setRoutingBusy(true);
+    setRouteError(null);
+    if (inlineMapTerritory !== territoryNum) {
+      setInlineMapTerritory(territoryNum);
+      setInlineMapFitRequest((n) => n + 1);
+    }
+    try {
+      const origin = await resolveOperatorOrigin();
+      if (!origin) return;
+      const unitCoords = q.streets
+        .flatMap((s) =>
+          s.units.map((u) => ({
+            key: u.key,
+            label: `${s.streetName}, ${u.numberOrComplement}`,
+            streetName: s.streetName,
+            numberOrComplement: u.numberOrComplement,
+            lat: u.lat ?? q.centerLat,
+            lng: u.lng ?? q.centerLng,
+            worked: u.worked,
+          }))
+        )
+        .filter((u) => u.worked === 0);
+      const targetUnits =
+        unitCoords.length > 0
+          ? unitCoords
+          : q.streets.flatMap((s) =>
+              s.units.map((u) => ({
+                key: u.key,
+                label: `${s.streetName}, ${u.numberOrComplement}`,
+                streetName: s.streetName,
+                numberOrComplement: u.numberOrComplement,
+                lat: u.lat ?? q.centerLat,
+                lng: u.lng ?? q.centerLng,
+                worked: u.worked,
+              }))
+            );
+      const orderedStops = buildWalkingSequenceRoute(targetUnits, 'sidewalk', origin);
+      const stops =
+        orderedStops.length > 0
+          ? orderedStops.map((s) => ({
+              key: s.key,
+              label: s.label,
+              lat: s.lat,
+              lng: s.lng,
+            }))
+          : [{ key: q.key, label: q.label, lat: q.centerLat, lng: q.centerLng }];
+      const route = await calculateMultiStopMapRoute(origin, stops, {
+        profile: 'foot',
+        timeoutMs: 4500,
+      });
+      setActiveRoute(route);
+      setRouteDestinationMeta({
+        label: `${q.label} (${stops.length} paradas pelas ruas)`,
+        lat: q.centerLat,
+        lng: q.centerLng,
+        city: sectionCity,
+        streetName: q.perimeterStreets[0],
+      });
     } finally {
       setRoutingBusy(false);
     }
@@ -849,6 +916,24 @@ export default function TerritoryChecklistScreen() {
                       ) : null}
 
                       <Pressable
+                        testID={`checklist-map-pick-origin-${section.territory}`}
+                        onPress={() => setPickingOriginMode((v) => !v)}
+                        style={[
+                          styles.inlineMapToolBtn,
+                          pickingOriginMode && styles.inlineMapToolBtnActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inlineMapToolBtnText,
+                            pickingOriginMode && styles.inlineMapToolBtnTextActive,
+                          ]}
+                        >
+                          {pickingOriginMode ? '📍 Clique no Mapa...' : '📍 Definir Partida'}
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
                         testID={`checklist-map-fit-${section.territory}`}
                         onPress={() => setInlineMapFitRequest((n) => n + 1)}
                         style={styles.inlineMapToolBtn}
@@ -867,6 +952,12 @@ export default function TerritoryChecklistScreen() {
                         <Text style={styles.inlineMapToolBtnText}>↗ Mapa CAD</Text>
                       </Pressable>
                     </View>
+
+                    {gpsError || routeError ? (
+                      <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+                        ⚠️ {routeError || gpsError}
+                      </Text>
+                    ) : null}
 
                     {activeRoute ? (
                       <View
@@ -924,6 +1015,12 @@ export default function TerritoryChecklistScreen() {
                       panToUserRequest={panToUserRequest}
                       activeRoute={activeRoute}
                       walkingSequence={walkingSeq}
+                      pickingOriginMode={pickingOriginMode}
+                      onPickOriginOnMap={(lat, lng) => {
+                        setManualOrigin(lat, lng);
+                        setPickingOriginMode(false);
+                        setRouteError(null);
+                      }}
                       onSelectPin={(k) => setInlineSelectedKey(k)}
                       onSelectQuadra={(k) => setInlineSelectedKey(k)}
                       onToggleWork={(k) => handleToggleItem(k)}
@@ -984,6 +1081,9 @@ export default function TerritoryChecklistScreen() {
                             streetName: q.perimeterStreets[0],
                           });
                         }
+                      }}
+                      onRouteToQuadraAddressesInMap={(qKey) => {
+                        handleTraceQuadraAddressesInChecklistMap(section.territory, qKey, sectionCity);
                       }}
                     />
                   </View>

@@ -48,6 +48,8 @@ export interface QuadraSummary {
   perimeterStreets: string[];
   boundaryPolygon: [number, number][]; // Array of [lat, lng]
   centroid: [number, number];          // [lat, lng]
+  centerLat: number;                   // centroid[0]
+  centerLng: number;                   // centroid[1]
   totalUnits: number;
   workedUnits: number;
   coveragePercent: number;
@@ -453,6 +455,8 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
       perimeterStreets,
       boundaryPolygon,
       centroid,
+      centerLat: centroid[0],
+      centerLng: centroid[1],
       totalUnits,
       workedUnits,
       coveragePercent,

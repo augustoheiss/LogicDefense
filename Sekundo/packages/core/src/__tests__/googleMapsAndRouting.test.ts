@@ -12,6 +12,7 @@ import {
   formatRouteDuration,
   computeOfflineRoute,
   calculateMapRoute,
+  calculateMultiStopMapRoute,
   buildWalkingSequenceRoute,
 } from '../geo/routingEngine';
 
@@ -180,5 +181,103 @@ describe('Google Maps Universal Deep-Links & Sovereign Routing Engine', () => {
     const nnOrder = buildWalkingSequenceRoute(units, 'nearest_neighbor', [-23.5501, -46.6331]);
     expect(nnOrder[0].numberOrComplement).toBe('101');
     expect(nnOrder.length).toBe(4);
+  });
+
+  it('anchors sidewalk walking sequence to operator GPS origin instead of blind alphabetical street order', () => {
+    // Street "Rua A" is far north (-23.5000), Street "Rua Z" is right next to operator GPS (-23.5500)
+    const userGps = { lat: -23.5500, lng: -46.6330 };
+    const units = [
+      { key: 'a1', lat: -23.5001, lng: -46.6001, street: 'Rua A (Longe)', numberOrComplement: '10', worked: 0 },
+      { key: 'a2', lat: -23.5002, lng: -46.6002, street: 'Rua A (Longe)', numberOrComplement: '11', worked: 0 },
+      { key: 'z1', lat: -23.5501, lng: -46.6331, street: 'Rua Z (Perto do GPS)', numberOrComplement: '20', worked: 0 },
+      { key: 'z2', lat: -23.5502, lng: -46.6332, street: 'Rua Z (Perto do GPS)', numberOrComplement: '21', worked: 0 },
+    ];
+
+    const gpsAnchored = buildWalkingSequenceRoute(units, 'sidewalk', userGps);
+    expect(gpsAnchored[0].street).toBe('Rua Z (Perto do GPS)');
+    expect(gpsAnchored[0].numberOrComplement).toBe('21'); // odd first on Rua Z
+    expect(gpsAnchored[1].numberOrComplement).toBe('20'); // even on Rua Z
+    expect(gpsAnchored[2].street).toBe('Rua A (Longe)');
+  });
+
+  it('calculates multi-stop street route from GPS origin across multiple addresses with OSRM endpoint failover', async () => {
+    const userGps = { lat: -23.5500, lng: -46.6330 };
+    const stops = [
+      { key: 'p1', label: 'Via Operacional 01, 120', lat: -23.5510, lng: -46.6340 },
+      { key: 'p2', label: 'Via Operacional 02, 450', lat: -23.5530, lng: -46.6370 },
+    ];
+
+    const calledUrls: string[] = [];
+    let callCount = 0;
+    const mockFailoverFetch = async (input: RequestInfo | URL) => {
+      calledUrls.push(String(input));
+      callCount++;
+      if (callCount === 1) {
+        throw new Error('Primary OSRM timeout');
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          code: 'Ok',
+          routes: [
+            {
+              distance: 890,
+              duration: 640,
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [-46.6330, -23.5500],
+                  [-46.6335, -23.5505],
+                  [-46.6340, -23.5510],
+                  [-46.6355, -23.5520],
+                  [-46.6370, -23.5530],
+                ],
+              },
+              legs: [
+                {
+                  steps: [{ name: 'Via Operacional 01', distance: 350, duration: 250 }],
+                },
+                {
+                  steps: [{ name: 'Via Operacional 02', distance: 540, duration: 390 }],
+                },
+              ],
+            },
+          ],
+        }),
+      } as unknown as Response;
+    };
+
+    const route = await calculateMultiStopMapRoute(userGps, stops, {
+      profile: 'foot',
+      fetchImpl: mockFailoverFetch,
+    });
+
+    expect(callCount).toBe(2);
+    expect(calledUrls[0]).toContain('-46.633,-23.55;-46.634,-23.551;-46.637,-23.553');
+    expect(route.source).toBe('osrm');
+    expect(route.coordinates.length).toBe(5);
+    expect(route.coordinates[0]).toEqual([-23.5500, -46.6330]);
+    expect(route.stops?.length).toBe(2);
+    expect(route.stops?.[0].order).toBe(1);
+    expect(route.stops?.[1].order).toBe(2);
+    expect(route.steps.length).toBe(2);
+  });
+
+  it('includes intermediate waypoints in buildGoogleMapsDirectionsUrl when routing to multiple addresses', () => {
+    const url = buildGoogleMapsDirectionsUrl({
+      originLat: -23.55,
+      originLng: -46.633,
+      lat: -23.555,
+      lng: -46.64,
+      travelMode: 'walking',
+      waypoints: [
+        { lat: -23.551, lng: -46.634 },
+        { lat: -23.553, lng: -46.637 },
+      ],
+    });
+    const decoded = decodeURIComponent(url);
+    expect(decoded).toContain('origin=-23.55,-46.633');
+    expect(decoded).toContain('destination=-23.555,-46.64');
+    expect(decoded).toContain('waypoints=-23.551,-46.634|-23.553,-46.637');
   });
 });

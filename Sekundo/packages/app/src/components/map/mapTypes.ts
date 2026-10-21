@@ -73,15 +73,7 @@ export interface MapUserLocation {
   lng: number;
   accuracy?: number;
   heading?: number | null;
-}
-
-export interface MapActiveRoute {
-  coordinates: LatLngTuple[];
-  distanceMeters: number;
-  durationSeconds: number;
-  cardinalDirection?: string;
-  source: 'osrm' | 'offline_haversine';
-  label?: string;
+  isManual?: boolean;
 }
 
 export interface MapWalkingStop {
@@ -91,6 +83,18 @@ export interface MapWalkingStop {
   order: number;
   label: string;
   worked: number;
+}
+
+export interface MapActiveRoute {
+  coordinates: LatLngTuple[];
+  distanceMeters: number;
+  durationSeconds: number;
+  cardinalDirection?: string;
+  source: 'osrm' | 'offline_haversine';
+  profile?: 'foot' | 'driving';
+  label?: string;
+  origin?: LatLngTuple;
+  stops?: MapWalkingStop[];
 }
 
 export interface TerritoryLeafletMapProps {
@@ -117,15 +121,25 @@ export interface TerritoryLeafletMapProps {
   /** Active street/offline route drawn over the map. */
   activeRoute?: MapActiveRoute | null;
   /** Optional ordered walking sequence path (`1 -> 2 -> 3...`) across addresses. */
-  walkingSequence?: MapWalkingStop[];
+  walkingSequence?: MapWalkingStop[] | null;
   /** Optional custom handler to open a pin in Google Maps; defaults to universal `maps/dir/?api=1`. */
   onOpenGoogleMapsPin?: (key: string) => void;
   /** Optional handler to trace an in-map route to a pin. */
   onRouteToPinInMap?: (key: string) => void;
+  /** Optional handler to add/toggle a pin in the multi-address route queue. */
+  onAddPinToRoute?: (key: string) => void;
+  /** Keys of pins currently queued in the multi-stop route. */
+  routeStopKeys?: string[];
+  /** When true, clicking on the map sets the operator's starting origin coordinates. */
+  pickingOriginMode?: boolean;
+  /** Callback fired when operator clicks the map while `pickingOriginMode` is active. */
+  onPickOriginOnMap?: (lat: number, lng: number) => void;
   /** Optional handler to open a quadra in Google Maps. */
   onOpenGoogleMapsQuadra?: (key: string) => void;
   /** Optional handler to trace an in-map route to a quadra. */
   onRouteToQuadraInMap?: (key: string) => void;
+  /** Optional handler to trace a multi-stop street route across all pending addresses in a quadra. */
+  onRouteToQuadraAddressesInMap?: (key: string) => void;
   /** When set, the map enters vertex-editing mode for one quadra boundary. */
   editSession?: MapEditSession | null;
   onPolygonDraft?: (ring: LatLngTuple[]) => void;
