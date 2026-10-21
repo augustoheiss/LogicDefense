@@ -82,3 +82,52 @@ def test_zero_egress_no_state_cache():
     response = client.get(f"/signal/room/{room_id}/state")
     assert response.status_code == 404
 
+
+def test_multi_peer_zero_knowledge_encrypted_sync():
+    # 1. Create room
+    response = client.post("/signal/room")
+    assert response.status_code == 200
+    room_id = response.json()["room_id"]
+
+    # 2. Reject plaintext packets (Zero-Knowledge enforcement)
+    bad_res = client.post(
+        f"/signal/room/{room_id}/sync-push",
+        json={
+            "peer_id": "peer_admin_1",
+            "packet_kind": "DELTA_MUTATION",
+            "cipher_packet": '{"plaintext":"forbidden"}',
+        },
+    )
+    assert bad_res.status_code == 400
+
+    # 3. Push encrypted packets from 3 simultaneous peers (Admin + 2 Viewers)
+    for idx, pid in enumerate(["peer_admin_1", "peer_viewer_2", "peer_viewer_3"], start=1):
+        push_res = client.post(
+            f"/signal/room/{room_id}/sync-push",
+            json={
+                "peer_id": pid,
+                "packet_kind": "ACTIVITY_LOG" if idx > 1 else "SNAPSHOT_SYNC",
+                "cipher_packet": f"SEKUNDO_COLLAB_v2:v2.salt_{idx}.iv_{idx}.cipher_{idx}",
+            },
+        )
+        assert push_res.status_code == 200
+        data = push_res.json()
+        assert data["seq"] == idx
+        assert data["active_peer_count"] == idx
+
+    # 4. Pull all packets from seq=0 for a 4th peer joining the link
+    pull_res = client.get(f"/signal/room/{room_id}/sync-pull?since_seq=0&peer_id=peer_viewer_4")
+    assert pull_res.status_code == 200
+    pull_data = pull_res.json()
+    assert len(pull_data["packets"]) == 3
+    assert pull_data["latest_seq"] == 3
+    assert pull_data["active_peer_count"] == 4
+
+    # 5. Incremental pull (since_seq=2 returns only seq=3)
+    inc_res = client.get(f"/signal/room/{room_id}/sync-pull?since_seq=2&peer_id=peer_viewer_4")
+    assert inc_res.status_code == 200
+    inc_data = inc_res.json()
+    assert len(inc_data["packets"]) == 1
+    assert inc_data["packets"][0]["seq"] == 3
+
+

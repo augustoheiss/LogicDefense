@@ -690,6 +690,22 @@ export function ensureParticipantPrivilegeMatrix(
     ])
   );
 
+  const hasExplicitAdminSeal =
+    typeof profile.hasAdminSeal === 'boolean'
+      ? profile.hasAdminSeal
+      : Boolean(
+          mergedCaps.cap_selo_admin ||
+            mergedCaps.selo_admin ||
+            (profile.capabilityTags || []).some((t) => /^(selo_admin|admin|👑)$/i.test(t.trim())) ||
+            (!preserveExplicit && inferredTier === 'coordenador_senior')
+        );
+
+  const defaultPin = String(1001 + (index % 8999)).padStart(4, '0');
+  const resolvedAccessPin =
+    typeof profile.accessPin === 'string' && profile.accessPin.trim().length > 0
+      ? profile.accessPin.trim()
+      : defaultPin;
+
   return {
     ...profile,
     profileCategory: inferredCategory,
@@ -701,6 +717,8 @@ export function ensureParticipantPrivilegeMatrix(
     lastAssignedIsoDate: profile.lastAssignedIsoDate ?? '',
     active: profile.active ?? true,
     preserveExplicitCapabilities: preserveExplicit || profile.preserveExplicitCapabilities,
+    hasAdminSeal: hasExplicitAdminSeal,
+    accessPin: resolvedAccessPin,
   };
 }
 
@@ -933,6 +951,8 @@ export const DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS: ParticipantProfile[] =
       assignmentCount: 0,
       lastAssignedIsoDate: '',
       active: true,
+      hasAdminSeal: spec.roleTier === 'coordenador_senior',
+      accessPin: String(1001 + idx).padStart(4, '0'),
     };
   });
 

@@ -179,7 +179,67 @@ export {
   buildHorizonPayload,
 } from './crypto/tokenGenerator';
 
-export type { HorizonPayload } from './crypto/tokenGenerator';
+export type {
+  HorizonPayload,
+  GenerateTokenOptions,
+} from './crypto/tokenGenerator';
+
+// Roster-Backed Zero-Trust Admission Gate & RBAC (`👑 Selo Admin`)
+export {
+  COLLAB_GOVERNANCE_POLICY,
+  computePinVerifierHash,
+  getActivePrivilegeKeys,
+  hasActivePrivileges,
+  hasAdminSealPrivilege,
+  buildPermissionsForRole,
+  canPerformSpreadsheetAction,
+  verifyParticipantAdmission,
+  revalidateSavedSessionPrincipal,
+  lockSessionWithPin,
+  unlockSessionWithPin,
+} from './auth/privilegeAccessGuard';
+export type {
+  SpreadsheetAccessRole,
+  SpreadsheetPermissionAction,
+  AdmissionRejectionReason,
+  CollaborativeGovernancePolicy,
+  SpreadsheetPermissionsSummary,
+  AuthenticatedSessionPrincipal,
+  AdmissionVerificationInput,
+  AdmissionVerificationResult,
+} from './auth/privilegeAccessGuard';
+
+// Tamper-Evident Append-Only Activity & Governance Audit Log
+export {
+  ACTIVITY_ACTION_LABELS,
+  computeAuditHash,
+  createActivityLogEntry,
+  appendActivityLogEntry,
+  compareActivityLogEntries,
+  mergeActivityLogs,
+  verifyActivityLogChain,
+  exportActivityLogToCsv,
+} from './audit/activityLogEngine';
+export type {
+  ActivityActionType,
+  ActivityLogEntry,
+  CreateActivityLogInput,
+} from './audit/activityLogEngine';
+
+// Zero-Knowledge Multi-Peer Collaborative Room Protocol (`1:N`)
+export {
+  COLLAB_PACKET_PREFIX,
+  encodeEncryptedCollabPacket,
+  decodeEncryptedCollabPacket,
+  isPacketAuthorAuthorizedAdmin,
+  applyIncomingCollabPacket,
+} from './sync/collabRoomProtocol';
+export type {
+  CollabPacketKind,
+  CollabPeerPresence,
+  CollabPacketPayloadV2,
+  CollabRoomStateReconcileResult,
+} from './sync/collabRoomProtocol';
 
 // Chat
 export type {

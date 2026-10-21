@@ -949,12 +949,13 @@ export function exportOmniCsvBundle(
       const activeCapKeys = Object.entries(p.capabilities || {})
         .filter(([, enabled]) => Boolean(enabled))
         .map(([k]) => k);
+      const sealSuffix = p.hasAdminSeal ? '|selo_admin' : '|sem_selo_admin';
       rows.push({
         _container_id: unitName,
         _key: p.id,
         _type: p.profileCategory || 'perfil_a',
         _engines: 'roster_assignments',
-        group_or_tier: `${p.groupTag}|${p.roleTier || 'operador_base'}`,
+        group_or_tier: `${p.groupTag}|${p.roleTier || 'operador_base'}${sealSuffix}`,
         date_or_cycle: p.lastAssignedIsoDate || '',
         time_or_duration: String(p.assignmentCount ?? 0),
         title_or_name: p.name,
@@ -962,7 +963,7 @@ export function exportOmniCsvBundle(
         secondary_assignee: p.lastPartnerId || '',
         status_or_readiness: (p.statusFlags || []).join('|'),
         capabilities_or_tags: activeCapKeys.join('|'),
-        contact_or_location: p.phone || p.email || '',
+        contact_or_location: p.phone || p.email || (p.accessPin ? `PIN:${p.accessPin}` : ''),
         notes_or_payload: (p.capabilityTags || []).join('|'),
         _meta_json: JSON.stringify(p),
       });
@@ -1192,7 +1193,7 @@ export function exportSingleEngineSampleCsv(engineId: string): string {
   }
 
   // Fallback for event-driven engines (`study_synthesis`, `inventory_assets`, `custom_generic`, etc.)
-  const tpl = ENGINE_TEMPLATES[engineId];
+  const tpl = (ENGINE_TEMPLATES as Record<string, any>)[engineId];
   if (tpl) {
     const { rows } = parseRawOmniCsvTable(tpl.canonicalCsv);
     const registry: FlatSkeletonEntry[] = rows.map((r) => ({
@@ -1338,8 +1339,34 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
 
     if (kind === 'participant_privilege') {
       if (containerId) unitName = containerId;
-      const [groupPart, tierPart] = (row.group_or_tier || 'Grupo 1|operador_base').split('|');
+      const groupParts = (row.group_or_tier || 'Grupo 1|operador_base')
+        .split('|')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const groupPart = groupParts[0] || 'Grupo 1';
+      const tierPart =
+        groupParts.find((g) =>
+          ['coordenador_senior', 'assistente_tecnico', 'operador_base'].includes(g)
+        ) || 'operador_base';
+      const hasSealInGroupCol = groupParts.some((g) => /^(selo_admin|admin|👑)$/i.test(g));
+      const hasNoSealInGroupCol = groupParts.some((g) => /^(sem_selo_admin|consultor|viewer)$/i.test(g));
       const capMap = parseParticipantPrivilegesFromCsvRow(row, headers, meta);
+
+      const rawContact = (row.contact_or_location || '').trim();
+      const pinMatch = rawContact.match(/(?:pin\s*[:=]\s*|^)(\d{3,8})$/i);
+      const extractedPin = pinMatch ? pinMatch[1] : meta.accessPin;
+
+      const explicitAdminSeal = hasSealInGroupCol
+        ? true
+        : hasNoSealInGroupCol
+        ? false
+        : capMap.cap_selo_admin === true || capMap.selo_admin === true
+        ? true
+        : typeof meta.hasAdminSeal === 'boolean'
+        ? meta.hasAdminSeal
+        : false;
+      delete capMap.cap_selo_admin;
+      delete capMap.selo_admin;
 
       const statusFlags = (row.status_or_readiness || '')
         .split('|')
@@ -1369,6 +1396,8 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           lastAssignedIsoDate: row.date_or_cycle || meta.lastAssignedIsoDate || '',
           assignmentCount: parseInt(row.time_or_duration || '0', 10) || meta.assignmentCount || 0,
           lastPartnerId: secondary || meta.lastPartnerId || undefined,
+          hasAdminSeal: explicitAdminSeal,
+          accessPin: extractedPin,
           preserveExplicitCapabilities: true,
         },
         participants.length,
@@ -1541,7 +1570,7 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           ? meta.customValues
           : metadataJsonVal
           ? safeJsonParse<Record<string, any>>(metadataJsonVal, {}).customValues ||
-            safeJsonParse<Record<string, any>>(metadataJsonVal, undefined)
+            safeJsonParse<Record<string, any> | undefined>(metadataJsonVal, undefined)
           : undefined;
       const [parsedContainerId, explicitContainerName] = containerId.includes('::')
         ? containerId.split('::').map((s) => s.trim())
@@ -1556,12 +1585,12 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
 
       const tableEnvelopeVal = containerChangedManually
         ? row._table_envelope_json
-          ? safeJsonParse<Record<string, any>>(row._table_envelope_json, undefined)
+          ? safeJsonParse<Record<string, any> | undefined>(row._table_envelope_json, undefined)
           : undefined
         : meta.tableEnvelope && typeof meta.tableEnvelope === 'object'
         ? meta.tableEnvelope
         : row._table_envelope_json
-        ? safeJsonParse<Record<string, any>>(row._table_envelope_json, undefined)
+        ? safeJsonParse<Record<string, any> | undefined>(row._table_envelope_json, undefined)
         : undefined;
 
       const resolvedTableName =

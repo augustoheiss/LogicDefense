@@ -33,6 +33,7 @@ export interface PrivilegeMatrixModalProps {
   onAutoAssignCurrentWeek?: (strictSameCategoryPairing: boolean) => void;
   onAutoAssignAllWeeks?: (strictSameCategoryPairing: boolean) => void;
   lastAutoAssignSummaryText?: string | null;
+  readOnly?: boolean;
 }
 
 export function PrivilegeMatrixModal({
@@ -43,6 +44,7 @@ export function PrivilegeMatrixModal({
   onAutoAssignCurrentWeek,
   onAutoAssignAllWeeks,
   lastAutoAssignSummaryText,
+  readOnly = false,
 }: PrivilegeMatrixModalProps) {
   const [selectedCategory, setSelectedCategory] = useState<ParticipantCategory | 'ALL'>('ALL');
   const [selectedRoleTier, setSelectedRoleTier] = useState<ParticipantRoleTier | 'ALL'>('ALL');
@@ -61,12 +63,19 @@ export function PrivilegeMatrixModal({
   const [newUserGroup, setNewUserGroup] = useState('Grupo 1');
   const [newUserCategory, setNewUserCategory] = useState<ParticipantCategory>('perfil_a');
   const [newUserTier, setNewUserTier] = useState<ParticipantRoleTier>('operador_base');
+  const [newUserPin, setNewUserPin] = useState('');
+  const [newUserAdminSeal, setNewUserAdminSeal] = useState(false);
   const [newPrivilegeName, setNewPrivilegeName] = useState('');
   const [extraCustomKeys, setExtraCustomKeys] = useState<string[]>([]);
 
   const normalizedParticipants = useMemo(
     () => participants.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx)),
     [participants]
+  );
+
+  const adminSealCount = useMemo(
+    () => normalizedParticipants.filter((p) => Boolean(p.hasAdminSeal)).length,
+    [normalizedParticipants]
   );
 
   const allEffectiveColumns = useMemo(
@@ -128,6 +137,7 @@ export function PrivilegeMatrixModal({
   }, [allEffectiveColumns, selectedDomain]);
 
   const handleToggleCapability = (participantId: string, capKey: CapabilityKey) => {
+    if (readOnly) return;
     const updated = normalizedParticipants.map((p) => {
       if (p.id !== participantId) return p;
       const nextCaps: Record<string, boolean> = {
@@ -145,7 +155,35 @@ export function PrivilegeMatrixModal({
     onChangeParticipants(updated);
   };
 
+  const handleToggleAdminSeal = (participantId: string) => {
+    if (readOnly) return;
+    const updated = normalizedParticipants.map((p) => {
+      if (p.id !== participantId) return p;
+      return {
+        ...p,
+        hasAdminSeal: !p.hasAdminSeal,
+        preserveExplicitCapabilities: true,
+      };
+    });
+    onChangeParticipants(updated);
+  };
+
+  const handleChangePin = (participantId: string, pinText: string) => {
+    if (readOnly) return;
+    const cleaned = pinText.replace(/[^0-9a-zA-Z]/g, '').slice(0, 8);
+    const updated = normalizedParticipants.map((p) => {
+      if (p.id !== participantId) return p;
+      return {
+        ...p,
+        accessPin: cleaned,
+        preserveExplicitCapabilities: true,
+      };
+    });
+    onChangeParticipants(updated);
+  };
+
   const handleToggleRoleTier = (participantId: string) => {
+    if (readOnly) return;
     const order: ParticipantRoleTier[] = [
       'operador_base',
       'assistente_tecnico',
@@ -169,6 +207,7 @@ export function PrivilegeMatrixModal({
   };
 
   const handleCreateUser = () => {
+    if (readOnly) return;
     const cleanName = newUserName.trim() || `Participante ${normalizedParticipants.length + 1}`;
     const newId = `p-${Date.now().toString().slice(-4)}`;
     const caps = buildPresetCapabilities(
@@ -182,6 +221,8 @@ export function PrivilegeMatrixModal({
         (caps as Record<string, boolean>)[col.key] = false;
       }
     }
+    const defaultPin =
+      newUserPin.trim() || String(1001 + (normalizedParticipants.length % 8999));
     const created: ParticipantProfile = {
       id: newId,
       name: cleanName,
@@ -194,14 +235,19 @@ export function PrivilegeMatrixModal({
       assignmentCount: 0,
       lastAssignedIsoDate: '',
       active: true,
+      hasAdminSeal: newUserAdminSeal,
+      accessPin: defaultPin,
       preserveExplicitCapabilities: true,
     };
     onChangeParticipants([...normalizedParticipants, created]);
     setNewUserName('');
+    setNewUserPin('');
+    setNewUserAdminSeal(false);
     setShowAddUserBar(false);
   };
 
   const handleCreateCustomPrivilege = () => {
+    if (readOnly) return;
     const cleanKey = newPrivilegeName.trim();
     if (!cleanKey) return;
     setExtraCustomKeys((prev) => (prev.includes(cleanKey) ? prev : [...prev, cleanKey]));
@@ -219,6 +265,7 @@ export function PrivilegeMatrixModal({
   };
 
   const handleResetRotationLedger = () => {
+    if (readOnly) return;
     const reset = normalizedParticipants.map((p) => ({
       ...p,
       assignmentCount: 0,
@@ -240,10 +287,17 @@ export function PrivilegeMatrixModal({
               <Text style={styles.modalTitle}>🛡️ PRIVILÉGIOS</Text>
               <View style={styles.countPill}>
                 <Text style={styles.countPillText}>
-                  {filteredParticipants.length}/{normalizedParticipants.length} 👤 •{' '}
-                  {allEffectiveColumns.length} col
+                  {filteredParticipants.length}/{normalizedParticipants.length} 👤 • 👑{' '}
+                  {adminSealCount} Admin • {allEffectiveColumns.length} col
                 </Text>
               </View>
+              {readOnly && (
+                <View style={[styles.countPill, { borderColor: '#38BDF8', backgroundColor: '#0C4A6E' }]}>
+                  <Text style={[styles.countPillText, { color: '#BAE6FD' }]}>
+                    👁️ SOMENTE CONSULTA
+                  </Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.topActionsRow}>
@@ -258,91 +312,95 @@ export function PrivilegeMatrixModal({
                 <Text style={styles.iconActionGlyph}>🔍</Text>
               </Pressable>
 
-              <Pressable
-                testID="priv-modal-btn-add-user"
-                accessibilityRole="button"
-                accessibilityLabel="Novo Usuário"
-                {...webTitle('Adicionar Novo Usuário')}
-                style={[styles.iconActionBtn, showAddUserBar && styles.cadBtnActive]}
-                onPress={() => {
-                  setShowAddUserBar((prev) => !prev);
-                  setShowAddPrivilegeBar(false);
-                }}
-              >
-                <Text style={styles.iconActionGlyph}>➕</Text>
-              </Pressable>
+              {!readOnly && (
+                <>
+                  <Pressable
+                    testID="priv-modal-btn-add-user"
+                    accessibilityRole="button"
+                    accessibilityLabel="Novo Usuário"
+                    {...webTitle('Adicionar Novo Usuário')}
+                    style={[styles.iconActionBtn, showAddUserBar && styles.cadBtnActive]}
+                    onPress={() => {
+                      setShowAddUserBar((prev) => !prev);
+                      setShowAddPrivilegeBar(false);
+                    }}
+                  >
+                    <Text style={styles.iconActionGlyph}>➕</Text>
+                  </Pressable>
 
-              <Pressable
-                testID="priv-modal-btn-add-priv"
-                accessibilityRole="button"
-                accessibilityLabel="Novo Privilégio Customizado"
-                {...webTitle('Criar Novo Privilégio Customizado na Planilha')}
-                style={[styles.iconActionBtn, showAddPrivilegeBar && styles.cadBtnActive]}
-                onPress={() => {
-                  setShowAddPrivilegeBar((prev) => !prev);
-                  setShowAddUserBar(false);
-                }}
-              >
-                <Text style={styles.iconActionGlyph}>🏷️</Text>
-              </Pressable>
+                  <Pressable
+                    testID="priv-modal-btn-add-priv"
+                    accessibilityRole="button"
+                    accessibilityLabel="Novo Privilégio Customizado"
+                    {...webTitle('Criar Novo Privilégio Customizado na Planilha')}
+                    style={[styles.iconActionBtn, showAddPrivilegeBar && styles.cadBtnActive]}
+                    onPress={() => {
+                      setShowAddPrivilegeBar((prev) => !prev);
+                      setShowAddUserBar(false);
+                    }}
+                  >
+                    <Text style={styles.iconActionGlyph}>🏷️</Text>
+                  </Pressable>
 
-              <Pressable
-                testID="priv-modal-btn-pairing"
-                accessibilityRole="button"
-                accessibilityLabel={
-                  strictSameCategoryPairing ? 'Duplas: Mesma Grade' : 'Duplas: Misto Livre'
-                }
-                {...webTitle(
-                  strictSameCategoryPairing ? 'Duplas: Mesma Grade (A/B)' : 'Duplas: Misto Livre'
-                )}
-                style={[
-                  styles.iconActionBtn,
-                  strictSameCategoryPairing && {
-                    borderColor: '#38BDF8',
-                    backgroundColor: '#0C4A6E',
-                  },
-                ]}
-                onPress={() => setStrictSameCategoryPairing((prev) => !prev)}
-              >
-                <Text style={styles.iconActionGlyph}>🔗</Text>
-              </Pressable>
+                  <Pressable
+                    testID="priv-modal-btn-pairing"
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      strictSameCategoryPairing ? 'Duplas: Mesma Grade' : 'Duplas: Misto Livre'
+                    }
+                    {...webTitle(
+                      strictSameCategoryPairing ? 'Duplas: Mesma Grade (A/B)' : 'Duplas: Misto Livre'
+                    )}
+                    style={[
+                      styles.iconActionBtn,
+                      strictSameCategoryPairing && {
+                        borderColor: '#38BDF8',
+                        backgroundColor: '#0C4A6E',
+                      },
+                    ]}
+                    onPress={() => setStrictSameCategoryPairing((prev) => !prev)}
+                  >
+                    <Text style={styles.iconActionGlyph}>🔗</Text>
+                  </Pressable>
 
-              {onAutoAssignCurrentWeek && (
-                <Pressable
-                  testID="priv-modal-btn-auto-week"
-                  accessibilityRole="button"
-                  accessibilityLabel="Auto-Designar Semana"
-                  {...webTitle('Auto-Designar Semana Atual')}
-                  style={[styles.iconActionBtn, styles.cadBtnEmerald]}
-                  onPress={() => onAutoAssignCurrentWeek(strictSameCategoryPairing)}
-                >
-                  <Text style={styles.iconActionGlyph}>⚡</Text>
-                </Pressable>
+                  {onAutoAssignCurrentWeek && (
+                    <Pressable
+                      testID="priv-modal-btn-auto-week"
+                      accessibilityRole="button"
+                      accessibilityLabel="Auto-Designar Semana"
+                      {...webTitle('Auto-Designar Semana Atual')}
+                      style={[styles.iconActionBtn, styles.cadBtnEmerald]}
+                      onPress={() => onAutoAssignCurrentWeek(strictSameCategoryPairing)}
+                    >
+                      <Text style={styles.iconActionGlyph}>⚡</Text>
+                    </Pressable>
+                  )}
+
+                  {onAutoAssignAllWeeks && (
+                    <Pressable
+                      testID="priv-modal-btn-auto-all"
+                      accessibilityRole="button"
+                      accessibilityLabel="Auto-Designar 9 Semanas"
+                      {...webTitle('Auto-Designar Todas as 9 Semanas')}
+                      style={[styles.iconActionBtn, styles.cadBtnGold]}
+                      onPress={() => onAutoAssignAllWeeks(strictSameCategoryPairing)}
+                    >
+                      <Text style={styles.iconActionGlyph}>🪄</Text>
+                    </Pressable>
+                  )}
+
+                  <Pressable
+                    testID="priv-modal-btn-reset"
+                    accessibilityRole="button"
+                    accessibilityLabel="Zerar Rotação"
+                    {...webTitle('Zerar Contadores de Rotação')}
+                    style={styles.iconActionBtn}
+                    onPress={handleResetRotationLedger}
+                  >
+                    <Text style={styles.iconActionGlyph}>↺</Text>
+                  </Pressable>
+                </>
               )}
-
-              {onAutoAssignAllWeeks && (
-                <Pressable
-                  testID="priv-modal-btn-auto-all"
-                  accessibilityRole="button"
-                  accessibilityLabel="Auto-Designar 9 Semanas"
-                  {...webTitle('Auto-Designar Todas as 9 Semanas')}
-                  style={[styles.iconActionBtn, styles.cadBtnGold]}
-                  onPress={() => onAutoAssignAllWeeks(strictSameCategoryPairing)}
-                >
-                  <Text style={styles.iconActionGlyph}>🪄</Text>
-                </Pressable>
-              )}
-
-              <Pressable
-                testID="priv-modal-btn-reset"
-                accessibilityRole="button"
-                accessibilityLabel="Zerar Rotação"
-                {...webTitle('Zerar Contadores de Rotação')}
-                style={styles.iconActionBtn}
-                onPress={handleResetRotationLedger}
-              >
-                <Text style={styles.iconActionGlyph}>↺</Text>
-              </Pressable>
 
               <Pressable
                 testID="priv-modal-btn-close"
@@ -364,14 +422,22 @@ export function PrivilegeMatrixModal({
           ) : null}
 
           {/* Click-to-Reveal: Add New User Strip */}
-          {showAddUserBar && (
+          {showAddUserBar && !readOnly && (
             <View style={styles.addUserStrip}>
               <TextInput
                 style={styles.addUserInput}
-                placeholder="Nome do participante..."
+                placeholder="Nome completo do participante..."
                 placeholderTextColor="#64748B"
                 value={newUserName}
                 onChangeText={setNewUserName}
+              />
+              <TextInput
+                style={[styles.addUserInput, { minWidth: 80, maxWidth: 100 }]}
+                placeholder="🔑 PIN (ex: 1025)"
+                placeholderTextColor="#64748B"
+                value={newUserPin}
+                onChangeText={setNewUserPin}
+                maxLength={8}
               />
               {(['Grupo 1', 'Grupo 2', 'Grupo 3'] as const).map((g) => (
                 <Pressable
@@ -393,6 +459,22 @@ export function PrivilegeMatrixModal({
                   </Text>
                 </Pressable>
               ))}
+              <Pressable
+                style={[
+                  styles.filterChip,
+                  newUserAdminSeal && { backgroundColor: '#78350F', borderColor: '#F59E0B' },
+                ]}
+                onPress={() => setNewUserAdminSeal((prev) => !prev)}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    newUserAdminSeal && { color: '#FDE68A', fontWeight: '800' },
+                  ]}
+                >
+                  {newUserAdminSeal ? '👑 Selo Admin' : '👁️ Consulta'}
+                </Text>
+              </Pressable>
               <Pressable style={[styles.cadBtn, styles.cadBtnEmerald]} onPress={handleCreateUser}>
                 <Text style={[styles.cadBtnText, { color: '#ECFDF5' }]}>💾</Text>
               </Pressable>
@@ -519,6 +601,14 @@ export function PrivilegeMatrixModal({
                 <View style={styles.participantNameCol}>
                   <Text style={styles.matrixHeaderCellText}>USUÁRIO / GRUPO</Text>
                 </View>
+                <View style={styles.adminSealCol}>
+                  <Text style={[styles.matrixHeaderCellText, { color: '#FDE68A' }]}>
+                    👑 SELO ADMIN
+                  </Text>
+                </View>
+                <View style={styles.pinCol}>
+                  <Text style={[styles.matrixHeaderCellText, { color: '#93C5FD' }]}>🔑 PIN</Text>
+                </View>
                 <View style={styles.tierCol}>
                   <Text style={styles.matrixHeaderCellText}>ESCALÃO</Text>
                 </View>
@@ -557,11 +647,54 @@ export function PrivilegeMatrixModal({
                     </View>
 
                     <Pressable
+                      testID={`priv-admin-seal-${p.id}`}
+                      style={styles.adminSealCol}
+                      onPress={() => handleToggleAdminSeal(p.id)}
+                    >
+                      <View
+                        style={[
+                          styles.adminSealPill,
+                          p.hasAdminSeal
+                            ? styles.adminSealPillActive
+                            : styles.adminSealPillViewer,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.adminSealPillText,
+                            p.hasAdminSeal
+                              ? { color: '#FDE68A' }
+                              : { color: '#94A3B8' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {p.hasAdminSeal ? '👑 ADMIN' : '👁️ Consulta'}
+                        </Text>
+                      </View>
+                    </Pressable>
+
+                    <View style={styles.pinCol}>
+                      {readOnly ? (
+                        <Text style={styles.pinMaskedText}>🔒 ••••</Text>
+                      ) : (
+                        <TextInput
+                          testID={`priv-pin-${p.id}`}
+                          style={styles.pinInput}
+                          value={p.accessPin || ''}
+                          onChangeText={(txt) => handleChangePin(p.id, txt)}
+                          placeholder="PIN"
+                          placeholderTextColor="#475569"
+                          maxLength={8}
+                        />
+                      )}
+                    </View>
+
+                    <Pressable
                       style={styles.tierCol}
                       onPress={() => handleToggleRoleTier(p.id)}
                     >
                       <Text style={styles.tierBadgeText} numberOfLines={1}>
-                        {ROLE_TIER_LABELS[p.roleTier || 'operador_base']} ↻
+                        {ROLE_TIER_LABELS[p.roleTier || 'operador_base']} {readOnly ? '' : '↻'}
                       </Text>
                     </Pressable>
 
@@ -823,6 +956,62 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRightWidth: 1,
     borderRightColor: '#1E293B',
+  },
+  adminSealCol: {
+    width: 102,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#1E293B',
+  },
+  adminSealPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    width: '100%',
+    alignItems: 'center',
+  },
+  adminSealPillActive: {
+    backgroundColor: '#78350F',
+    borderColor: '#F59E0B',
+  },
+  adminSealPillViewer: {
+    backgroundColor: '#1E293B',
+    borderColor: '#334155',
+  },
+  adminSealPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  pinCol: {
+    width: 72,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#1E293B',
+  },
+  pinInput: {
+    width: '100%',
+    backgroundColor: '#0B1120',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    color: '#93C5FD',
+    fontSize: 10.5,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  pinMaskedText: {
+    color: '#64748B',
+    fontSize: 9.5,
+    fontWeight: '700',
   },
   tierCol: {
     width: 125,

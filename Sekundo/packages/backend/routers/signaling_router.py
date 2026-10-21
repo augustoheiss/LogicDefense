@@ -30,11 +30,13 @@ router = APIRouter()
 # Ephemeral In-Memory Store (TTL-based, no database)
 # ---------------------------------------------------------------------------
 
-# Room TTL in seconds (5 minutes — enough for handshake)
+# Room TTL in seconds (5 minutes — enough for handshake; refreshed on active E2EE sync)
 ROOM_TTL = 300
+MAX_ENCRYPTED_PACKETS_PER_ROOM = 500
+ACTIVE_PEER_WINDOW_SECONDS = 45
 
-# In-memory rooms: { room_id: { offer, answer, candidates, created_at } }
-# Strictly ephemeral SDP/ICE handshake broker — ZERO application state or user data stored.
+# In-memory rooms: { room_id: { offer, answer, candidates, encrypted_packets, next_seq, peers, created_at } }
+# Strictly ephemeral SDP/ICE handshake & Zero-Knowledge E2EE ciphertext relay — ZERO plaintext user data stored.
 _rooms: dict[str, dict] = {}
 
 
@@ -66,6 +68,12 @@ class ICECandidate(BaseModel):
     sdpMid: Optional[str] = None
 
 
+class EncryptedSyncPushPayload(BaseModel):
+    peer_id: str
+    packet_kind: str = "DELTA_MUTATION"
+    cipher_packet: str
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -81,6 +89,9 @@ async def create_room():
         "answer": None,
         "candidates_offer": [],
         "candidates_answer": [],
+        "encrypted_packets": [],
+        "next_seq": 1,
+        "peers": {},
         "created_at": time.time(),
     }
 
@@ -169,5 +180,105 @@ async def get_candidates(room_id: str, role: str):
         raise HTTPException(status_code=400, detail="Role must be 'offer' or 'answer'.")
 
     return {"candidates": _rooms[room_id].get(f"candidates_{role}", [])}
+
+
+@router.post("/room/{room_id}/sync-push")
+async def post_encrypted_sync_packet(room_id: str, payload: EncryptedSyncPushPayload):
+    """
+    Zero-Knowledge Multi-Peer (1:N) Encrypted Relay Push.
+    Accepts ONLY AES-256-GCM encrypted packets (`SEKUNDO_COLLAB_v2:` or `SEKUNDO_ENC_DELTA_v2:`).
+    Auto-creates the room in ephemeral memory if needed so multi-peer links reconnect seamlessly.
+    """
+    _cleanup_expired()
+
+    cipher = (payload.cipher_packet or "").strip()
+    if not (
+        cipher.startswith("SEKUNDO_COLLAB_v2:")
+        or cipher.startswith("SEKUNDO_ENC_DELTA_v2:")
+        or cipher.startswith("v2.")
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Zero-Knowledge violation: only AES-256-GCM encrypted packets are accepted.",
+        )
+
+    now = time.time()
+    if room_id not in _rooms:
+        _rooms[room_id] = {
+            "offer": None,
+            "answer": None,
+            "candidates_offer": [],
+            "candidates_answer": [],
+            "encrypted_packets": [],
+            "next_seq": 1,
+            "peers": {},
+            "created_at": now,
+        }
+
+    room = _rooms[room_id]
+    room["created_at"] = now
+    room["peers"][payload.peer_id] = now
+
+    seq = room["next_seq"]
+    room["next_seq"] = seq + 1
+
+    entry = {
+        "seq": seq,
+        "peer_id": payload.peer_id,
+        "packet_kind": payload.packet_kind,
+        "cipher_packet": cipher,
+        "received_at": now,
+    }
+    room["encrypted_packets"].append(entry)
+    if len(room["encrypted_packets"]) > MAX_ENCRYPTED_PACKETS_PER_ROOM:
+        room["encrypted_packets"] = room["encrypted_packets"][-MAX_ENCRYPTED_PACKETS_PER_ROOM:]
+
+    active_peers = [
+        pid for pid, last_ts in room["peers"].items() if now - last_ts <= ACTIVE_PEER_WINDOW_SECONDS
+    ]
+    return {
+        "status": "packet_relayed",
+        "seq": seq,
+        "active_peer_count": len(active_peers),
+    }
+
+
+@router.get("/room/{room_id}/sync-pull")
+async def get_encrypted_sync_packets(
+    room_id: str,
+    since_seq: int = 0,
+    peer_id: Optional[str] = None,
+):
+    """
+    Zero-Knowledge Multi-Peer (1:N) Encrypted Relay Pull.
+    Returns all opaque encrypted packets with `seq > since_seq` and active peer count.
+    """
+    _cleanup_expired()
+
+    if room_id not in _rooms:
+        return {
+            "packets": [],
+            "latest_seq": 0,
+            "active_peer_count": 0,
+        }
+
+    now = time.time()
+    room = _rooms[room_id]
+    room["created_at"] = now
+    if peer_id:
+        room["peers"][peer_id] = now
+
+    packets = [p for p in room.get("encrypted_packets", []) if p["seq"] > since_seq]
+    latest_seq = (room.get("next_seq", 1) - 1) if room.get("encrypted_packets") else 0
+    active_peers = [
+        pid for pid, last_ts in room.get("peers", {}).items() if now - last_ts <= ACTIVE_PEER_WINDOW_SECONDS
+    ]
+
+    return {
+        "packets": packets,
+        "latest_seq": latest_seq,
+        "active_peer_count": len(active_peers),
+    }
+
 
 

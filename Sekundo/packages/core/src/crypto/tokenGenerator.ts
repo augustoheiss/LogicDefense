@@ -7,6 +7,8 @@
 
 import type { EventState, RolloverSnapshot } from '../events/types';
 import type { FlatRegistry } from '../skeleton/types';
+import type { ParticipantProfile } from '../roster/participantDirectory';
+import type { ActivityLogEntry } from '../audit/activityLogEngine';
 import { encryptForURL, decryptFromURL } from './symmetric';
 
 // ---------------------------------------------------------------------------
@@ -16,11 +18,22 @@ import { encryptForURL, decryptFromURL } from './symmetric';
 /** Maximum number of weeks of history included in the Horizon Window. */
 const HORIZON_WEEKS = 2;
 
+export interface GenerateTokenOptions {
+  /** Privilege Matrix roster embedded in the encrypted payload for zero-trust registration verification */
+  privilegeRoster?: ParticipantProfile[];
+  /** Ephemeral simultaneous collaboration room ID */
+  roomId?: string;
+  /** Initial immutable activity log trail */
+  activityLog?: ActivityLogEntry[];
+}
+
 /**
  * The payload packaged into the shareable link.
  * Contains only what the viewer needs for the immediate context.
  */
 export interface HorizonPayload {
+  /** Event container ID */
+  eventId?: string;
   /** Event configuration. */
   eventName: string;
   eventFrequency: string;
@@ -30,6 +43,15 @@ export interface HorizonPayload {
 
   /** Recent archive snapshots (last N weeks/periods). */
   recentHistory: RolloverSnapshot[];
+
+  /** Privilege Matrix roster for Identity Gate & `👑 Selo Admin` RBAC enforcement */
+  privilegeRoster?: ParticipantProfile[];
+
+  /** Simultaneous collaboration room ID */
+  roomId?: string;
+
+  /** Initial activity log entries */
+  activityLog?: ActivityLogEntry[];
 
   /** Timestamp when this token was generated. */
   generatedAt: string;
@@ -43,22 +65,28 @@ export interface HorizonPayload {
  *
  * @param state - The full event state from localStorage.
  * @param currentSkeleton - The current active flat skeleton registry.
+ * @param options - Optional privilege roster, roomId, and activity log.
  * @returns The packaged payload ready for encryption.
  */
 export function buildHorizonPayload(
   state: EventState,
-  currentSkeleton: FlatRegistry
+  currentSkeleton: FlatRegistry,
+  options?: GenerateTokenOptions
 ): HorizonPayload {
   // Take only the most recent N snapshots
   const recentHistory = state.archive.slice(-HORIZON_WEEKS);
 
   return {
+    eventId: state.config.id,
     eventName: state.config.name,
     eventFrequency: state.config.frequency,
     skeleton: currentSkeleton,
     recentHistory,
+    privilegeRoster: options?.privilegeRoster,
+    roomId: options?.roomId,
+    activityLog: options?.activityLog,
     generatedAt: new Date().toISOString(),
-    version: 1,
+    version: options?.privilegeRoster ? 2 : 1,
   };
 }
 
@@ -72,14 +100,16 @@ export function buildHorizonPayload(
  * @param state - The full event state.
  * @param skeleton - Current active skeleton.
  * @param passphrase - Admin-chosen passphrase (shared out-of-band).
+ * @param options - Optional privilege roster, roomId, and activity log.
  * @returns URL-safe Base64 token string.
  */
 export async function generateToken(
   state: EventState,
   skeleton: FlatRegistry,
-  passphrase: string
+  passphrase: string,
+  options?: GenerateTokenOptions
 ): Promise<string> {
-  const payload = buildHorizonPayload(state, skeleton);
+  const payload = buildHorizonPayload(state, skeleton, options);
   return encryptForURL(payload, passphrase);
 }
 
@@ -115,10 +145,11 @@ export async function decodeToken(
  * buildShareURL("https://sekundo.app", token)
  * // → "https://sekundo.app/#/view?data=aBcDeFgH..."
  */
-export function buildShareURL(baseUrl: string, token: string): string {
+export function buildShareURL(baseUrl: string, token: string, roomId?: string): string {
   // Strip trailing slash
   const base = baseUrl.replace(/\/+$/, '');
-  return `${base}/#/view?data=${token}`;
+  const roomQuery = roomId ? `&room=${encodeURIComponent(roomId)}` : '';
+  return `${base}/#/view?data=${token}${roomQuery}`;
 }
 
 /**

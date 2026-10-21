@@ -44,6 +44,10 @@ export interface ParticipantProfile {
   lastPartnerId?: string;
   active?: boolean;
   preserveExplicitCapabilities?: boolean;
+  /** Governance Admin Seal: Only participants with `hasAdminSeal === true` can edit or export shared spreadsheets */
+  hasAdminSeal?: boolean;
+  /** Registration PIN / Access Code confirmed once on first entry into a shared link */
+  accessPin?: string;
 }
 
 /**

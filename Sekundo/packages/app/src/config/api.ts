@@ -76,7 +76,7 @@ export const SEKUNDO_API_URL = resolveApiUrl();
 export const API = {
   health: `${SEKUNDO_API_URL}/health`,
 
-  // WebRTC Signaling (ephemeral SDP/ICE handshake only — zero state storage, zero PDF uploads)
+  // WebRTC Signaling & Zero-Knowledge Multi-Peer (1:N) Encrypted Relay
   signal: {
     createRoom: `${SEKUNDO_API_URL}/signal/room`,
     room: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}`,
@@ -84,6 +84,11 @@ export const API = {
     answer: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}/answer`,
     candidates: (id: string, role: 'offer' | 'answer') =>
       `${SEKUNDO_API_URL}/signal/room/${id}/candidates/${role}`,
+    syncPush: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}/sync-push`,
+    syncPull: (id: string, sinceSeq: number = 0, peerId?: string) =>
+      `${SEKUNDO_API_URL}/signal/room/${id}/sync-pull?since_seq=${sinceSeq}${
+        peerId ? `&peer_id=${encodeURIComponent(peerId)}` : ''
+      }`,
   },
 } as const;
 

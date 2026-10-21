@@ -6,13 +6,31 @@
  * and provides a copy-ready shareable URL.
  */
 
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StyleSheet, Text, View, TextInput, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import { useSkeleton } from '../hooks/useSkeleton';
-import { generateToken, buildShareURL } from '@sekundo/core';
+import {
+  generateToken,
+  buildShareURL,
+  DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  ensureParticipantPrivilegeMatrix,
+  hasActivePrivileges,
+  encodeEncryptedCollabPacket,
+  type ParticipantProfile,
+} from '@sekundo/core';
+import {
+  loadSavedPrivilegeParticipants,
+  savePrivilegeParticipants,
+} from '../storage/omniStorageBridge';
+import {
+  loadPersistedActivityLog,
+  recordPersistedActivityEvent,
+} from '../storage/activityLogStore';
+import { PrivilegeMatrixModal } from '../components/PrivilegeMatrixModal';
+import { API } from '../config/api';
 import * as Clipboard from 'expo-clipboard';
 
 export default function ShareEvent() {
@@ -27,7 +45,40 @@ export default function ShareEvent() {
   const [passphrase, setPassphrase] = useState('');
   const [generating, setGenerating] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [privilegeRoster, setPrivilegeRoster] = useState<ParticipantProfile[]>(() =>
+    DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
+  );
+  const [showPrivilegeModal, setShowPrivilegeModal] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    loadSavedPrivilegeParticipants().then((saved) => {
+      if (active && saved && saved.length > 0) {
+        setPrivilegeRoster(saved.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx)));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const governanceStats = useMemo(() => {
+    const total = privilegeRoster.length;
+    const authorizedViewers = privilegeRoster.filter((p) => hasActivePrivileges(p)).length;
+    const adminSealHolders = privilegeRoster.filter(
+      (p) => hasActivePrivileges(p) && Boolean(p.hasAdminSeal)
+    );
+    const blockedCount = total - authorizedViewers;
+    return {
+      total,
+      authorizedViewers,
+      adminCount: adminSealHolders.length,
+      adminNames: adminSealHolders.map((p) => `${p.name} (PIN: ${p.accessPin || '1001'})`),
+      blockedCount,
+    };
+  }, [privilegeRoster]);
 
   if (skeletonLoading || !event) {
     return (
@@ -37,18 +88,91 @@ export default function ShareEvent() {
     );
   }
 
+  const handleUpdatePrivilegeRoster = async (updated: ParticipantProfile[]) => {
+    const normalized = updated.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx));
+    setPrivilegeRoster(normalized);
+    await savePrivilegeParticipants(normalized);
+  };
+
   const handleGenerateLink = async () => {
     if (!passphrase.trim()) return;
     setGenerating(true);
     setCopied(false);
     try {
-      // 1. Generate encrypted Base64URL token
-      const token = await generateToken(event, flatRegistry, passphrase);
-      
-      // 2. Build the full URL
+      // 1. Create or allocate a room ID for simultaneous Zero-Knowledge sync
+      let activeRoomId = `rm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      try {
+        const res = await fetch(API.signal.createRoom, { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.room_id) activeRoomId = data.room_id;
+        }
+      } catch {
+        // Offline / local fallback room ID remains active
+      }
+
+      // 2. Record link creation in the immutable Activity Log
+      const { updatedLog } = await recordPersistedActivityEvent({
+        eventId: eventId || 'global',
+        actorId: 'admin-host',
+        actorName: 'Coordenador Host',
+        actorGroup: 'Administração',
+        actorRole: 'ADMIN_SEAL',
+        actionType: 'SHARE_LINK_CREATED',
+        targetSheet: 'GERAL',
+        summary: `Link simultâneo E2EE gerado (Sala ${activeRoomId}) com ${governanceStats.authorizedViewers} credenciados (${governanceStats.adminCount} c/ Selo Admin).`,
+      });
+
+      // 3. Generate encrypted Base64URL token with embedded Privilege Roster + Room ID + Audit Log
+      const token = await generateToken(event, flatRegistry, passphrase, {
+        privilegeRoster,
+        roomId: activeRoomId,
+        activityLog: updatedLog,
+      });
+
+      // 4. Push initial encrypted SNAPSHOT_SYNC packet to the room (best-effort)
+      try {
+        const currentLog = await loadPersistedActivityLog(eventId || 'global');
+        const cipherPacket = await encodeEncryptedCollabPacket(
+          {
+            protocol: 'SEKUNDO_COLLAB_v2',
+            packetId: `pkt_init_${Date.now().toString(36)}`,
+            roomId: activeRoomId,
+            eventId: eventId || 'global',
+            sentAt: new Date().toISOString(),
+            kind: 'SNAPSHOT_SYNC',
+            author: {
+              peerId: 'admin_host',
+              participantId: privilegeRoster.find((p) => p.hasAdminSeal)?.id || 'p-01',
+              fullName: privilegeRoster.find((p) => p.hasAdminSeal)?.name || 'Coordenador Host',
+              groupTag: privilegeRoster.find((p) => p.hasAdminSeal)?.groupTag || 'Grupo 1',
+              role: 'ADMIN_SEAL',
+              hasAdminSeal: true,
+            },
+            skeleton: Object.values(flatRegistry),
+            privilegeRoster,
+            activityEntries: currentLog.slice(-40),
+          },
+          passphrase
+        );
+        await fetch(API.signal.syncPush(activeRoomId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            peer_id: 'admin_host',
+            packet_kind: 'SNAPSHOT_SYNC',
+            cipher_packet: cipherPacket,
+          }),
+        });
+      } catch {
+        // Best-effort initial room push
+      }
+
+      // 5. Build the full URL
       const appBaseUrl = PlatformShareUrlBase();
-      const fullUrl = buildShareURL(appBaseUrl, token);
-      
+      const fullUrl = buildShareURL(appBaseUrl, token, activeRoomId);
+
+      setRoomId(activeRoomId);
       setShareUrl(fullUrl);
     } catch (err: any) {
       alert('Failed to generate token: ' + err.message);
@@ -80,27 +204,66 @@ export default function ShareEvent() {
 
         {/* Informative Alert */}
         <View style={styles.alertBox}>
-          <Text style={styles.alertTitle}>🔒 Out-of-Band Key Policy</Text>
+          <Text style={styles.alertTitle}>🔒 Política Zero-Knowledge + Controle por Lista de Privilégios</Text>
           <Text style={styles.alertText}>
-            The decryption passphrase is never embedded in the URL. You must share the password
-            with the viewers via a secondary secure channel (e.g. WhatsApp, face-to-face).
+            A senha de criptografia nunca vai na URL. Ao abrir o link, cada pessoa confirma (apenas no
+            1º acesso) seu Nome Completo, Grupo e PIN. Quem não estiver na Lista de Privilégios é
+            bloqueado. Somente quem tiver o 👑 Selo Admin poderá editar e exportar a planilha.
           </Text>
+        </View>
+
+        {/* Governance & Privilege List Summary Box */}
+        <View style={styles.governanceBox}>
+          <View style={styles.governanceHeaderRow}>
+            <Text style={styles.governanceTitle}>🛡️ HIERARQUIA EMBUTIDA NO LINK</Text>
+            <Pressable
+              onPress={() => setShowPrivilegeModal(true)}
+              style={styles.managePrivBtn}
+            >
+              <Text style={styles.managePrivBtnText}>⚙️ Editar Selo Admin & PINs</Text>
+            </Pressable>
+          </View>
+          <View style={styles.governanceStatsRow}>
+            <View style={styles.statBadge}>
+              <Text style={[styles.statNumber, { color: '#FDE68A' }]}>
+                👑 {governanceStats.adminCount}
+              </Text>
+              <Text style={styles.statLabel}>Selo Admin (Editar/Exportar)</Text>
+            </View>
+            <View style={styles.statBadge}>
+              <Text style={[styles.statNumber, { color: '#38BDF8' }]}>
+                👁️ {governanceStats.authorizedViewers - governanceStats.adminCount}
+              </Text>
+              <Text style={styles.statLabel}>Somente Consulta</Text>
+            </View>
+            <View style={styles.statBadge}>
+              <Text style={[styles.statNumber, { color: '#F87171' }]}>
+                ⛔ {governanceStats.blockedCount}
+              </Text>
+              <Text style={styles.statLabel}>Sem Privilégio (Bloqueados)</Text>
+            </View>
+          </View>
+          {governanceStats.adminNames.length > 0 && (
+            <Text style={styles.adminListHint} numberOfLines={2}>
+              👑 Admins ativos: {governanceStats.adminNames.join(' • ')}
+            </Text>
+          )}
         </View>
 
         {/* Input Form */}
         {!shareUrl ? (
           <View style={styles.form}>
-            <Text style={styles.label}>ENTER SECURITY PASSPHRASE</Text>
+            <Text style={styles.label}>SENHA DE CRIPTOGRAFIA E2EE DA SALA</Text>
             <TextInput
               style={styles.input}
               secureTextEntry
               value={passphrase}
               onChangeText={setPassphrase}
-              placeholder="e.g. mermão-this-is-the-way-2026"
+              placeholder="ex: sekundo-sala-segura-2026"
               placeholderTextColor="#4F5E74"
             />
             <Text style={styles.inputSub}>
-              Choose a strong password. This will derive the AES-256 key on the device.
+              Escolha uma senha forte. Ela deriva a chave AES-256-GCM local para o link e para a sincronização simultânea.
             </Text>
 
             <Pressable
@@ -114,13 +277,15 @@ export default function ShareEvent() {
               {generating ? (
                 <ActivityIndicator size="small" color="#12151C" />
               ) : (
-                <Text style={styles.primaryBtnText}>Encrypt & Generate URL</Text>
+                <Text style={styles.primaryBtnText}>🔐 Criptografar & Gerar Link Simultâneo</Text>
               )}
             </Pressable>
           </View>
         ) : (
           <View style={styles.resultContainer}>
-            <Text style={styles.label}>YOUR SHARABLE LINK IS READY</Text>
+            <Text style={styles.label}>
+              LINK COMPARTILHÁVEL PRONTO {roomId ? `• SALA: ${roomId}` : ''}
+            </Text>
             
             <View style={styles.urlDisplay}>
               <Text style={styles.urlText} numberOfLines={2}>
@@ -131,17 +296,24 @@ export default function ShareEvent() {
             <View style={styles.resultActions}>
               <Pressable onPress={handleCopy} style={styles.copyBtn}>
                 <Text style={styles.copyBtnText}>
-                  {copied ? '✓ Copied' : 'Copy to Clipboard'}
+                  {copied ? '✓ Copiado!' : '📋 Copiar Link'}
                 </Text>
               </Pressable>
               
               <Pressable onPress={() => setShareUrl(null)} style={styles.resetBtn}>
-                <Text style={styles.resetBtnText}>New Password</Text>
+                <Text style={styles.resetBtnText}>Nova Senha</Text>
               </Pressable>
             </View>
           </View>
         )}
       </View>
+
+      <PrivilegeMatrixModal
+        visible={showPrivilegeModal}
+        onClose={() => setShowPrivilegeModal(false)}
+        participants={privilegeRoster}
+        onChangeParticipants={handleUpdatePrivilegeRoster}
+      />
     </SafeAreaView>
   );
 }
@@ -217,6 +389,70 @@ const styles = StyleSheet.create({
     color: '#A9B4C5',
     fontSize: 12,
     lineHeight: 18,
+  },
+  governanceBox: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 14,
+    marginBottom: 20,
+    gap: 10,
+  },
+  governanceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  governanceTitle: {
+    color: '#F8FAFC',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  managePrivBtn: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#60A5FA',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  managePrivBtnText: {
+    color: '#BAE6FD',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  governanceStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statBadge: {
+    flex: 1,
+    backgroundColor: '#090D16',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    padding: 8,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  statLabel: {
+    color: '#94A3B8',
+    fontSize: 9.5,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  adminListHint: {
+    color: '#FDE68A',
+    fontSize: 11,
+    fontWeight: '600',
   },
   form: {
     width: '100%',

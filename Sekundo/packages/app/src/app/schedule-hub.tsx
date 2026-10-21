@@ -37,7 +37,13 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import * as storage from '../storage/localStorage';
 import { PrivilegeMatrixModal } from '../components/PrivilegeMatrixModal';
+import { ActivityLogModal } from '../components/audit/ActivityLogModal';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
+import {
+  loadPersistedActivityLog,
+  recordPersistedActivityEvent,
+} from '../storage/activityLogStore';
+import type { ActivityLogEntry } from '@sekundo/core';
 import {
   exportFullSiteOmniCsvFromStorage,
   commitOmniCsvBundleToStorage,
@@ -212,6 +218,8 @@ export default function ScheduleHubConsole() {
   const [participantSearch, setParticipantSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'schedule' | 'territories'>('schedule');
   const [showPrivilegeMatrixModal, setShowPrivilegeMatrixModal] = useState(false);
+  const [showActivityLogModal, setShowActivityLogModal] = useState(false);
+  const [activityLogEntries, setActivityLogEntries] = useState<ActivityLogEntry[]>([]);
   const [lastAutoAssignSummaryText, setLastAutoAssignSummaryText] = useState<string | null>(null);
 
   // Rehearsal Timer State
@@ -283,10 +291,11 @@ export default function ScheduleHubConsole() {
     let mounted = true;
     (async () => {
       try {
-        const [savedPrivs, savedSched, savedTerr] = await Promise.all([
+        const [savedPrivs, savedSched, savedTerr, savedAudit] = await Promise.all([
           loadSavedPrivilegeParticipants(),
           loadSavedScheduleRegistry(),
           loadSavedTerritoryRegistry(),
+          loadPersistedActivityLog(eventId || 'global'),
         ]);
         if (!mounted) return;
         if (savedPrivs && savedPrivs.length > 0) {
@@ -297,6 +306,9 @@ export default function ScheduleHubConsole() {
         }
         if (savedTerr && savedTerr.length > 0) {
           setTerritoryRegistry(savedTerr);
+        }
+        if (savedAudit) {
+          setActivityLogEntries(savedAudit);
         }
       } catch {
         // ignore
@@ -336,6 +348,20 @@ export default function ScheduleHubConsole() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.localStorage.setItem(PRIVILEGE_DIRECTORY_STORAGE_KEY, JSON.stringify(updated));
     }
+    recordPersistedActivityEvent({
+      eventId: eventId || 'global',
+      actorId: 'admin-local',
+      actorName: myParticipantName || 'Coordenador Admin',
+      actorGroup: 'Administração',
+      actorRole: 'ADMIN_SEAL',
+      actionType: 'PRIVILEGE_UPDATED',
+      targetSheet: 'PRIVILEGIOS',
+      summary: `Matriz de Privilégios / Selo Admin atualizada (${
+        updated.filter((p) => p.hasAdminSeal).length
+      } c/ Selo Admin).`,
+    })
+      .then(({ updatedLog }) => setActivityLogEntries(updatedLog))
+      .catch(() => undefined);
   };
 
   // Auto-Assign Designations using the Privilege Matrix & FIFO Rotation
@@ -871,6 +897,16 @@ export default function ScheduleHubConsole() {
             {...({ title: `Matriz de Privilégios (${activeDirectory.length})` } as any)}
           >
             <Text style={[styles.cadCommandBtnText, { color: '#090D16' }]}>🛡️</Text>
+          </Pressable>
+
+          <Pressable
+            testID="schedule-btn-activity-log"
+            onPress={() => setShowActivityLogModal(true)}
+            style={[styles.cadCommandBtn, styles.cadBtnBlue]}
+            accessibilityLabel="Log de Atividades"
+            {...({ title: `Log de Atividades Imutável (${activityLogEntries.length})` } as any)}
+          >
+            <Text style={styles.cadCommandBtnText}>📜</Text>
           </Pressable>
 
           <Pressable
@@ -1640,6 +1676,28 @@ export default function ScheduleHubConsole() {
         onAutoAssignCurrentWeek={(strict) => handleRunAutoAssign('current_week', strict)}
         onAutoAssignAllWeeks={(strict) => handleRunAutoAssign('all_weeks', strict)}
         lastAutoAssignSummaryText={lastAutoAssignSummaryText}
+      />
+
+      <ActivityLogModal
+        visible={showActivityLogModal}
+        onClose={() => setShowActivityLogModal(false)}
+        eventName={activeUnitName}
+        entries={activityLogEntries}
+        onlinePeers={[]}
+        onExportLogRecorded={() => {
+          recordPersistedActivityEvent({
+            eventId: eventId || 'global',
+            actorId: 'admin-local',
+            actorName: myParticipantName || 'Coordenador Admin',
+            actorGroup: 'Administração',
+            actorRole: 'ADMIN_SEAL',
+            actionType: 'CSV_EXPORTED',
+            targetSheet: 'GERAL',
+            summary: 'Exportou o Log de Atividades em CSV.',
+          })
+            .then(({ updatedLog }) => setActivityLogEntries(updatedLog))
+            .catch(() => undefined);
+        }}
       />
 
       {/* ================================================================= */}
