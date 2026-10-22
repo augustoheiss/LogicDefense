@@ -369,7 +369,7 @@ export default function AIChatScreen() {
     return (
       <ProRequiredView
         onBack={() => router.back()}
-        onOpenSettings={() => router.push('/coin/settings')}
+        onOpenSettings={() => router.push('/coin/settings' as any)}
         onShowPaywall={() => {
           router.back();
           setTimeout(() => setShowPaywall(true), 150);

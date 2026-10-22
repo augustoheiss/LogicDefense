@@ -305,15 +305,29 @@ export function verifyParticipantAdmission(
 
   if (policy.requirePinMatch) {
     const expectedPin = (matched.accessPin || '').trim();
-    if (expectedPin && rawPin !== expectedPin) {
-      return {
-        allowed: false,
-        role: 'UNAUTHORIZED',
-        rejectionReason: 'PIN_MISMATCH',
-        matchedParticipant: matched,
-        errorMessage:
-          'PIN de cadastro inválido. Verifique o PIN com o Administrador da planilha.',
-      };
+    if (expectedPin) {
+      if (rawPin !== expectedPin) {
+        return {
+          allowed: false,
+          role: 'UNAUTHORIZED',
+          rejectionReason: 'PIN_MISMATCH',
+          matchedParticipant: matched,
+          errorMessage:
+            'PIN de cadastro inválido. Verifique o PIN com o Administrador da planilha.',
+        };
+      }
+    } else if (matched.pinVerifierHash) {
+      const candidateHash = computePinVerifierHash(rawPin, matched.id);
+      if (candidateHash !== matched.pinVerifierHash) {
+        return {
+          allowed: false,
+          role: 'UNAUTHORIZED',
+          rejectionReason: 'PIN_MISMATCH',
+          matchedParticipant: matched,
+          errorMessage:
+            'PIN de cadastro inválido. Verifique o PIN com o Administrador da planilha.',
+        };
+      }
     }
   }
 
@@ -332,7 +346,8 @@ export function verifyParticipantAdmission(
     confirmedAt: nowIso,
     lastActiveAt: nowIso,
     isPinLocked: false,
-    pinVerifierHash: computePinVerifierHash(rawPin || matched.accessPin || '', matched.id),
+    pinVerifierHash:
+      matched.pinVerifierHash || computePinVerifierHash(rawPin || matched.accessPin || '', matched.id),
     permissions: buildPermissionsForRole(role, policy),
   };
 

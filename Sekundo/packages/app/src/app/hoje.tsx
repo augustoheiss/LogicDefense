@@ -265,7 +265,7 @@ export default function HojeCockpitScreen() {
     <SafeAreaView style={styles.cadViewport}>
       {/* Top AutoCAD Icon-Only Ribbon (Zero Horizontal Overflow on 390px Mobile!) */}
       <View style={styles.topRibbon}>
-        <MultiEngineSwitcherBar activeEngine="hoje" />
+        <MultiEngineSwitcherBar activeRoute="hoje" />
 
         <View style={styles.headerActions}>
           <TouchableOpacity

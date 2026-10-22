@@ -995,7 +995,7 @@ export default function TransactionsScreen() {
                       'Deseja ir para as Configurações para ativar sua chave de licença ou ver os planos?'
                     );
                     if (goToSettings) {
-                      router.push('/coin/settings');
+                      router.push('/coin/settings' as any);
                     }
                   } else {
                     Alert.alert(
@@ -1003,13 +1003,13 @@ export default function TransactionsScreen() {
                       'O Assistente de IA financeiro exige uma Chave de Licença PRO ativa. Ative sua chave nas Configurações.',
                       [
                         { text: 'Cancelar', style: 'cancel' },
-                        { text: 'Ativar Licença', onPress: () => router.push('/coin/settings') },
+                        { text: 'Ativar Licença', onPress: () => router.push('/coin/settings' as any) },
                         { text: 'Ver Planos', onPress: () => setShowPaywall(true) }
                       ]
                     );
                   }
                 } else {
-                  router.push('/coin/chat');
+                  router.push('/coin/chat' as any);
                 }
               }}
             >

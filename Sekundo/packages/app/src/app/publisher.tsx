@@ -98,7 +98,7 @@ export default function PublisherModeScreen() {
   const fallbackEvent =
     events.find((e) => e.config.id === rawEventId) ||
     events.find((e) => e.config.id === 'seed-territorios-s13') ||
-    events.find((e) => (e.config.engines || []).includes('territory_logistics')) ||
+    events.find((e) => (e.config.activeEngines || []).includes('territory_logistics')) ||
     events[0] ||
     null;
   const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-s13';
@@ -1079,7 +1079,7 @@ export default function PublisherModeScreen() {
                                     lng: unit.lng,
                                     streetName: street.streetName,
                                     numberOrComplement: unit.numberOrComplement,
-                                    label: unit.fullLabel,
+                                    label: `${unit.street || street.streetName}, ${unit.numberOrComplement}`,
                                     city: defaultCity,
                                     originLat: userLocation?.lat,
                                     originLng: userLocation?.lng,

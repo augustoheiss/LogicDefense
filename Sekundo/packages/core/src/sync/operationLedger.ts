@@ -115,6 +115,26 @@ export function applyOperationToRegistry(
   registry: FlatSkeletonEntry[],
   op: LedgerOperation
 ): FlatSkeletonEntry[] {
+  if (op.field === '__node_delete__') {
+    if (op.newValue === true) {
+      return registry.filter((entry) => entry.key !== op.nodeKey);
+    }
+    return registry;
+  }
+
+  if (op.field === '__node_upsert__' && op.newValue && typeof op.newValue === 'object') {
+    const incomingNode = op.newValue as FlatSkeletonEntry;
+    const exists = registry.some((entry) => entry.key === op.nodeKey);
+    if (!exists) {
+      return [...registry, { ...incomingNode, meta: { ...(incomingNode.meta || {}) } }];
+    }
+    return registry.map((entry) =>
+      entry.key === op.nodeKey
+        ? { ...entry, ...incomingNode, meta: { ...(entry.meta || {}), ...(incomingNode.meta || {}) } }
+        : entry
+    );
+  }
+
   const nextRegistry = registry.map((entry) => {
     if (entry.key !== op.nodeKey) return entry;
 
@@ -368,4 +388,94 @@ export function createP2PSyncMessage(
     operations,
     sentAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Computes fine-grained HLC `LedgerOperation`s representing the exact attribute-level
+ * differences between `prevRegistry` and `nextRegistry`.
+ */
+export function diffSkeletonToLedgerOperations(
+  eventId: string,
+  prevRegistry: FlatSkeletonEntry[],
+  nextRegistry: FlatSkeletonEntry[],
+  authorId: string,
+  authorName?: string
+): LedgerOperation[] {
+  const ops: LedgerOperation[] = [];
+  const prevMap = new Map<string, FlatSkeletonEntry>();
+  for (const entry of prevRegistry || []) {
+    prevMap.set(entry.key, entry);
+  }
+  const nextKeys = new Set<string>();
+  let seq = 0;
+  const nowIso = new Date().toISOString();
+
+  for (const nextEntry of nextRegistry || []) {
+    nextKeys.add(nextEntry.key);
+    const prevEntry = prevMap.get(nextEntry.key);
+    if (!prevEntry) {
+      ops.push(
+        createLedgerOperation(eventId, nextEntry.key, '__node_upsert__', nextEntry, authorId, {
+          authorName,
+          timestamp: nowIso,
+          sequence: seq++,
+        })
+      );
+      continue;
+    }
+
+    if ((nextEntry.value ?? '') !== (prevEntry.value ?? '')) {
+      ops.push(
+        createLedgerOperation(eventId, nextEntry.key, 'value', nextEntry.value ?? '', authorId, {
+          prevValue: prevEntry.value ?? '',
+          authorName,
+          timestamp: nowIso,
+          sequence: seq++,
+        })
+      );
+    }
+
+    if ((nextEntry.label ?? '') !== (prevEntry.label ?? '')) {
+      ops.push(
+        createLedgerOperation(eventId, nextEntry.key, 'label', nextEntry.label ?? '', authorId, {
+          prevValue: prevEntry.label ?? '',
+          authorName,
+          timestamp: nowIso,
+          sequence: seq++,
+        })
+      );
+    }
+
+    const prevMeta = (prevEntry.meta || {}) as Record<string, unknown>;
+    const nextMeta = (nextEntry.meta || {}) as Record<string, unknown>;
+    const allMetaKeys = new Set([...Object.keys(prevMeta), ...Object.keys(nextMeta)]);
+    for (const metaKey of allMetaKeys) {
+      if (JSON.stringify(prevMeta[metaKey]) !== JSON.stringify(nextMeta[metaKey])) {
+        const fieldName = metaKey === 'worked' ? 'worked' : `meta.${metaKey}`;
+        ops.push(
+          createLedgerOperation(eventId, nextEntry.key, fieldName, nextMeta[metaKey], authorId, {
+            prevValue: prevMeta[metaKey],
+            authorName,
+            timestamp: nowIso,
+            sequence: seq++,
+          })
+        );
+      }
+    }
+  }
+
+  for (const prevEntry of prevRegistry || []) {
+    if (!nextKeys.has(prevEntry.key)) {
+      ops.push(
+        createLedgerOperation(eventId, prevEntry.key, '__node_delete__', true, authorId, {
+          prevValue: prevEntry,
+          authorName,
+          timestamp: nowIso,
+          sequence: seq++,
+        })
+      );
+    }
+  }
+
+  return ops;
 }

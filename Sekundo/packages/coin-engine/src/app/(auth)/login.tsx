@@ -130,7 +130,7 @@ export default function LoginScreen() {
       setError(result.error);
       notification(NotificationFeedbackType.Error);
     } else {
-      router.replace('/coin');
+      router.replace('/coin' as any);
     }
   }, [email, password, auth, router, impact, notification]);
 
@@ -251,7 +251,7 @@ export default function LoginScreen() {
             style={styles.footer}
           >
             <Text style={styles.footerText}>Ainda não tem conta? </Text>
-            <Pressable onPress={() => router.replace('/coin/register')}>
+            <Pressable onPress={() => router.replace('/coin/register' as any)}>
               <Text style={styles.footerLink}>Criar conta</Text>
             </Pressable>
           </Animated.View>
@@ -265,7 +265,7 @@ export default function LoginScreen() {
               onPress={() => {
                 impact(ImpactFeedbackStyle.Light);
                 auth.enterGuestMode();
-                router.replace('/coin');
+                router.replace('/coin' as any);
               }}
             >
               <Text style={styles.guestLinkText}>

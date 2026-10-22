@@ -668,7 +668,7 @@ export default function HojeScreen() {
             onNavigateCharts={() => router.push('/coin/charts' as any)}
             onNavigateMetrics={() => router.push('/coin/metrics' as any)}
             onNavigateSettings={() => router.push('/coin/settings' as any)}
-            onNavigateChat={() => router.push('/coin/chat')}
+            onNavigateChat={() => router.push('/coin/chat' as any)}
             onNextActionPress={handleNextActionPress}
             onUpdateDashboardConfig={db.updateDashboardConfig}
             renderToolContent={renderCadToolContent}
@@ -725,7 +725,7 @@ export default function HojeScreen() {
 
               <Pressable
                 style={styles.chatHeaderButton}
-                onPress={() => router.push('/coin/chat')}
+                onPress={() => router.push('/coin/chat' as any)}
               >
                 <Text style={styles.chatButtonEmoji}>✨</Text>
                 <Text style={styles.chatButtonText}>IA Assistente</Text>

@@ -207,7 +207,12 @@ export function applyIncomingCollabPacket(
     updatedLedger = reconciled.consolidatedLedger;
   } else if (packet.kind === 'SNAPSHOT_SYNC' && Array.isArray(packet.skeleton)) {
     if (Array.isArray(packet.operations) && packet.operations.length > 0) {
-      const reconciled = reconcileLedgers(updatedLedger, packet.operations, packet.skeleton);
+      const baseRegistry = updatedSkeleton.length > 0 ? updatedSkeleton : packet.skeleton;
+      const reconciled = reconcileLedgers(updatedLedger, packet.operations, baseRegistry);
+      updatedSkeleton = reconciled.updatedRegistry;
+      updatedLedger = reconciled.consolidatedLedger;
+    } else if (updatedLedger.length > 0) {
+      const reconciled = reconcileLedgers(updatedLedger, [], packet.skeleton);
       updatedSkeleton = reconciled.updatedRegistry;
       updatedLedger = reconciled.consolidatedLedger;
     } else {

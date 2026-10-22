@@ -30,36 +30,43 @@ import { Platform } from 'react-native';
  * ⚠️ This NEVER falls back to any Assistente-Moeda URL.
  */
 function resolveApiUrl(): string {
-  // If running in browser on localhost / 127.0.0.1, prioritize local origin
+  // 1. If running in browser on localhost / 127.0.0.1:
+  //    - On Metro dev ports (8081 / 19006), route to local FastAPI port 8001
+  //    - On integrated local SIT/gateway servers (e.g. 8788, 8000, 8001), use window.location.origin
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
     const hostname = window.location.hostname;
+    const port = window.location.port;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      if (port === '8081' || port === '19006') {
+        return 'http://localhost:8001';
+      }
       return window.location.origin;
     }
   }
 
-  // Check for explicit env var (set in Expo config)
-  const envUrl = process.env.EXPO_PUBLIC_SEKUNDO_API_URL;
+  // 2. Explicit environment variable (EXPO_PUBLIC_SEKUNDO_API_URL or EXPO_PUBLIC_API_URL)
+  const envUrl = (
+    process.env.EXPO_PUBLIC_SEKUNDO_API_URL ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    ''
+  ).trim();
   if (envUrl) {
-    return envUrl.replace(/\/+$/, ''); // Strip trailing slash
+    return envUrl.replace(/\/+$/, '');
   }
 
-  // Development defaults
+  // 3. Development defaults for native emulators/simulators
   if (__DEV__) {
     if (Platform.OS === 'android') {
-      // Android emulator uses 10.0.2.2 to reach host machine
       return 'http://10.0.2.2:8001';
     }
-    // iOS simulator and web both use localhost
     return 'http://localhost:8001';
   }
 
-  // Production fallback for web
+  // 4. Production web fallback (relies on vercel.json /signal/:path* rewrite)
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
   }
 
-  // Production — must be set via EXPO_PUBLIC_SEKUNDO_API_URL
   console.warn(
     '[Sekundo] EXPO_PUBLIC_SEKUNDO_API_URL not set. PDF and signaling features will not work.'
   );

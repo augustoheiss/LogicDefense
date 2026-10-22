@@ -33,6 +33,7 @@ router = APIRouter()
 # Room TTL in seconds (5 minutes — enough for handshake; refreshed on active E2EE sync)
 ROOM_TTL = 300
 MAX_ENCRYPTED_PACKETS_PER_ROOM = 500
+MAX_CIPHER_PACKET_CHARS = 262_144
 ACTIVE_PEER_WINDOW_SECONDS = 45
 
 # In-memory rooms: { room_id: { offer, answer, candidates, encrypted_packets, next_seq, peers, created_at } }
@@ -192,6 +193,11 @@ async def post_encrypted_sync_packet(room_id: str, payload: EncryptedSyncPushPay
     _cleanup_expired()
 
     cipher = (payload.cipher_packet or "").strip()
+    if len(cipher) > MAX_CIPHER_PACKET_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail="Encrypted packet exceeds maximum allowed relay size (256 KB).",
+        )
     if not (
         cipher.startswith("SEKUNDO_COLLAB_v2:")
         or cipher.startswith("SEKUNDO_ENC_DELTA_v2:")

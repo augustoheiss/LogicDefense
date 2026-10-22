@@ -1,6 +1,9 @@
 import sys
 import os
-import pytest
+try:
+    import pytest
+except ImportError:
+    pytest = None
 from fastapi.testclient import TestClient
 
 # Add packages/backend to path
@@ -129,5 +132,52 @@ def test_multi_peer_zero_knowledge_encrypted_sync():
     inc_data = inc_res.json()
     assert len(inc_data["packets"]) == 1
     assert inc_data["packets"][0]["seq"] == 3
+
+
+def test_unified_gateway_sekundo_signaling_router():
+    """Verifies that LogicDefense Unified Gateway mounts and serves /signal/room/* identically."""
+    from fastapi import FastAPI
+    import importlib.util
+
+    gateway_router_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "backend", "routers", "sekundo_signaling_router.py")
+    )
+    spec = importlib.util.spec_from_file_location("sekundo_signaling_router", gateway_router_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    gw_app = FastAPI()
+    gw_app.include_router(mod.router, prefix="/signal")
+    gw_client = TestClient(gw_app)
+
+    rm_res = gw_client.post("/signal/room")
+    assert rm_res.status_code == 200
+    room_id = rm_res.json()["room_id"]
+
+    push_res = gw_client.post(
+        f"/signal/room/{room_id}/sync-push",
+        json={
+            "peer_id": "gw_peer_1",
+            "packet_kind": "SNAPSHOT_SYNC",
+            "cipher_packet": "SEKUNDO_COLLAB_v2:v2.salt.iv.cipher",
+        },
+    )
+    assert push_res.status_code == 200
+    assert push_res.json()["seq"] == 1
+
+    pull_res = gw_client.get(f"/signal/room/{room_id}/sync-pull?since_seq=0&peer_id=gw_peer_2")
+    assert pull_res.status_code == 200
+    assert len(pull_res.json()["packets"]) == 1
+
+
+if __name__ == "__main__":
+    test_health()
+    test_signaling_room_lifecycle()
+    test_zero_egress_no_state_cache()
+    test_multi_peer_zero_knowledge_encrypted_sync()
+    test_unified_gateway_sekundo_signaling_router()
+    print("ALL 5 BACKEND TESTS PASSED!")
+
+
 
 

@@ -176,6 +176,7 @@ export {
   decodeToken,
   buildShareURL,
   extractTokenFromURL,
+  extractRoomFromURL,
   buildHorizonPayload,
 } from './crypto/tokenGenerator';
 
@@ -344,6 +345,7 @@ export {
   synthesizeOpsFromRegistry,
   exportLedgerDelta,
   createP2PSyncMessage,
+  diffSkeletonToLedgerOperations,
 } from './sync/operationLedger';
 export type {
   LedgerOperation,

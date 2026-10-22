@@ -34,6 +34,7 @@ import { useLocalSearchParams } from 'expo-router';
 import {
   decodeToken,
   extractTokenFromURL,
+  extractRoomFromURL,
   encrypt,
   decrypt,
   skeletonTree,
@@ -101,16 +102,36 @@ export default function TokenViewer() {
   const [nodeEmail, setNodeEmail] = useState('');
   const [, setParentNodeKey] = useState<string | null>(null);
 
-  // Auto-resolve token on param load
+  // Auto-resolve token on param load or browser hash/query
   useEffect(() => {
     if (dataParam) {
       setTokenInput(dataParam);
+      return;
+    }
+    if (typeof window !== 'undefined' && window.location?.href) {
+      const fromHref = extractTokenFromURL(window.location.href);
+      if (fromHref) {
+        setTokenInput(fromHref);
+      }
     }
   }, [dataParam]);
 
+  const extractedRoomFromInput = useMemo(() => {
+    const fromInput = extractRoomFromURL(tokenInput);
+    if (fromInput) return fromInput;
+    if (typeof window !== 'undefined' && window.location?.href) {
+      return extractRoomFromURL(window.location.href) || '';
+    }
+    return '';
+  }, [tokenInput]);
+
   const effectiveRoomId = useMemo(
-    () => roomParam || payload?.roomId || (payload ? `rm_${payload.eventName}` : ''),
-    [roomParam, payload]
+    () =>
+      roomParam ||
+      extractedRoomFromInput ||
+      payload?.roomId ||
+      (payload ? `rm_${payload.eventName}` : ''),
+    [roomParam, extractedRoomFromInput, payload]
   );
 
   const eventScopeId = useMemo(
@@ -189,7 +210,7 @@ export default function TokenViewer() {
     },
   });
 
-  // Legacy 1:1 WebRTC P2P Sync hook (kept as secondary transport)
+  // Legacy 1:1 WebRTC P2P Sync hook (kept as secondary transport ONLY when RBAC roster is absent)
   const {
     connectionState,
     joinViewerHandshake,
@@ -199,7 +220,7 @@ export default function TokenViewer() {
     eventId: payload ? payload.eventName : 'viewer-session',
     role: 'viewer',
     onStateUpdate: (incomingSkeleton) => {
-      if (payload) {
+      if (payload && privilegeRoster.length === 0) {
         setPayload((prev) => (prev ? { ...prev, skeleton: incomingSkeleton } : null));
       }
     },

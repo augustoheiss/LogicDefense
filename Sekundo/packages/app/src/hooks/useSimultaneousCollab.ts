@@ -25,6 +25,7 @@ import {
   encodeEncryptedCollabPacket,
   decodeEncryptedCollabPacket,
   applyIncomingCollabPacket,
+  diffSkeletonToLedgerOperations,
 } from '@sekundo/core';
 import { API, getHeaders } from '../config/api';
 import { getOrCreateDeviceId, loadEventLedger, saveEventLedger } from '../storage/ledgerStore';
@@ -243,7 +244,7 @@ export function useSimultaneousCollab({
               cipher_packet: cipherPacket,
             }),
           });
-          if (res.ok) {
+          if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
             const data = await res.json();
             if (typeof data.active_peer_count === 'number') {
               setRemotePeerCount(Math.max(1, data.active_peer_count));
@@ -282,7 +283,7 @@ export function useSimultaneousCollab({
             headers: getHeaders(),
           }
         );
-        if (!res.ok) {
+        if (!res.ok || !(res.headers.get('content-type') || '').includes('application/json')) {
           if (!cancelled) setSyncStatus('offline_local');
           return;
         }
@@ -357,15 +358,41 @@ export function useSimultaneousCollab({
     async (
       nextSkeleton: FlatSkeletonEntry[],
       nextRoster?: ParticipantProfile[],
-      newLogEntries?: ActivityLogEntry[]
+      newLogEntries?: ActivityLogEntry[],
+      explicitOps?: LedgerOperation[]
     ) => {
-      const ledger = await loadEventLedger(stateRef.current.eventId);
+      const current = stateRef.current;
+      const existingLedger = await loadEventLedger(current.eventId);
+      const authorId = current.principal?.participantId || peerIdRef.current;
+      const authorName = current.principal?.fullName || 'Operador';
+
+      const deltaOps =
+        explicitOps && explicitOps.length > 0
+          ? explicitOps
+          : diffSkeletonToLedgerOperations(
+              current.eventId,
+              current.skeleton,
+              nextSkeleton,
+              authorId,
+              authorName
+            );
+
+      const mergedLedger =
+        deltaOps.length > 0 ? [...existingLedger, ...deltaOps] : existingLedger;
+
+      if (deltaOps.length > 0) {
+        await saveEventLedger(current.eventId, mergedLedger);
+      }
+
+      // Update stateRef skeleton immediately so subsequent edits diff against the latest state
+      stateRef.current.skeleton = nextSkeleton;
+
       await publishCollabPacket({
         kind: 'SNAPSHOT_SYNC',
         skeleton: nextSkeleton,
-        privilegeRoster: nextRoster || stateRef.current.privilegeRoster,
-        operations: ledger,
-        activityEntries: newLogEntries || stateRef.current.activityLog.slice(-20),
+        privilegeRoster: nextRoster || current.privilegeRoster,
+        operations: mergedLedger,
+        activityEntries: newLogEntries || current.activityLog.slice(-20),
       });
     },
     [publishCollabPacket]

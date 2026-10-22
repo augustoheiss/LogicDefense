@@ -153,7 +153,7 @@ export default function TerritoryMapScreen() {
   const fallbackEvent =
     events.find((e) => e.config.id === rawEventId) ||
     events.find((e) => e.config.id === 'seed-territorios-s13') ||
-    events.find((e) => (e.config.engines || []).includes('territory_logistics')) ||
+    events.find((e) => (e.config.activeEngines || []).includes('territory_logistics')) ||
     events[0] ||
     null;
   const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-s13';
@@ -2477,7 +2477,7 @@ export default function TerritoryMapScreen() {
                                       lng: unit.lng,
                                       streetName: group.streetName,
                                       numberOrComplement: unit.numberOrComplement,
-                                      label: unit.fullLabel,
+                                      label: `${unit.street || group.streetName}, ${unit.numberOrComplement}`,
                                       city: cityList[0],
                                       originLat: userLocation?.lat,
                                       originLng: userLocation?.lng,

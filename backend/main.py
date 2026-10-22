@@ -77,6 +77,11 @@ from routers.stripe_webhook_router import router as stripe_webhook_router
 app.include_router(webhook_router)
 app.include_router(stripe_webhook_router)
 
+# 6. Sekundo Zero-Knowledge Signaling & E2EE Multi-Peer Relay (/signal/*)
+from routers.sekundo_signaling_router import router as sekundo_signaling_router
+
+app.include_router(sekundo_signaling_router, prefix="/signal", tags=["Sekundo Signaling"])
+
 
 # ── Health Checks & Root Auto-Discovery ───────────────────────────────────────
 
@@ -87,7 +92,7 @@ async def health_check():
         "service": "LogicDefense Unified Gateway",
         "status": "online",
         "version": "3.0.0",
-        "modules": ["cv-maker", "assistente-moeda", "ocorrencias", "licenses", "api-keys"],
+        "modules": ["cv-maker", "assistente-moeda", "ocorrencias", "licenses", "api-keys", "sekundo-signaling"],
     }
 
 

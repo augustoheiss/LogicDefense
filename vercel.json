@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/signal/:path*",
+      "destination": "https://ocorrencias-pdf-writer.onrender.com/signal/:path*"
+    },
+    {
       "source": "/laboratorio/assistente-moeda/:path*",
       "destination": "/laboratorio/assistente-moeda/index.html"
     },

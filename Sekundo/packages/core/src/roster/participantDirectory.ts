@@ -48,6 +48,8 @@ export interface ParticipantProfile {
   hasAdminSeal?: boolean;
   /** Registration PIN / Access Code confirmed once on first entry into a shared link */
   accessPin?: string;
+  /** Deterministic FNV-1a 64-bit hex PIN verifier hash used in shared payloads so raw accessPin is never exposed */
+  pinVerifierHash?: string;
 }
 
 /**

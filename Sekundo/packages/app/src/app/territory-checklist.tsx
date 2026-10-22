@@ -78,7 +78,7 @@ export default function TerritoryChecklistScreen() {
     if (rawEventId) {
       return events.find((e) => e.config.id === rawEventId) || events[0];
     }
-    return events.find((e) => (e.config.engines || []).includes('territory_logistics')) || events[0];
+    return events.find((e) => (e.config.activeEngines || []).includes('territory_logistics')) || events[0];
   }, [events, rawEventId]);
   const eventId = event?.config.id || rawEventId;
   const { flatRegistry: rawFlatRegistry, updateNode, updateNodes, loading } = useSkeleton(eventId);
@@ -605,7 +605,7 @@ export default function TerritoryChecklistScreen() {
       {/* Top Header (Icon-Only Click-to-Reveal) */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <MultiEngineSwitcherBar activeEngine="checklist" eventId={eventId} />
+          <MultiEngineSwitcherBar activeRoute="territory-checklist" eventId={eventId} />
           <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <Pressable
               onPress={() => setShowFiltersPanel((prev) => !prev)}

@@ -323,7 +323,7 @@ export default function SkeletonEditor() {
         tools={skeletonCadTools}
         leftSlot={
           <View style={styles.actionLeft}>
-            <MultiEngineSwitcherBar activeEngine="skeleton" eventId={eventId} />
+            <MultiEngineSwitcherBar activeRoute="skeleton-editor" eventId={eventId} />
           </View>
         }
       />
@@ -341,7 +341,7 @@ export default function SkeletonEditor() {
 
         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
           {(metrics.engineId === 'territory_logistics' ||
-            (event.config.engines || []).includes('territory_logistics')) && (
+            (event.config.activeEngines || []).includes('territory_logistics')) && (
             <>
               <Pressable
                 onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
@@ -377,7 +377,7 @@ export default function SkeletonEditor() {
           )}
 
           {(metrics.engineId === 'roster_assignments' ||
-            (event.config.engines || []).includes('roster_assignments')) && (
+            (event.config.activeEngines || []).includes('roster_assignments')) && (
             <Pressable
               onPress={() => router.push(`/roster-swap?id=${eventId}`)}
               style={[

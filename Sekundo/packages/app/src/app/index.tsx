@@ -27,6 +27,8 @@ import {
   getActiveEngines,
   DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
   generateOmniMasterSampleCsv,
+  extractTokenFromURL,
+  extractRoomFromURL,
   type ParticipantProfile,
 } from '@sekundo/core';
 import { deliverFile } from '../utils/deliverFile';
@@ -66,6 +68,15 @@ export default function Dashboard() {
   const [statusToast, setStatusToast] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location?.hash?.startsWith('#/view')) {
+      const tok = extractTokenFromURL(window.location.href) || '';
+      const rm = extractRoomFromURL(window.location.href) || '';
+      const q = new URLSearchParams();
+      if (tok) q.set('data', tok);
+      if (rm) q.set('room', rm);
+      router.replace(`/view${q.toString() ? `?${q.toString()}` : ''}` as any);
+      return;
+    }
     loadSavedPrivilegeParticipants().then((loaded) => {
       if (loaded && loaded.length > 0) {
         setParticipants(loaded);

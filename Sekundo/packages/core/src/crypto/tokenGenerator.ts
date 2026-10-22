@@ -9,6 +9,7 @@ import type { EventState, RolloverSnapshot } from '../events/types';
 import type { FlatRegistry } from '../skeleton/types';
 import type { ParticipantProfile } from '../roster/participantDirectory';
 import type { ActivityLogEntry } from '../audit/activityLogEngine';
+import { computePinVerifierHash } from '../auth/privilegeAccessGuard';
 import { encryptForURL, decryptFromURL } from './symmetric';
 
 // ---------------------------------------------------------------------------
@@ -76,17 +77,28 @@ export function buildHorizonPayload(
   // Take only the most recent N snapshots
   const recentHistory = state.archive.slice(-HORIZON_WEEKS);
 
+  // Redact plaintext accessPin into deterministic pinVerifierHash so viewers cannot inspect other users' PINs
+  const sanitizedRoster: ParticipantProfile[] | undefined = options?.privilegeRoster
+    ? options.privilegeRoster.map((p) => {
+        const { accessPin, ...rest } = p;
+        const hash =
+          rest.pinVerifierHash ||
+          (accessPin ? computePinVerifierHash(accessPin, rest.id) : undefined);
+        return hash ? { ...rest, pinVerifierHash: hash } : { ...rest };
+      })
+    : undefined;
+
   return {
     eventId: state.config.id,
     eventName: state.config.name,
     eventFrequency: state.config.frequency,
     skeleton: currentSkeleton,
     recentHistory,
-    privilegeRoster: options?.privilegeRoster,
+    privilegeRoster: sanitizedRoster,
     roomId: options?.roomId,
     activityLog: options?.activityLog,
     generatedAt: new Date().toISOString(),
-    version: options?.privilegeRoster ? 2 : 1,
+    version: sanitizedRoster ? 2 : 1,
   };
 }
 
@@ -147,24 +159,75 @@ export async function decodeToken(
  */
 export function buildShareURL(baseUrl: string, token: string, roomId?: string): string {
   // Strip trailing slash
-  const base = baseUrl.replace(/\/+$/, '');
+  let base = baseUrl.replace(/\/+$/, '');
+  if (/^https?:\/\/(www\.)?heisslab\.com\.br$/i.test(base)) {
+    base = `${base}/laboratorio/sekundo`;
+  }
   const roomQuery = roomId ? `&room=${encodeURIComponent(roomId)}` : '';
   return `${base}/#/view?data=${token}${roomQuery}`;
 }
 
 /**
  * Extract the encrypted token from a shareable URL.
+ * Supports `#/view?data=...`, `#data=...`, and `?data=...` query strings.
  *
  * @param url - The full URL string.
  * @returns The token string, or null if not found.
  */
 export function extractTokenFromURL(url: string): string | null {
   try {
-    const hashPart = url.split('#')[1];
-    if (!hashPart) return null;
+    const trimmed = (url || '').trim();
+    if (!trimmed) return null;
 
-    const params = new URLSearchParams(hashPart.replace(/^\/view\?/, ''));
-    return params.get('data');
+    if (trimmed.includes('#')) {
+      const hashPart = trimmed.split('#')[1] || '';
+      const cleanHash = hashPart.replace(/^\/?view\??/, '');
+      const hashParams = new URLSearchParams(cleanHash);
+      const fromHash = hashParams.get('data');
+      if (fromHash) return fromHash;
+    }
+
+    if (trimmed.includes('?')) {
+      const queryPart = trimmed.split('#')[0].split('?')[1] || '';
+      const queryParams = new URLSearchParams(queryPart);
+      const fromQuery = queryParams.get('data');
+      if (fromQuery) return fromQuery;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract the collaborative room ID (`room`) from a shareable URL.
+ * Supports `#/view?data=...&room=...` and `?room=...` query strings.
+ *
+ * @param url - The full URL string.
+ * @returns The room ID string, or null if not found.
+ */
+export function extractRoomFromURL(url: string): string | null {
+  try {
+    const trimmed = (url || '').trim();
+    if (!trimmed) return null;
+
+    if (trimmed.includes('#')) {
+      const hashPart = trimmed.split('#')[1] || '';
+      const cleanHash = hashPart.replace(/^\/?view\??/, '');
+      const hashParams = new URLSearchParams(cleanHash);
+      const fromHash = hashParams.get('room');
+      if (fromHash) return fromHash;
+    }
+
+    if (trimmed.includes('?')) {
+      const queryPart = trimmed.split('#')[0].split('?')[1] || '';
+      const queryParams = new URLSearchParams(queryPart);
+      const fromQuery = queryParams.get('room');
+      if (fromQuery) return fromQuery;
+    }
+
+    return null;
   } catch {
     return null;
   }

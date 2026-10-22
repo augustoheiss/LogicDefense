@@ -204,7 +204,7 @@ export default function RegisterScreen() {
               ]}
               onPress={() => {
                 impact(ImpactFeedbackStyle.Medium);
-                router.replace('/coin/login');
+                router.replace('/coin/login' as any);
               }}
             >
               <LinearGradient
@@ -359,7 +359,7 @@ export default function RegisterScreen() {
             style={styles.footer}
           >
             <Text style={styles.footerText}>Já tem uma conta? </Text>
-            <Pressable onPress={() => router.replace('/coin/login')}>
+            <Pressable onPress={() => router.replace('/coin/login' as any)}>
               <Text style={styles.footerLink}>Entrar</Text>
             </Pressable>
           </Animated.View>
@@ -373,7 +373,7 @@ export default function RegisterScreen() {
               onPress={() => {
                 impact(ImpactFeedbackStyle.Light);
                 auth.enterGuestMode();
-                router.replace('/coin');
+                router.replace('/coin' as any);
               }}
             >
               <Text style={styles.guestLinkText}>

@@ -19,7 +19,12 @@ import {
   ensureParticipantPrivilegeMatrix,
   hasActivePrivileges,
   encodeEncryptedCollabPacket,
+  buildProgramacaoReuniaoRegistry,
+  buildTerritoriosS13HistoricalRegistry,
+  buildCombinedMultiEngineSkeleton,
+  PROGRAMACAO_UNIT_NAME,
   type ParticipantProfile,
+  type EventState,
 } from '@sekundo/core';
 import {
   loadSavedPrivilegeParticipants,
@@ -38,9 +43,41 @@ export default function ShareEvent() {
   const { id } = useLocalSearchParams();
   const eventId = typeof id === 'string' ? id : '';
 
-  const { events } = useLocalEvent();
-  const event = events.find((e) => e.config.id === eventId);
-  const { flatRegistry, loading: skeletonLoading } = useSkeleton(eventId);
+  const { events, loading: eventsLoading } = useLocalEvent();
+  const matchedEvent = events.find((e) => e.config.id === eventId) || events[0];
+  const effectiveEventId = matchedEvent?.config?.id || eventId || 'sekundo-default-event';
+  const { flatRegistry, loading: skeletonLoading } = useSkeleton(effectiveEventId);
+
+  const event: EventState = useMemo(() => {
+    if (matchedEvent) return matchedEvent;
+    const nowIso = new Date().toISOString();
+    return {
+      config: {
+        id: effectiveEventId,
+        name: PROGRAMACAO_UNIT_NAME,
+        frequency: 'weekly',
+        startDate: nowIso.slice(0, 10),
+        skeletonRoots: ['01', '02', '03'],
+        autoRollover: true,
+        lastRolloverDate: nowIso.slice(0, 10),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      },
+      lifecycle: 'active',
+      archive: [],
+    };
+  }, [matchedEvent, effectiveEventId]);
+
+  const effectiveRegistry = useMemo(() => {
+    if (flatRegistry && flatRegistry.length > 0) return flatRegistry;
+    return buildCombinedMultiEngineSkeleton({
+      scheduleRegistry: buildProgramacaoReuniaoRegistry(
+        undefined,
+        DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
+      ),
+      territoryRegistry: buildTerritoriosS13HistoricalRegistry(),
+    });
+  }, [flatRegistry]);
 
   const [passphrase, setPassphrase] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -80,7 +117,7 @@ export default function ShareEvent() {
     };
   }, [privilegeRoster]);
 
-  if (skeletonLoading || !event) {
+  if (eventsLoading || skeletonLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFB800" />
@@ -103,7 +140,7 @@ export default function ShareEvent() {
       let activeRoomId = `rm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       try {
         const res = await fetch(API.signal.createRoom, { method: 'POST' });
-        if (res.ok) {
+        if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
           const data = await res.json();
           if (data?.room_id) activeRoomId = data.room_id;
         }
@@ -113,7 +150,7 @@ export default function ShareEvent() {
 
       // 2. Record link creation in the immutable Activity Log
       const { updatedLog } = await recordPersistedActivityEvent({
-        eventId: eventId || 'global',
+        eventId: effectiveEventId,
         actorId: 'admin-host',
         actorName: 'Coordenador Host',
         actorGroup: 'Administração',
@@ -124,7 +161,7 @@ export default function ShareEvent() {
       });
 
       // 3. Generate encrypted Base64URL token with embedded Privilege Roster + Room ID + Audit Log
-      const token = await generateToken(event, flatRegistry, passphrase, {
+      const token = await generateToken(event, effectiveRegistry, passphrase, {
         privilegeRoster,
         roomId: activeRoomId,
         activityLog: updatedLog,
@@ -132,13 +169,13 @@ export default function ShareEvent() {
 
       // 4. Push initial encrypted SNAPSHOT_SYNC packet to the room (best-effort)
       try {
-        const currentLog = await loadPersistedActivityLog(eventId || 'global');
+        const currentLog = await loadPersistedActivityLog(effectiveEventId);
         const cipherPacket = await encodeEncryptedCollabPacket(
           {
             protocol: 'SEKUNDO_COLLAB_v2',
             packetId: `pkt_init_${Date.now().toString(36)}`,
             roomId: activeRoomId,
-            eventId: eventId || 'global',
+            eventId: effectiveEventId,
             sentAt: new Date().toISOString(),
             kind: 'SNAPSHOT_SYNC',
             author: {
@@ -149,7 +186,7 @@ export default function ShareEvent() {
               role: 'ADMIN_SEAL',
               hasAdminSeal: true,
             },
-            skeleton: Object.values(flatRegistry),
+            skeleton: Object.values(effectiveRegistry),
             privilegeRoster,
             activityEntries: currentLog.slice(-40),
           },
@@ -319,11 +356,13 @@ export default function ShareEvent() {
 }
 
 function PlatformShareUrlBase(): string {
-  if (typeof window !== 'undefined') {
-    // Matches the current hosting URL (works in local dev, staging, prod)
-    return `${window.location.protocol}//${window.location.host}`;
+  if (typeof window !== 'undefined' && window.location) {
+    const basePath = window.location.pathname.startsWith('/laboratorio/sekundo')
+      ? '/laboratorio/sekundo'
+      : '';
+    return `${window.location.protocol}//${window.location.host}${basePath}`;
   }
-  return 'https://sekundo.app';
+  return 'https://heisslab.com.br/laboratorio/sekundo';
 }
 
 const styles = StyleSheet.create({

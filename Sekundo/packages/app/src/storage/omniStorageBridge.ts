@@ -836,10 +836,9 @@ export async function commitOmniCsvBundleToStorage(
     for (const ev of bundle.events) {
       if (ev.id === primaryEventId || ev.id === HUB_PRIMARY_EVENT_ID) continue;
 
-      const evEngines = (ev.engines.filter((e) => validEngineSet.has(e)) as EngineId[]) || [
-        'custom',
-      ];
-      const normalizedEvEngines: EngineId[] = evEngines.length > 0 ? evEngines : ['custom'];
+      const evEngines = ev.engines.filter((e) => validEngineSet.has(e)) as EngineId[];
+      const normalizedEvEngines: EngineId[] =
+        evEngines.length > 0 ? evEngines : (['roster_assignments'] as EngineId[]);
       const finalId = ev.id || `evt-${normalizedEvEngines[0]}`;
 
       if (!existingIds.includes(finalId)) {
@@ -853,7 +852,7 @@ export async function commitOmniCsvBundleToStorage(
           ...cfg,
           id: finalId,
           engineId: normalizedEvEngines[0],
-          engines: normalizedEvEngines,
+          activeEngines: normalizedEvEngines,
         };
         const st = eventContainer.createEventState(finalConfig);
         await localStore.saveEventState(finalId, st);
@@ -868,7 +867,7 @@ export async function commitOmniCsvBundleToStorage(
               ...existingEvState.config,
               name: ev.name || existingEvState.config.name,
               engineId: normalizedEvEngines[0],
-              engines: normalizedEvEngines,
+              activeEngines: normalizedEvEngines,
             },
           });
         }
@@ -891,9 +890,10 @@ export async function commitOmniCsvBundleToStorage(
       if (!st) continue;
       const skel = (await localStore.loadSkeleton(id)) || [];
       const engs = getActiveEngines(st.config);
+      const firstType = skel[0]?.type as string | undefined;
       const childNodes =
         skel.length > 1 &&
-        (skel[0].type === 'group' || skel[0].type === 'root' || skel[0].type === 'header')
+        (firstType === 'group' || firstType === 'root' || firstType === 'header')
           ? skel.slice(1)
           : skel;
       mirrorList.push({

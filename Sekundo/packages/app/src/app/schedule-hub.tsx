@@ -81,6 +81,7 @@ import {
   importOmniCsvBundle,
   isOmniCsvText,
   selectEnginePartitionNodes,
+  buildCombinedMultiEngineSkeleton,
   autoAssignScheduleRegistry,
   inferSlotRequiredCapability,
   ensureParticipantPrivilegeMatrix,
@@ -646,20 +647,37 @@ export default function ScheduleHubConsole() {
     setStatusBanner(`✅ Designação "${slot.label}" atualizada para ${person.name}!`);
   };
 
-  const handleSaveSeedToAppEvents = async () => {
+  const handleSaveSeedToAppEvents = async (): Promise<string | null> => {
     try {
       const scheduleEventName = `${activeUnitName} — Programação Semanal`;
-      let schedEvent = events.find((e) => e.config.name === scheduleEventName);
+      let schedEvent =
+        (eventId ? events.find((e) => e.config.id === eventId) : undefined) ||
+        events.find((e) => e.config.name === scheduleEventName);
       if (!schedEvent) {
         schedEvent = await addEvent(scheduleEventName, 'weekly', ['01', '02', '03'], [
           'roster_assignments',
+          'territory_logistics',
           'live_production_ros',
         ]);
       }
-      await storage.saveSkeleton(schedEvent.config.id, activeScheduleRegistry);
-      setStatusBanner('✅ Programação e Territórios salvos no App Sekundo!');
+      const combinedSkeleton = buildCombinedMultiEngineSkeleton({
+        scheduleRegistry: activeScheduleRegistry,
+        territoryRegistry,
+      });
+      await storage.saveSkeleton(schedEvent.config.id, combinedSkeleton);
+      await savePrivilegeParticipants(activeDirectory);
+      setStatusBanner('✅ Programação, Territórios e Privilégios salvos no App Sekundo!');
+      return schedEvent.config.id;
     } catch (e: any) {
       setStatusBanner(`❌ Erro ao salvar: ${e.message}`);
+      return null;
+    }
+  };
+
+  const handleShareScheduleLive = async () => {
+    const savedEventId = await handleSaveSeedToAppEvents();
+    if (savedEventId) {
+      router.push(`/share?id=${encodeURIComponent(savedEventId)}` as any);
     }
   };
 
@@ -843,7 +861,7 @@ export default function ScheduleHubConsole() {
         ]}
       >
         <MultiEngineSwitcherBar
-          activeEngine="schedule"
+          activeRoute="schedule-hub"
           eventId={eventId}
           onOpenPrivileges={() => setShowPrivilegeMatrixModal(true)}
         />
@@ -959,12 +977,24 @@ export default function ScheduleHubConsole() {
 
           <Pressable
             testID="schedule-btn-save"
-            onPress={handleSaveSeedToAppEvents}
+            onPress={() => {
+              handleSaveSeedToAppEvents();
+            }}
             style={styles.cadCommandBtn}
             accessibilityLabel="Salvar no App Sekundo"
             {...({ title: 'Salvar no App Sekundo' } as any)}
           >
             <Text style={styles.cadCommandBtnText}>💾</Text>
+          </Pressable>
+
+          <Pressable
+            testID="schedule-btn-share-live"
+            onPress={handleShareScheduleLive}
+            style={[styles.cadCommandBtn, styles.cadBtnEmerald]}
+            accessibilityLabel="Compartilhar Link Simultâneo E2EE"
+            {...({ title: 'Compartilhar Link Simultâneo E2EE (Sala Multi-Usuário)' } as any)}
+          >
+            <Text style={styles.cadCommandBtnText}>🔗</Text>
           </Pressable>
 
           <Pressable

@@ -16,6 +16,11 @@ import {
   decodeEncryptedCollabPacket,
   applyIncomingCollabPacket,
   createLedgerOperation,
+  diffSkeletonToLedgerOperations,
+  buildHorizonPayload,
+  buildShareURL,
+  extractTokenFromURL,
+  extractRoomFromURL,
 } from '../index';
 
 describe('Sekundo Phase 7 — Roster-Gated Identity Confirmation, RBAC Selo Admin, Activity Log & Simultaneous Collab', () => {
@@ -308,5 +313,143 @@ describe('Sekundo Phase 7 — Roster-Gated Identity Confirmation, RBAC Selo Admi
     expect(acceptedOutcome.accepted).toBe(true);
     expect(acceptedOutcome.updatedSkeleton[0].value).toBe('Editado pelo Admin 01');
     expect(verifyActivityLogChain(acceptedOutcome.updatedActivityLog).valid).toBe(true);
+  });
+
+  it('State 8 (Zero-Trust PIN Redaction in HorizonPayload): redacts raw accessPin into pinVerifierHash and verifies admission accurately', () => {
+    const payload = buildHorizonPayload(
+      {
+        config: {
+          id: 'evt-pin-redact',
+          name: 'Programação',
+          frequency: 'weekly',
+          startDate: '2026-01-01',
+          skeletonRoots: ['01'],
+          autoRollover: true,
+          lastRolloverDate: '2026-01-01',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+        lifecycle: 'active',
+        archive: [],
+      },
+      [],
+      {
+        privilegeRoster: DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+        roomId: 'rm_redact_test',
+      }
+    );
+
+    // No participant in shared payload may expose raw accessPin
+    for (const p of payload.privilegeRoster || []) {
+      expect(p.accessPin).toBeUndefined();
+      expect(p.pinVerifierHash).toMatch(/^pvh_[0-9a-f]{16}$/);
+    }
+    expect(JSON.stringify(payload.privilegeRoster)).not.toContain('"accessPin"');
+
+    // Admission verification against redacted roster succeeds with valid PIN and rejects wrong PIN
+    const validAdmin = verifyParticipantAdmission(
+      {
+        fullName: 'Participante 01',
+        groupTag: 'Grupo 1',
+        pin: '1001',
+        eventId: 'evt-pin-redact',
+      },
+      payload.privilegeRoster!
+    );
+    expect(validAdmin.allowed).toBe(true);
+    expect(validAdmin.role).toBe('ADMIN_SEAL');
+
+    const wrongPin = verifyParticipantAdmission(
+      {
+        fullName: 'Participante 01',
+        groupTag: 'Grupo 1',
+        pin: '9999',
+        eventId: 'evt-pin-redact',
+      },
+      payload.privilegeRoster!
+    );
+    expect(wrongPin.allowed).toBe(false);
+    expect(wrongPin.rejectionReason).toBe('PIN_MISMATCH');
+  });
+
+  it('State 9 (Concurrent Admin SNAPSHOT_SYNC with HLC Operations): preserves simultaneous edits on distinct nodes without last-snapshot-wins overwrite', () => {
+    const baseSkeleton = [
+      { key: '01-01-01-01', type: 'slot' as const, label: 'Slot 01', value: 'Original 01', meta: {} },
+      { key: '01-01-01-02', type: 'slot' as const, label: 'Slot 02', value: 'Original 02', meta: {} },
+    ];
+
+    // Admin 01 edits Slot 01
+    const admin1Skeleton = [
+      { key: '01-01-01-01', type: 'slot' as const, label: 'Slot 01', value: 'Editado por Admin 01', meta: {} },
+      { key: '01-01-01-02', type: 'slot' as const, label: 'Slot 02', value: 'Original 02', meta: {} },
+    ];
+    const admin1Ops = diffSkeletonToLedgerOperations(
+      'evt-01',
+      baseSkeleton,
+      admin1Skeleton,
+      'p-01',
+      'Participante 01'
+    );
+
+    // Admin 03 (p-03, coordenador_senior with hasAdminSeal: true) concurrently edits Slot 02 before seeing Admin 01's edit
+    const admin3Skeleton = [
+      { key: '01-01-01-01', type: 'slot' as const, label: 'Slot 01', value: 'Original 01', meta: {} },
+      { key: '01-01-01-02', type: 'slot' as const, label: 'Slot 02', value: 'Editado por Admin 03', meta: {} },
+    ];
+    const admin3Ops = diffSkeletonToLedgerOperations(
+      'evt-01',
+      baseSkeleton,
+      admin3Skeleton,
+      'p-03',
+      'Participante 03'
+    );
+
+    // Admin 01 receives Admin 03's SNAPSHOT_SYNC packet
+    const reconciledOnAdmin1 = applyIncomingCollabPacket(
+      {
+        eventId: 'evt-01',
+        skeleton: admin1Skeleton,
+        privilegeRoster: DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+        ledger: admin1Ops,
+        activityLog: [],
+      },
+      {
+        protocol: 'SEKUNDO_COLLAB_v2',
+        packetId: 'pkt_admin3',
+        roomId: 'rm_test',
+        eventId: 'evt-01',
+        kind: 'SNAPSHOT_SYNC',
+        sentAt: new Date().toISOString(),
+        author: {
+          peerId: 'peer_3',
+          participantId: 'p-03',
+          fullName: 'Participante 03',
+          groupTag: 'Grupo 1',
+          role: 'ADMIN_SEAL',
+          hasAdminSeal: true,
+        },
+        skeleton: admin3Skeleton,
+        operations: admin3Ops,
+      }
+    );
+
+    expect(reconciledOnAdmin1.accepted).toBe(true);
+    expect(reconciledOnAdmin1.updatedSkeleton.find((n) => n.key === '01-01-01-01')?.value).toBe(
+      'Editado por Admin 01'
+    );
+    expect(reconciledOnAdmin1.updatedSkeleton.find((n) => n.key === '01-01-01-02')?.value).toBe(
+      'Editado por Admin 03'
+    );
+  });
+
+  it('State 10 (Share URL Normalization & Extraction): supports /laboratorio/sekundo base path and extracts token + room from hash or query', () => {
+    const shareUrl = buildShareURL('https://heisslab.com.br', 'tok_abc_123', 'rm_xyz_789');
+    expect(shareUrl).toBe('https://heisslab.com.br/laboratorio/sekundo/#/view?data=tok_abc_123&room=rm_xyz_789');
+    expect(extractTokenFromURL(shareUrl)).toBe('tok_abc_123');
+    expect(extractRoomFromURL(shareUrl)).toBe('rm_xyz_789');
+
+    const directViewUrl = 'https://heisslab.com.br/laboratorio/sekundo/view?room=rm_direct_01#data=tok_direct_01';
+    expect(extractTokenFromURL(directViewUrl)).toBe('tok_direct_01');
+    expect(extractRoomFromURL(directViewUrl)).toBe('rm_direct_01');
   });
 });
