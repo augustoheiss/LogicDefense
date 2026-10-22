@@ -4,7 +4,7 @@ export function GamesMenu() {
   return (
     <>
       <div className="hero" style={{ paddingBottom: 'clamp(24px, 3vw, 40px)' }}>
-        <p className="hero__eyebrow">Portal Educacional · Jogos</p>
+        <p className="hero__eyebrow">Portal Educacional · 5 Jogos Interativos</p>
         <h1 className="hero__title">Menu de Jogos</h1>
         <p className="hero__sub">
           Aprenda Matemática sem perceber. Cada jogo treina raciocínio lógico
@@ -13,7 +13,7 @@ export function GamesMenu() {
       </div>
 
       <div className="section" style={{ paddingTop: 0 }}>
-        <p className="section__title">Disponível agora</p>
+        <p className="section__title">Disponível agora · 5 Jogos</p>
         <p className="section__subtitle">Jogue diretamente no navegador, sem instalação.</p>
 
         {/* ── Logic Defense card ── */}
@@ -102,6 +102,30 @@ export function GamesMenu() {
               <span className="game-card__badge">🎮 3D WebGL</span>
               <span className="game-card__badge">🧮 PEMDAS + Aritmética</span>
               <Link to="/jogos/logic-friction" className="btn-primary">
+                ▶ Jogar agora
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Logic Tetris (Genesis Edition) card ── */}
+        <div className="game-card" style={{ marginTop: 24 }}>
+          <div className="game-card__thumb" style={{ background: 'linear-gradient(135deg, #070b14 0%, #101d3b 50%, #241046 100%)' }}>
+            <span style={{ position: 'relative', zIndex: 1 }}>🧱</span>
+          </div>
+          <div className="game-card__body">
+            <span className="game-card__tag" style={{ background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.35)' }}>Puzzle Espacial · Base-10</span>
+            <h2 className="game-card__title">Logic Tetris · Genesis Edition</h2>
+            <p className="game-card__desc">
+              Onde a Matemática salva sua vida na Matriz 10×20. Use as 4 operações e os atalhos visuais
+              Heiss-Lab para metamorfosear a peça em queda ([M]), selar buracos soterrados com Cristais
+              Dourados ([B]) e ativar o Protocolo Fênix 142857 contra o Top-Out.
+            </p>
+            <div className="game-card__footer">
+              <span className="game-card__badge">⚗️ 3 Milagres Matemáticos</span>
+              <span className="game-card__badge">🔥 Protocolo Fênix 142857</span>
+              <span className="game-card__badge">📖 Códice Heiss-Lab</span>
+              <Link to="/jogos/logic-tetris" className="btn-primary">
                 ▶ Jogar agora
               </Link>
             </div>

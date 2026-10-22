@@ -48,7 +48,7 @@ const OUTCOMES = [
 const HERO_BULLETS = [
   'Desligue o seu "Juiz" interno: o erro é o rascunho do pensamento.',
   'Descubra os atalhos visuais e a simetria dos números que a escola nunca ensinou.',
-  '4 Jogos interativos 100% no navegador para treinar cálculo mental e agilidade lógica.',
+  '5 Jogos interativos 100% no navegador para treinar cálculo mental e agilidade lógica.',
 ]
 
 export function Home() {
@@ -113,10 +113,10 @@ export function Home() {
               type="button"
               className="btn-hero-primary"
               id="cta-jogar-agora"
-              aria-label="Conhecer e jogar os 4 jogos do ecossistema"
+              aria-label="Conhecer e jogar os 5 jogos do ecossistema"
               onClick={() => scrollTo('jogos-section')}
             >
-              ▶ Conhecer os 4 Jogos
+              ▶ Conhecer os 5 Jogos
               <span className="btn-hero__arrow" aria-hidden="true">→</span>
             </button>
             <button

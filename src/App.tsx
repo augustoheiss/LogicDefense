@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
@@ -6,6 +7,7 @@ import { LogicDefensePage } from './pages/LogicDefensePage'
 import { LogicAscensionPage } from './pages/LogicAscensionPage'
 import { LogicInvadersLanding } from './pages/LogicInvadersLanding'
 import { LogicFrictionPage } from './pages/LogicFrictionPage'
+const LogicTetrisPage = lazy(() => import('./pages/LogicTetrisPage'))
 import { LabPage } from './pages/LabPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
@@ -29,6 +31,14 @@ export default function App() {
           <Route path="/jogos/logic-ascension"    element={<LogicAscensionPage />} />
           <Route path="/jogos/logic-invaders"     element={<LogicInvadersLanding />} />
           <Route path="/jogos/logic-friction"    element={<LogicFrictionPage />} />
+          <Route
+            path="/jogos/logic-tetris"
+            element={
+              <Suspense fallback={<div className="min-h-screen bg-[#040711] flex items-center justify-center text-cyan-300 font-mono text-sm">Carregando Logic Tetris (Genesis Edition)...</div>}>
+                <LogicTetrisPage />
+              </Suspense>
+            }
+          />
           <Route path="/laboratorio"               element={<LabPage />} />
           <Route path="/cv-maker"                  element={<CVMaker />} />
           <Route path="/laboratorio/cv-maker"      element={<CVMaker />} />

@@ -62,6 +62,18 @@ const GAMES: GameItem[] = [
     highlights: ['Renderização 3D Three.js', 'Física de Colisão', 'Combate em Arena'],
     mechanic: 'Imersão espacial completa onde números têm peso, massa e velocidade.',
   },
+  {
+    id: 'logic-tetris',
+    to: '/jogos/logic-tetris',
+    icon: '🧱',
+    title: 'Logic Tetris',
+    genre: 'Puzzle Espacial · Base-10 Genesis',
+    accentColor: 'cyan',
+    badge: 'Genesis Edition · 142857',
+    description: 'A versão Genesis do Tetris onde a aritmética salva a sua vida. Resolva atalhos das 4 operações para metamorfosear a peça em queda, selar buracos soterrados com Cristais Dourados ou purificar a matriz no Protocolo Fênix.',
+    highlights: ['Metamorfose de Peça [M]', 'Selagem de Buracos [B]', 'Protocolo Fênix 142857'],
+    mechanic: 'Bullet-Time Cognitivo (0.12×) com 2ª chance elástica e Códice das 8 Lentes Heiss-Lab.',
+  },
 ]
 
 export function GamesShowcase() {
@@ -72,7 +84,7 @@ export function GamesShowcase() {
         <div className="text-center mb-4">
           <span className="section-tag-arcade">
             <span>🎮</span>
-            <span>OS 4 JOGOS DO ECOSSISTEMA</span>
+            <span>OS 5 JOGOS DO ECOSSISTEMA</span>
           </span>
         </div>
 
