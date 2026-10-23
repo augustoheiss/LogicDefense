@@ -89,11 +89,14 @@ export function Arena() {
         <cylinderGeometry args={[ARENA_RADIUS, ARENA_RADIUS, SLAB_THICKNESS, ARENA_SEGMENTS]} />
         <meshLambertMaterial color="#0a0a12" />
       </mesh>
-      {/* 2.5D Motherboard Circuit Trace Layer (non-raycastable so floor clicks are untouched) */}
+      {/* 2.5D Motherboard Circuit Trace Layer (non-raycastable so floor clicks are untouched)
+          renderOrder={-10} guarantees it always renders immediately after the opaque floor slab
+          and NEVER paints over transparent 2.5D sprites or 3D <Text> in the North half of the arena. */}
       {visualStyle === '2.5D' && (
         <mesh
           position={[0, SLAB_THICKNESS / 2 + 0.008, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
+          renderOrder={-10}
           raycast={noRaycast}
         >
           <circleGeometry args={[ARENA_RADIUS - 0.15, ARENA_SEGMENTS]} />
@@ -245,13 +248,14 @@ function CyberGrid() {
   })
 
   return (
-    <group position={[0, SLAB_THICKNESS / 2, 0]}>
-      <group ref={gridRef} />
+    <group position={[0, SLAB_THICKNESS / 2, 0]} renderOrder={-9}>
+      <group ref={gridRef} renderOrder={-9} />
       <mesh
         ref={rippleMeshRef}
         position={[0, 0.04, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={false}
+        renderOrder={-7}
         raycast={noRaycast}
       >
         <ringGeometry args={[0.88, 1.0, 64]} />
@@ -288,6 +292,7 @@ function EdgeGlow() {
       ref={ringRef}
       position={[0, SLAB_THICKNESS / 2 + 0.03, 0]}
       rotation={[-Math.PI / 2, 0, 0]}
+      renderOrder={-8}
       raycast={noRaycast}
     >
       <ringGeometry args={[ARENA_RADIUS - 0.3, ARENA_RADIUS, 80]} />
@@ -295,6 +300,7 @@ function EdgeGlow() {
         color="#00ffcc"
         transparent
         opacity={0.18}
+        depthWrite={false}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -322,12 +328,13 @@ export function ArenaBoundary() {
             position={[x, ARENA_WALL_HEIGHT / 2, z]}
             rotation={[0, -midAngle + Math.PI / 2, 0]}
           >
-            <mesh>
+            <mesh renderOrder={-6} raycast={noRaycast}>
               <boxGeometry args={[segLength, ARENA_WALL_HEIGHT, ARENA_WALL_THICKNESS]} />
               <meshBasicMaterial
                 color="#00d4ff"
                 transparent
                 opacity={0.06}
+                depthWrite={false}
               />
             </mesh>
           </RigidBody>

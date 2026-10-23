@@ -167,6 +167,7 @@ export function EnemyDeathFX() {
       ref={meshRef}
       args={[planeGeo, undefined, MAX_SHARDS]}
       frustumCulled={false}
+      renderOrder={5}
       raycast={noRaycast}
     >
       <meshBasicMaterial

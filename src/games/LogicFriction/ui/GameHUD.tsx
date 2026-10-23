@@ -185,6 +185,7 @@ function MathCompassBar() {
   const mathZonePosition = useGameStore(s => s.mathZonePosition)
   const setMoveTarget = useGameStore(s => s.setMoveTarget)
   const setActionMode = useGameStore(s => s.setActionMode)
+  const isMobile = useIsMobileViewport()
 
   if (phase !== 'PLAYING' || !currentProblem || mathAnswered) return null
 
@@ -195,30 +196,34 @@ function MathCompassBar() {
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 10,
+      gap: isMobile ? 6 : 10,
       background: 'rgba(4,8,24,0.92)',
       border: '1px solid rgba(0,212,255,0.45)',
       borderRadius: 10,
-      padding: '6px 14px',
+      padding: isMobile ? '5px 10px' : '6px 14px',
       pointerEvents: 'auto',
       boxShadow: '0 0 20px rgba(0,212,255,0.2)',
       fontFamily: "'Courier New', monospace",
+      maxWidth: 'calc(100vw - 16px)',
+      boxSizing: 'border-box',
     }}>
       <span style={{
-        fontSize: 12,
+        fontSize: isMobile ? 11 : 12,
         color: '#ffd700',
         fontWeight: 800,
-        letterSpacing: '0.06em',
+        letterSpacing: '0.04em',
+        whiteSpace: 'nowrap',
       }}>
         🧭 {dirInfo.arrow} {dirInfo.name}
       </span>
       <span style={{
-        fontSize: 15,
+        fontSize: isMobile ? 13 : 15,
         color: '#00d4ff',
         fontWeight: 900,
         background: 'rgba(0,212,255,0.12)',
-        padding: '2px 8px',
+        padding: isMobile ? '2px 6px' : '2px 8px',
         borderRadius: 6,
+        whiteSpace: 'nowrap',
       }}>
         {currentProblem.expression}
       </span>
@@ -231,13 +236,14 @@ function MathCompassBar() {
           background: 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(0,212,255,0.25))',
           border: '1px solid #ffd700',
           borderRadius: 7,
-          padding: '4px 10px',
+          padding: isMobile ? '4px 8px' : '4px 10px',
           color: '#ffd700',
-          fontSize: 11,
+          fontSize: isMobile ? 10 : 11,
           fontWeight: 800,
           fontFamily: "'Courier New', monospace",
           cursor: 'pointer',
           textTransform: 'uppercase',
+          whiteSpace: 'nowrap',
         }}
       >
         ⚡ Ir para Equação
@@ -250,6 +256,7 @@ function MathCompassBar() {
 function PedagogicalInsightToast() {
   const lastMathReward = useGameStore(s => s.lastMathReward)
   const dismissMathReward = useGameStore(s => s.dismissMathReward)
+  const isMobile = useIsMobileViewport()
 
   useEffect(() => {
     if (!lastMathReward) return
@@ -267,7 +274,7 @@ function PedagogicalInsightToast() {
   return (
     <div style={{
       position: 'absolute',
-      bottom: 68,
+      bottom: isMobile ? 124 : 68,
       left: 16,
       maxWidth: 420,
       width: 'calc(100vw - 32px)',

@@ -118,9 +118,9 @@ export function MathRewardFX() {
       outerRingMatRef.current.opacity = Math.max(0, (1 - progress) * 0.6)
     }
 
-    // 3. Animate floating 3D bonus text rising upward
+    // 3. Animate floating 3D bonus text rising upward (clamped so it stays near pad)
     if (textGroupRef.current) {
-      textGroupRef.current.position.y = 2.8 + progress * 3.2
+      textGroupRef.current.position.y = 1.6 + progress * 1.4
     }
 
     // 4. Animate Core Chain-Lightning opacity & flicker
@@ -184,7 +184,7 @@ export function MathRewardFX() {
         </mesh>
 
         {/* ── Floating 3D Reward Billboard ── */}
-        <group ref={textGroupRef} position={[0, 2.8, 0]}>
+        <group ref={textGroupRef} position={[0, 1.6, 0]}>
           <Billboard>
             <Text
               fontSize={0.75}
@@ -193,6 +193,7 @@ export function MathRewardFX() {
               anchorY="middle"
               outlineWidth={0.06}
               outlineColor="#000000"
+              renderOrder={16}
             >
               {isCorrect
                 ? `+$${activeReward.goldBonus} OURO · STREAK x${activeReward.streak}!`
@@ -207,6 +208,7 @@ export function MathRewardFX() {
                 anchorY="middle"
                 outlineWidth={0.04}
                 outlineColor="#000000"
+                renderOrder={16}
               >
                 {`⚡ TROVÃO DE ARQUIMEDES (${activeReward.lightningTargets.length} ALVOS)`}
               </Text>

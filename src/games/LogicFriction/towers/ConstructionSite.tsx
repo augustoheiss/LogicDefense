@@ -223,6 +223,7 @@ export function ConstructionSite({ id, position, type }: ConstructionSiteProps) 
             anchorY="middle"
             outlineWidth={0.05}
             outlineColor="#000000"
+            renderOrder={15}
           >
             {`$${bpCost}`}
             <meshBasicMaterial
@@ -243,6 +244,7 @@ export function ConstructionSite({ id, position, type }: ConstructionSiteProps) 
             anchorY="middle"
             outlineWidth={0.03}
             outlineColor="#000000"
+            renderOrder={15}
           >
             {`⏱ ${secondsLeft}s`}
             <meshBasicMaterial

@@ -88,7 +88,12 @@ function GoldenRingEffect({ active }: GoldenRingEffectProps) {
   }, [])
 
   return (
-    <mesh position={[0, -CORE_SIZE - 0.42, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
+    <mesh
+      position={[0, -CORE_SIZE - 0.42, 0]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      renderOrder={-6}
+      raycast={noRaycast}
+    >
       <planeGeometry args={[12, 12]} />
       <shaderMaterial
         ref={materialRef}
@@ -128,13 +133,16 @@ export function CentralCore() {
         void main() {
           vec2 p = vUv - 0.5;
           float r = length(p);
-          float ringMask = smoothstep(0.42, 0.445, r) * (1.0 - smoothstep(0.475, 0.495, r));
+          float ringMask = smoothstep(0.39, 0.415, r) * (1.0 - smoothstep(0.475, 0.495, r));
           if (ringMask < 0.01) discard;
           float angle = atan(p.x, p.y);
           float normAngle = (angle + 3.14159265) / 6.2831853;
           float fill = step(normAngle, clamp(uRatio, 0.0, 1.0));
-          vec3 col = mix(vec3(0.06, 0.09, 0.14), uColor, fill);
-          float alpha = ringMask * mix(0.22, 0.85, fill);
+          float segWave = abs(sin(normAngle * 24.0 * 3.14159265));
+          float tickMask = smoothstep(0.12, 0.22, segWave);
+          vec3 emptyCol = vec3(0.35, 0.05, 0.10);
+          vec3 col = mix(emptyCol, uColor * 1.25, fill) * (0.75 + 0.25 * tickMask);
+          float alpha = ringMask * mix(0.58, 0.95, fill);
           gl_FragColor = vec4(col, alpha);
         }
       `,
@@ -206,13 +214,14 @@ export function CentralCore() {
     if (coreHpRingMatRef.current) {
       const ratio = maxCoreHp > 0 ? Math.max(0, coreHp / maxCoreHp) : 1
       coreHpRingMatRef.current.uniforms.uRatio.value = ratio
-      const hex = storeBuffActive
-        ? '#ffd700'
-        : ratio > 0.5
-        ? '#00ff88'
-        : ratio > 0.25
-        ? '#facc15'
-        : '#ff2244'
+      const hex =
+        ratio <= 0.25
+          ? '#ff2244'
+          : ratio <= 0.5
+          ? '#facc15'
+          : storeBuffActive
+          ? '#ffd700'
+          : '#00ff88'
       coreHpRingMatRef.current.uniforms.uColor.value.set(hex)
     }
   })
@@ -235,13 +244,22 @@ export function CentralCore() {
   // Core visual scale grows slightly per level
   const levelScale = 1 + (coreLevel - 1) * 0.1
   const hpRatio = maxCoreHp > 0 ? coreHp / maxCoreHp : 1
-  const coreTint = isBuffActive
-    ? '#fffbeb'
-    : hpRatio <= 0.25
+  const coreTint =
+    hpRatio <= 0.25
       ? '#ff6b6b'
       : hpRatio <= 0.5
         ? '#fde047'
-        : '#ffffff'
+        : isBuffActive
+          ? '#fffbeb'
+          : '#ffffff'
+  const mandalaColor =
+    hpRatio <= 0.25
+      ? '#ff3355'
+      : hpRatio <= 0.5
+        ? '#facc15'
+        : isBuffActive
+          ? '#ffd700'
+          : '#38bdf8'
 
   return (
     <group position={[0, CORE_SIZE + 0.5, 0]}>
@@ -268,7 +286,8 @@ export function CentralCore() {
             geometry={planeGeo}
             position={[0, -CORE_SIZE - 0.38, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
-            scale={[8.2 * levelScale, 8.2 * levelScale, 1]}
+            scale={[7.8 * levelScale, 7.8 * levelScale, 1]}
+            renderOrder={-5}
             raycast={noRaycast}
           >
             <meshBasicMaterial
@@ -277,15 +296,16 @@ export function CentralCore() {
               alphaTest={0.02}
               depthWrite={false}
               blending={THREE.AdditiveBlending}
-              color={isBuffActive ? '#ffd700' : '#38bdf8'}
-              opacity={isBuffActive ? 0.9 : 0.72}
+              color={mandalaColor}
+              opacity={isBuffActive ? 0.85 : 0.68}
             />
           </mesh>
           <mesh
             geometry={planeGeo}
             position={[0, -CORE_SIZE - 0.36, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
-            scale={[9.4 * levelScale, 9.4 * levelScale, 1]}
+            scale={[10.4 * levelScale, 10.4 * levelScale, 1]}
+            renderOrder={-4}
             raycast={noRaycast}
           >
             <shaderMaterial
@@ -379,6 +399,7 @@ export function CentralCore() {
           key={i}
           position={[0, -CORE_SIZE - 0.4 - i * 0.4, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
+          renderOrder={-5}
           raycast={noRaycast}
         >
           <ringGeometry args={[
@@ -390,6 +411,7 @@ export function CentralCore() {
             color={i === 0 ? '#00d4ff' : '#a855f7'}
             transparent
             opacity={0.12}
+            depthWrite={false}
             side={THREE.DoubleSide}
           />
         </mesh>
@@ -397,7 +419,7 @@ export function CentralCore() {
 
       {/* ═══════════════════════════════════════════
           TEXT — SIBLING to RigidBody, not a child.
-          depthTest={false} for always-on-top readability.
+          depthTest={false} + renderOrder={15} for always-on-top readability.
           ═══════════════════════════════════════════ */}
       {isUpgradeMode && (
         <Billboard>
@@ -409,6 +431,7 @@ export function CentralCore() {
             anchorY="middle"
             outlineWidth={0.04}
             outlineColor="#000000"
+            renderOrder={15}
           >
             {`UPGRADE BASE: $${upgradeCost}`}
             <meshBasicMaterial
@@ -427,6 +450,7 @@ export function CentralCore() {
             anchorY="middle"
             outlineWidth={0.03}
             outlineColor="#000000"
+            renderOrder={15}
           >
             {`BASE LVL ${coreLevel}`}
             <meshBasicMaterial

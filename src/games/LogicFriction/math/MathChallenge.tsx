@@ -77,6 +77,7 @@ export function MathChallenge() {
             outlineWidth={0.08}
             outlineColor="#000000"
             maxWidth={30}
+            renderOrder={15}
           >
             {currentProblem.expression}
             <meshBasicMaterial
@@ -100,6 +101,7 @@ export function MathChallenge() {
               anchorY="middle"
               outlineWidth={0.05}
               outlineColor="#000000"
+              renderOrder={15}
             >
               ▼ CLIQUE OU PISE NA RESPOSTA ▼
               <meshBasicMaterial
@@ -145,6 +147,7 @@ export function MathChallenge() {
               anchorY="middle"
               outlineWidth={0.09}
               outlineColor="#000000"
+              renderOrder={15}
             >
               ✓ BUFF DIVINO ATIVO!
               <meshBasicMaterial
@@ -169,6 +172,7 @@ export function MathChallenge() {
               anchorY="middle"
               outlineWidth={0.12}
               outlineColor="#000000"
+              renderOrder={15}
             >
               ✗
               <meshBasicMaterial
@@ -422,16 +426,18 @@ function AnswerPad({ index, label, isCorrect, position, zoneWorldPos, disabled, 
       {/* ═══════════════════════════════════════════
           TEXT — SIBLING to RigidBody, not a child.
           Includes High-Contrast Geometric Symbol (▲, ◆, ●, ■)
+          renderOrder={15} prevents floor decal occlusion in North Math Zone.
           ═══════════════════════════════════════════ */}
       <Billboard>
         <Text
-          position={[0, ANSWER_PAD_HEIGHT + 2.35, 0]}
-          fontSize={0.75}
+          position={[0, ANSWER_PAD_HEIGHT + 2.4, 0]}
+          fontSize={0.85}
           color={showResult ? labelColor : padAccent}
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.05}
+          outlineWidth={0.06}
           outlineColor="#000000"
+          renderOrder={15}
         >
           {padSymbol}
           <meshBasicMaterial
@@ -439,19 +445,20 @@ function AnswerPad({ index, label, isCorrect, position, zoneWorldPos, disabled, 
             color={showResult ? labelColor : padAccent}
             depthTest={false}
             transparent
-            opacity={showResult && !isCorrect ? 0.3 : 0.95}
+            opacity={showResult && !isCorrect ? 0.3 : 1}
             toneMapped={false}
           />
         </Text>
         <Text
-          position={[0, ANSWER_PAD_HEIGHT + 1.2, 0]}
-          fontSize={1.4}
+          position={[0, ANSWER_PAD_HEIGHT + 1.25, 0]}
+          fontSize={1.45}
           color={labelColor}
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.06}
+          outlineWidth={0.07}
           outlineColor="#000000"
           maxWidth={6}
+          renderOrder={15}
         >
           {label}
           <meshBasicMaterial

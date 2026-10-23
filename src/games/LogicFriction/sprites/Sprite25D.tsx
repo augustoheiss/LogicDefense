@@ -167,6 +167,7 @@ export function StackedBillboard25D({
               geometry={planeGeo}
               position={[spec.xOffset ?? 0, spec.yOffset ?? 0, spec.zOffset]}
               scale={[spec.width, spec.height, 1]}
+              renderOrder={3}
               raycast={noRaycast}
               frustumCulled={false}
             >
@@ -260,6 +261,7 @@ export function CrossQuad25D({
           position={[0, centerOffset, 0]}
           rotation={[0, rotY, 0]}
           scale={[width, height, 1]}
+          renderOrder={2}
           raycast={noRaycast}
         >
           <meshBasicMaterial

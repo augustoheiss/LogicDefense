@@ -523,6 +523,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
             anchorY="middle"
             outlineWidth={0.03}
             outlineColor="#000000"
+            renderOrder={15}
           >
             {`LV${safeLevel}`}
             <meshBasicMaterial
@@ -547,6 +548,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
             anchorY="middle"
             outlineWidth={0.04}
             outlineColor="#000000"
+            renderOrder={15}
           >
             {upgradeLabel}
             <meshBasicMaterial

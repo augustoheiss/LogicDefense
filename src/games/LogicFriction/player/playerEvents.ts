@@ -7,7 +7,7 @@
 // ============================================================
 
 // ── Shared player position (written by PlayerController every frame) ──
-export const playerPositionRef = { x: 0, y: 0, z: 0 }
+export const playerPositionRef = { x: 0, y: 0, z: 5.5 }
 
 // ── Attack event system ──
 type AttackListener = (px: number, pz: number, range: number, damage: number) => void

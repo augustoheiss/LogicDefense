@@ -130,13 +130,16 @@ export function Enemy({
         void main() {
           vec2 p = vUv - 0.5;
           float r = length(p);
-          float ringMask = smoothstep(0.35, 0.38, r) * (1.0 - smoothstep(0.46, 0.49, r));
+          float ringMask = smoothstep(0.36, 0.39, r) * (1.0 - smoothstep(0.46, 0.49, r));
           if (ringMask < 0.01) discard;
           float angle = atan(p.x, p.y); // -PI..PI, 0 at top
           float normAngle = (angle + 3.14159265) / 6.2831853;
           float fill = step(normAngle, clamp(uRatio, 0.0, 1.0));
-          vec3 col = mix(vec3(0.08, 0.1, 0.16), uColor, fill);
-          float alpha = ringMask * mix(0.28, 0.92, fill);
+          float segWave = abs(sin(normAngle * 16.0 * 3.14159265));
+          float tickMask = smoothstep(0.12, 0.24, segWave);
+          vec3 emptyCol = vec3(0.32, 0.05, 0.12);
+          vec3 col = mix(emptyCol, uColor * 1.25, fill) * (0.75 + 0.25 * tickMask);
+          float alpha = ringMask * mix(0.55, 0.95, fill);
           gl_FragColor = vec4(col, alpha);
         }
       `,
@@ -842,9 +845,10 @@ export function Enemy({
       {isBoss && bossHpRingShader && (
         <mesh
           geometry={planeGeo}
-          position={[0, -colliderRadius * 0.58 + 0.02, 0]}
+          position={[0, -colliderRadius + 0.06, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
-          scale={[colliderRadius * 3.4, colliderRadius * 3.4, 1]}
+          scale={[colliderRadius * 5.0, colliderRadius * 5.0, 1]}
+          renderOrder={-3}
           raycast={noRaycast}
         >
           <shaderMaterial
@@ -858,7 +862,12 @@ export function Enemy({
       )}
 
       {/* Ground shadow ring — subtle positional indicator */}
-      <mesh position={[0, -colliderRadius * 0.6, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
+      <mesh
+        position={[0, -colliderRadius + 0.03, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        renderOrder={-4}
+        raycast={noRaycast}
+      >
         <ringGeometry args={[
           colliderRadius * 0.6,
           colliderRadius * 1.0,
@@ -868,6 +877,7 @@ export function Enemy({
           color={isBoss ? '#ffaa00' : '#ff0055'}
           transparent
           opacity={isBoss ? 0.25 : 0.15}
+          depthWrite={false}
           side={THREE.DoubleSide}
         />
       </mesh>

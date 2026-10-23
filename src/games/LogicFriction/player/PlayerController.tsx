@@ -67,7 +67,7 @@ export function PlayerController() {
   const ghost2MeshRef = useRef<THREE.Mesh>(null)
   const ghostOffsetRef = useRef({ x: 0, z: 0 })
   const ghostRingBufRef = useRef(
-    Array.from({ length: 8 }, () => ({ x: 0, z: 0 }))
+    Array.from({ length: 8 }, () => ({ x: 0, z: 5.5 }))
   )
   const ghostRingHeadRef = useRef(0)
   const ghostSampleTimerRef = useRef(0)
@@ -129,13 +129,16 @@ export function PlayerController() {
 
     // ── Startup Physics Lockdown ──
     // Rapier needs a few frames to build the BVH (collision tree).
-    // Lock the player at spawn for the first 10 frames to prevent
-    // gravity from dropping it through the floor before collisions load.
+    // Lock the player at spawn [0, 2, 5.5] (in front of CentralCore) for the first 10 frames
+    // to prevent gravity from dropping it through the floor before collisions load.
     frameCountRef.current++
     if (frameCountRef.current <= 10) {
-      rb.setTranslation({ x: 0, y: 2, z: 0 }, true)
+      rb.setTranslation({ x: 0, y: 2, z: 5.5 }, true)
       rb.setLinvel({ x: 0, y: 0, z: 0 }, true)
       rb.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      playerPositionRef.x = 0
+      playerPositionRef.y = 2
+      playerPositionRef.z = 5.5
       if (frameCountRef.current === 1) {
         console.log('[PlayerController] Frame 1 — physics lockdown active')
       }
@@ -161,8 +164,8 @@ export function PlayerController() {
     // back to a safe spawn instead of silently skipping (which causes
     // the mesh to stay at infinity on mobile tablets).
     if (isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) {
-      console.warn('[PlayerController] ⚠️ Physics NaN detected! Rescuing player to [0, 2, 0]')
-      rb.setTranslation({ x: 0, y: 2, z: 0 }, true)
+      console.warn('[PlayerController] ⚠️ Physics NaN detected! Rescuing player to [0, 2, 5.5]')
+      rb.setTranslation({ x: 0, y: 2, z: 5.5 }, true)
       rb.setLinvel({ x: 0, y: 0, z: 0 }, true)
       rb.setAngvel({ x: 0, y: 0, z: 0 }, true)
       return
@@ -668,7 +671,7 @@ export function PlayerController() {
       ref={rigidBodyRef}
       type="dynamic"
       colliders={false}
-      position={[0, 2, 0]}
+      position={[0, 2, 5.5]}
       lockRotations
       linearDamping={4}
       mass={1}
@@ -760,6 +763,7 @@ export function PlayerController() {
               geometry={planeGeo}
               visible={false}
               frustumCulled={false}
+              renderOrder={2}
               raycast={noRaycast}
             >
               <meshBasicMaterial
@@ -770,7 +774,7 @@ export function PlayerController() {
                 depthWrite={false}
                 blending={THREE.AdditiveBlending}
                 side={THREE.DoubleSide}
-                opacity={0.42}
+                opacity={0.45}
               />
             </mesh>
             <mesh
@@ -778,6 +782,7 @@ export function PlayerController() {
               geometry={planeGeo}
               visible={false}
               frustumCulled={false}
+              renderOrder={2}
               raycast={noRaycast}
             >
               <meshBasicMaterial
@@ -788,7 +793,7 @@ export function PlayerController() {
                 depthWrite={false}
                 blending={THREE.AdditiveBlending}
                 side={THREE.DoubleSide}
-                opacity={0.22}
+                opacity={0.25}
               />
             </mesh>
 
@@ -800,6 +805,7 @@ export function PlayerController() {
               rotation={[-Math.PI / 2, 0, 0]}
               visible={false}
               frustumCulled={false}
+              renderOrder={4}
               raycast={noRaycast}
             >
               <meshBasicMaterial
