@@ -1,0 +1,37 @@
+# Dependencies & VCS
+node_modules/
+**/node_modules/
+.git/
+venv/
+**/venv/
+
+# Build & Cache
+dist/
+**/dist/
+.expo/
+**/.expo/
+.pytest_cache/
+**/.pytest_cache/
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
+
+# Unrelated sibling folders in LogicDefense root
+Assistente-Moeda-App/
+Music/
+backend/
+docs/
+master-plan/
+public/
+scripts/
+src/
+tests/
+*.db
+simulacao_assistente_moeda_5anos.csv
+
+# Heavy documentation & marketing assets inside Sekundo
+Sekundo/playstore-assets/
+Sekundo/master-plan/
+Sekundo/docs/
+Sekundo/packages/backend/

@@ -71,3 +71,5 @@ yarn-debug.*
 yarn-error.*
 coverage/
 
+playstore-assets/
+**/playstore-assets/
