@@ -739,7 +739,7 @@ export function applyFruitGravityAndRefill10x10(
   grid: GridMatrix,
   rng: () => number = Math.random
 ): { grid: GridMatrix; movedCount: number; spawnedCount: number } {
-  const nextGrid = createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT)
+  const nextGrid = createEmptyGrid(BOARD_HEIGHT, BOARD_WIDTH)
   let movedCount = 0
   let spawnedCount = 0
 
@@ -921,7 +921,7 @@ export function generatePlayableFruitBoard10x10(
   seedGrid?: GridMatrix,
   rng: () => number = Math.random
 ): GridMatrix {
-  const board = createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT)
+  const board = createEmptyGrid(BOARD_HEIGHT, BOARD_WIDTH)
 
   // Se houver blocos sementes, traz até 15 blocos sobreviventes para as linhas 0..9
   if (seedGrid) {

@@ -506,6 +506,27 @@ def run_logic_tetris_e2e_suite() -> int:
                 "tiers": expressions_by_tier,
             }
 
+            # 10c. Round-Trip Style Switching (FRUIT_MATCH -> TACTILE_GRID -> TETRIS_CLASSIC -> FRUIT_MATCH -> TETRIS_CLASSIC)
+            print("[10c/11] Validando alternância livre de ida e volta entre os 3 Estilos (incluindo retorno ao Clássico)...")
+            page.locator('[data-testid="style-btn-FRUIT_MATCH"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "FRUIT_MATCH"
+            page.locator('[data-testid="style-btn-TACTILE_GRID"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "TACTILE_GRID"
+            page.locator('[data-testid="style-btn-TETRIS_CLASSIC"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "TETRIS_CLASSIC", (
+                "Clicar em Clássico a partir da Grade Tátil deve retornar imediatamente para TETRIS_CLASSIC"
+            )
+            page.locator('[data-testid="style-btn-FRUIT_MATCH"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "FRUIT_MATCH"
+            page.locator('[data-testid="style-btn-TETRIS_CLASSIC"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "TETRIS_CLASSIC", (
+                "Clicar em Clássico a partir de Frutas deve retornar imediatamente para TETRIS_CLASSIC"
+            )
+            telemetry_report["checks"]["roundTripStyleSwitchingToClassic"] = {
+                "status": "PASS",
+                "finalStyle": page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style"),
+            }
+
             desktop_ctx.close()
 
             # =========================================================================

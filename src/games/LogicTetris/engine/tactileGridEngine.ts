@@ -966,7 +966,7 @@ export function purgeMajorityBlocksForTransition(
   const totalBefore = allOccupied.length
   if (totalBefore === 0) {
     return {
-      grid: createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT),
+      grid: createEmptyGrid(BOARD_HEIGHT, BOARD_WIDTH),
       purgedBlocksCount: 0,
       survivingBlocksCount: 0,
       transmutationBonusPoints: 0,
@@ -993,7 +993,7 @@ export function purgeMajorityBlocksForTransition(
     }
   }
 
-  const nextGrid = createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT)
+  const nextGrid = createEmptyGrid(BOARD_HEIGHT, BOARD_WIDTH)
 
   if (targetStyle === 'TETRIS_CLASSIC') {
     // Coloca os sobreviventes na base da Torre 20×10 (linhas 19 e 18), sem fechar linha de 10

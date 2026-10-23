@@ -43,7 +43,13 @@ export function createEmptyGrid(
   height: number = BOARD_HEIGHT,
   width: number = BOARD_WIDTH
 ): GridMatrix {
-  return Array.from({ length: height }, () => Array.from({ length: width }, () => null))
+  const safeHeight =
+    height === BOARD_WIDTH && width === BOARD_HEIGHT ? BOARD_HEIGHT : height
+  const safeWidth =
+    height === BOARD_WIDTH && width === BOARD_HEIGHT ? BOARD_WIDTH : width
+  return Array.from({ length: safeHeight }, () =>
+    Array.from({ length: safeWidth }, () => null)
+  )
 }
 
 /**
