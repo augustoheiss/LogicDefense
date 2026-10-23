@@ -122,7 +122,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '18 + 7 = ?',
     correctAnswer: 25,
-    shortHint: '💡 Massinha: Tire 2 do 7 e dê ao 18 → 20 + 5 = 25',
+    shortHint: '💡 Massinha: Passe 2 do 7 para o 18 virar 20 → agora some 20 + 5 = ?',
     stepByStep: [
       'O 18 está a apenas 2 passos de virar a dezena redonda 20.',
       'Tiramos 2 da massinha do 7 (que vira 5) e entregamos ao 18 (que vira 20).',
@@ -152,7 +152,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '19 + 8 = ?',
     correctAnswer: 27,
-    shortHint: '💡 Massinha: Passe 1 do 8 para o 19 → 20 + 7 = 27',
+    shortHint: '💡 Massinha: Passe 1 do 8 para o 19 fechar a dezena 20 → 20 + 7 = ?',
     stepByStep: [
       'O 19 só precisa de +1 para virar 20.',
       'Tiramos 1 do 8 (que passa a ser 7) e damos ao 19 (que vira 20).',
@@ -182,7 +182,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '28 + 6 = ?',
     correctAnswer: 34,
-    shortHint: '💡 Massinha: Passe 2 do 6 para o 28 → 30 + 4 = 34',
+    shortHint: '💡 Massinha: Passe 2 do 6 para o 28 fechar a dezena 30 → 30 + 4 = ?',
     stepByStep: [
       'O 28 pede +2 para fechar a dezena 30.',
       'Quebramos o 6 em (2 + 4): o 2 completa o 30 e sobram 4.',
@@ -212,7 +212,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '29 + 16 = ?',
     correctAnswer: 45,
-    shortHint: '💡 Massinha: Passe 1 do 16 para o 29 → 30 + 15 = 45',
+    shortHint: '💡 Massinha: Passe 1 do 16 para o 29 virar 30 → agora some 30 + 15 = ?',
     stepByStep: [
       'O 29 está a 1 unidade de virar 30.',
       'Transferimos 1 do 16 para o 29: temos 30 + 15.',
@@ -242,7 +242,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '47 + 38 = ?',
     correctAnswer: 85,
-    shortHint: '💡 Massinha: Passe 3 do 38 para o 47 → 50 + 35 = 85',
+    shortHint: '💡 Massinha: Passe 3 do 38 para o 47 fechar a dezena 50 → 50 + 35 = ?',
     stepByStep: [
       'O 47 precisa de +3 para virar a dezena redonda 50.',
       'Tiramos 3 do 38 (que vira 35) e entregamos ao 47 (que vira 50).',
@@ -272,7 +272,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '88 + 35 = ?',
     correctAnswer: 123,
-    shortHint: '💡 Massinha: Passe 2 do 35 para o 88 → 90 + 33 = 123',
+    shortHint: '💡 Massinha: Passe 2 do 35 para o 88 fechar a dezena 90 → 90 + 33 = ?',
     stepByStep: [
       'O 88 pede apenas +2 para fechar 90.',
       'Tiramos 2 do 35 (que vira 33) e formamos 90 + 33.',
@@ -307,7 +307,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 1,
     expression: '9 + [ ? ] = 10',
     correctAnswer: 1,
-    shortHint: '💡 Linha Base-10: 9 colunas cheias + 1 bloco = 10!',
+    shortHint: '💡 Linha Base-10: A linha inteira tem 10 colunas. Se 9 estão cheias, quantas faltam?',
     stepByStep: [
       'Uma linha completa do Logic Tetris possui exatamente 10 colunas.',
       'Se 9 colunas já estão preenchidas, falta apenas 1 bloco unitário (1×1) para fechar 10!',
@@ -337,7 +337,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 2,
     expression: '8 + [ ? ] = 10',
     correctAnswer: 2,
-    shortHint: '💡 Amigos do 10: 8 colunas cheias + 2 blocos = 10!',
+    shortHint: '💡 Amigos do 10: A linha tem 10 colunas e 8 já estão cheias → 10 − 8 = ?',
     stepByStep: [
       'Visualize a linha de 10 colunas no tabuleiro: 8 blocos acesos deixam um espaço de 2.',
       'O par perfeito do 8 na Base 10 é o 2 (8 + 2 = 10)!',
@@ -367,7 +367,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 3,
     expression: '7 + [ ? ] = 10',
     correctAnswer: 3,
-    shortHint: '💡 Amigos do 10: De 7 até 10 faltam exatamente 3 blocos!',
+    shortHint: '💡 Amigos do 10: Na grade de 10 colunas, 7 estão cheias → 10 − 7 = ?',
     stepByStep: [
       'Na grade Base-10 do Tetris, 7 blocos preenchidos deixam 3 casas vazias.',
       '7 e 3 são os Amigos do 10: 7 + 3 = 10!',
@@ -397,7 +397,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 4,
     expression: '6 + [ ? ] = 10',
     correctAnswer: 4,
-    shortHint: '💡 Amigos do 10: 6 blocos + 4 blocos (1 Tetrominó) = 10!',
+    shortHint: '💡 Amigos do 10: A linha fecha com 10 blocos e já temos 6 → 10 − 6 = ?',
     stepByStep: [
       'Se uma linha tem 6 blocos, faltam 4 colunas — exatamente a área de 1 Tetrominó!',
       '6 + 4 = 10!',
@@ -427,7 +427,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 3,
     expression: '7 + [ ? ] = 15',
     correctAnswer: 8,
-    shortHint: '💡 Ponte do 10: De 7 até 10 (+3) e de 10 até 15 (+5) → 3 + 5 = 8',
+    shortHint: '💡 Ponte do 10: De 7 até 10 (+3) e de 10 até 15 (+5) → some os saltos: 3 + 5 = ?',
     stepByStep: [
       'Use o 10 como trampolim: de 7 para completar 10 faltam 3.',
       'De 10 para chegar em 15 faltam mais 5.',
@@ -458,7 +458,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 6,
     expression: '14 + [ ? ] = 20',
     correctAnswer: 6,
-    shortHint: '💡 Amigo do 4 na dezena: Se 4 + 6 = 10, então 14 + 6 = 20!',
+    shortHint: '💡 Amigo do 4 na Dezena: Olhe para a unidade 4. Quanto falta de 4 para fechar 10: 10 − 4 = ?',
     stepByStep: [
       'Olhe apenas para a unidade 4: quanto falta de 4 para fechar 10?',
       'Como 4 + 6 = 10, então 14 + 6 fecha exatamente a dezena 20!',
@@ -488,7 +488,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 3,
     expression: '37 + [ ? ] = 50',
     correctAnswer: 13,
-    shortHint: '💡 Ponte da Dezena: De 37 até 40 (+3) e de 40 até 50 (+10) = 13',
+    shortHint: '💡 Ponte da Dezena: De 37 até 40 (+3) e de 40 até 50 (+10) → 3 + 10 = ?',
     stepByStep: [
       'Primeiro complete a dezena imediatamente acima: de 37 até 40 faltam 3.',
       'Depois suba de 40 até 50: faltam 10.',
@@ -522,7 +522,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '42 − 19 = ?',
     correctAnswer: 23,
-    shortHint: '💡 Hack Japonês: Some +1 nos DOIS números → 43 − 20 = 23',
+    shortHint: '💡 Hack Japonês: Some +1 nos DOIS números para arredondar → 43 − 20 = ?',
     stepByStep: [
       'O Subtraendo (19) é o Rei: ele só precisa de +1 para virar 20.',
       'Para a distância entre os dois não mudar, somamos +1 também no 42 (que vira 43).',
@@ -552,7 +552,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '34 − 19 = ?',
     correctAnswer: 15,
-    shortHint: '💡 Hack Japonês: Some +1 nos dois lados → 35 − 20 = 15',
+    shortHint: '💡 Hack Japonês: Some +1 nos dois lados para arredondar o 19 → 35 − 20 = ?',
     stepByStep: [
       'Olhe para o 19: somando +1 ele vira 20.',
       'Some +1 também no 34 para manter a mesma distância: 34 + 1 = 35.',
@@ -582,7 +582,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '63 − 28 = ?',
     correctAnswer: 35,
-    shortHint: '💡 Hack Japonês: Some +2 nos dois lados → 65 − 30 = 35',
+    shortHint: '💡 Hack Japonês: Some +2 nos dois lados para o 28 virar 30 → 65 − 30 = ?',
     stepByStep: [
       'O 28 precisa de +2 para virar a dezena redonda 30.',
       'Somamos +2 também no 63 → ele vira 65.',
@@ -612,7 +612,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '73 − 38 = ?',
     correctAnswer: 35,
-    shortHint: '💡 Hack Japonês: Some +2 nos dois números → 75 − 40 = 35',
+    shortHint: '💡 Hack Japonês: Some +2 nos dois números para o 38 virar 40 → 75 − 40 = ?',
     stepByStep: [
       'O subtraendo 38 pede +2 para virar 40.',
       'Damos +2 também ao 73, que vira 75.',
@@ -642,7 +642,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '85 − 27 = ?',
     correctAnswer: 58,
-    shortHint: '💡 Hack Japonês: Some +3 nos dois lados → 88 − 30 = 58',
+    shortHint: '💡 Hack Japonês: Some +3 nos dois lados para o 27 virar 30 → 88 − 30 = ?',
     stepByStep: [
       'O 27 está a +3 de virar 30.',
       'Somamos +3 nos dois termos: (85 + 3) − (27 + 3) = 88 − 30.',
@@ -672,7 +672,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '100 − 37 = ?',
     correctAnswer: 63,
-    shortHint: '💡 Hack do 99: Tire 1 dos dois (99 − 36 = 63) ou some +3 (103 − 40 = 63)!',
+    shortHint: '💡 Hack do 99: Tire 1 dos dois lados (99 − 36) ou some +3 nos dois → 103 − 40 = ?',
     stepByStep: [
       'Caminho A (Hack Japonês +3): Some +3 nos dois → 103 − 40 = 63.',
       'Caminho B (Truque do 99): Tire 1 dos dois → 99 − 36 = 63 (9−3=6 e 9−6=3).',
@@ -706,7 +706,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '50 − 34 = ?',
     correctAnswer: 16,
-    shortHint: '💡 Elevador: De 34 até 40 (+6) e de 40 até 50 (+10) = 16',
+    shortHint: '💡 Elevador: De 34 até 40 (+6) e de 40 até 50 (+10) → some os andares: 6 + 10 = ?',
     stepByStep: [
       'Imagine que você está no andar 34 e quer subir até o 50.',
       'Do 34 até o 40 o elevador sobe 6 andares.',
@@ -736,7 +736,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '25 − 18 = ?',
     correctAnswer: 7,
-    shortHint: '💡 Elevador na Ponte do 20: De 18 até 20 (+2) e de 20 até 25 (+5) = 7',
+    shortHint: '💡 Elevador na Ponte do 20: De 18 até 20 (+2) e de 20 até 25 (+5) → 2 + 5 = ?',
     stepByStep: [
       'Do andar 18 até o andar 20 subimos 2 andares.',
       'Do 20 até o 25 subimos mais 5 andares.',
@@ -766,7 +766,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '10 + 6 − 8 = ?',
     correctAnswer: 8,
-    shortHint: '💡 Balança Base-10: Faça 10 − 8 primeiro (= 2) e some 6 → 2 + 6 = 8!',
+    shortHint: '💡 Balança Base-10: Resolva 10 − 8 primeiro (= 2) e some com o 6 → 2 + 6 = ?',
     stepByStep: [
       'Em vez de somar 10 + 6 = 16 para depois subtrair 8, use os Amigos do 10!',
       '10 − 8 sobra 2 imediatamente.',
@@ -796,7 +796,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '70 − 43 = ?',
     correctAnswer: 27,
-    shortHint: '💡 Elevador: De 43 até 50 (+7) e de 50 até 70 (+20) = 27',
+    shortHint: '💡 Elevador: De 43 até 50 (+7) e de 50 até 70 (+20) → some os saltos: 7 + 20 = ?',
     stepByStep: [
       'Do 43 até o 50 o elevador sobe 7 andares (3 + 7 = 10).',
       'Do 50 até o 70 sobe mais 20 andares.',
@@ -826,7 +826,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '110 − 76 = ?',
     correctAnswer: 34,
-    shortHint: '💡 Elevador: De 76 até 80 (+4), até 100 (+20) e até 110 (+10) = 34',
+    shortHint: '💡 Elevador: De 76 até 80 (+4) e de 80 até 110 (+30) → 30 + 4 = ?',
     stepByStep: [
       'De 76 até 80 subimos +4.',
       'De 80 até 100 subimos +20, e até 110 mais +10 (total +30).',
@@ -860,7 +860,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '15 × 4 = ?',
     correctAnswer: 60,
-    shortHint: '💡 Dobro do Dobro: O dobro de 15 é 30 → o dobro de 30 é 60!',
+    shortHint: '💡 Dobro do Dobro: O 1º dobro de 15 é 30. Agora dobre o 30 → 30 × 2 = ?',
     stepByStep: [
       'Multiplicar por 4 (a área de um Tetrominó!) é dobrar duas vezes seguidas.',
       '1º Dobro: 15 × 2 = 30.',
@@ -890,7 +890,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '25 × 4 = ?',
     correctAnswer: 100,
-    shortHint: '💡 Dobro do Dobro: 25 → 50 → 100!',
+    shortHint: '💡 Dobro do Dobro: O 1º dobro de 25 é 50. Agora dobre o 50 → 50 × 2 = ?',
     stepByStep: [
       'Pense em 4 moedas de 25: o dobro de 25 é 50.',
       'O dobro de 50 fecha exatamente a centena: 100!',
@@ -919,7 +919,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '16 × 4 = ?',
     correctAnswer: 64,
-    shortHint: '💡 Dobro do Dobro: Dobro de 16 é 32 → Dobro de 32 é 64!',
+    shortHint: '💡 Dobro do Dobro: O 1º dobro de 16 é 32. Agora dobre o 32 → 32 × 2 = ?',
     stepByStep: [
       '1º Dobro: 16 + 16 = 32.',
       '2º Dobro: 32 + 32 = 64!',
@@ -948,7 +948,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '35 × 4 = ?',
     correctAnswer: 140,
-    shortHint: '💡 Dobro do Dobro: Dobro de 35 é 70 → Dobro de 70 é 140!',
+    shortHint: '💡 Dobro do Dobro: O 1º dobro de 35 é 70. Agora dobre o 70 → 70 × 2 = ?',
     stepByStep: [
       'Todo número terminado em 5 fica redondo ao dobrar!',
       '1º Dobro: 35 × 2 = 70.',
@@ -978,7 +978,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '15 × 8 = ?',
     correctAnswer: 120,
-    shortHint: '💡 Triplo Dobro (×8): 15 → 30 → 60 → 120!',
+    shortHint: '💡 Triplo Dobro (×8): 15 dobra para 30, que dobra para 60. Dobre o 60 → 60 × 2 = ?',
     stepByStep: [
       'Multiplicar por 8 é dobrar 3 vezes seguidas!',
       '15 × 2 = 30 → 30 × 2 = 60 → 60 × 2 = 120!',
@@ -1011,7 +1011,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '14 × 5 = ?',
     correctAnswer: 70,
-    shortHint: '💡 Dobra e Meia: Metade de 14 é 7 → 7 × 10 = 70!',
+    shortHint: '💡 Dobra e Meia: Corte o 14 pela metade (= 7) e dobre o 5 (= 10) → 7 × 10 = ?',
     stepByStep: [
       'Assim como esticar um quadrado 2×2 em uma barra 1×4, cortamos o 14 pela metade (= 7) e dobramos o 5 (= 10).',
       'A conta vira 7 × 10 = 70 instantaneamente!',
@@ -1040,7 +1040,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '18 × 5 = ?',
     correctAnswer: 90,
-    shortHint: '💡 Dobra e Meia: Metade de 18 é 9 → 9 × 10 = 90!',
+    shortHint: '💡 Dobra e Meia: Corte o 18 pela metade (= 9) e dobre o 5 (= 10) → 9 × 10 = ?',
     stepByStep: [
       'Multiplicar por 5 é multiplicar por 10 e pegar a metade!',
       'Metade de 18 é 9, e o dobro de 5 é 10 → 9 × 10 = 90!',
@@ -1069,7 +1069,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '24 × 5 = ?',
     correctAnswer: 120,
-    shortHint: '💡 Dobra e Meia: Metade de 24 é 12 → 12 × 10 = 120!',
+    shortHint: '💡 Dobra e Meia: Corte o 24 pela metade (= 12) e dobre o 5 (= 10) → 12 × 10 = ?',
     stepByStep: [
       'Corte o 24 pela metade (= 12) e dobre o 5 (= 10).',
       'A área do retângulo não muda: 12 × 10 = 120!',
@@ -1098,7 +1098,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '18 × 15 = ?',
     correctAnswer: 270,
-    shortHint: '💡 Dobra e Meia: Metade de 18 (9) × Dobro de 15 (30) → 9 × 30 = 270!',
+    shortHint: '💡 Dobra e Meia: Metade de 18 (= 9) × Dobro de 15 (= 30) → 9 × 30 = ?',
     stepByStep: [
       '18 × 15 parece difícil na vertical, mas observe a Regra de Ouro da Área!',
       'Corte o 18 pela metade (= 9) e dobre o 15 (= 30).',
@@ -1128,7 +1128,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '16 × 25 = ?',
     correctAnswer: 400,
-    shortHint: '💡 Dobra e Meia Duplo: 16 ÷ 4 = 4 e 25 × 4 = 100 → 4 × 100 = 400!',
+    shortHint: '💡 Dobra e Meia Duplo: 16 ÷ 4 = 4 e 25 × 4 = 100 → agora faça 4 × 100 = ?',
     stepByStep: [
       'Em vez de multiplicar 16 × 25, transforme o retângulo duas vezes:',
       '16 × 25 = 8 × 50 = 4 × 100.',
@@ -1162,7 +1162,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '9 × 8 = ?',
     correctAnswer: 72,
-    shortHint: '💡 Truque do 9 (Base 10): 10 × 8 = 80, menos 8 → 80 − 8 = 72!',
+    shortHint: '💡 Truque do 9 (Base 10): Multiplique 10 × 8 (= 80) e tire 8 → 80 − 8 = ?',
     stepByStep: [
       'O 9 é 10 menos 1 (uma linha quase cheia do Tetris!).',
       '8 linhas de 10 blocos dão 80; tirando 1 bloco de cada uma das 8 linhas: 80 − 8 = 72!',
@@ -1191,7 +1191,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '12 × 8 = ?',
     correctAnswer: 96,
-    shortHint: '💡 Simetria na Base 10: (10 + 2) × (10 − 2) = 10² − 2² = 100 − 4 = 96!',
+    shortHint: '💡 Simetria na Base 10: (10 + 2) × (10 − 2) vira 10² − 2² → 100 − 4 = ?',
     stepByStep: [
       '12 e 8 estão à mesma distância do centro 10 (10 + 2 e 10 − 2).',
       'Pela Diferença de Quadrados: 10² − 2² = 100 − 4 = 96!',
@@ -1220,7 +1220,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '19 × 6 = ?',
     correctAnswer: 114,
-    shortHint: '💡 Arredonde para 20: (20 × 6) − 6 = 120 − 6 = 114!',
+    shortHint: '💡 Arredonde para 20: Multiplique 20 × 6 (= 120) e tire 6 → 120 − 6 = ?',
     stepByStep: [
       '19 está colado na dezena redonda 20 (19 = 20 − 1).',
       'Multiplique 20 × 6 = 120 e tire 1 vez o 6: 120 − 6 = 114!',
@@ -1249,7 +1249,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '21 × 19 = ?',
     correctAnswer: 399,
-    shortHint: '💡 Diferença de Quadrados no 20: (20 + 1)(20 − 1) = 400 − 1 = 399!',
+    shortHint: '💡 Diferença de Quadrados no 20: (20 + 1)(20 − 1) vira 20² − 1² → 400 − 1 = ?',
     stepByStep: [
       '21 e 19 são vizinhos simétricos do 20 (20 + 1 e 20 − 1).',
       'O quadrado de 20 é 400; tirando 1² (= 1), temos 400 − 1 = 399 em 1 segundo!',
@@ -1282,7 +1282,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '36 ÷ 4 = ?',
     correctAnswer: 9,
-    shortHint: '💡 Corta no Meio 2×: Metade de 36 é 18 → Metade de 18 é 9!',
+    shortHint: '💡 Corta no Meio 2×: A metade de 36 é 18. Agora corte o 18 ao meio: 18 ÷ 2 = ?',
     stepByStep: [
       'Dividir por 4 é cortar ao meio duas vezes seguidas!',
       '1ª Metade: 36 ÷ 2 = 18.',
@@ -1312,7 +1312,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '48 ÷ 4 = ?',
     correctAnswer: 12,
-    shortHint: '💡 Corta no Meio 2×: Metade de 48 é 24 → Metade de 24 é 12!',
+    shortHint: '💡 Corta no Meio 2×: A metade de 48 é 24. Agora corte o 24 ao meio: 24 ÷ 2 = ?',
     stepByStep: [
       '1ª Metade: 48 ÷ 2 = 24.',
       '2ª Metade: 24 ÷ 2 = 12!',
@@ -1341,7 +1341,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '84 ÷ 4 = ?',
     correctAnswer: 21,
-    shortHint: '💡 Corta no Meio 2×: Metade de 84 é 42 → Metade de 42 é 21!',
+    shortHint: '💡 Corta no Meio 2×: A metade de 84 é 42. Agora corte o 42 ao meio: 42 ÷ 2 = ?',
     stepByStep: [
       '1ª Metade: 84 ÷ 2 = 42.',
       '2ª Metade: 42 ÷ 2 = 21!',
@@ -1370,7 +1370,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '85 ÷ 5 = ?',
     correctAnswer: 17,
-    shortHint: '💡 Dividir por 5: Dobre o 85 (= 170) e corte o zero final → 17!',
+    shortHint: '💡 Dividir por 5: Dobre o 85 (= 170) e corte o zero final: 170 ÷ 10 = ?',
     stepByStep: [
       'Dividir por 5 é o mesmo que multiplicar por 2 e dividir por 10!',
       'O dobro de 85 é 170 (80×2=160 + 5×2=10).',
@@ -1400,7 +1400,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '60 ÷ 12 = ?',
     correctAnswer: 5,
-    shortHint: '💡 Senhores do Tempo (Relógio): 60 minutos divididos em 12 horas = 5!',
+    shortHint: '💡 Relógio Base-60: Corte ao meio duas vezes → 60 ÷ 12 vira 30 ÷ 6 = ?',
     stepByStep: [
       'No relógio de 60 minutos com 12 marcações, cada marcação vale 5 minutos!',
       'Ou simplifique cortando ao meio: 60 ÷ 12 = 30 ÷ 6 = 5!',
@@ -1429,7 +1429,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '(24 × 5) ÷ 12 = ?',
     correctAnswer: 10,
-    shortHint: '💡 Simplifique Antes de Multiplicar: 24 ÷ 12 = 2 → 2 × 5 = 10!',
+    shortHint: '💡 Simplifique Primeiro: Divida 24 por 12 (= 2) e multiplique pelo 5 → 2 × 5 = ?',
     stepByStep: [
       'Nunca multiplique 24 × 5 primeiro se você pode simplificar os Senhores do Tempo!',
       '24 dividido por 12 dá exatamente 2.',
@@ -1653,3 +1653,46 @@ export function generateMathChallenge(options: GenerateChallengeOptions): Tetris
 export function getAllMathLenses(): MathLensMetadata[] {
   return Object.values(TETRIS_MATH_LENSES)
 }
+
+/**
+ * Deterministic Zero-Spoiler Invariant Validator (`RT-10` — Phase 01).
+ * Inspects 100% of items in `RAW_PROBLEM_BANK` and verifies that:
+ * 1. No `shortHint` ends with the `correctAnswer` number.
+ * 2. No `shortHint` contains spoiler patterns (`= ${correctAnswer}`, `→ ${correctAnswer}`, `é ${correctAnswer}`).
+ * 3. Every `shortHint` ends with a Socratic guiding question (`?`).
+ */
+export function verifyZeroSpoilerProblemBank(): { valid: boolean; violations: string[] } {
+  const violations: string[] = []
+
+  for (const item of RAW_PROBLEM_BANK) {
+    const ans = String(item.correctAnswer)
+    const hint = item.shortHint.trim()
+
+    // 1. Check if shortHint ends with the correctAnswer
+    const endsWithAnsRegex = new RegExp(`(?:^|\\D)${ans}[!?.\\s]*$`)
+    if (endsWithAnsRegex.test(hint)) {
+      violations.push(`[${item.id}] shortHint termina com a resposta (${ans}): "${hint}"`)
+    }
+
+    // 2. Check if shortHint contains spoiler patterns like `= ${ans}`, `→ ${ans}`, `é ${ans}`
+    const spoilerPatternRegex = new RegExp(
+      `(?:=|→|é|são|vira|dá|sobra|sobram)\\s*${ans}(?:\\b|!|$)`,
+      'i'
+    )
+    if (spoilerPatternRegex.test(hint)) {
+      violations.push(`[${item.id}] shortHint contém padrão de spoiler para (${ans}): "${hint}"`)
+    }
+
+    // 3. Ensure shortHint ends with '?'
+    if (!hint.endsWith('?')) {
+      violations.push(`[${item.id}] shortHint deve terminar com '?' socrático: "${hint}"`)
+    }
+  }
+
+  return {
+    valid: violations.length === 0,
+    violations,
+  }
+}
+
+export const auditProblemBankZeroSpoilers = verifyZeroSpoilerProblemBank

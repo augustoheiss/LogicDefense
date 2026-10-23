@@ -12,13 +12,19 @@ const MAX_FRAME_DELTA_MS = 100
 const PRUNE_FEEDBACK_INTERVAL_MS = 400
 
 /**
- * Deterministic temporal game loop hook (`requestAnimationFrame`) for Logic Tetris Genesis.
+ * Deterministic temporal game loop hook (`requestAnimationFrame`) for Logic Tetris Genesis (Trinity Expansion).
  *
  * Incorporates Auditor Improvements:
  * - `Melhoria 04-D`: Idempotent under React 19 StrictMode (`cancelAnimationFrame` in cleanup),
  *   clamped delta `dtMs = Math.min(Math.max(0, rawDt), 100)` to prevent tab-switch teleports,
  *   and periodic `pruneFloatingFeedbacks()` cleanup every 400ms to prevent memory accumulation.
- * - Immediately pauses gravity ticks when `phase` is not `'PLAYING' | 'MATH_MORPH' | 'MATH_FILL_HOLE'`.
+ * - `Melhoria 05-C` & `RT-14`: Polymorphic keyboard routing across all 3 Trinity styles:
+ *   - `[G]`: `store.cycleSubGameStyle()` (switch style on demand)
+ *   - `[L]`: `store.toggleStyleRotationMode()` (toggle Simultaneous vs. Locked style)
+ *   - `ArrowUp` / `W`: `store.moveUp()` (moves cursor up in `TACTILE_GRID`, rotates CW in falling styles)
+ *   - `R` / `X`: `store.rotatePiece('CW')` in all 3 styles
+ *   - `[1]`, `[2]`, `[3]`: `store.selectTactileTraySlot(0 | 1 | 2)` in `TACTILE_GRID`
+ *   - `Enter` / `Space`: `store.hardDrop()` (places selected piece in `TACTILE_GRID` or drops in falling styles)
  */
 export function useGameLoop(options: UseGameLoopOptions = {}): void {
   const { enabled = true, enableKeyboard = true } = options
@@ -54,11 +60,12 @@ export function useGameLoop(options: UseGameLoopOptions = {}): void {
       const store = useLogicTetrisStore.getState()
       const currentPhase = store.phase
 
-      // Advance deterministic gravity / lock-delay / Grace-Float / Bullet-Time
+      // Advance deterministic gravity / lock-delay / Grace-Float / Bullet-Time / Style Transition
       if (
         currentPhase === 'PLAYING' ||
         currentPhase === 'MATH_MORPH' ||
-        currentPhase === 'MATH_FILL_HOLE'
+        currentPhase === 'MATH_FILL_HOLE' ||
+        store.styleTransitionRemainingMs > 0
       ) {
         store.tickLoop(dtMs)
       }
@@ -125,6 +132,24 @@ export function useGameLoop(options: UseGameLoopOptions = {}): void {
         return
       }
 
+      // Trinity style cycle with [G] (Melhoria 05-C)
+      if (event.key === 'g' || event.key === 'G') {
+        if (phase === 'PLAYING' || phase === 'PAUSED' || phase === 'START_HUB') {
+          event.preventDefault()
+          store.cycleSubGameStyle()
+        }
+        return
+      }
+
+      // Trinity style rotation lock toggle with [L] (Melhoria 05-C)
+      if (event.key === 'l' || event.key === 'L') {
+        if (phase === 'PLAYING' || phase === 'PAUSED' || phase === 'START_HUB') {
+          event.preventDefault()
+          store.toggleStyleRotationMode()
+        }
+        return
+      }
+
       if (phase !== 'PLAYING') {
         return
       }
@@ -155,6 +180,12 @@ export function useGameLoop(options: UseGameLoopOptions = {}): void {
         case 'ArrowUp':
         case 'w':
         case 'W':
+          event.preventDefault()
+          store.moveUp()
+          break
+
+        case 'r':
+        case 'R':
         case 'x':
         case 'X':
           event.preventDefault()
@@ -165,6 +196,34 @@ export function useGameLoop(options: UseGameLoopOptions = {}): void {
         case 'Z':
           event.preventDefault()
           store.rotatePiece('CCW')
+          break
+
+        case '1':
+          if (store.activeSubGameStyle === 'TACTILE_GRID') {
+            event.preventDefault()
+            store.selectTactileTraySlot(0)
+          }
+          break
+
+        case '2':
+          if (store.activeSubGameStyle === 'TACTILE_GRID') {
+            event.preventDefault()
+            store.selectTactileTraySlot(1)
+          }
+          break
+
+        case '3':
+          if (store.activeSubGameStyle === 'TACTILE_GRID') {
+            event.preventDefault()
+            store.selectTactileTraySlot(2)
+          }
+          break
+
+        case 'Enter':
+          if (store.activeSubGameStyle === 'TACTILE_GRID') {
+            event.preventDefault()
+            store.hardDrop()
+          }
           break
 
         case ' ':

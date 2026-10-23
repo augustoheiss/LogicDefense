@@ -122,20 +122,21 @@ export function LogicTetrisPage() {
       <section className="relative pt-6 pb-12 px-3 sm:px-6 max-w-6xl mx-auto">
         <div className="text-center max-w-3xl mx-auto mb-6">
           <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-xs font-mono font-bold text-cyan-300 mb-3">
-            <span>🧩 HEISS-LAB · PUZZLE GEOMÉTRICO BASE-10</span>
+            <span>🧶 HEISS-LAB · CORDÃO TRÍPLICE 3-EM-1 · BASE-10 & DOPAMINA 12×+</span>
           </span>
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
             Logic Tetris:{' '}
             <span className="bg-gradient-to-r from-cyan-400 via-teal-300 to-amber-300 bg-clip-text text-transparent">
-              Onde a Matemática Salva a Sua Vida no Jogo.
+              Onde a Matemática Salva a Sua Vida nos 3 Estilos dos Blocos.
             </span>
           </h1>
           <p className="text-sm sm:text-base text-slate-300 mt-2.5 leading-relaxed">
-            Na versão Gênesis do Tetris, você não é refém da sorte: faça uma conta mental das{' '}
-            <strong>4 operações (+, −, ×, ÷)</strong> para{' '}
-            <strong className="text-cyan-300">mudar a peça caindo [M]</strong> para o formato exato
-            que você precisa, <strong className="text-amber-300">tapar um buraco soterrado [B]</strong>{' '}
-            com cristais dourados ou purificar a base com o{' '}
+            Jogue no <strong className="text-cyan-300">Modo Simultâneo 3-em-1 [L]</strong> (que
+            alterna entre <strong>🧱 Tetris Clássico</strong>, <strong>🍇 Frutas em Cascata</strong>{' '}
+            e <strong>🧩 Grade Livre H×V 10×10</strong> mantendo sua sequência viva!) ou trave no
+            seu estilo favorito. Use a <strong>Luz Guia Socrática Zero-Spoiler</strong> das 4
+            operações para <strong className="text-cyan-300">transmutar peças [M]</strong>,{' '}
+            <strong className="text-amber-300">selar buracos/colunas [B]</strong> e acionar o{' '}
             <strong className="text-purple-300">Protocolo Fênix 142857</strong>!
           </p>
         </div>
@@ -153,76 +154,141 @@ export function LogicTetrisPage() {
         className="py-14 px-4 sm:px-6 border-t border-slate-800/80 bg-slate-950/60"
         data-testid="bab-before-after-section"
       >
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* BEFORE: A Tirania do Acaso & O Medo da Conta */}
-          <div className="rounded-3xl bg-rose-950/20 border border-rose-500/30 p-6 sm:p-8 space-y-4">
-            <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/40 text-xs font-mono font-bold text-rose-300">
-              ❌ ANTES: A IMPOTÊNCIA DO ACASO & DA DECOREBA
-            </span>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-white">
-              Quando um único buraco soterrado ou um "empréstimo" travava tudo
-            </h2>
-            <ul className="space-y-3 text-sm text-slate-300 leading-relaxed">
-              <li className="flex items-start gap-2.5">
-                <span className="text-rose-400 font-bold mt-0.5">01.</span>
-                <span>
-                  <strong>No Tetris Clássico:</strong> Você precisa desesperadamente da barra{' '}
-                  <code>I</code> ou soterra um único buraco na base, mas o jogo não lhe dá nenhuma
-                  forma inteligente de alterar a peça ou reparar a estrutura.
-                </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="text-rose-400 font-bold mt-0.5">02.</span>
-                <span>
-                  <strong>Na Aritmética Mecânica:</strong> Subtrair <code>42 − 19</code> pedindo
-                  emprestado ou decorar tabuadas frias gera ansiedade e esconde a beleza geométrica
-                  da Base-10.
-                </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="text-rose-400 font-bold mt-0.5">03.</span>
-                <span>
-                  <strong>O Erro Punitivo:</strong> Errar uma conta na escola ou colocar um bloco no
-                  lugar errado costumava significar punição imediata sem segunda chance.
-                </span>
-              </li>
-            </ul>
+        <div className="max-w-6xl mx-auto space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* BEFORE: A Tirania do Acaso & O Medo da Conta */}
+            <div className="rounded-3xl bg-rose-950/20 border border-rose-500/30 p-6 sm:p-8 space-y-4">
+              <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/40 text-xs font-mono font-bold text-rose-300">
+                ❌ ANTES: A IMPOTÊNCIA DO ACASO & DA DECOREBA
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-white">
+                Quando um único buraco soterrado ou um "empréstimo" travava tudo
+              </h2>
+              <ul className="space-y-3 text-sm text-slate-300 leading-relaxed">
+                <li className="flex items-start gap-2.5">
+                  <span className="text-rose-400 font-bold mt-0.5">01.</span>
+                  <span>
+                    <strong>Monotonia & Refém da Sorte:</strong> Jogos de blocos tradicionais
+                    prendem você a uma única regra rígida e não oferecem forma inteligente de moldar
+                    a peça ou reparar uma cavidade soterrada.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="text-rose-400 font-bold mt-0.5">02.</span>
+                  <span>
+                    <strong>Dicas que Dão Spoiler ou Decoreba Fria:</strong> Subtrair{' '}
+                    <code>42 − 19</code> pedindo emprestado gera ansiedade, e dicas que entregam a
+                    resposta pronta roubam o prazer da descoberta mental.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="text-rose-400 font-bold mt-0.5">03.</span>
+                  <span>
+                    <strong>Combos que Morrem Cedo:</strong> Uma única peça sem limpar linha zerava
+                    sua sequência e estagnava o som a partir do 5×.
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            {/* AFTER: A Soberania da Matemática Salva-Vidas */}
+            <div className="rounded-3xl bg-cyan-950/25 border border-cyan-500/40 p-6 sm:p-8 space-y-4">
+              <span className="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-xs font-mono font-bold text-cyan-200">
+                ✨ DEPOIS: CORDÃO TRÍPLICE 3-EM-1, LUZ GUIA ZERO-SPOILER & DOPAMINA 16×+
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-white">
+                Três universos geométricos, raciocínio socrático e sinfonia até 12×+!
+              </h2>
+              <ul className="space-y-3 text-sm text-slate-300 leading-relaxed">
+                <li className="flex items-start gap-2.5">
+                  <span className="text-cyan-400 font-bold mt-0.5">🧶</span>
+                  <span>
+                    <strong>O Cordão Tríplice dos Blocos em Tempo Real ([G] / [L]):</strong> Alterne
+                    automaticamente a cada 4 limpezas (Modo Simultâneo) ou trave entre{' '}
+                    <strong>Tetris Clássico (7+3=10)</strong>,{' '}
+                    <strong>Frutas em Cascata (2+1=3)</strong> e{' '}
+                    <strong>Grade Livre H×V 10×10 (10+10−1=19)</strong>!
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="text-amber-400 font-bold mt-0.5">💡</span>
+                  <span>
+                    <strong>Luz Guia Socrática Zero-Spoiler & Alquimia [M]/[B]:</strong> A dica
+                    ensina o <em>caminho mental</em> (ex.: cortar na metade duas vezes para dividir
+                    por 4) sem jamais entregar o resultado final antes do seu clique!
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="text-purple-400 font-bold mt-0.5">👑</span>
+                  <span>
+                    <strong>Sinfonia de Dopamina de 16 Estágios (12×+) & Fênix 142857:</strong> Com
+                    janela de momentum de 3 jogadas, sua sequência escala de acordes pentatônicos
+                    até fanfarras Lídias, Supernova e o Êxtase Gênesis 12×+!
+                  </span>
+                </li>
+              </ul>
+            </div>
           </div>
 
-          {/* AFTER: A Soberania da Matemática Salva-Vidas */}
-          <div className="rounded-3xl bg-cyan-950/25 border border-cyan-500/40 p-6 sm:p-8 space-y-4">
-            <span className="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-xs font-mono font-bold text-cyan-200">
-              ✨ DEPOIS: A MATEMÁTICA COMO SUPERPODER SALVA-VIDAS
-            </span>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-white">
-              Seu raciocínio rápido molda o formato da peça e sela qualquer buraco!
-            </h2>
-            <ul className="space-y-3 text-sm text-slate-300 leading-relaxed">
-              <li className="flex items-start gap-2.5">
-                <span className="text-cyan-400 font-bold mt-0.5">🔮</span>
-                <span>
-                  <strong>Metamorfose de Peça [M]:</strong> Precisa de uma barra <code>I</code>, de
-                  um cubo <code>O</code> ou do <strong>Monominó Dourado 1×1</strong>? Resolva uma
-                  conta em Bullet-Time e receba exatamente a peça escolhida com escudo de flutuação!
+          {/* 3 Architectural Highlight Cards of the Triple Cord Expansion (`Melhoria 07-A`) */}
+          <div
+            className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            data-testid="bab-trinity-pillars-grid"
+          >
+            <article className="rounded-2xl bg-slate-900/80 border border-cyan-500/30 p-5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-cyan-300">
+                  🧱🍇🧩 CORDÃO TRÍPLICE 3-EM-1
                 </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="text-amber-400 font-bold mt-0.5">✦</span>
-                <span>
-                  <strong>Tapar Buracos Soterrados [B]:</strong> Equilibre a Balança da Dezena para
-                  materializar Cristais Dourados diretamente nas cavidades profundas e disparar
-                  limpezas em cascata!
+                <span className="px-2 py-0.5 rounded bg-cyan-500/15 text-[10px] font-mono text-cyan-200">
+                  [G] Trocar · [L] Travar
                 </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="text-purple-400 font-bold mt-0.5">🔥</span>
-                <span>
-                  <strong>Protocolo Fênix 142857 & Segunda Chance Elástica:</strong> Mesmo quando a
-                  pilha encosta no topo, acertar o desafio Fênix purifica os andares inferiores e
-                  salva a sua partida!
+              </div>
+              <h3 className="text-sm font-extrabold text-white">
+                Grid 20×10 Base-10, Cachos de Frutas & Arena H×V 10×10
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Experimente a gravidade clássica de tetrominós, a reação em cadeia de pares de
+                frutas coloridas e o encaixe tátil sem gravidade em linhas horizontais e colunas
+                verticais na mesma partida!
+              </p>
+            </article>
+
+            <article className="rounded-2xl bg-slate-900/80 border border-amber-500/30 p-5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-amber-300">
+                  🔮 ALQUIMIA [M] & [B]
                 </span>
-              </li>
-            </ul>
+                <span className="px-2 py-0.5 rounded bg-amber-500/15 text-[10px] font-mono text-amber-200">
+                  100% Zero-Spoiler
+                </span>
+              </div>
+              <h3 className="text-sm font-extrabold text-white">
+                Luz Guia Socrática & Milagres Polimórficos
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Cada estilo adapta seus poderes: molde tetrominós ou peças da bandeja, forje o Par
+                Coringa Estelar (✦+✦), acione o Imã Magnético de Frutas ou sele cruzamentos H×V!
+              </p>
+            </article>
+
+            <article className="rounded-2xl bg-slate-900/80 border border-purple-500/30 p-5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-purple-300">
+                  👑 DOPAMINA 12×+ & FÊNIX
+                </span>
+                <span className="px-2 py-0.5 rounded bg-purple-500/15 text-[10px] font-mono text-purple-200">
+                  16 Estágios Web Audio
+                </span>
+              </div>
+              <h3 className="text-sm font-extrabold text-white">
+                Protocolo Fênix 142857 & Escudo de Momentum (3 Peças)
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Mantenha sua sequência viva por até 3 jogadas preparatórias rumo à fanfarra lendária
+                12×+ com fogos dourados, e purifique a base com a harmonia cíclica 142857!
+              </p>
+            </article>
           </div>
         </div>
       </section>

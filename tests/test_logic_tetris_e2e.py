@@ -102,7 +102,7 @@ def run_logic_tetris_e2e_suite() -> int:
             page.on("pageerror", on_page_error)
 
             # 1.1 Navegação Portal (/jogos -> /jogos/logic-tetris) [Melhoria 09-D]
-            print("[1/8] Testando navegação pelo Portal (/jogos -> /jogos/logic-tetris)...")
+            print("[1/11] Testando navegação pelo Portal (/jogos -> /jogos/logic-tetris)...")
             page.goto(f"{base_url}/jogos", wait_until="domcontentloaded", timeout=30000)
             page.wait_for_selector('a[href="/jogos/logic-tetris"]', timeout=20000)
             games_menu_text = page.content()
@@ -119,7 +119,7 @@ def run_logic_tetris_e2e_suite() -> int:
             telemetry_report["checks"]["portalNavigationToLogicTetris"] = "PASS"
 
             # 1.2 Verificação da Página Educacional BAB & 8 Lentes [Melhoria 08-A / 09-C]
-            print("[2/8] Auditando estrutura BAB, 8 Lentes e layout Desktop (1440x900)...")
+            print("[2/11] Auditando estrutura BAB, 8 Lentes e layout Desktop (1440x900)...")
             assert page.locator('[data-testid="bab-before-after-section"]').is_visible()
             assert page.locator('[data-testid="bab-lenses-bridge-section"]').is_visible()
             assert page.locator('[data-testid="btn-focus-arena"]').is_visible()
@@ -137,7 +137,7 @@ def run_logic_tetris_e2e_suite() -> int:
             telemetry_report["screenshots"].append(shot_hub)
 
             # 1.3 Teste dos 3 Modos no Start Hub + Faixa de Maestria + Modo Zen (Escudos Infinitos) + Mute [Melhoria 09-B / 10-B]
-            print("[3/8] Testando seleção dos 3 Modos, Faixa de Maestria e persistência de Mute...")
+            print("[3/11] Testando seleção dos 3 Modos, Faixa de Maestria e persistência de Mute...")
             assert page.locator('[data-testid="start-hub-overlay"]').is_visible()
             assert page.locator('[data-testid="hub-mastery-banner"]').is_visible(), (
                 "Faixa de Memória de Maestria (hub-mastery-banner) deve estar visível no Start Hub"
@@ -182,7 +182,7 @@ def run_logic_tetris_e2e_suite() -> int:
             telemetry_report["checks"]["desktopCanvasBoundingBox"] = canvas_box
 
             # 1.4 Milagre #1: Metamorfose de Peça ([M] / Alquimia da Forma) [Melhoria 09-A]
-            print("[4/8] Testando Milagre #1: Metamorfose da Peça em Queda ([M] -> Barra I)...")
+            print("[4/11] Testando Milagre #1: Metamorfose da Peça em Queda ([M] -> Barra I)...")
             page.locator('[data-testid="alchemy-piece-I"]').click()
             modal = page.locator('[data-testid="math-intervention-modal"]')
             assert modal.is_visible(), "Modal de intervenção matemática deve abrir ao clicar em Peça I"
@@ -235,7 +235,7 @@ def run_logic_tetris_e2e_suite() -> int:
             }
 
             # 1.5 Milagre #2: Tapar Buraco ([B]) + Feedback Elástico de 2ª Chance (RT-09) [Melhoria 09-A]
-            print("[5/8] Testando Milagre #2: Tapar Buraco ([B]) + Segunda Chance Elástica (RT-09)...")
+            print("[5/11] Testando Milagre #2: Tapar Buraco ([B]) + Segunda Chance Elástica (RT-09)...")
             page.locator('[data-testid="btn-trigger-fill-hole"]').click()
             assert modal.is_visible(), "Modal de Tapar Buraco ([B]) deve abrir"
 
@@ -273,7 +273,7 @@ def run_logic_tetris_e2e_suite() -> int:
             }
 
             # 1.6 Milagre #3: Salvação Fênix 142857 (Top-Out Second Wind) [Melhoria 09-A]
-            print("[6/8] Empilhando peças até o topo para acionar o Protocolo Fênix 142857...")
+            print("[6/11] Empilhando peças até o topo para acionar o Protocolo Fênix 142857...")
             phoenix_triggered = False
             for _ in range(18):
                 if modal.is_visible():
@@ -312,7 +312,7 @@ def run_logic_tetris_e2e_suite() -> int:
             }
 
             # 1.7 Códice Pedagógico Retrátil ([H]) — Histórico + 8 Lentes [Melhoria 09-A]
-            print("[7/8] Auditando Códice Pedagógico Heiss-Lab ([H]) — Diário da Sessão e 8 Lentes...")
+            print("[7/11] Auditando Códice Pedagógico Heiss-Lab ([H]) — Diário da Sessão e 8 Lentes...")
             page.locator('[data-testid="btn-toggle-codex"]').click()
             codex_drawer = page.locator('[data-testid="logic-codex-drawer"]')
             assert codex_drawer.is_visible(), "Gaveta do Códice deve abrir ao clicar em btn-toggle-codex"
@@ -341,12 +341,142 @@ def run_logic_tetris_e2e_suite() -> int:
             assert not codex_drawer.is_visible(), "Códice deve fechar ao clicar em btn-close-codex"
             telemetry_report["checks"]["codexHistoryAnd8Lenses"] = "PASS"
 
+            # 1.8 Check 9 — Invariante Zero-Spoiler na Luz Guia Socrática & Badge de Estilo [Melhoria 07-C]
+            print("[8/11] Auditando Invariante Zero-Spoiler na Luz Guia Socrática e Contexto do Cordão Tríplice...")
+            page.locator('[data-testid="style-btn-FRUIT_MATCH"]').click()
+            assert canvas_el.get_attribute("data-style") == "FRUIT_MATCH", (
+                "Canvas deve mudar data-style para FRUIT_MATCH ao clicar em style-btn-FRUIT_MATCH"
+            )
+            page.locator('[data-testid="btn-trigger-morph"]').click()
+            assert modal.is_visible(), "Modal matemático deve abrir em FRUIT_MATCH"
+
+            context_badge = page.locator('[data-testid="modal-style-context-badge"]')
+            assert context_badge.is_visible(), (
+                "Badge contextual (modal-style-context-badge) deve estar visível no modal"
+            )
+            context_badge_text = context_badge.inner_text()
+            assert "Frutas" in context_badge_text, (
+                f"Badge contextual deve indicar Frutas em Cascata, recebido: {context_badge_text}"
+            )
+
+            socratic_guide_text = page.locator('[data-testid="modal-guiding-light"]').inner_text()
+            correct_choice_label = (
+                page.locator('[data-choice-correct="true"]')
+                .first.locator('[data-testid^="math-choice-label-"]')
+                .inner_text()
+                .strip()
+            )
+            assert "?" in socratic_guide_text, (
+                f"Luz Guia Socrática deve conter pergunta instigante ('?'), recebido: {socratic_guide_text}"
+            )
+            assert f"= {correct_choice_label}" not in socratic_guide_text and (
+                f"={correct_choice_label}" not in socratic_guide_text
+            ), (
+                f"VIOLAÇÃO ZERO-SPOILER: Luz Guia entregou '= {correct_choice_label}' em: {socratic_guide_text}"
+            )
+            page.locator('[data-choice-correct="true"]').first.click()
+            assert not modal.is_visible(), "Modal deve fechar após resolver Par Coringa em FRUIT_MATCH"
+            telemetry_report["checks"]["zeroSpoilerGuidingLightAndContextBadge"] = {
+                "status": "PASS",
+                "styleContextBadge": context_badge_text,
+                "guidingLightSample": socratic_guide_text,
+            }
+
+            # 1.9 Check 10 — Troca do Cordão Tríplice (FRUIT_MATCH -> TACTILE_GRID), Bandeja Tátil & Aba Cordão Tríplice no Códice [Melhoria 07-C]
+            print("[9/11] Auditando Grade Tátil 10x10, Bandeja de 3 Peças, Trava [L] e Aba Cordão Tríplice no Códice...")
+            page.locator('[data-testid="style-btn-TACTILE_GRID"]').click()
+            assert canvas_el.get_attribute("data-style") == "TACTILE_GRID", (
+                "Canvas deve mudar data-style para TACTILE_GRID ao clicar em style-btn-TACTILE_GRID"
+            )
+            tactile_tray = page.locator('[data-testid="tactile-piece-tray"]')
+            assert tactile_tray.is_visible(), (
+                "Bandeja Tátil de 3 Peças (tactile-piece-tray) deve estar visível em TACTILE_GRID"
+            )
+            assert page.locator('[data-testid="tactile-tray-slot-0"]').is_visible()
+            assert page.locator('[data-testid="tactile-tray-slot-1"]').is_visible()
+            assert page.locator('[data-testid="tactile-tray-slot-2"]').is_visible()
+
+            # Selecionar slot 1 da bandeja e encaixar na Arena 10x10
+            page.locator('[data-testid="tactile-tray-slot-1"]').click()
+            page.keyboard.press("Enter")
+
+            # Alternar modo Simultâneo <-> Travado via botão HUD
+            rot_btn = page.locator('[data-testid="btn-toggle-style-rotation"]')
+            rot_before = canvas_el.get_attribute("data-rotation-mode")
+            rot_btn.click()
+            rot_after = canvas_el.get_attribute("data-rotation-mode")
+            assert rot_before != rot_after, (
+                f"btn-toggle-style-rotation deve alternar data-rotation-mode ({rot_before} -> {rot_after})"
+            )
+
+            # Abrir Códice [H] e validar Marcos de Sequência/Dobras + 3ª Aba Cordão Tríplice
+            page.locator('[data-testid="btn-toggle-codex"]').click()
+            assert codex_drawer.is_visible(), "Códice deve abrir para inspecionar a Aba do Cordão Tríplice"
+            assert page.locator('[data-testid="codex-max-streak"]').is_visible()
+            assert page.locator('[data-testid="codex-style-shifts"]').is_visible()
+
+            page.locator('[data-testid="codex-tab-trinity"]').click()
+            trinity_guide = page.locator('[data-testid="codex-trinity-guide"]')
+            assert trinity_guide.is_visible(), "Guia do Cordão Tríplice (codex-trinity-guide) deve estar visível"
+            assert page.locator('[data-testid="codex-style-card-TETRIS_CLASSIC"]').is_visible()
+            assert page.locator('[data-testid="codex-style-card-FRUIT_MATCH"]').is_visible()
+            assert page.locator('[data-testid="codex-style-card-TACTILE_GRID"]').is_visible()
+            assert "Cordão Tríplice" in page.locator('[data-testid="codex-tab-trinity"]').inner_text(), (
+                "Aba 3 do Códice deve exibir o rótulo neutro 'Cordão Tríplice'"
+            )
+            telemetry_report["checks"]["trinityStyleSwitchingTrayAndCodexTab"] = {
+                "status": "PASS",
+                "rotationModeToggled": f"{rot_before} -> {rot_after}",
+            }
+
+            # 1.10 Check 11 — Alinhamento grid-cols-3 das 3 Abas & Jukebox Interativo 12x+ [Melhoria 08-B / 08-C]
+            print("[10/11] Auditando alinhamento em linha única (grid-cols-3) das 3 abas do Códice e Jukebox 12x+...")
+            box_tab_history = page.locator('[data-testid="codex-tab-history"]').bounding_box()
+            box_tab_lenses = page.locator('[data-testid="codex-tab-lenses"]').bounding_box()
+            box_tab_trinity = page.locator('[data-testid="codex-tab-trinity"]').bounding_box()
+            assert (
+                box_tab_history is not None
+                and box_tab_lenses is not None
+                and box_tab_trinity is not None
+            ), "As 3 abas do Códice devem possuir boundingBox válido"
+            assert abs(box_tab_history["y"] - box_tab_trinity["y"]) <= 4, (
+                f"As 3 abas do Códice devem estar na mesma linha horizontal! "
+                f"y_history={box_tab_history['y']}, y_trinity={box_tab_trinity['y']}"
+            )
+
+            jukebox_bar = page.locator('[data-testid="codex-dopamine-preview-bar"]')
+            assert jukebox_bar.is_visible(), (
+                "Jukebox Harmônico (codex-dopamine-preview-bar) deve estar visível na aba Cordão Tríplice"
+            )
+            page.locator('[data-testid="codex-sound-preview-1"]').click()
+            page.locator('[data-testid="codex-sound-preview-7"]').click()
+            page.locator('[data-testid="codex-sound-preview-12"]').click()
+
+            jukebox_badge_text = page.locator('[data-testid="codex-sound-preview-badge"]').inner_text()
+            assert "12×" in jukebox_badge_text, (
+                f"Jukebox 12x+ deve exibir badge de 12x, recebido: {jukebox_badge_text}"
+            )
+
+            shot_trinity_codex = os.path.join(
+                screenshots_dir, "05b_codex_drawer_trinity_guide.png"
+            )
+            page.screenshot(path=shot_trinity_codex, full_page=False)
+            telemetry_report["screenshots"].append(shot_trinity_codex)
+
+            page.locator('[data-testid="btn-close-codex"]').click()
+            assert not codex_drawer.is_visible(), "Códice deve fechar após validar Aba do Cordão Tríplice e Jukebox"
+            telemetry_report["checks"]["codexSingleRowTabsAndDopamineJukebox"] = {
+                "status": "PASS",
+                "tabsDeltaY": abs(box_tab_history["y"] - box_tab_trinity["y"]),
+                "jukeboxBadge12x": jukebox_badge_text.splitlines()[0],
+            }
+
             desktop_ctx.close()
 
             # =========================================================================
             # PARTE 2: MOBILE VIEWPORT (390x844) — TOUCH PAD & BOUNDING BOX [Melhoria 09-C]
             # =========================================================================
-            print("[8/8] Auditando Viewport Mobile (390x844), TouchControlPad e ausência de overflow...")
+            print("[11/11] Auditando Viewport Mobile (390x844), TouchControlPad e ausência de overflow...")
             mobile_ctx = browser.new_context(
                 viewport={"width": 390, "height": 844},
                 is_mobile=True,

@@ -1,5 +1,6 @@
 import React from 'react'
-import { GameMode } from '../types'
+import { GameMode, SubGameStyle } from '../types'
+import { FRUIT_CATALOG } from '../engine/fruitMatchEngine'
 import { getPieceDefinition } from '../engine/tetrominoes'
 import { useLogicTetrisStore } from '../state/useLogicTetrisStore'
 import { MiniPieceMatrixPreview } from './PieceAlchemyBar'
@@ -19,19 +20,43 @@ const MODE_LABELS: Record<GameMode, { badge: string; color: string }> = {
   },
   master: {
     badge: '🔥 Mestre da Balança',
-    color: 'bg-amber-500/20 border-amber-400/50 text-amber-200',
+    color: 'bg-amber-500/20 border-amber-300/50 text-amber-200',
   },
 }
 
+const STYLE_BUTTONS: ReadonlyArray<{
+  style: SubGameStyle
+  label: string
+  shortHint: string
+}> = [
+  {
+    style: 'TETRIS_CLASSIC',
+    label: '🧱 Clássico',
+    shortHint: 'Queda Base-10',
+  },
+  {
+    style: 'FRUIT_MATCH',
+    label: '🍇 Frutas',
+    shortHint: 'Cascata 2+1=3',
+  },
+  {
+    style: 'TACTILE_GRID',
+    label: '🧩 Grade 10×10',
+    shortHint: 'Livre H×V',
+  },
+]
+
 /**
- * Telemetry HUD & Queue Panel (`TelemetryHUD.tsx`).
+ * Telemetry HUD, Trinity Style Switcher & Interactive Tactile Tray (`TelemetryHUD.tsx`).
  *
  * Incorporates Auditor Improvements:
- * - `Melhoria 07-C`: Displays clickable `Hold [C]` slot, `Next 3 Pieces` queue with
- *   `MiniPieceMatrixPreview` & `areaFormula`, `Phoenix Shields (🛡️)`, `Logic Charge (%)`,
- *   and quick controls (`Mute`, `Pause [P]`, `Codex [H]`, `Mode Hub`).
- * - `Melhoria 07-D`: Deterministic `data-testid` attributes (`hud-score`, `hud-lines`,
- *   `hud-phoenix-shields`, `btn-hold-piece`, `btn-toggle-codex`, `btn-toggle-mute`, `btn-toggle-pause`).
+ * - `Melhoria 06-B`: Adds `data-testid="trinity-style-hud"` with 3 instant style switcher buttons
+ *   (`style-btn-TETRIS_CLASSIC`, `style-btn-FRUIT_MATCH`, `style-btn-TACTILE_GRID`),
+ *   rotation mode toggle (`btn-toggle-style-rotation`: `"🌀 Simultâneo (X/4) [L]"` vs. `"🔒 Estilo Travado [L]"`),
+ *   and polymorphic Reserve/Queue panel (`btn-hold-piece` + `hud-next-queue` containing `tactile-piece-tray`
+ *   with `tactile-tray-slot-0..2` when in `TACTILE_GRID`).
+ * - Preserves 100% of existing `data-testid` attributes (`hud-score`, `hud-lines`, `hud-streak-counter`,
+ *   `hud-phoenix-shields`, `btn-hold-piece`, `hud-next-queue`, `btn-toggle-codex`, `btn-toggle-mute`, `btn-toggle-pause`).
  */
 export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) => {
   const phase = useLogicTetrisStore((s) => s.phase)
@@ -40,6 +65,8 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
   const lines = useLogicTetrisStore((s) => s.lines)
   const level = useLogicTetrisStore((s) => s.level)
   const combo = useLogicTetrisStore((s) => s.combo)
+  const comboGraceDropsLeft = useLogicTetrisStore((s) => s.comboGraceDropsLeft)
+  const maxStreakInSession = useLogicTetrisStore((s) => s.maxStreakInSession)
   const logicCharge = useLogicTetrisStore((s) => s.logicCharge)
   const phoenixShields = useLogicTetrisStore((s) => s.phoenixShields)
   const holdPieceType = useLogicTetrisStore((s) => s.holdPieceType)
@@ -49,7 +76,20 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
   const isMuted = useLogicTetrisStore((s) => s.isMuted)
   const highScore = useLogicTetrisStore((s) => s.stats.highScore)
 
+  const activeSubGameStyle = useLogicTetrisStore((s) => s.activeSubGameStyle)
+  const styleRotationMode = useLogicTetrisStore((s) => s.styleRotationMode)
+  const styleShiftProgress = useLogicTetrisStore((s) => s.styleShiftProgress)
+  const styleShiftTarget = useLogicTetrisStore((s) => s.styleShiftTarget)
+  const activeFruitPair = useLogicTetrisStore((s) => s.activeFruitPair)
+  const nextFruitPair = useLogicTetrisStore((s) => s.nextFruitPair)
+  const tactileTray = useLogicTetrisStore((s) => s.tactileTray)
+  const selectedTraySlot = useLogicTetrisStore((s) => s.selectedTraySlot)
+
   const holdCurrentPiece = useLogicTetrisStore((s) => s.holdCurrentPiece)
+  const rotatePiece = useLogicTetrisStore((s) => s.rotatePiece)
+  const setSubGameStyle = useLogicTetrisStore((s) => s.setSubGameStyle)
+  const toggleStyleRotationMode = useLogicTetrisStore((s) => s.toggleStyleRotationMode)
+  const selectTactileTraySlot = useLogicTetrisStore((s) => s.selectTactileTraySlot)
   const togglePause = useLogicTetrisStore((s) => s.togglePause)
   const toggleCodex = useLogicTetrisStore((s) => s.toggleCodex)
   const toggleMute = useLogicTetrisStore((s) => s.toggleMute)
@@ -60,10 +100,33 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
   const nextThree = nextQueue.slice(0, 3)
   const linesToNextShield = 10 - (lines % 10)
 
+  const activePrimaryFruit =
+    FRUIT_CATALOG[activeFruitPair.primary] ?? FRUIT_CATALOG.APPLE_RUBY
+  const activeSecondaryFruit =
+    FRUIT_CATALOG[activeFruitPair.secondary] ?? FRUIT_CATALOG.CITRUS_GOLD
+  const nextPrimaryFruit =
+    FRUIT_CATALOG[nextFruitPair.primary] ?? FRUIT_CATALOG.GRAPE_NEON
+  const nextSecondaryFruit =
+    FRUIT_CATALOG[nextFruitPair.secondary] ?? FRUIT_CATALOG.EMERALD_PEAR
+
+  const selectedTrayOption = tactileTray[selectedTraySlot]
+  const selectedTrayDef = selectedTrayOption
+    ? getPieceDefinition(selectedTrayOption.type)
+    : null
+
+  const handleHoldOrStyleAction = () => {
+    if (phase !== 'PLAYING') return
+    if (activeSubGameStyle === 'TACTILE_GRID') {
+      rotatePiece('CW')
+      return
+    }
+    holdCurrentPiece()
+  }
+
   return (
     <aside
       className={`flex flex-col gap-3 ${className}`}
-      aria-label="Painel de Telemetria, Fila de Peças e Escudos Fênix"
+      aria-label="Painel de Telemetria, Cordão Tríplice dos Blocos, Fila de Peças e Escudos Fênix"
     >
       {/* Top Action & Mode Bar */}
       <div className="lt-glass-panel rounded-2xl p-3 flex flex-col gap-2.5">
@@ -113,6 +176,78 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
           </div>
         </div>
 
+        {/* =====================================================================
+            TRINITY STYLE CONTROL PANEL (`data-testid="trinity-style-hud"` — Melhoria 06-B)
+            ===================================================================== */}
+        <div
+          className="rounded-xl bg-slate-950/85 border border-slate-800 p-2.5 flex flex-col gap-2"
+          data-testid="trinity-style-hud"
+        >
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-300 font-bold">
+              🧶 Cordão Tríplice [G]
+            </span>
+
+            <button
+              type="button"
+              onClick={toggleStyleRotationMode}
+              data-testid="btn-toggle-style-rotation"
+              title="Alternar entre Modo Simultâneo 3-em-1 e Travar no Estilo Atual [L]"
+              className={`px-2.5 py-0.5 rounded-full border text-[10px] font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                styleRotationMode === 'SIMULTANEOUS'
+                  ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-200 hover:bg-cyan-500/30'
+                  : 'bg-amber-500/20 border-amber-400/70 text-amber-200 hover:bg-amber-500/30'
+              }`}
+            >
+              {styleRotationMode === 'SIMULTANEOUS' ? (
+                <>
+                  <span>
+                    🌀 Simultâneo ({styleShiftProgress}/{styleShiftTarget}) [L]
+                  </span>
+                  <span className="inline-flex items-center gap-0.5">
+                    {Array.from({ length: styleShiftTarget }).map((_, i) => (
+                      <span
+                        key={i}
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          i < styleShiftProgress ? 'bg-amber-300' : 'bg-slate-700'
+                        }`}
+                      />
+                    ))}
+                  </span>
+                </>
+              ) : (
+                <span>🔒 Estilo Travado [L]</span>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1.5">
+            {STYLE_BUTTONS.map((btn) => {
+              const isActive = activeSubGameStyle === btn.style
+              return (
+                <button
+                  key={btn.style}
+                  type="button"
+                  onClick={() => setSubGameStyle(btn.style)}
+                  data-testid={`style-btn-${btn.style}`}
+                  className={`px-2 py-1.5 rounded-lg border text-center transition cursor-pointer flex flex-col items-center justify-center ${
+                    isActive
+                      ? 'bg-cyan-950/90 border-cyan-400 text-white shadow-[0_0_12px_rgba(34,211,238,0.28)]'
+                      : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300'
+                  }`}
+                >
+                  <span className="text-[11px] font-mono font-bold leading-tight">
+                    {btn.label}
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-400 leading-tight">
+                    {btn.shortHint}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Score, Lines, Level & Phoenix Shields Grid */}
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-slate-950/75 border border-slate-800/90 px-3 py-2">
@@ -131,18 +266,34 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
             <div className="text-[10px] font-mono uppercase text-slate-400">
               Linhas Base-10 · Nível {level}
             </div>
-            <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline justify-between gap-1">
               <span
                 className="text-lg font-extrabold font-mono text-emerald-300"
                 data-testid="hud-lines"
               >
                 {lines}
               </span>
-              {combo > 0 && (
-                <span className="text-[11px] font-mono font-bold text-amber-300 animate-pulse">
-                  🔥 Combo ×{combo + 1}
-                </span>
-              )}
+              <span
+                data-testid="hud-streak-counter"
+                title={
+                  combo > 0
+                    ? `Sequência ativa ×${combo} (Janela de ritmo: ${comboGraceDropsLeft} encaixe(s) preparatório(s) · Recorde da sessão: ×${maxStreakInSession})`
+                    : `Sequência pronta (Recorde da sessão: ×${maxStreakInSession})`
+                }
+                className={`text-[11px] font-mono font-bold transition ${
+                  combo >= 12
+                    ? 'text-yellow-300 animate-bounce'
+                    : combo > 0
+                      ? 'text-amber-300 animate-pulse'
+                      : 'text-slate-400'
+                }`}
+              >
+                {combo >= 12
+                  ? `👑 Sequência ×${combo}!`
+                  : combo > 0
+                    ? `🔥 Sequência ×${combo} (${comboGraceDropsLeft}⏳)`
+                    : `🔥 Sequência ×0`}
+              </span>
             </div>
           </div>
         </div>
@@ -178,26 +329,61 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
         </div>
       </div>
 
-      {/* Hold [C] & Next 3 Pieces Queue (`Melhoria 07-C`) */}
+      {/* Polymorphic Hold [C] & Next Queue / Tactile 3-Piece Tray (`Melhoria 06-B`) */}
       <div className="grid grid-cols-2 gap-2.5">
-        {/* Hold Piece Slot */}
+        {/* Hold Piece Slot / Active Fruit Pair / Rotate Tactile Piece */}
         <button
           type="button"
-          disabled={phase !== 'PLAYING' || !canHold}
-          onClick={() => holdCurrentPiece()}
+          disabled={
+            phase !== 'PLAYING' ||
+            (activeSubGameStyle !== 'TACTILE_GRID' && !canHold)
+          }
+          onClick={handleHoldOrStyleAction}
           data-testid="btn-hold-piece"
-          title="Guardar peça atual para usar depois (Tecla [C] ou [Shift])"
+          title={
+            activeSubGameStyle === 'TACTILE_GRID'
+              ? 'Girar peça selecionada da bandeja (Tecla [R])'
+              : activeSubGameStyle === 'FRUIT_MATCH'
+                ? 'Trocar par em queda pelo próximo par (Tecla [C] ou [Shift])'
+                : 'Guardar peça atual para usar depois (Tecla [C] ou [Shift])'
+          }
           className="lt-glass-panel rounded-2xl p-3 flex flex-col items-center justify-between text-center hover:border-cyan-400/60 transition cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
         >
           <div className="w-full flex items-center justify-between text-[10px] font-mono text-slate-300">
-            <span>RESERVA</span>
+            <span>
+              {activeSubGameStyle === 'TACTILE_GRID'
+                ? 'GIRAR PEÇA'
+                : activeSubGameStyle === 'FRUIT_MATCH'
+                  ? 'PAR EM QUEDA'
+                  : 'RESERVA'}
+            </span>
             <span className="px-1.5 py-0.2 rounded bg-slate-800 border border-slate-700 text-cyan-300 font-bold">
-              [C]
+              {activeSubGameStyle === 'TACTILE_GRID' ? '↻ [R]' : '[C]'}
             </span>
           </div>
 
           <div className="my-2 min-h-[44px] flex items-center justify-center">
-            {holdDef ? (
+            {activeSubGameStyle === 'FRUIT_MATCH' ? (
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-purple-500/40">
+                <span className="text-lg" title={activeSecondaryFruit.namePt}>
+                  {activeSecondaryFruit.emoji}
+                </span>
+                <span className="text-xs font-mono text-amber-300">↔</span>
+                <span className="text-lg" title={activePrimaryFruit.namePt}>
+                  {activePrimaryFruit.emoji}
+                </span>
+              </div>
+            ) : activeSubGameStyle === 'TACTILE_GRID' ? (
+              selectedTrayDef && selectedTrayOption ? (
+                <MiniPieceMatrixPreview
+                  def={selectedTrayDef}
+                  rotation={selectedTrayOption.rotation}
+                  cellSizePx={8}
+                />
+              ) : (
+                <span className="text-[11px] font-mono text-slate-500">Selecione slot</span>
+              )
+            ) : holdDef ? (
               <MiniPieceMatrixPreview def={holdDef} cellSizePx={8} />
             ) : (
               <span className="text-[11px] font-mono text-slate-500">Vazio (Clique)</span>
@@ -205,44 +391,135 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
           </div>
 
           <div className="text-[10px] font-mono text-slate-300">
-            {holdDef ? `${holdDef.namePt} (${holdDef.areaFormula})` : 'Guarda 1 peça'}
+            {activeSubGameStyle === 'FRUIT_MATCH'
+              ? `${activeSecondaryFruit.symbol} + ${activePrimaryFruit.symbol} · [R] Girar Par`
+              : activeSubGameStyle === 'TACTILE_GRID'
+                ? selectedTrayDef && selectedTrayOption
+                  ? `${selectedTrayDef.namePt} (${selectedTrayOption.rotation * 90}°)`
+                  : 'Girar peça da bandeja'
+                : holdDef
+                  ? `${holdDef.namePt} (${holdDef.areaFormula})`
+                  : 'Guarda 1 peça'}
           </div>
         </button>
 
-        {/* Next 3 Pieces Queue */}
+        {/* Next 3 Pieces Queue / Next Fruit Pair / Interactive 3-Piece Tactile Tray */}
         <div
           className="lt-glass-panel rounded-2xl p-3 flex flex-col justify-between"
           data-testid="hud-next-queue"
         >
-          <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 mb-1.5">
-            <span>PRÓXIMAS (7-BAG)</span>
-            <span className="text-emerald-300">3 PEÇAS</span>
-          </div>
+          {activeSubGameStyle === 'TACTILE_GRID' ? (
+            <div
+              className="flex flex-col justify-between h-full"
+              data-testid="tactile-piece-tray"
+            >
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 mb-1.5">
+                <span>BANDEJA TÁTIL</span>
+                <span className="text-emerald-300">[1] [2] [3]</span>
+              </div>
 
-          <div className="flex items-center justify-around gap-1 my-auto">
-            {nextThree.map((type, idx) => {
-              const def = getPieceDefinition(type)
-              return (
-                <div
-                  key={`${type}_${idx}`}
-                  className="flex flex-col items-center gap-1"
-                  title={`${def.namePt} (${def.areaFormula})`}
-                >
-                  <MiniPieceMatrixPreview def={def} cellSizePx={idx === 0 ? 7 : 5.5} />
+              <div className="grid grid-cols-3 gap-1 my-auto">
+                {tactileTray.map((opt, idx) => {
+                  const def = getPieceDefinition(opt.type)
+                  const isSelected = selectedTraySlot === idx && !opt.isUsed
+                  return (
+                    <button
+                      key={`${opt.type}_${idx}`}
+                      type="button"
+                      disabled={opt.isUsed}
+                      onClick={() => selectTactileTraySlot(idx as 0 | 1 | 2)}
+                      data-testid={`tactile-tray-slot-${idx}`}
+                      title={`${def.namePt} (${def.areaFormula})`}
+                      className={`p-1 rounded-xl border flex flex-col items-center justify-between transition cursor-pointer ${
+                        opt.isUsed
+                          ? 'opacity-35 border-slate-800 bg-slate-950/40 pointer-events-none'
+                          : isSelected
+                            ? 'border-emerald-400 bg-emerald-950/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                            : 'border-slate-800 bg-slate-900/70 hover:border-slate-600'
+                      }`}
+                    >
+                      <span className="text-[9px] font-mono font-bold text-cyan-300">
+                        [{idx + 1}] {def.label}
+                      </span>
+                      <div className="my-1 min-h-[26px] flex items-center justify-center">
+                        <MiniPieceMatrixPreview
+                          def={def}
+                          rotation={opt.rotation}
+                          cellSizePx={5}
+                        />
+                      </div>
+                      <span className="text-[8px] font-mono text-slate-300">
+                        {opt.isUsed ? '✓ Usada' : def.areaFormula}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="text-[9px] font-mono text-emerald-300/90 text-center mt-[4px]">
+                Clique na Arena 10×10 p/ encaixar!
+              </div>
+            </div>
+          ) : activeSubGameStyle === 'FRUIT_MATCH' ? (
+            <div className="flex flex-col justify-between h-full">
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 mb-1.5">
+                <span>PRÓXIMO PAR</span>
+                <span className="text-purple-300">CASCATA 3+</span>
+              </div>
+
+              <div className="flex items-center justify-center gap-3 my-auto py-1">
+                <div className="flex flex-col items-center">
+                  <span className="text-xl">{nextSecondaryFruit.emoji}</span>
                   <span className="text-[9px] font-mono text-slate-300">
-                    {def.label}
-                    <span style={{ color: def.borderColor }} className="ml-0.5">
-                      {def.symbol}
-                    </span>
+                    {nextSecondaryFruit.namePt}
                   </span>
                 </div>
-              )
-            })}
-          </div>
+                <span className="text-xs font-mono text-purple-300">+</span>
+                <div className="flex flex-col items-center">
+                  <span className="text-xl">{nextPrimaryFruit.emoji}</span>
+                  <span className="text-[9px] font-mono text-slate-300">
+                    {nextPrimaryFruit.namePt}
+                  </span>
+                </div>
+              </div>
 
-          <div className="text-[9px] font-mono text-slate-400 text-center mt-[4px]">
-            Ou pressione [M] p/ escolher!
-          </div>
+              <div className="text-[9px] font-mono text-amber-300/90 text-center mt-[4px]">
+                Junte 2 + 1 = 3+ frutas iguais!
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 mb-1.5">
+                <span>PRÓXIMAS (7-BAG)</span>
+                <span className="text-emerald-300">3 PEÇAS</span>
+              </div>
+
+              <div className="flex items-center justify-around gap-1 my-auto">
+                {nextThree.map((type, idx) => {
+                  const def = getPieceDefinition(type)
+                  return (
+                    <div
+                      key={`${type}_${idx}`}
+                      className="flex flex-col items-center gap-1"
+                      title={`${def.namePt} (${def.areaFormula})`}
+                    >
+                      <MiniPieceMatrixPreview def={def} cellSizePx={idx === 0 ? 7 : 5.5} />
+                      <span className="text-[9px] font-mono text-slate-300">
+                        {def.label}
+                        <span style={{ color: def.borderColor }} className="ml-0.5">
+                          {def.symbol}
+                        </span>
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="text-[9px] font-mono text-slate-400 text-center mt-[4px]">
+                Ou pressione [M] p/ escolher!
+              </div>
+            </>
+          )}
         </div>
       </div>
 

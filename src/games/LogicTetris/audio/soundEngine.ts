@@ -15,27 +15,40 @@
  *   and `localStorage` persistence under `logic_tetris_v1_muted`.
  */
 
+import { DopamineTier, SubGameStyle } from '../types'
+
 export const MUTE_STORAGE_KEY = 'logic_tetris_v1_muted'
 const MIN_CHANNEL_COOLDOWN_MS = 35
-const MAX_CONCURRENT_VOICES = 14
+export const MAX_CONCURRENT_VOICES = 24
 
-// C Major Pentatonic + Lydian #4 (F#) frequencies in Hz
+// C Major Pentatonic + Lydian #4 (F#) frequencies in Hz — Expanded C3 (130.81 Hz) to G6 (1567.98 Hz)
 export const PENTATONIC_LYDIAN_SCALE_HZ: readonly number[] = [
-  261.63, // C4  (Index 0)
-  293.66, // D4  (Index 1)
-  329.63, // E4  (Index 2)
-  369.99, // F#4 (Index 3 - Lydian bright degree)
-  392.00, // G4  (Index 4)
-  440.00, // A4  (Index 5)
-  493.88, // B4  (Index 6)
-  523.25, // C5  (Index 7)
-  587.33, // D5  (Index 8)
-  659.25, // E5  (Index 9)
-  739.99, // F#5 (Index 10 - Lydian bright degree)
-  783.99, // G5  (Index 11)
-  880.00, // A5  (Index 12)
-  987.77, // B5  (Index 13)
-  1046.50, // C6 (Index 14)
+  130.81, // C3  (Index 0  - Deep Sub-Bass Root)
+  146.83, // D3  (Index 1)
+  164.81, // E3  (Index 2)
+  185.00, // F#3 (Index 3  - Lydian Low Bright)
+  196.00, // G3  (Index 4  - Sub-Bass Fifth)
+  220.00, // A3  (Index 5)
+  246.94, // B3  (Index 6)
+  261.63, // C4  (Index 7  - Middle C)
+  293.66, // D4  (Index 8)
+  329.63, // E4  (Index 9)
+  369.99, // F#4 (Index 10 - Lydian bright degree)
+  392.00, // G4  (Index 11)
+  440.00, // A4  (Index 12)
+  493.88, // B4  (Index 13)
+  523.25, // C5  (Index 14)
+  587.33, // D5  (Index 15)
+  659.25, // E5  (Index 16)
+  739.99, // F#5 (Index 17 - Lydian bright degree)
+  783.99, // G5  (Index 18)
+  880.00, // A5  (Index 19)
+  987.77, // B5  (Index 20)
+  1046.50, // C6 (Index 21)
+  1174.66, // D6 (Index 22)
+  1318.51, // E6 (Index 23)
+  1479.98, // F#6 (Index 24 - High Crystal Lydian #4)
+  1567.98, // G6 (Index 25 - Genesis Ecstasy Apex)
 ]
 
 type SoundChannel =
@@ -48,17 +61,28 @@ type SoundChannel =
   | 'morph'
   | 'seal'
   | 'clear'
+  | 'dopamine'
+  | 'styleShift'
   | 'bounce'
   | 'phoenix'
   | 'system'
 
-interface ToneOptions {
+export interface ToneOptions {
   freq: number
   type?: OscillatorType
   durationSec: number
   delaySec?: number
   gain?: number
   slideToFreq?: number
+}
+
+export interface SequenceDopamineSignature {
+  streakCount: number
+  magnitude: number
+  style: SubGameStyle
+  tier: DopamineTier
+  primaryFrequenciesHz: number[]
+  notes: ToneOptions[]
 }
 
 function loadInitialMutedState(): boolean {
@@ -79,10 +103,79 @@ function persistMutedState(muted: boolean): void {
   }
 }
 
+export interface DopamineStageDescriptor {
+  streakCount: number
+  tier: DopamineTier
+  badgePt: string
+  harmonicDescriptionPt: string
+}
+
+export function getSequenceDopamineTier(streakCount: number): DopamineTier {
+  if (streakCount <= 0) return 'NONE'
+  if (streakCount <= 3) return 'WARMUP_1_3'
+  if (streakCount <= 6) return 'HARMONIC_4_6'
+  if (streakCount <= 9) return 'LYDIAN_7_9'
+  if (streakCount <= 11) return 'SUPERNOVA_10_11'
+  return 'GENESIS_ECSTASY_12_PLUS'
+}
+
+export function getDopamineStageDescriptor(streakCount: number): DopamineStageDescriptor {
+  const tier = getSequenceDopamineTier(streakCount)
+  if (tier === 'NONE') {
+    return {
+      streakCount: 0,
+      tier,
+      badgePt: '🌱 Pronto para a 1ª Sequência',
+      harmonicDescriptionPt: 'Aguardando a primeira limpeza Base-10 ou cascata.',
+    }
+  }
+  if (tier === 'WARMUP_1_3') {
+    return {
+      streakCount,
+      tier,
+      badgePt: `✨ ${streakCount}× Aquecimento Pentatônico`,
+      harmonicDescriptionPt: 'Tríade pentatônica cristalina de despertar harmônico.',
+    }
+  }
+  if (tier === 'HARMONIC_4_6') {
+    return {
+      streakCount,
+      tier,
+      badgePt: `🔥 ${streakCount}× Pulso Harmônico Brilhante`,
+      harmonicDescriptionPt: 'Arpejo ascendente em oitava dupla com pulso de baixo.',
+    }
+  }
+  if (tier === 'LYDIAN_7_9') {
+    return {
+      streakCount,
+      tier,
+      badgePt: `⚡ ${streakCount}× Ressonância Lídia (#4)`,
+      harmonicDescriptionPt: 'Fanfarra Lídia luminosa com quarta aumentada celestial (F#).',
+    }
+  }
+  if (tier === 'SUPERNOVA_10_11') {
+    return {
+      streakCount,
+      tier,
+      badgePt: `🌟 ${streakCount}× Supernova Harmônica!`,
+      harmonicDescriptionPt: 'Cascata polifônica de 5 vozes em registro cristalino.',
+    }
+  }
+  return {
+    streakCount,
+    tier,
+    badgePt: `👑 ${streakCount}× SEQUÊNCIA LENDÁRIA! DOPAMINA MÁXIMA!`,
+    harmonicDescriptionPt:
+      'Fanfarra Gênesis de 6 vozes + Sub-Bass + Sinos de Cristal (C6–G6)!',
+  }
+}
+
 class LogicTetrisSoundEngine {
   private ctx: AudioContext | null = null
   private muted: boolean = loadInitialMutedState()
   private activeVoices: number = 0
+  private activeVoiceNodes: Array<{ osc: OscillatorNode; gainNode: GainNode }> = []
+  private lastSequenceSignature: SequenceDopamineSignature | null = null
   private lastChannelTriggerMs: Record<SoundChannel, number> = {
     move: 0,
     rotate: 0,
@@ -93,6 +186,8 @@ class LogicTetrisSoundEngine {
     morph: 0,
     seal: 0,
     clear: 0,
+    dopamine: 0,
+    styleShift: 0,
     bounce: 0,
     phoenix: 0,
     system: 0,
@@ -110,6 +205,18 @@ class LogicTetrisSoundEngine {
 
   public toggleMuted(): boolean {
     return this.setMuted(!this.muted)
+  }
+
+  public getSequenceDopamineTier(streakCount: number): DopamineTier {
+    return getSequenceDopamineTier(streakCount)
+  }
+
+  public getDopamineStageDescriptor(streakCount: number): DopamineStageDescriptor {
+    return getDopamineStageDescriptor(streakCount)
+  }
+
+  public getLastSequenceSignature(): SequenceDopamineSignature | null {
+    return this.lastSequenceSignature
   }
 
   private getAudioContext(): AudioContext | null {
@@ -146,11 +253,26 @@ class LogicTetrisSoundEngine {
   }
 
   private scheduleNote(options: ToneOptions): void {
-    if (this.muted || this.activeVoices >= MAX_CONCURRENT_VOICES) return
+    if (this.muted) return
     const ctx = this.getAudioContext()
     if (!ctx) return
 
     try {
+      // RT-11 Graceful Voice Stealing: if at capacity (24 voices), steal the oldest active voice cleanly
+      while (this.activeVoiceNodes.length >= MAX_CONCURRENT_VOICES) {
+        const oldest = this.activeVoiceNodes.shift()
+        if (oldest) {
+          this.activeVoices = Math.max(0, this.activeVoices - 1)
+          try {
+            oldest.osc.stop()
+            oldest.osc.disconnect()
+            oldest.gainNode.disconnect()
+          } catch {
+            // Ignore already-stopped nodes
+          }
+        }
+      }
+
       const {
         freq,
         type = 'sine',
@@ -160,6 +282,7 @@ class LogicTetrisSoundEngine {
         slideToFreq,
       } = options
 
+      const safeGain = Math.min(0.085, Math.max(0.005, gain))
       const startTime = ctx.currentTime + Math.max(0, delaySec)
       const attackTime = 0.006
       const endTime = startTime + Math.max(0.025, durationSec)
@@ -175,15 +298,22 @@ class LogicTetrisSoundEngine {
 
       // Click-free ADSR envelope
       gainNode.gain.setValueAtTime(0.0001, startTime)
-      gainNode.gain.linearRampToValueAtTime(gain, startTime + attackTime)
+      gainNode.gain.linearRampToValueAtTime(safeGain, startTime + attackTime)
       gainNode.gain.exponentialRampToValueAtTime(0.0001, endTime)
 
       osc.connect(gainNode)
       gainNode.connect(ctx.destination)
 
-      this.activeVoices++
+      const record = { osc, gainNode }
+      this.activeVoiceNodes.push(record)
+      this.activeVoices = this.activeVoiceNodes.length
+
       osc.onended = () => {
-        this.activeVoices = Math.max(0, this.activeVoices - 1)
+        const idx = this.activeVoiceNodes.indexOf(record)
+        if (idx !== -1) {
+          this.activeVoiceNodes.splice(idx, 1)
+        }
+        this.activeVoices = this.activeVoiceNodes.length
         try {
           osc.disconnect()
           gainNode.disconnect()
@@ -362,29 +492,318 @@ class LogicTetrisSoundEngine {
   }
 
   /**
-   * Ascending Pentatonic/Lydian arpeggio on Line Clears (`1..4` lines), shifting upward in
-   * harmonic degree as `combo` grows (`Melhoria 06-A`).
+   * Deterministic 16-Stage Sequence Dopamine Synthesizer Blueprint (`Phase 01` — `playSequenceDopamine`).
+   * Maps any `streakCount` (`1..16+`) into a progressively richer harmonic signature:
+   * - `1..3` (`WARMUP_1_3`): Ascending crystalline pentatonic arpeggio rising 1 scale degree per streak.
+   * - `4..6` (`HARMONIC_4_6`): Adds warm sub-bass (`C3/D3/G3` triangle) + chorus detune (`+3 Hz`) shimmer.
+   * - `7..9` (`LYDIAN_7_9`): 5-note C Lydian arpeggio highlighting `#4` (`F#5`) + high crystal bell (`E6..G6`).
+   * - `10..11` (`SUPERNOVA_10_11`): Rapid 6-note golden harp cascade with double-octave resolution.
+   * - `12+` (`GENESIS_ECSTASY_12_PLUS`): Triumphant 8-note polyphonic fanfare + sustained golden chord,
+   *   escalating in harmonic brilliance for `12×, 13×, 14×, 15×, 16×+` without any ceiling!
    */
-  public playLineClear(linesCleared: number, combo: number = 0): void {
-    if (!this.canTriggerChannel('clear', 50)) return
-    const clampedLines = Math.max(1, Math.min(4, linesCleared))
-    const comboOffset = Math.max(0, Math.min(5, combo))
-    const noteCount = clampedLines === 4 ? 6 : clampedLines + 2
+  public getSequenceDopamineSignature(
+    streakCount: number,
+    magnitude: number = 1,
+    style: SubGameStyle = 'TETRIS_CLASSIC'
+  ): SequenceDopamineSignature {
+    const effectiveStreak = Math.max(1, Math.floor(streakCount))
+    const clampedMag = Math.max(1, Math.min(4, Math.floor(magnitude)))
+    const tier = getSequenceDopamineTier(effectiveStreak)
+    const notes: ToneOptions[] = []
+    const primaryFrequenciesHz: number[] = []
 
-    for (let i = 0; i < noteCount; i++) {
-      const scaleIdx = Math.min(
-        PENTATONIC_LYDIAN_SCALE_HZ.length - 1,
-        comboOffset + i * 2
-      )
-      const freq = PENTATONIC_LYDIAN_SCALE_HZ[scaleIdx]
-      this.scheduleNote({
-        freq,
-        type: clampedLines >= 4 ? 'triangle' : 'sine',
-        durationSec: 0.2 + clampedLines * 0.03,
-        delaySec: i * 0.048,
+    const stylePitchOffsetHz =
+      style === 'FRUIT_MATCH' ? 2.5 : style === 'TACTILE_GRID' ? -1.5 : 0
+
+    if (tier === 'WARMUP_1_3') {
+      // Stage 1..3: C4 (idx 7), D4 (idx 8), E4 (idx 9) ascending arpeggio
+      const baseIdx = 7 + (effectiveStreak - 1)
+      const noteCount = clampedMag >= 4 ? 5 : 2 + clampedMag
+      for (let i = 0; i < noteCount; i++) {
+        const scaleIdx = Math.min(PENTATONIC_LYDIAN_SCALE_HZ.length - 1, baseIdx + i * 2)
+        const freq = Number((PENTATONIC_LYDIAN_SCALE_HZ[scaleIdx] + stylePitchOffsetHz).toFixed(2))
+        primaryFrequenciesHz.push(freq)
+        notes.push({
+          freq,
+          type: i === noteCount - 1 ? 'triangle' : 'sine',
+          durationSec: 0.18 + clampedMag * 0.025,
+          delaySec: i * 0.045,
+          gain: 0.075,
+        })
+      }
+    } else if (tier === 'HARMONIC_4_6') {
+      // Stage 4..6: Sub-bass foundation + 4-note ascending arpeggio + +3Hz chorus shimmer
+      const bassIndices = [0, 1, 4] // C3 (130.81), D3 (146.83), G3 (196.00)
+      const bassFreq = PENTATONIC_LYDIAN_SCALE_HZ[bassIndices[(effectiveStreak - 4) % 3]]
+      primaryFrequenciesHz.push(bassFreq)
+      notes.push({
+        freq: bassFreq,
+        type: 'triangle',
+        durationSec: 0.32,
+        delaySec: 0,
         gain: 0.08,
       })
+
+      const baseIdx = 10 + (effectiveStreak - 4) // F#4, G4, A4
+      const arpCount = 4
+      for (let i = 0; i < arpCount; i++) {
+        const scaleIdx = Math.min(PENTATONIC_LYDIAN_SCALE_HZ.length - 1, baseIdx + i * 2)
+        const freq = Number((PENTATONIC_LYDIAN_SCALE_HZ[scaleIdx] + stylePitchOffsetHz).toFixed(2))
+        primaryFrequenciesHz.push(freq)
+        notes.push({
+          freq,
+          type: i % 2 === 0 ? 'triangle' : 'sine',
+          durationSec: 0.22,
+          delaySec: i * 0.044,
+          gain: 0.075,
+        })
+        if (i >= arpCount - 2) {
+          // Twin chorus detune (+3 Hz)
+          notes.push({
+            freq: Number((freq + 3.0).toFixed(2)),
+            type: 'sine',
+            durationSec: 0.24,
+            delaySec: i * 0.044 + 0.008,
+            gain: 0.045,
+          })
+        }
+      }
+    } else if (tier === 'LYDIAN_7_9') {
+      // Stage 7..9: 5-note C Lydian arpeggio (with F#5 bright degree) + high crystal bell
+      const bassFreq = effectiveStreak === 7 ? 164.81 : effectiveStreak === 8 ? 185.0 : 196.0
+      primaryFrequenciesHz.push(bassFreq)
+      notes.push({
+        freq: bassFreq,
+        type: 'triangle',
+        durationSec: 0.36,
+        delaySec: 0,
+        gain: 0.08,
+      })
+
+      const baseIdx = 13 + (effectiveStreak - 7) // B4, C5, D5
+      for (let i = 0; i < 5; i++) {
+        const scaleIdx = Math.min(PENTATONIC_LYDIAN_SCALE_HZ.length - 1, baseIdx + i)
+        const freq = Number((PENTATONIC_LYDIAN_SCALE_HZ[scaleIdx] + stylePitchOffsetHz).toFixed(2))
+        primaryFrequenciesHz.push(freq)
+        notes.push({
+          freq,
+          type: i === 4 ? 'triangle' : 'sine',
+          durationSec: 0.24,
+          delaySec: i * 0.038,
+          gain: 0.078,
+        })
+      }
+
+      // High crystal bell (E6 / F#6 / G6)
+      const bellIdx = Math.min(25, 23 + (effectiveStreak - 7))
+      const bellFreq = PENTATONIC_LYDIAN_SCALE_HZ[bellIdx]
+      primaryFrequenciesHz.push(bellFreq)
+      notes.push({
+        freq: bellFreq,
+        type: 'sine',
+        durationSec: 0.34,
+        delaySec: 5 * 0.038,
+        gain: 0.07,
+      })
+    } else if (tier === 'SUPERNOVA_10_11') {
+      // Stage 10..11: Rapid 6-note golden harp cascade + double-octave resolution
+      const isEleven = effectiveStreak >= 11
+      const lowRoot = isEleven ? 293.66 : 261.63 // D4 or C4
+      const highOctave = isEleven ? 1174.66 : 1046.5 // D6 or C6
+      primaryFrequenciesHz.push(lowRoot)
+      notes.push({
+        freq: lowRoot,
+        type: 'triangle',
+        durationSec: 0.38,
+        delaySec: 0,
+        gain: 0.082,
+      })
+
+      const baseIdx = isEleven ? 15 : 14 // D5 or C5
+      for (let i = 0; i < 6; i++) {
+        const scaleIdx = Math.min(PENTATONIC_LYDIAN_SCALE_HZ.length - 1, baseIdx + i)
+        const freq = Number((PENTATONIC_LYDIAN_SCALE_HZ[scaleIdx] + stylePitchOffsetHz).toFixed(2))
+        primaryFrequenciesHz.push(freq)
+        notes.push({
+          freq,
+          type: i % 2 === 0 ? 'triangle' : 'sine',
+          durationSec: 0.25,
+          delaySec: i * 0.034,
+          gain: 0.08,
+        })
+      }
+
+      primaryFrequenciesHz.push(highOctave)
+      notes.push({
+        freq: highOctave,
+        type: 'triangle',
+        durationSec: 0.4,
+        delaySec: 6 * 0.034,
+        gain: 0.084,
+      })
+    } else {
+      // Stage 12+ (`GENESIS_ECSTASY_12_PLUS` — O "Sonzim" Lendário de 12+ Sequências!)
+      // 8-note triumphant polyphonic fanfare + golden sustain chord, escalating with each extra streak (12, 13, 14, 15, 16+)
+      const extraAbove12 = Math.min(12, Math.max(0, effectiveStreak - 12))
+      const brillianceMultiplier = Number((1 + extraAbove12 * 0.016).toFixed(4))
+
+      // Warm harmonic sub-bass fifth (C3 + G3)
+      const bassRoot = Number((130.81 * brillianceMultiplier).toFixed(2))
+      const bassFifth = Number((196.0 * brillianceMultiplier).toFixed(2))
+      primaryFrequenciesHz.push(bassRoot, bassFifth)
+      notes.push(
+        {
+          freq: bassRoot,
+          type: 'triangle',
+          durationSec: 0.48,
+          delaySec: 0,
+          gain: 0.082,
+        },
+        {
+          freq: bassFifth,
+          type: 'sine',
+          durationSec: 0.46,
+          delaySec: 0.02,
+          gain: 0.072,
+        }
+      )
+
+      // 8-Note Triumphant Genesis Ecstasy Fanfare (C5 -> E5 -> G5 -> B5 -> D6 -> F#6 -> E6 -> G6)
+      const baseFanfareHz = [
+        523.25, // C5
+        659.25, // E5
+        783.99, // G5
+        987.77, // B5
+        1174.66, // D6
+        1479.98, // F#6 (Lydian #4 climax)
+        1318.51, // E6
+        1567.98, // G6 (Apex)
+      ]
+
+      baseFanfareHz.forEach((rawFreq, idx) => {
+        const freq = Number((rawFreq * brillianceMultiplier + stylePitchOffsetHz).toFixed(2))
+        primaryFrequenciesHz.push(freq)
+        const isClimax = idx === baseFanfareHz.length - 1
+        notes.push({
+          freq,
+          type: idx % 2 === 0 || isClimax ? 'triangle' : 'sine',
+          durationSec: isClimax ? 0.46 : 0.22,
+          delaySec: idx * 0.042,
+          gain: isClimax ? 0.085 : 0.08,
+        })
+      })
+
+      // Chorus shimmer crown at the peak of the fanfare
+      const crownChordHz = [1046.5, 1318.51, 1567.98]
+      crownChordHz.forEach((rawCrown, cIdx) => {
+        const freq = Number((rawCrown * brillianceMultiplier + 3.5).toFixed(2))
+        notes.push({
+          freq,
+          type: 'sine',
+          durationSec: 0.42,
+          delaySec: 8 * 0.042 + cIdx * 0.015,
+          gain: 0.06,
+        })
+      })
     }
+
+    return {
+      streakCount: effectiveStreak,
+      magnitude: clampedMag,
+      style,
+      tier,
+      primaryFrequenciesHz,
+      notes,
+    }
+  }
+
+  /**
+   * Plays the 16-stage Sequence Dopamine symphony (`1×` to `16×+`) and returns its signature.
+   */
+  public playSequenceDopamine(
+    streakCount: number,
+    magnitude: number = 1,
+    style: SubGameStyle = 'TETRIS_CLASSIC'
+  ): SequenceDopamineSignature {
+    const signature = this.getSequenceDopamineSignature(streakCount, magnitude, style)
+    const prevStreak = this.lastSequenceSignature?.streakCount ?? -1
+    this.lastSequenceSignature = signature
+
+    // Allow immediate trigger if streakCount changed (escalating sequence), otherwise apply 35ms cooldown
+    if (streakCount !== prevStreak) {
+      if (this.muted) return signature
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      this.lastChannelTriggerMs.dopamine = now
+    } else if (!this.canTriggerChannel('dopamine', 35)) {
+      return signature
+    }
+
+    signature.notes.forEach((note) => {
+      this.scheduleNote(note)
+    })
+
+    return signature
+  }
+
+  /**
+   * Ascending Pentatonic/Lydian arpeggio on Line Clears (`1..4` lines), powered by the
+   * 16-Stage Sequence Dopamine Engine (`playSequenceDopamine`) so sequences `1×` through `16×+`
+   * escalate continuously without hitting the old `combo = 5` ceiling!
+   */
+  public playLineClear(linesCleared: number, combo: number = 0): SequenceDopamineSignature {
+    const clampedLines = Math.max(1, Math.min(4, linesCleared))
+    const effectiveStreak = combo <= 0 ? 1 : combo
+    return this.playSequenceDopamine(effectiveStreak, clampedLines, 'TETRIS_CLASSIC')
+  }
+
+  /**
+   * Distinct sonic fanfare when shifting between the 3 styles of the Block Trinity
+   * (`TETRIS_CLASSIC`, `FRUIT_MATCH`, `TACTILE_GRID`).
+   */
+  public playStyleShiftFanfare(targetStyle: SubGameStyle): void {
+    if (!this.canTriggerChannel('styleShift', 60)) return
+
+    if (targetStyle === 'FRUIT_MATCH') {
+      // Juicy syncopated marimba cascade: E4 -> G4 -> A4 -> B4 -> D5 -> G5
+      const fruitNotes = [329.63, 392.0, 440.0, 493.88, 587.33, 783.99]
+      fruitNotes.forEach((freq, idx) => {
+        this.scheduleNote({
+          freq,
+          type: idx % 2 === 0 ? 'sine' : 'triangle',
+          durationSec: 0.18,
+          delaySec: idx * 0.04,
+          gain: 0.075,
+        })
+      })
+      return
+    }
+
+    if (targetStyle === 'TACTILE_GRID') {
+      // Warm crystalline Base-10 grid chord: D4 -> F#4 -> A4 -> D5 -> F#5 -> A5
+      const gridNotes = [293.66, 369.99, 440.0, 587.33, 739.99, 880.0]
+      gridNotes.forEach((freq, idx) => {
+        this.scheduleNote({
+          freq,
+          type: 'triangle',
+          durationSec: 0.2,
+          delaySec: idx * 0.042,
+          gain: 0.075,
+        })
+      })
+      return
+    }
+
+    // TETRIS_CLASSIC: Heroic geometric Base-10 brass/crystal motif: C4 -> G4 -> C5 -> E5 -> G5 -> C6
+    const classicNotes = [261.63, 392.0, 523.25, 659.25, 783.99, 1046.5]
+    classicNotes.forEach((freq, idx) => {
+      this.scheduleNote({
+        freq,
+        type: idx === classicNotes.length - 1 ? 'triangle' : 'sine',
+        durationSec: 0.22,
+        delaySec: idx * 0.042,
+        gain: 0.078,
+      })
+    })
   }
 
   /**

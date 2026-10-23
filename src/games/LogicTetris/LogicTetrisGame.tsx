@@ -1,7 +1,8 @@
 import React from 'react'
-import { GameMode } from './types'
+import { GameMode, SubGameStyle } from './types'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useLogicTetrisStore } from './state/useLogicTetrisStore'
+import { soundEngine } from './audio/soundEngine'
 import { TetrisCanvas } from './components/TetrisCanvas'
 import { TelemetryHUD } from './components/TelemetryHUD'
 import { PieceAlchemyBar } from './components/PieceAlchemyBar'
@@ -61,13 +62,24 @@ const MODE_OPTIONS: readonly ModeOptionCard[] = [
   },
 ]
 
+const HUB_STYLE_BUTTONS: ReadonlyArray<{
+  style: SubGameStyle
+  label: string
+}> = [
+  { style: 'TETRIS_CLASSIC', label: '🧱 Clássico' },
+  { style: 'FRUIT_MATCH', label: '🍇 Frutas' },
+  { style: 'TACTILE_GRID', label: '🧩 Grade 10×10' },
+]
+
 /**
- * Main Orchestrator Component for Logic Tetris (Genesis Edition) (`LogicTetrisGame.tsx`).
+ * Main Orchestrator Component for Logic Tetris (Trinity Expansion) (`LogicTetrisGame.tsx`).
  *
  * Incorporates Auditor Improvements:
  * - `Melhoria 07-A`: Connects `LogicCodexDrawer` (`[H]`) with Live Session Diary + 8 Lenses Guide.
- * - `Melhoria 07-B`: Welcoming 3-Mode `START_HUB` selector (`Zen`, `Arcade`, `Mestre`) & celebratory
- *   `GAME_OVER` summary card highlighting math miracles achieved.
+ * - `Melhoria 07-B / 06-B / 06-C`: Welcoming 3-Mode `START_HUB` selector (`Zen`, `Arcade`, `Mestre`)
+ *   + Trinity Style & Rotation Mode selector (`hub-style-selector`) keeping `btn-start-match` 100%
+ *   visible in Desktop (`1440×900`) and Mobile (`390×844`), and celebratory `GAME_OVER` summary card
+ *   highlighting `maxStreakInSession` and `totalStyleShiftsCount`.
  * - `Melhoria 07-C`: Integrates `TelemetryHUD`, `TetrisCanvas`, `PieceAlchemyBar`, and `TouchControlPad`.
  * - `Melhoria 07-D`: Deterministic `data-testid` attributes for Playwright E2E verification.
  */
@@ -76,13 +88,19 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
 
   const phase = useLogicTetrisStore((s) => s.phase)
   const mode = useLogicTetrisStore((s) => s.mode)
+  const activeSubGameStyle = useLogicTetrisStore((s) => s.activeSubGameStyle)
+  const styleRotationMode = useLogicTetrisStore((s) => s.styleRotationMode)
   const score = useLogicTetrisStore((s) => s.score)
   const lines = useLogicTetrisStore((s) => s.lines)
   const level = useLogicTetrisStore((s) => s.level)
+  const maxStreakInSession = useLogicTetrisStore((s) => s.maxStreakInSession)
+  const totalStyleShiftsCount = useLogicTetrisStore((s) => s.totalStyleShiftsCount)
   const stats = useLogicTetrisStore((s) => s.stats)
   const solvedCount = useLogicTetrisStore((s) => s.solvedHistory.length)
 
   const setMode = useLogicTetrisStore((s) => s.setMode)
+  const setSubGameStyle = useLogicTetrisStore((s) => s.setSubGameStyle)
+  const setStyleRotationMode = useLogicTetrisStore((s) => s.setStyleRotationMode)
   const startGame = useLogicTetrisStore((s) => s.startGame)
   const resumeGame = useLogicTetrisStore((s) => s.resumeGame)
   const returnToHub = useLogicTetrisStore((s) => s.returnToHub)
@@ -109,6 +127,8 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
       data-testid="logic-tetris-game"
       data-game-phase={phase}
       data-game-mode={mode}
+      data-active-style={activeSubGameStyle}
+      data-rotation-mode={styleRotationMode}
     >
       {/* Main Responsive Arena Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
@@ -129,31 +149,31 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
       </div>
 
       {/* =====================================================================
-          START HUB OVERLAY (3-Mode Selection: Zen / Arcade / Master — Melhoria 07-B)
+          START HUB OVERLAY (3-Mode Selection + Trinity Style Selector — Melhoria 06-B/06-C)
           ===================================================================== */}
       {phase === 'START_HUB' && (
         <div
-          className="fixed inset-0 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-fadeIn"
+          className="fixed inset-0 flex items-center justify-center p-2 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-fadeIn"
           style={{ zIndex: 1150 }}
           data-testid="start-hub-overlay"
         >
-          <div className="w-full max-w-2xl rounded-3xl bg-slate-900/95 border-2 border-cyan-500/60 shadow-[0_0_50px_rgba(6,182,212,0.28)] p-5 sm:p-6 flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-3 flex-wrap border-b border-slate-800 pb-3">
+          <div className="w-full max-w-2xl rounded-3xl bg-slate-900/95 border-2 border-cyan-500/60 shadow-[0_0_50px_rgba(6,182,212,0.28)] p-3.5 sm:p-5 flex flex-col gap-2.5 sm:gap-3.5 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-2 flex-wrap border-b border-slate-800 pb-2">
               <div>
-                <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-[11px] font-mono font-bold text-cyan-200">
-                  🏛️ LOGIC TETRIS (GENESIS EDITION)
+                <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-[10px] sm:text-[11px] font-mono font-bold text-cyan-200">
+                  🏛️ LOGIC TETRIS (TRINITY EXPANSION)
                 </span>
-                <h2 className="text-xl sm:text-2xl font-extrabold text-white mt-1.5">
+                <h2 className="text-lg sm:text-2xl font-extrabold text-white mt-1">
                   Onde a Matemática Salva a Sua Vida no Jogo!
                 </h2>
                 <p
-                  className="text-xs sm:text-sm text-slate-300 mt-[4px]"
-                  style={{ fontSize: '13px' }}
+                  className="text-xs text-slate-300 mt-[2px] leading-snug"
+                  style={{ fontSize: '12px' }}
                 >
-                  Precisa da barra <strong className="text-cyan-300">I</strong>? Soterraram um
-                  buraco na pilha? Chegou no topo? Resolva uma conta mental das 4 operações para{' '}
-                  <strong className="text-amber-300">mudar a peça [M]</strong>,{' '}
-                  <strong className="text-amber-300">tapar buracos com ouro [B]</strong> ou ativar o{' '}
+                  Jogue os <strong className="text-cyan-300">3 Estilos do Cordão Tríplice</strong> ao
+                  mesmo tempo ou trave no seu favorito! Use a Matemática para{' '}
+                  <strong className="text-amber-300">mudar peças [M]</strong>,{' '}
+                  <strong className="text-amber-300">tapar buracos [B]</strong> e ativar o{' '}
                   <strong className="text-purple-300">Protocolo Fênix 142857</strong>!
                 </p>
               </div>
@@ -161,14 +181,14 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
 
             {/* Mastery Memory & Warm Encouragement Banner (`Melhoria 10-B`) */}
             <div
-              className="rounded-2xl bg-slate-950/85 border border-cyan-500/30 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap"
+              className="rounded-xl bg-slate-950/85 border border-cyan-500/30 px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap"
               data-testid="hub-mastery-banner"
             >
-              <div className="flex items-center gap-2 text-xs text-cyan-200 font-medium">
+              <div className="flex items-center gap-1.5 text-[11px] text-cyan-200 font-medium">
                 <span>🌟</span>
-                <span>Memória de Maestria & Bons Sentimentos:</span>
+                <span>Memória de Maestria:</span>
               </div>
-              <div className="flex items-center gap-3 text-xs font-mono">
+              <div className="flex items-center gap-2.5 text-[11px] font-mono">
                 <span className="text-amber-300 font-bold">
                   🏆 Recorde: {stats.highScore.toLocaleString('pt-BR')}
                 </span>
@@ -183,8 +203,53 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
               </div>
             </div>
 
-            {/* 3 Mode Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Triple Cord Style & Simultaneous Mode Selector (`data-testid="hub-style-selector"` — Melhoria 06-B/06-C) */}
+            <div
+              className="rounded-xl bg-slate-950/90 border border-slate-800 p-2 sm:p-2.5 flex flex-col gap-1.5"
+              data-testid="hub-style-selector"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[10px] font-mono font-bold uppercase text-slate-300">
+                  🌀 Escolha o Estilo Inicial do Cordão Tríplice:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStyleRotationMode('SIMULTANEOUS')}
+                  data-testid="hub-rotation-simultaneous"
+                  className={`px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold transition cursor-pointer ${
+                    styleRotationMode === 'SIMULTANEOUS'
+                      ? 'bg-cyan-500/25 border-cyan-400 text-cyan-100'
+                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  🌀 Simultâneo 3-em-1 (Padrão)
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                {HUB_STYLE_BUTTONS.map((btn) => {
+                  const isSelected = activeSubGameStyle === btn.style
+                  return (
+                    <button
+                      key={btn.style}
+                      type="button"
+                      onClick={() => setSubGameStyle(btn.style)}
+                      data-testid={`hub-style-${btn.style}`}
+                      className={`py-1.5 px-2 rounded-lg border text-[11px] font-mono font-bold transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-cyan-950/90 border-cyan-400 text-white shadow'
+                          : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 3 Mode Cards (Compact on mobile so btn-start-match is 100% in viewport!) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
               {MODE_OPTIONS.map((opt) => {
                 const isSelected = mode === opt.mode
                 return (
@@ -193,28 +258,33 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
                     type="button"
                     onClick={() => setMode(opt.mode)}
                     data-testid={opt.testId}
-                    className={`rounded-2xl p-3.5 border-2 text-left flex flex-col justify-between gap-2 transition cursor-pointer ${
+                    className={`rounded-xl p-2.5 sm:p-3 border-2 text-left flex flex-col justify-between gap-1.5 transition cursor-pointer ${
                       isSelected
-                        ? `${opt.accentBorder} ring-2 ring-cyan-300/60 scale-[1.01]`
+                        ? `${opt.accentBorder} ring-2 ring-cyan-300/60`
                         : 'bg-slate-950/75 hover:bg-slate-900 border-slate-800 hover:border-slate-700'
                     }`}
                   >
                     <div>
-                      <span className="text-[10px] font-mono font-bold text-cyan-300">
-                        {opt.badge}
-                      </span>
-                      <h3 className="text-base font-extrabold text-white mt-0.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[9px] sm:text-[10px] font-mono font-bold text-cyan-300">
+                          {opt.badge}
+                        </span>
+                        <span className="text-[9px] font-mono text-amber-200 md:hidden">
+                          {opt.shieldsLabel}
+                        </span>
+                      </div>
+                      <h3 className="text-sm sm:text-base font-extrabold text-white mt-0.5">
                         {opt.title}
                       </h3>
                       <p
-                        className="text-xs text-slate-300 mt-[4px] leading-relaxed"
+                        className="text-xs text-slate-300 mt-[2px] leading-snug line-clamp-2"
                         style={{ fontSize: '12px' }}
                       >
                         {opt.subtitle}
                       </p>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-800/80 space-y-1 text-[10px] font-mono text-slate-300">
+                    <div className="hidden md:block pt-1.5 border-t border-slate-800/80 space-y-0.5 text-[10px] font-mono text-slate-300">
                       <div>{opt.shieldsLabel}</div>
                       <div className="text-amber-200/90">{opt.mathTierLabel}</div>
                     </div>
@@ -224,21 +294,21 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
             </div>
 
             {/* Hub Footer Actions */}
-            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800 flex-wrap">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800 flex-wrap">
               <button
                 type="button"
                 onClick={() => toggleCodex(true)}
                 data-testid="btn-hub-open-codex"
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-mono font-bold text-cyan-200 transition cursor-pointer"
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-mono font-bold text-cyan-200 transition cursor-pointer"
               >
-                📚 Explorar as 8 Lentes do Códice [H]
+                📚 Explorar as 8 Lentes [H]
               </button>
 
               <button
                 type="button"
                 onClick={handleStartMatch}
                 data-testid="btn-start-match"
-                className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-extrabold font-mono text-sm shadow-[0_0_25px_rgba(34,211,238,0.45)] transition cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-extrabold font-mono text-xs sm:text-sm shadow-[0_0_25px_rgba(34,211,238,0.45)] transition cursor-pointer"
               >
                 ▶ INICIAR PARTIDA ({MODE_OPTIONS.find((m) => m.mode === mode)?.title})
               </button>
@@ -296,7 +366,7 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
       )}
 
       {/* =====================================================================
-          CELEBRATORY GAME OVER OVERLAY (`Melhoria 07-B`)
+          CELEBRATORY GAME OVER OVERLAY (`Melhoria 07-B / 06-C`)
           ===================================================================== */}
       {phase === 'GAME_OVER' && (
         <div
@@ -317,7 +387,7 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
             </p>
 
             {/* Session & Lifetime Achievements Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center font-mono">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center font-mono">
               <div className="rounded-xl bg-slate-950/85 border border-slate-800 p-2.5">
                 <div className="text-[10px] text-slate-400">PONTOS</div>
                 <div className="text-base font-extrabold text-white">
@@ -333,6 +403,18 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
                 <div className="text-base font-extrabold text-cyan-300">{solvedCount}</div>
               </div>
               <div className="rounded-xl bg-slate-950/85 border border-slate-800 p-2.5">
+                <div className="text-[10px] text-slate-400">MAIOR SEQUÊNCIA</div>
+                <div className="text-base font-extrabold text-yellow-300">
+                  👑 ×{maxStreakInSession}
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-950/85 border border-slate-800 p-2.5">
+                <div className="text-[10px] text-slate-400">DOBRAS DO CORDÃO TRÍPLICE</div>
+                <div className="text-base font-extrabold text-purple-300">
+                  🌀 {totalStyleShiftsCount}
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-950/85 border border-slate-800 p-2.5">
                 <div className="text-[10px] text-slate-400">RECORDE GERAL</div>
                 <div className="text-base font-extrabold text-amber-300">
                   {stats.highScore.toLocaleString('pt-BR')}
@@ -340,7 +422,35 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+            {/* Agonist Triple Cord & Dopamine Session Summary (`data-testid="gameover-trinity-summary"` — `Melhoria 08-A`) */}
+            <div
+              data-testid="gameover-trinity-summary"
+              className="rounded-2xl bg-slate-950/90 border border-amber-400/40 p-3 text-left space-y-1.5 font-mono"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-extrabold text-amber-300">
+                  🔥 Sequência Máx: ×{maxStreakInSession}
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-[10px] font-bold text-amber-100">
+                  {soundEngine.getDopamineStageDescriptor(maxStreakInSession).badgePt}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-300 flex-wrap">
+                <span>🌀 Dobras do Cordão Tríplice: {totalStyleShiftsCount}</span>
+                <span>🧠 Contas Resolvidas: {solvedCount}</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => toggleCodex(true)}
+              data-testid="gameover-open-codex"
+              className="w-full py-2.5 px-4 rounded-xl bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-400/60 text-xs font-mono font-extrabold text-cyan-200 transition cursor-pointer"
+            >
+              📜 Revisar Códice & Aulas desta Partida [H]
+            </button>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={() => toggleCodex(true)}

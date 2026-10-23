@@ -1,18 +1,29 @@
 import React, { useEffect, useState } from 'react'
 import { ALL_PIECE_TYPES, getPieceDefinition } from '../engine/tetrominoes'
-import { useLogicTetrisStore } from '../state/useLogicTetrisStore'
+import {
+  getSubGameStyleLabelPt,
+  useLogicTetrisStore,
+} from '../state/useLogicTetrisStore'
 import { MiniPieceMatrixPreview } from './PieceAlchemyBar'
 
 /**
  * Rapid Mathematical Intervention Overlay (`MathInterventionModal.tsx`).
- * Powers the 3 Life-Saving Mathematical Miracles of Logic Tetris (Genesis Edition):
- * 1. `MATH_MORPH`: Transmute the falling piece into the exact geometry needed (`I, O, T, S, Z, J, L, 1×1, 1×2`).
- * 2. `MATH_FILL_HOLE`: Materialize Golden Balance Crystals (`SEALED_GOLD`) directly inside buried cavities.
- * 3. `MATH_SECOND_WIND`: Phoenix Protocol 142857 — Purify the bottom 4–6 rows upon Top-Out to save the player's life!
+ * Powers the 3 Life-Saving Mathematical Miracles of Logic Tetris across all 3 Trinity Styles:
+ * 1. `MATH_MORPH` (`[M]`):
+ *    - `TETRIS_CLASSIC`: Transmute the falling piece into `I, O, T, S, Z, J, L, 1×1, 1×2`.
+ *    - `FRUIT_MATCH`: Forge a Star Prism Wildcard Pair (`✦ + ✦`).
+ *    - `TACTILE_GRID`: Transmute the selected Tray Slot into `1×1` or chosen shape.
+ * 2. `MATH_FILL_HOLE` (`[B]`):
+ *    - `TETRIS_CLASSIC`: Seal buried cavities with Golden Crystals (`SEALED_GOLD`).
+ *    - `FRUIT_MATCH`: Magnetic Fruit Collapse (`magnetizeSingleFruitColor`).
+ *    - `TACTILE_GRID`: Seal Horizontal or Vertical Line cavities (`sealTactileRowOrColCavities`).
+ * 3. `MATH_SECOND_WIND` (`Fênix 142857`):
+ *    - Purify bottom rows (`TETRIS_CLASSIC`), collapse top 2 fruit colors (`FRUIT_MATCH`),
+ *      or free `>= 60%` of the `10×10` Tactile Arena (`TACTILE_GRID`).
  *
  * Incorporates Auditor Improvements:
- * - `Melhoria 05-A`: Displays Heiss-Lab Lens badge, warm Guiding Light (`shortHint`), Base-10 geometry formula,
- *   and direct link to `/repositorio/:slug`.
+ * - `Melhoria 05-A / 06-A`: Displays Heiss-Lab Lens badge, Trinity Style Context badge (`modal-style-context-badge`),
+ *   warm Zero-Spoiler Guiding Light (`shortHint`), Base-10 geometry formula, and direct link to `/repositorio/:slug`.
  * - `Melhoria 05-B`: Inline Elastic Feedback (`ELASTIC_BOUNCE` + `trapDiagnosis` panel `data-testid="math-trap-diagnosis"`)
  *   without closing the modal (`RT-09`), guaranteeing a real second chance.
  * - `Melhoria 05-C`: Ultra-fast `< 1s` operation via keys `[1]–[4]`, inline target-piece switcher for `MATH_MORPH`,
@@ -22,8 +33,10 @@ import { MiniPieceMatrixPreview } from './PieceAlchemyBar'
 export const MathInterventionModal: React.FC = () => {
   const phase = useLogicTetrisStore((s) => s.phase)
   const mode = useLogicTetrisStore((s) => s.mode)
+  const activeSubGameStyle = useLogicTetrisStore((s) => s.activeSubGameStyle)
   const activeChallenge = useLogicTetrisStore((s) => s.activeChallenge)
   const topology = useLogicTetrisStore((s) => s.topology)
+  const tactileTopology = useLogicTetrisStore((s) => s.tactileTopology)
   const eliminatedChoiceValues = useLogicTetrisStore((s) => s.eliminatedChoiceValues)
   const lastWrongDiagnosis = useLogicTetrisStore((s) => s.lastWrongDiagnosis)
   const secondWindStepsRemaining = useLogicTetrisStore((s) => s.secondWindStepsRemaining)
@@ -108,8 +121,13 @@ export const MathInterventionModal: React.FC = () => {
   const isFillHole = phase === 'MATH_FILL_HOLE'
   const isSecondWind = phase === 'MATH_SECOND_WIND'
 
+  const recommendedPieceType =
+    activeSubGameStyle === 'TACTILE_GRID'
+      ? tactileTopology.recommendedPiece
+      : topology.recommendedPiece
+
   const targetPieceType =
-    activeChallenge.targetPiece ?? topology.recommendedPiece ?? 'I'
+    activeChallenge.targetPiece ?? recommendedPieceType ?? 'I'
   const targetPieceDef = getPieceDefinition(targetPieceType)
   const buriedCount = topology.buriedCavities.length
   const rowsToPurify = mode === 'zen' ? 6 : 4
@@ -118,31 +136,76 @@ export const MathInterventionModal: React.FC = () => {
     secondWindStepsTotal - secondWindStepsRemaining + 1
   )
 
+  // Contextual Trinity Miracle Label (Melhoria 06-A)
+  const styleLabel = getSubGameStyleLabelPt(activeSubGameStyle)
+  const styleContextBadgeText =
+    activeSubGameStyle === 'FRUIT_MATCH'
+      ? isSecondWind
+        ? `🍇 ${styleLabel} · Protocolo Fênix: Colapsar 2 Cores Dominantes`
+        : isFillHole
+          ? `🍇 ${styleLabel} · Imã Magnético de Frutas`
+          : `🍇 ${styleLabel} · Forjar Par Coringa Estelar (✦ + ✦)`
+      : activeSubGameStyle === 'TACTILE_GRID'
+        ? isSecondWind
+          ? `🧩 ${styleLabel} · Protocolo Fênix: Liberar Espaço na Arena 10×10`
+          : isFillHole
+            ? `🧩 ${styleLabel} · Selar Linha Horizontal ou Coluna Vertical`
+            : `🧩 ${styleLabel} · Moldar Peça da Bandeja (${targetPieceDef.namePt})`
+        : isSecondWind
+          ? `🧱 ${styleLabel} · Protocolo Fênix: Purificar ${rowsToPurify} Linhas`
+          : isFillHole
+            ? `🧱 ${styleLabel} · Selar Cavidades Soterradas com Ouro`
+            : `🧱 ${styleLabel} · Moldar Peça em Queda (${targetPieceDef.namePt})`
+
   const themeClasses = isSecondWind
     ? {
         border: 'border-purple-400/80 shadow-[0_0_45px_rgba(168,85,247,0.35)]',
         headerBg: 'from-purple-950/95 via-fuchsia-950/90 to-amber-950/85',
         badge: 'bg-amber-400/20 border-amber-300/60 text-amber-200',
         title: '🔥 Protocolo Fênix 142857 — Salvação de Emergência!',
-        subtitle: `Resolva para purificar as ${rowsToPurify} linhas inferiores e continuar jogando!`,
+        subtitle:
+          activeSubGameStyle === 'FRUIT_MATCH'
+            ? 'Resolva para colapsar as 2 cores de frutas mais populosas e continuar jogando!'
+            : activeSubGameStyle === 'TACTILE_GRID'
+              ? 'Resolva para purificar a Arena 10×10, renovar a bandeja e continuar jogando!'
+              : `Resolva para purificar as ${rowsToPurify} linhas inferiores e continuar jogando!`,
       }
     : isFillHole
       ? {
           border: 'border-amber-400/80 shadow-[0_0_42px_rgba(251,191,36,0.32)]',
           headerBg: 'from-amber-950/95 via-yellow-950/90 to-slate-900/95',
           badge: 'bg-amber-400/20 border-amber-300/60 text-amber-200',
-          title: '✦ Alquimia de Balança — Selar Cavidades Soterradas com Ouro',
+          title:
+            activeSubGameStyle === 'FRUIT_MATCH'
+              ? '🧲 Alquimia Magnética — Imã de Frutas Isoladas'
+              : activeSubGameStyle === 'TACTILE_GRID'
+                ? '✦ Alquimia H×V — Selar Linha ou Coluna Quase Cheia'
+                : '✦ Alquimia de Balança — Selar Cavidades Soterradas com Ouro',
           subtitle:
-            buriedCount > 0
-              ? `Materializa Cristais Dourados (✦) diretamente em até ${Math.min(3, buriedCount)} buraco(s) soterrado(s)!`
-              : 'Tabuleiro sem buracos soterrados: concederá o Monominó Dourado (1×1)!',
+            activeSubGameStyle === 'FRUIT_MATCH'
+              ? 'Estoura todas as frutas isoladas da cor mais fragmentada e dispara cascatas!'
+              : activeSubGameStyle === 'TACTILE_GRID'
+                ? 'Materializa Cristais Dourados (✦) na Linha ou Coluna mais próxima de fechar 10!'
+                : buriedCount > 0
+                  ? `Materializa Cristais Dourados (✦) diretamente em até ${Math.min(3, buriedCount)} buraco(s) soterrado(s)!`
+                  : 'Tabuleiro sem buracos soterrados: concederá o Monominó Dourado (1×1)!',
         }
       : {
           border: 'border-cyan-400/80 shadow-[0_0_42px_rgba(34,211,238,0.32)]',
           headerBg: 'from-cyan-950/95 via-teal-950/90 to-slate-900/95',
           badge: 'bg-cyan-400/20 border-cyan-300/60 text-cyan-200',
-          title: '🔮 Alquimia Geométrica — Moldar Peça Ideal',
-          subtitle: `Bullet-Time 0.12× Ativo · Transmute a peça atual para ${targetPieceDef.namePt} (${targetPieceDef.areaFormula})!`,
+          title:
+            activeSubGameStyle === 'FRUIT_MATCH'
+              ? '⭐ Alquimia dos Cachos — Par Coringa Estelar (✦ + ✦)'
+              : activeSubGameStyle === 'TACTILE_GRID'
+                ? '🔮 Alquimia da Bandeja — Moldar Peça Tátil'
+                : '🔮 Alquimia Geométrica — Moldar Peça Ideal',
+          subtitle:
+            activeSubGameStyle === 'FRUIT_MATCH'
+              ? 'Transmute o par atual em Estrelas Prisma (✦ + ✦) que conectam com qualquer fruta!'
+              : activeSubGameStyle === 'TACTILE_GRID'
+                ? `Transmute o slot selecionado da bandeja para ${targetPieceDef.namePt} (${targetPieceDef.areaFormula})!`
+                : `Bullet-Time 0.12× Ativo · Transmute a peça atual para ${targetPieceDef.namePt} (${targetPieceDef.areaFormula})!`,
         }
 
   const handleChoiceClick = (idx: number, choiceValue: number) => {
@@ -161,6 +224,7 @@ export const MathInterventionModal: React.FC = () => {
       aria-labelledby="lt-modal-title"
       data-testid="math-intervention-modal"
       data-intervention-type={activeChallenge.interventionType}
+      data-active-style={activeSubGameStyle}
     >
       <div
         className={`w-full max-w-lg rounded-2xl bg-slate-900/95 border-2 ${themeClasses.border} overflow-hidden flex flex-col`}
@@ -170,12 +234,21 @@ export const MathInterventionModal: React.FC = () => {
           className={`bg-gradient-to-r ${themeClasses.headerBg} px-4 py-3 border-b border-slate-800`}
         >
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span
-              className={`px-2.5 py-0.5 rounded-full border text-[11px] font-mono font-bold ${themeClasses.badge}`}
-              data-testid="modal-lens-badge"
-            >
-              {activeChallenge.lensBadge}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span
+                className={`px-2.5 py-0.5 rounded-full border text-[11px] font-mono font-bold ${themeClasses.badge}`}
+                data-testid="modal-lens-badge"
+              >
+                {activeChallenge.lensBadge}
+              </span>
+
+              <span
+                className="px-2 py-0.5 rounded-full bg-slate-950/75 border border-slate-700 text-[10px] font-mono font-semibold text-cyan-200"
+                data-testid="modal-style-context-badge"
+              >
+                {styleContextBadgeText}
+              </span>
+            </div>
 
             {isSecondWind ? (
               <span className="px-2.5 py-0.5 rounded-full bg-purple-500/25 border border-purple-300/50 text-[11px] font-mono font-bold text-purple-100">
@@ -202,7 +275,7 @@ export const MathInterventionModal: React.FC = () => {
         {/* Body Content */}
         <div className="p-4 flex flex-col gap-3.5">
           {/* Inline Target Piece Selector when in MATH_MORPH (`Melhoria 05-C`) */}
-          {isMorph && (
+          {isMorph && activeSubGameStyle !== 'FRUIT_MATCH' && (
             <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-2.5 flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -229,7 +302,7 @@ export const MathInterventionModal: React.FC = () => {
                 {ALL_PIECE_TYPES.map((type) => {
                   const def = getPieceDefinition(type)
                   const isSelected = type === targetPieceType
-                  const isOracle = type === topology.recommendedPiece
+                  const isOracle = type === recommendedPieceType
                   return (
                     <button
                       key={type}
