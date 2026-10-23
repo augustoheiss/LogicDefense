@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { LogicTetrisGame } from '../games/LogicTetris'
 import { TETRIS_MATH_LENSES } from '../games/LogicTetris/engine/mathEngine'
+import { toggleLogicTetrisFullscreen } from '../games/LogicTetris/hooks/useGameLoop'
+import { useLogicTetrisStore } from '../games/LogicTetris/state/useLogicTetrisStore'
 import { TetrisMathLensId } from '../games/LogicTetris/types'
 
 interface LensShowcaseItem {
@@ -64,13 +66,16 @@ const LENS_SHOWCASE_ITEMS: readonly LensShowcaseItem[] = [
 /**
  * Educational BAB Landing Page + Live Arena for Logic Tetris (Genesis Edition) (`LogicTetrisPage.tsx`).
  *
- * Incorporates Auditor Improvements (`Melhoria 08-A` to `08-D`):
+ * Incorporates Auditor Improvements (`Melhoria 08-A` to `08-D`) & Master Plan V2:
  * - `Melhoria 08-A`: Full Before-After-Bridge (BAB) narrative + Interactive Showcase of the 8 Heiss-Lab
  *   Mental Math Lenses with direct `<Link to="/repositorio/:slug" />` links.
  * - `Melhoria 08-C`: Top Quick-Navigation Bar (`← Todos os Jogos`, `📚 Repositório Didático`,
- *   `🎯 Focar na Arena`) and scroll-safe arena focus.
+ *   `🎯 Focar na Arena`, `⛶ Tela Cheia [F]`) and scroll-safe arena focus.
+ * - `Master Plan V2`: Expanded `max-w-[1600px]` stage container and native Fullscreen toggle.
  */
 export function LogicTetrisPage() {
+  const isFullscreen = useLogicTetrisStore((s) => s.isFullscreen)
+
   const scrollToArena = () => {
     const el = document.getElementById('lt-arena-anchor')
     if (el) {
@@ -78,11 +83,16 @@ export function LogicTetrisPage() {
     }
   }
 
+  const handlePageFullscreen = () => {
+    scrollToArena()
+    toggleLogicTetrisFullscreen()
+  }
+
   return (
     <div className="min-h-screen bg-[#040812] text-slate-100" data-testid="logic-tetris-page">
       {/* Top Quick Navigation Bar (`Melhoria 08-C`) */}
       <div className="sticky top-0 z-30 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <Link
               to="/jogos"
@@ -96,7 +106,7 @@ export function LogicTetrisPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Link
               to="/repositorio"
               data-testid="nav-to-repository"
@@ -112,6 +122,14 @@ export function LogicTetrisPage() {
             >
               🎯 Focar na Arena
             </button>
+            <button
+              type="button"
+              onClick={handlePageFullscreen}
+              data-testid="btn-page-fullscreen"
+              className="px-3 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/60 text-xs font-mono font-bold text-purple-200 transition cursor-pointer"
+            >
+              {isFullscreen ? '⛶ Sair da Tela Cheia [F]' : '⛶ Tela Cheia [F]'}
+            </button>
           </div>
         </div>
       </div>
@@ -119,10 +137,10 @@ export function LogicTetrisPage() {
       {/* =====================================================================
           SECTION 1: HERO & LIVE EMBEDDED GAME ARENA (ABOVE THE FOLD)
           ===================================================================== */}
-      <section className="relative pt-6 pb-12 px-3 sm:px-6 max-w-6xl mx-auto">
-        <div className="text-center max-w-3xl mx-auto mb-6">
+      <section className="relative pt-6 pb-12 px-3 sm:px-6 max-w-[1600px] mx-auto">
+        <div className="text-center max-w-4xl mx-auto mb-6">
           <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-xs font-mono font-bold text-cyan-300 mb-3">
-            <span>🧶 HEISS-LAB · CORDÃO TRÍPLICE 3-EM-1 · BASE-10 & DOPAMINA 12×+</span>
+            <span>🧶 HEISS-LAB · CORDÃO TRÍPLICE 3-EM-1 · ARENAS PROPORCIONAIS 20×10 & 10×10</span>
           </span>
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
             Logic Tetris:{' '}
@@ -132,10 +150,12 @@ export function LogicTetrisPage() {
           </h1>
           <p className="text-sm sm:text-base text-slate-300 mt-2.5 leading-relaxed">
             Jogue no <strong className="text-cyan-300">Modo Simultâneo 3-em-1 [L]</strong> (que
-            alterna entre <strong>🧱 Tetris Clássico</strong>, <strong>🍇 Frutas em Cascata</strong>{' '}
-            e <strong>🧩 Grade Livre H×V 10×10</strong> mantendo sua sequência viva!) ou trave no
-            seu estilo favorito. Use a <strong>Luz Guia Socrática Zero-Spoiler</strong> das 4
-            operações para <strong className="text-cyan-300">transmutar peças [M]</strong>,{' '}
+            alterna entre <strong>🧱 Tetris Clássico 20×10</strong>,{' '}
+            <strong>🍎 Frutas 10×10 em Troca & Cascata</strong> e{' '}
+            <strong>🧩 Grade Livre H×V 10×10 com Macro-Blocos 3×3</strong> mantendo sua sequência
+            viva!) ou trave no seu estilo favorito. Use a{' '}
+            <strong>Luz Guia Socrática Zero-Spoiler</strong> das 4 operações para{' '}
+            <strong className="text-cyan-300">transmutar peças [M]</strong>,{' '}
             <strong className="text-amber-300">selar buracos/colunas [B]</strong> e acionar o{' '}
             <strong className="text-purple-300">Protocolo Fênix 142857</strong>!
           </p>
@@ -197,17 +217,17 @@ export function LogicTetrisPage() {
                 ✨ DEPOIS: CORDÃO TRÍPLICE 3-EM-1, LUZ GUIA ZERO-SPOILER & DOPAMINA 16×+
               </span>
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">
-                Três universos geométricos, raciocínio socrático e sinfonia até 12×+!
+                Três universos geométricos proporcionais, raciocínio socrático e sinfonia até 12×+!
               </h2>
               <ul className="space-y-3 text-sm text-slate-300 leading-relaxed">
                 <li className="flex items-start gap-2.5">
                   <span className="text-cyan-400 font-bold mt-0.5">🧶</span>
                   <span>
                     <strong>O Cordão Tríplice dos Blocos em Tempo Real ([G] / [L]):</strong> Alterne
-                    automaticamente a cada 4 limpezas (Modo Simultâneo) ou trave entre{' '}
-                    <strong>Tetris Clássico (7+3=10)</strong>,{' '}
-                    <strong>Frutas em Cascata (2+1=3)</strong> e{' '}
-                    <strong>Grade Livre H×V 10×10 (10+10−1=19)</strong>!
+                    automaticamente a cada 4 limpezas (eliminando a maioria dos blocos acumulados!)
+                    ou trave entre <strong>Tetris Clássico 20×10 (7+3=10)</strong>,{' '}
+                    <strong>Frutas 10×10 Cheia (Troca 3+)</strong> e{' '}
+                    <strong>Grade Livre H×V 10×10 (Macro-Blocos 3×3)</strong>!
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -238,19 +258,19 @@ export function LogicTetrisPage() {
             <article className="rounded-2xl bg-slate-900/80 border border-cyan-500/30 p-5 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono font-bold text-cyan-300">
-                  🧱🍇🧩 CORDÃO TRÍPLICE 3-EM-1
+                  🧱🍎🧩 CORDÃO TRÍPLICE 3-EM-1
                 </span>
                 <span className="px-2 py-0.5 rounded bg-cyan-500/15 text-[10px] font-mono text-cyan-200">
                   [G] Trocar · [L] Travar
                 </span>
               </div>
               <h3 className="text-sm font-extrabold text-white">
-                Grid 20×10 Base-10, Cachos de Frutas & Arena H×V 10×10
+                Torre 20×10 Base-10, Arena 10×10 de Frutas & Grade H×V 10×10
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Experimente a gravidade clássica de tetrominós, a reação em cadeia de pares de
-                frutas coloridas e o encaixe tátil sem gravidade em linhas horizontais e colunas
-                verticais na mesma partida!
+                Experimente a gravidade clássica de tetrominós, a troca adjacente de frutas na
+                grade 10×10 cheia com cascatas e o encaixe tátil de Macro-Blocos (3×3, 1×5) sem
+                cortar o cenário!
               </p>
             </article>
 
@@ -267,8 +287,9 @@ export function LogicTetrisPage() {
                 Luz Guia Socrática & Milagres Polimórficos
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Cada estilo adapta seus poderes: molde tetrominós ou peças da bandeja, forje o Par
-                Coringa Estelar (✦+✦), acione o Imã Magnético de Frutas ou sele cruzamentos H×V!
+                Cada estilo adapta seus poderes: molde tetrominós ou peças da bandeja (inclusive
+                Cubos 3×3!), forje 2 Estrelas Coringa (✦+✦), acione o Imã Magnético de Frutas ou
+                sele cruzamentos H×V!
               </p>
             </article>
 

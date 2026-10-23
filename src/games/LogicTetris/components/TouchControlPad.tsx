@@ -8,10 +8,10 @@ export interface TouchControlPadProps {
 /**
  * Ergonomic Universal Touch & Quick-Action Pad (`TouchControlPad.tsx`).
  *
- * Incorporates Auditor Improvements:
+ * Incorporates Auditor Improvements & Master Plan V2:
  * - `Melhoria 07-C / 06-C`: Large touch-friendly controls (`min-h-[44px]`, `touch-action: manipulation`)
- *   for `←`, `→`, `↑ Subir` (`touch-up` in `TACTILE_GRID`), `↓ Descer`, `↻ Girar`,
- *   `⏬ Cair` / `✅ Encaixar` (`touch-hard-drop`), `📦 Hold [C]`, `🔮 Mudar [M]`, `✦ Tapar [B]`,
+ *   for `←`, `→`, `↑ Subir` (`touch-up` in `TACTILE_GRID` & `FRUIT_MATCH`), `↓ Descer`, `↻ Girar`,
+ *   `⏬ Cair` / `✅ Encaixar` / `⇄ Trocar` (`touch-hard-drop`), `📦 Hold [C]`, `🔮 Mudar [M]`, `✦ Tapar [B]`,
  *   and `🌀 Estilo [G]` (`touch-cycle-style`).
  * - Preserves 100% of deterministic `data-testid` attributes (`touch-control-pad`, `touch-left`,
  *   `touch-right`, `touch-rotate-cw`, `touch-soft-drop`, `touch-hard-drop`, `touch-hold`,
@@ -35,6 +35,8 @@ export const TouchControlPad: React.FC<TouchControlPadProps> = ({ className = ''
 
   const isPlaying = phase === 'PLAYING'
   const isTactile = activeSubGameStyle === 'TACTILE_GRID'
+  const isFruit = activeSubGameStyle === 'FRUIT_MATCH'
+  const is10x10CursorMode = isTactile || isFruit
 
   return (
     <section
@@ -44,11 +46,11 @@ export const TouchControlPad: React.FC<TouchControlPadProps> = ({ className = ''
     >
       <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
         <span>CONTROLES RÁPIDOS (TOUCH & TECLADO)</span>
-        <span className="text-cyan-300">SETAS / WASD · ESPAÇO · [G] · [M] · [B]</span>
+        <span className="text-cyan-300">SETAS / WASD · ESPAÇO · [G] · [M] · [B] · [F]</span>
       </div>
 
       {/* Primary Movement & Rotation Row */}
-      <div className={`grid ${isTactile ? 'grid-cols-6' : 'grid-cols-5'} gap-1.5`}>
+      <div className={`grid ${is10x10CursorMode ? 'grid-cols-6' : 'grid-cols-5'} gap-1.5`}>
         <button
           type="button"
           disabled={!isPlaying}
@@ -61,7 +63,7 @@ export const TouchControlPad: React.FC<TouchControlPadProps> = ({ className = ''
           <span className="text-[9px] text-slate-400">Esq</span>
         </button>
 
-        {isTactile && (
+        {is10x10CursorMode && (
           <button
             type="button"
             disabled={!isPlaying}
@@ -107,8 +109,10 @@ export const TouchControlPad: React.FC<TouchControlPadProps> = ({ className = ''
           style={{ touchAction: 'manipulation' }}
           className="min-h-[44px] rounded-xl bg-cyan-950/80 hover:bg-cyan-900/80 active:scale-95 border border-cyan-500/50 text-cyan-100 font-mono font-bold text-sm flex flex-col items-center justify-center transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
         >
-          <span>↻</span>
-          <span className="text-[9px] text-cyan-300">Girar</span>
+          <span>{isFruit ? '⇄' : '↻'}</span>
+          <span className="text-[9px] text-cyan-300">
+            {isFruit ? 'Trocar' : 'Girar'}
+          </span>
         </button>
 
         <button
@@ -119,9 +123,9 @@ export const TouchControlPad: React.FC<TouchControlPadProps> = ({ className = ''
           style={{ touchAction: 'manipulation' }}
           className="min-h-[44px] rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 active:scale-95 border border-emerald-500/50 text-emerald-100 font-mono font-bold text-sm flex flex-col items-center justify-center transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
         >
-          <span>{isTactile ? '✅' : '⏬'}</span>
+          <span>{isTactile ? '✅' : isFruit ? '🍎' : '⏬'}</span>
           <span className="text-[9px] text-emerald-300">
-            {isTactile ? 'Encaixar' : 'Cair'}
+            {isTactile ? 'Encaixar' : isFruit ? 'Sel/Troca' : 'Cair'}
           </span>
         </button>
       </div>
@@ -130,14 +134,16 @@ export const TouchControlPad: React.FC<TouchControlPadProps> = ({ className = ''
       <div className="grid grid-cols-4 gap-1.5">
         <button
           type="button"
-          disabled={!isPlaying || (!isTactile && !canHold)}
+          disabled={!isPlaying || (activeSubGameStyle === 'TETRIS_CLASSIC' && !canHold)}
           onClick={() => (isTactile ? rotatePiece('CW') : holdCurrentPiece())}
           data-testid="touch-hold"
           style={{ touchAction: 'manipulation' }}
           className="min-h-[44px] rounded-xl bg-slate-900/90 hover:bg-slate-800 active:scale-95 border border-slate-700 text-slate-200 font-mono font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
         >
-          <span>📦</span>
-          <span>{isTactile ? 'Girar [R]' : 'Reserva [C]'}</span>
+          <span>{isFruit ? '🎯' : '📦'}</span>
+          <span>
+            {isTactile ? 'Girar [R]' : isFruit ? 'Dica [C]' : 'Reserva [C]'}
+          </span>
         </button>
 
         <button

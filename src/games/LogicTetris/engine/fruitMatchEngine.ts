@@ -6,13 +6,23 @@ import {
   FruitBlockMeta,
   FruitCascadeOracleReport,
   FruitCluster,
+  FruitCoord,
   FruitKind,
   FruitPairPiece,
+  FruitSwapMove,
+  FruitSwapResolutionResult,
   GridCell,
   GridMatrix,
   RotationDirection,
 } from '../types'
-import { cloneGrid } from './gridEngine'
+import { cloneGrid, createEmptyGrid } from './gridEngine'
+
+/**
+ * Dimensões da Arena 10×10 Cheia de Frutas (Swap & Cascade Match-3).
+ * Opera nas linhas 0..9 e colunas 0..9 (100 células visíveis em tela cheia sem cortes!).
+ */
+export const FRUIT_GRID_ROWS = 10
+export const FRUIT_GRID_COLS = 10
 
 /**
  * RT-13 Circuit Breaker: Hard cap on cascade waves per move so a chain reaction
@@ -120,18 +130,24 @@ export function inferFruitKindFromCell(cell: GridCell): FruitKind {
   }
   switch (cell.type) {
     case 'Z':
+    case 'CORNER_3X3':
       return 'APPLE_RUBY'
     case 'L':
     case 'O':
     case 'DOT_1X1':
+    case 'CUBE_3X3':
       return 'CITRUS_GOLD'
     case 'T':
     case 'DOMINO_1X2':
+    case 'RECT_2X3':
       return 'GRAPE_NEON'
     case 'S':
+    case 'CORNER_2X2':
       return 'EMERALD_PEAR'
     case 'I':
     case 'J':
+    case 'BAR_1X5':
+    case 'TRIO_1X3':
     default:
       return 'BERRY_CYAN'
   }
@@ -658,18 +674,597 @@ export function lockFruitPairAndResolve(
 }
 
 /**
+ * Detecta se o GridMatrix está operando no modo Arena 10×10 Cheia de Frutas (rows 0..9 ativas, rows 10..19 vazias).
+ */
+export function is10x10FruitArenaGrid(grid: GridMatrix): boolean {
+  let top10Count = 0
+  let bottom10Count = 0
+  const height = grid.length || BOARD_HEIGHT
+  const width = grid[0]?.length ?? BOARD_WIDTH
+
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      if (grid[r]?.[c] !== null) {
+        if (r < FRUIT_GRID_ROWS) {
+          top10Count += 1
+        } else {
+          bottom10Count += 1
+        }
+      }
+    }
+  }
+
+  return top10Count > 0 && bottom10Count === 0
+}
+
+/**
+ * Quebra quaisquer grupos involuntários de 3+ frutas iguais que tenham surgido estaticamente
+ * nas linhas 0..9 sem explodi-los, garantindo estado estacionário limpo após reposição ou no Frame 0.
+ */
+function breakAccidentalFruitClusters10x10(grid: GridMatrix): GridMatrix {
+  const working = cloneGrid(grid)
+  for (let guard = 0; guard < 16; guard++) {
+    const clusters = findConnectedFruitClusters(working)
+    if (clusters.length === 0) break
+
+    for (const cluster of clusters) {
+      const targetPos = cluster.cells[Math.floor(cluster.cells.length / 2)] ?? cluster.cells[0]
+      if (!targetPos) continue
+      const { row, col } = targetPos
+      const neighborKinds = new Set<FruitKind>()
+      for (const [dr, dc] of ORTHOGONAL_DIRS) {
+        const nr = row + dr
+        const nc = col + dc
+        const nCell = working[nr]?.[nc] ?? null
+        if (nCell) {
+          neighborKinds.add(inferFruitKindFromCell(nCell))
+        }
+      }
+
+      const safeKind =
+        PLAYABLE_FRUITS.find((k) => !neighborKinds.has(k) && k !== cluster.kind) ??
+        PLAYABLE_FRUITS[(PLAYABLE_FRUITS.indexOf(cluster.kind) + 1) % PLAYABLE_FRUITS.length]
+      working[row][col] = createFruitGridCell(safeKind)
+    }
+  }
+  return working
+}
+
+/**
+ * Gravidade & Reposição pelo Topo na Arena 10×10 (`rows 0..9, cols 0..9`).
+ * Quando um grupo de 3+ frutas explode, as frutas acima descem até a linha 9 (base da Arena 10×10)
+ * e novas frutas nascem no topo (linhas 0..k) para manter as 100 células cheias!
+ */
+export function applyFruitGravityAndRefill10x10(
+  grid: GridMatrix,
+  rng: () => number = Math.random
+): { grid: GridMatrix; movedCount: number; spawnedCount: number } {
+  const nextGrid = createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT)
+  let movedCount = 0
+  let spawnedCount = 0
+
+  for (let col = 0; col < FRUIT_GRID_COLS; col++) {
+    let writeRow = FRUIT_GRID_ROWS - 1
+    for (let readRow = FRUIT_GRID_ROWS - 1; readRow >= 0; readRow--) {
+      const cell = grid[readRow]?.[col] ?? null
+      if (!cell) continue
+
+      const kind = inferFruitKindFromCell(cell)
+      const meta = FRUIT_CATALOG[kind]
+      nextGrid[writeRow][col] = {
+        ...cell,
+        fruitKind: kind,
+        color: cell.color || meta.color,
+        glowColor: cell.glowColor || meta.glowColor,
+        borderColor: cell.borderColor || meta.borderColor,
+        symbol: cell.symbol || meta.symbol,
+      }
+      if (writeRow !== readRow) {
+        movedCount += 1
+      }
+      writeRow -= 1
+    }
+
+    // Reposição pelo topo: preenche as células vazias no topo da coluna (writeRow..0)
+    while (writeRow >= 0) {
+      const randomBaseIdx = Math.floor(rng() * PLAYABLE_FRUITS.length)
+      let chosenKind = PLAYABLE_FRUITS[randomBaseIdx] ?? 'APPLE_RUBY'
+
+      // Evita sequências triviais excessivas na geração de topo mas permite cascatas orgânicas
+      const below1 =
+        writeRow + 1 < FRUIT_GRID_ROWS && nextGrid[writeRow + 1]?.[col]
+          ? inferFruitKindFromCell(nextGrid[writeRow + 1][col]!)
+          : null
+      const below2 =
+        writeRow + 2 < FRUIT_GRID_ROWS && nextGrid[writeRow + 2]?.[col]
+          ? inferFruitKindFromCell(nextGrid[writeRow + 2][col]!)
+          : null
+      if (below1 && below1 === below2 && chosenKind === below1 && rng() < 0.65) {
+        chosenKind = PLAYABLE_FRUITS[(randomBaseIdx + 1) % PLAYABLE_FRUITS.length]
+      }
+
+      nextGrid[writeRow][col] = createFruitGridCell(chosenKind)
+      spawnedCount += 1
+      writeRow -= 1
+    }
+  }
+
+  return { grid: nextGrid, movedCount, spawnedCount }
+}
+
+/**
+ * Escaneia todas as trocas ortogonais adjacentes nas linhas 0..9 e colunas 0..9
+ * que formam imediatamente um grupo >= 3 de frutas iguais (ou usam uma Estrela Coringa ✦).
+ */
+export function findAllValidFruitSwaps(grid: GridMatrix): FruitSwapMove[] {
+  const swaps: FruitSwapMove[] = []
+  const maxRow = Math.min(FRUIT_GRID_ROWS, grid.length || BOARD_HEIGHT)
+  const maxCol = Math.min(FRUIT_GRID_COLS, grid[0]?.length ?? BOARD_WIDTH)
+
+  const checkCandidateSwap = (r1: number, c1: number, r2: number, c2: number) => {
+    const cellA = grid[r1]?.[c1] ?? null
+    const cellB = grid[r2]?.[c2] ?? null
+    if (!cellA || !cellB) return
+
+    const kindA = inferFruitKindFromCell(cellA)
+    const kindB = inferFruitKindFromCell(cellB)
+    if (kindA === kindB && kindA !== 'STAR_PRISM') return
+
+    // Se uma das duas células é Estrela Coringa (✦), trocar com qualquer fruta adjacente é sempre válido!
+    if (kindA === 'STAR_PRISM' || kindB === 'STAR_PRISM') {
+      const targetKind = kindA === 'STAR_PRISM' ? kindB : kindA
+      swaps.push({
+        from: { row: r1, col: c1 },
+        to: { row: r2, col: c2 },
+        expectedClusterSize: 4,
+        fruitKind: targetKind,
+      })
+      return
+    }
+
+    const simGrid = cloneGrid(grid)
+    simGrid[r1][c1] = cellB
+    simGrid[r2][c2] = cellA
+
+    const clusters = findConnectedFruitClusters(simGrid)
+    if (clusters.length > 0) {
+      let bestCluster = clusters[0]
+      for (const cl of clusters) {
+        if (cl.cells.length > bestCluster.cells.length) {
+          bestCluster = cl
+        }
+      }
+      swaps.push({
+        from: { row: r1, col: c1 },
+        to: { row: r2, col: c2 },
+        expectedClusterSize: bestCluster.cells.length,
+        fruitKind: bestCluster.kind,
+      })
+    }
+  }
+
+  for (let r = 0; r < maxRow; r++) {
+    for (let c = 0; c < maxCol; c++) {
+      if (c + 1 < maxCol) {
+        checkCandidateSwap(r, c, r, c + 1)
+      }
+      if (r + 1 < maxRow) {
+        checkCandidateSwap(r, c, r + 1, c)
+      }
+    }
+  }
+
+  swaps.sort((a, b) => b.expectedClusterSize - a.expectedClusterSize)
+  return swaps
+}
+
+/**
+ * Garante que a Arena 10×10 tenha pelo menos `minSwaps` trocas adjacentes válidas prontas
+ * e 0 grupos auto-explosivos em repouso (Prevenção RT-17 de Deadlock).
+ */
+export function ensureMinimumValidSwaps(
+  grid: GridMatrix,
+  minSwaps: number = 4,
+  rng: () => number = Math.random
+): { grid: GridMatrix; swaps: FruitSwapMove[]; wasReshuffled: boolean } {
+  let working = breakAccidentalFruitClusters10x10(grid)
+  let swaps = findAllValidFruitSwaps(working)
+  if (swaps.length >= minSwaps) {
+    return { grid: working, swaps, wasReshuffled: false }
+  }
+
+  // Injeta padrões V / L de "2 + 1 a um passo de distância" em regiões espaçadas da Arena 10×10
+  const anchorCandidates: Array<{ r: number; c: number; kindIdx: number }> = [
+    { r: 1, c: 1, kindIdx: 0 },
+    { r: 2, c: 5, kindIdx: 1 },
+    { r: 4, c: 2, kindIdx: 2 },
+    { r: 5, c: 6, kindIdx: 3 },
+    { r: 7, c: 1, kindIdx: 4 },
+    { r: 7, c: 5, kindIdx: 0 },
+    { r: 3, c: 4, kindIdx: 1 },
+    { r: 8, c: 3, kindIdx: 2 },
+  ]
+
+  const offsetSeed = Math.floor(rng() * PLAYABLE_FRUITS.length)
+  for (const anchor of anchorCandidates) {
+    const { r, c, kindIdx } = anchor
+    if (r + 1 >= FRUIT_GRID_ROWS || c + 2 >= FRUIT_GRID_COLS) continue
+
+    const targetKind = PLAYABLE_FRUITS[(kindIdx + offsetSeed) % PLAYABLE_FRUITS.length]
+    const blockerKind = PLAYABLE_FRUITS[(kindIdx + offsetSeed + 2) % PLAYABLE_FRUITS.length]
+
+    // Padrão: (r, c) = K, (r, c+1) = K, (r, c+2) = Blocker, (r+1, c+2) = K
+    // Assim, trocar (r, c+2) <-> (r+1, c+2) fecha a linha (r, c..c+2) de 3 frutas K!
+    working[r][c] = createFruitGridCell(targetKind)
+    working[r][c + 1] = createFruitGridCell(targetKind)
+    working[r][c + 2] = createFruitGridCell(blockerKind)
+    working[r + 1][c + 2] = createFruitGridCell(targetKind)
+
+    working = breakAccidentalFruitClusters10x10(working)
+    swaps = findAllValidFruitSwaps(working)
+    if (swaps.length >= minSwaps) {
+      break
+    }
+  }
+
+  return { grid: working, swaps, wasReshuffled: true }
+}
+
+/**
+ * Gera uma Arena 10×10 (`rows 0..9, cols 0..9` = 100 células) 100% preenchida com frutas vibrantes!
+ * Se `seedGrid` possuir blocos sobreviventes (ex: após eliminar 80% na troca de cenário),
+ * preserva-os como sementes de frutas na Arena 10×10 e preenche o restante garantindo:
+ * - Zero grupos de >= 3 auto-explosivos no Frame 0
+ * - Pelo menos 6 trocas adjacentes válidas prontas para o jogador fazer combos!
+ */
+export function generatePlayableFruitBoard10x10(
+  seedGrid?: GridMatrix,
+  rng: () => number = Math.random
+): GridMatrix {
+  const board = createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT)
+
+  // Se houver blocos sementes, traz até 15 blocos sobreviventes para as linhas 0..9
+  if (seedGrid) {
+    const height = seedGrid.length || BOARD_HEIGHT
+    const width = seedGrid[0]?.length ?? BOARD_WIDTH
+    for (let r = 0; r < height; r++) {
+      for (let c = 0; c < Math.min(FRUIT_GRID_COLS, width); c++) {
+        const cell = seedGrid[r]?.[c] ?? null
+        if (!cell) continue
+        const targetRow = r < FRUIT_GRID_ROWS ? r : r - (height - FRUIT_GRID_ROWS)
+        if (targetRow >= 0 && targetRow < FRUIT_GRID_ROWS) {
+          const kind = inferFruitKindFromCell(cell)
+          board[targetRow][c] = createFruitGridCell(kind, Boolean(cell.isMorphedBlock))
+        }
+      }
+    }
+  }
+
+  // Preenche todas as 100 células (rows 0..9, cols 0..9) evitando trios imediatos
+  for (let r = 0; r < FRUIT_GRID_ROWS; r++) {
+    for (let c = 0; c < FRUIT_GRID_COLS; c++) {
+      const existing = board[r][c]
+      const baseIdx = existing
+        ? Math.max(0, PLAYABLE_FRUITS.indexOf(inferFruitKindFromCell(existing)))
+        : Math.floor(rng() * PLAYABLE_FRUITS.length)
+
+      let chosenKind: FruitKind = PLAYABLE_FRUITS[baseIdx % PLAYABLE_FRUITS.length]
+
+      for (let offset = 0; offset < PLAYABLE_FRUITS.length; offset++) {
+        const candidate = PLAYABLE_FRUITS[(baseIdx + offset) % PLAYABLE_FRUITS.length]
+        const left1 = c >= 1 && board[r][c - 1] ? inferFruitKindFromCell(board[r][c - 1]!) : null
+        const left2 = c >= 2 && board[r][c - 2] ? inferFruitKindFromCell(board[r][c - 2]!) : null
+        const up1 = r >= 1 && board[r - 1][c] ? inferFruitKindFromCell(board[r - 1][c]!) : null
+        const up2 = r >= 2 && board[r - 2][c] ? inferFruitKindFromCell(board[r - 2][c]!) : null
+
+        const formsHoriz3 = left1 === candidate && left2 === candidate
+        const formsVert3 = up1 === candidate && up2 === candidate
+        const formsCorner3 =
+          left1 === candidate &&
+          up1 === candidate &&
+          ((c >= 1 && r >= 1 && board[r - 1][c - 1] && inferFruitKindFromCell(board[r - 1][c - 1]!) === candidate) ||
+            left1 === up1)
+
+        if (!formsHoriz3 && !formsVert3 && !formsCorner3) {
+          chosenKind = candidate
+          break
+        }
+      }
+
+      board[r][c] = createFruitGridCell(chosenKind)
+    }
+  }
+
+  const ensured = ensureMinimumValidSwaps(board, 6, rng)
+  return ensured.grid
+}
+
+/**
+ * Resolve ondas em cascata na Arena 10×10 com gravidade e reposição automática de frutas pelo topo!
+ * Limitado por `MAX_CASCADE_STEPS = 16` (RT-13) e garante estado final estável com >= 4 trocas válidas.
+ */
+export function resolveFruitCascades10x10WithRefill(
+  grid: GridMatrix,
+  rng: () => number = Math.random
+): CascadeResolutionResult {
+  let currentGrid = cloneGrid(grid)
+  // Limpa linhas 10..19 por segurança na Arena 10×10
+  for (let r = FRUIT_GRID_ROWS; r < currentGrid.length; r++) {
+    for (let c = 0; c < currentGrid[r].length; c++) {
+      currentGrid[r][c] = null
+    }
+  }
+
+  const waves: CascadeWave[] = []
+  let totalPoppedBlocks = 0
+  let totalScoreEarned = 0
+
+  for (let step = 1; step <= MAX_CASCADE_STEPS; step++) {
+    const clusters = findConnectedFruitClusters(currentGrid)
+    if (clusters.length === 0) {
+      break
+    }
+
+    const poppedKeySet = new Set<string>()
+    const poppedCells: Array<{ row: number; col: number; kind: FruitKind; color: string }> = []
+
+    for (const cluster of clusters) {
+      for (const pos of cluster.cells) {
+        if (pos.row >= FRUIT_GRID_ROWS) continue
+        const key = `${pos.row},${pos.col}`
+        if (poppedKeySet.has(key)) continue
+        poppedKeySet.add(key)
+
+        const cell = currentGrid[pos.row]?.[pos.col]
+        const cellKind = cell ? inferFruitKindFromCell(cell) : cluster.kind
+        const meta = FRUIT_CATALOG[cellKind]
+        poppedCells.push({
+          row: pos.row,
+          col: pos.col,
+          kind: cellKind,
+          color: cell?.color || meta.color,
+        })
+        currentGrid[pos.row][pos.col] = null
+      }
+    }
+
+    if (poppedCells.length === 0) {
+      break
+    }
+
+    const totalPoppedInWave = poppedCells.length
+    const mathResonanceFormula = buildWaveMathResonanceFormula(
+      clusters,
+      step,
+      totalPoppedInWave
+    )
+    const waveScore =
+      totalPoppedInWave * 65 * step * (clusters.length > 1 ? 2 : 1)
+
+    waves.push({
+      waveIndex: step,
+      clusters,
+      poppedCells,
+      totalPoppedInWave,
+      mathResonanceFormula,
+      waveScore,
+    })
+
+    totalPoppedBlocks += totalPoppedInWave
+    totalScoreEarned += waveScore
+
+    // Frutas acima descem e novas frutas entram pelo topo da Arena 10×10!
+    currentGrid = applyFruitGravityAndRefill10x10(currentGrid, rng).grid
+  }
+
+  // Após todas as cascatas, estabiliza a Arena 10×10 com 0 auto-pops pendentes e >= 4 trocas válidas
+  const stabilized = ensureMinimumValidSwaps(currentGrid, 4, rng)
+
+  return {
+    grid: stabilized.grid,
+    waves,
+    totalPoppedBlocks,
+    totalWaves: waves.length,
+    totalScoreEarned,
+    streakDelta: waves.length,
+    isAllClear: false,
+  }
+}
+
+/**
+ * Troca duas frutas ortogonalmente adjacentes (`|dr| + |dc| === 1`) na Arena 10×10 (`rows 0..9, cols 0..9`).
+ * - Se formar pelo menos 1 grupo de 3+ frutas iguais (ou envolver Estrela Coringa ✦), explode os grupos,
+ *   desce as frutas acima, repõe novas frutas pelo topo e resolve cascatas em cadeia!
+ * - Se não formar grupo >= 3, retorna `validSwap: false` mantendo o tabuleiro intacto (bounce elástico).
+ */
+export function swapAdjacentFruitsAndResolve(
+  grid: GridMatrix,
+  from: FruitCoord,
+  to: FruitCoord,
+  rng: () => number = Math.random
+): FruitSwapResolutionResult {
+  const dr = Math.abs(from.row - to.row)
+  const dc = Math.abs(from.col - to.col)
+  if (
+    dr + dc !== 1 ||
+    from.row < 0 ||
+    from.row >= FRUIT_GRID_ROWS ||
+    to.row < 0 ||
+    to.row >= FRUIT_GRID_ROWS ||
+    from.col < 0 ||
+    from.col >= FRUIT_GRID_COLS ||
+    to.col < 0 ||
+    to.col >= FRUIT_GRID_COLS
+  ) {
+    const currentSwaps = findAllValidFruitSwaps(grid)
+    return {
+      validSwap: false,
+      grid: cloneGrid(grid),
+      waves: [],
+      totalPoppedBlocks: 0,
+      totalWaves: 0,
+      totalScoreEarned: 0,
+      streakDelta: 0,
+      remainingValidSwaps: currentSwaps.length,
+      wasBoardReshuffled: false,
+    }
+  }
+
+  const workingGrid = cloneGrid(grid)
+  const cellFrom = workingGrid[from.row]?.[from.col] ?? null
+  const cellTo = workingGrid[to.row]?.[to.col] ?? null
+
+  if (!cellFrom || !cellTo) {
+    const currentSwaps = findAllValidFruitSwaps(grid)
+    return {
+      validSwap: false,
+      grid: cloneGrid(grid),
+      waves: [],
+      totalPoppedBlocks: 0,
+      totalWaves: 0,
+      totalScoreEarned: 0,
+      streakDelta: 0,
+      remainingValidSwaps: currentSwaps.length,
+      wasBoardReshuffled: false,
+    }
+  }
+
+  workingGrid[from.row][from.col] = cellTo
+  workingGrid[to.row][to.col] = cellFrom
+
+  const kindFrom = inferFruitKindFromCell(cellFrom)
+  const kindTo = inferFruitKindFromCell(cellTo)
+
+  // Se uma das frutas trocadas for Estrela Coringa (✦), garante formação de trio estelar com a cor parceira
+  if (kindFrom === 'STAR_PRISM' || kindTo === 'STAR_PRISM') {
+    const partnerKind: FruitKind =
+      kindFrom === 'STAR_PRISM'
+        ? kindTo === 'STAR_PRISM'
+          ? 'APPLE_RUBY'
+          : kindTo
+        : kindFrom
+    const initialClusters = findConnectedFruitClusters(workingGrid)
+    if (initialClusters.length === 0) {
+      let harmonized = 0
+      for (const [nrDelta, ncDelta] of ORTHOGONAL_DIRS) {
+        const nr = to.row + nrDelta
+        const nc = to.col + ncDelta
+        if (
+          nr >= 0 &&
+          nr < FRUIT_GRID_ROWS &&
+          nc >= 0 &&
+          nc < FRUIT_GRID_COLS &&
+          !(nr === from.row && nc === from.col)
+        ) {
+          workingGrid[nr][nc] = createFruitGridCell(partnerKind, true)
+          harmonized += 1
+          if (harmonized >= 2) break
+        }
+      }
+    }
+  }
+
+  const clustersAfterSwap = findConnectedFruitClusters(workingGrid)
+  if (clustersAfterSwap.length === 0) {
+    const currentSwaps = findAllValidFruitSwaps(grid)
+    return {
+      validSwap: false,
+      grid: cloneGrid(grid),
+      waves: [],
+      totalPoppedBlocks: 0,
+      totalWaves: 0,
+      totalScoreEarned: 0,
+      streakDelta: 0,
+      remainingValidSwaps: currentSwaps.length,
+      wasBoardReshuffled: false,
+    }
+  }
+
+  const cascadeResult = resolveFruitCascades10x10WithRefill(workingGrid, rng)
+  const finalSwaps = findAllValidFruitSwaps(cascadeResult.grid)
+
+  return {
+    validSwap: true,
+    grid: cascadeResult.grid,
+    waves: cascadeResult.waves,
+    totalPoppedBlocks: cascadeResult.totalPoppedBlocks,
+    totalWaves: cascadeResult.totalWaves,
+    totalScoreEarned: cascadeResult.totalScoreEarned,
+    streakDelta: cascadeResult.streakDelta,
+    remainingValidSwaps: finalSwaps.length,
+    wasBoardReshuffled: false,
+  }
+}
+
+/**
+ * Milagre [M] na Arena 10×10 de Frutas:
+ * Materializa `count` Estrelas Coringa Douradas (`STAR_PRISM` ✦) em posições estratégicas
+ * nas linhas 0..9, permitindo que o jogador troque a Estrela com qualquer fruta vizinha!
+ */
+export function forgeWildcardStarsOnBoard(
+  grid: GridMatrix,
+  count: number = 2,
+  focusCoord?: FruitCoord
+): GridMatrix {
+  const working = cloneGrid(grid)
+  const candidates: FruitCoord[] = []
+
+  if (
+    focusCoord &&
+    focusCoord.row >= 0 &&
+    focusCoord.row < FRUIT_GRID_ROWS &&
+    focusCoord.col >= 0 &&
+    focusCoord.col < FRUIT_GRID_COLS
+  ) {
+    candidates.push(focusCoord)
+  }
+
+  const swaps = findAllValidFruitSwaps(working)
+  for (const sw of swaps) {
+    candidates.push(sw.from)
+  }
+
+  // Adiciona posições centrais caso faltem candidatos
+  const fallbackCoords: FruitCoord[] = [
+    { row: 4, col: 4 },
+    { row: 4, col: 5 },
+    { row: 5, col: 4 },
+    { row: 3, col: 5 },
+  ]
+  for (const fb of fallbackCoords) {
+    candidates.push(fb)
+  }
+
+  let forged = 0
+  const usedKeys = new Set<string>()
+  for (const coord of candidates) {
+    if (forged >= count) break
+    const key = `${coord.row},${coord.col}`
+    if (usedKeys.has(key)) continue
+    usedKeys.add(key)
+
+    const cell = working[coord.row]?.[coord.col]
+    if (cell && inferFruitKindFromCell(cell) === 'STAR_PRISM') continue
+
+    working[coord.row][coord.col] = createFruitGridCell('STAR_PRISM', true)
+    forged += 1
+  }
+
+  return working
+}
+
+/**
  * Melhoria 02-A: Socratic Cascade Oracle.
  * Scans the board to identify:
- * - Orthogonal pairs of 2 matching fruits waiting for +1 to complete 2 + 1 = 3
- * - Which column (0..9) and fruit color produces the strongest immediate cascade
- * - Which fruit color is the most fragmented/populous (ideal target for [B] Fruit Magnet)
- * - A Socratic, Zero-Spoiler pedagogical hint.
+ * - No modo 10×10 Swap-Fruit: Todas as trocas adjacentes válidas (`findAllValidFruitSwaps`),
+ *   destacando a melhor troca 2 + 1 = 3 sem dar spoiler automático.
+ * - Qual cor de fruta está mais espalhada/populosa (alvo ideal do Imã [B]).
  */
 export function scanFruitCascadeOracle(grid: GridMatrix): FruitCascadeOracleReport {
   const height = grid.length || BOARD_HEIGHT
   const width = grid[0]?.length ?? BOARD_WIDTH
 
-  // Count blocks and isolated components per playable fruit
+  // Count blocks per playable fruit
   const fruitCounts: Record<FruitKind, number> = {
     APPLE_RUBY: 0,
     CITRUS_GOLD: 0,
@@ -697,7 +1292,42 @@ export function scanFruitCascadeOracle(grid: GridMatrix): FruitCascadeOracleRepo
     }
   }
 
-  // Detect connected pairs of size 2 that have at least one open neighbor or column drop
+  // Se estamos na Arena 10×10 Cheia de Frutas (rows 0..9), escaneia as trocas ortogonais diretas!
+  if (is10x10FruitArenaGrid(grid)) {
+    const swaps = findAllValidFruitSwaps(grid)
+    const bestSwap = swaps[0] ?? null
+    const bestFruit = bestSwap?.fruitKind ?? mostFragmentedFruit
+    const bestCol = bestSwap?.to.col ?? 4
+    const bestMeta = FRUIT_CATALOG[bestFruit]
+
+    let pedagogicalHint: string
+    if (bestSwap) {
+      const rLabel = bestSwap.from.row + 1
+      const c1Label = bestSwap.from.col + 1
+      const c2Label = bestSwap.to.col + 1
+      const axisDesc =
+        bestSwap.from.row === bestSwap.to.row
+          ? `linha ${rLabel} (col ${c1Label} ↔ col ${c2Label})`
+          : `coluna ${c1Label} (linha ${bestSwap.from.row + 1} ↕ linha ${bestSwap.to.row + 1})`
+      pedagogicalHint = `💡 Troque ${bestMeta.emoji} ${bestMeta.namePt} na ${axisDesc} para fechar ${bestSwap.expectedClusterSize} frutas (${swaps.length} trocas prontas)!`
+    } else {
+      const fragMeta = FRUIT_CATALOG[mostFragmentedFruit]
+      pedagogicalHint = `💡 ${fragmentedCount} × ${fragMeta.namePt} (${fragMeta.emoji}) na Arena 10×10: use [B] Imã ou troque frutas vizinhas!`
+    }
+
+    return {
+      recommendedFruit: bestFruit,
+      recommendedCol: bestCol,
+      readyPairsCount: swaps.length,
+      mostFragmentedFruit,
+      fragmentedCount,
+      pedagogicalHint,
+      bestSwap,
+      validSwapsCount: swaps.length,
+    }
+  }
+
+  // Fallback legado para tabuleiros 20×10 com blocos na base (rows 10..19)
   let readyPairsCount = 0
   let bestFruit: FruitKind = mostFragmentedFruit
   let bestCol = 4
@@ -747,11 +1377,8 @@ export function scanFruitCascadeOracle(grid: GridMatrix): FruitCascadeOracleRepo
     }
   }
 
-  // Simulate dropping a single block of each playable fruit in each column 0..9
-  // to find the column + fruit with maximum cascade resonance
   for (const kind of PLAYABLE_FRUITS) {
     for (let col = 0; col < width; col++) {
-      // Find lowest empty row in column
       let dropRow = -1
       for (let r = height - 1; r >= 0; r--) {
         if (grid[r][col] === null) {
@@ -795,6 +1422,8 @@ export function scanFruitCascadeOracle(grid: GridMatrix): FruitCascadeOracleRepo
     mostFragmentedFruit,
     fragmentedCount,
     pedagogicalHint,
+    bestSwap: null,
+    validSwapsCount: readyPairsCount,
   }
 }
 
@@ -820,14 +1449,16 @@ export function morphFruitPairToWildcardOrTarget(
  * Melhoria 02-B — Miracle [B] (Imã de Frutas / Magnetic Color Collapse):
  * Identifies `targetKind` (or automatically the most fragmented/populous fruit color
  * on the board), pops all blocks of that color across the entire board in Wave 1
- * (even isolated or buried ones!), applies column gravity, and resolves any secondary cascades!
+ * (even isolated or buried ones!), applies gravity (and top refill in 10×10 mode!),
+ * and resolves any secondary cascades!
  */
 export function magnetizeSingleFruitColor(
   grid: GridMatrix,
   targetKind?: FruitKind
 ): CascadeResolutionResult {
-  let workingGrid = applyColumnGravityToFruits(grid).grid
-  const height = workingGrid.length
+  const is10x10 = is10x10FruitArenaGrid(grid)
+  let workingGrid = is10x10 ? cloneGrid(grid) : applyColumnGravityToFruits(grid).grid
+  const height = is10x10 ? FRUIT_GRID_ROWS : workingGrid.length
   const width = workingGrid[0]?.length ?? BOARD_WIDTH
 
   const oracle = scanFruitCascadeOracle(workingGrid)
@@ -901,6 +1532,38 @@ export function magnetizeSingleFruitColor(
     waveScore: n * 75,
   }
 
+  if (is10x10) {
+    workingGrid = applyFruitGravityAndRefill10x10(workingGrid).grid
+    const secondary = resolveFruitCascades10x10WithRefill(workingGrid)
+    const shiftedWaves: CascadeWave[] = secondary.waves.map((w) => {
+      const nextIdx = w.waveIndex + 1
+      return {
+        ...w,
+        waveIndex: nextIdx,
+        mathResonanceFormula: buildWaveMathResonanceFormula(
+          w.clusters,
+          nextIdx,
+          w.totalPoppedInWave
+        ),
+        waveScore:
+          w.totalPoppedInWave * 65 * nextIdx * (w.clusters.length > 1 ? 2 : 1),
+      }
+    })
+    const allWaves = [magnetWave, ...shiftedWaves]
+    const totalPoppedBlocks = allWaves.reduce((acc, w) => acc + w.totalPoppedInWave, 0)
+    const totalScoreEarned = allWaves.reduce((acc, w) => acc + w.waveScore, 0)
+
+    return {
+      grid: secondary.grid,
+      waves: allWaves,
+      totalPoppedBlocks,
+      totalWaves: allWaves.length,
+      totalScoreEarned,
+      streakDelta: allWaves.length,
+      isAllClear: false,
+    }
+  }
+
   workingGrid = applyColumnGravityToFruits(workingGrid).grid
   const secondary = resolveFruitCascades(workingGrid)
 
@@ -939,11 +1602,12 @@ export function magnetizeSingleFruitColor(
 /**
  * Phoenix Second Wind Miracle in FRUIT_MATCH:
  * Collapses the 2 most populous fruit colors on the board in a massive purification wave,
- * applies column gravity, and resolves any secondary cascades.
+ * applies gravity (and top refill in 10×10 mode!), and resolves any secondary cascades.
  */
 export function purifyTopTwoFruitColors(grid: GridMatrix): CascadeResolutionResult {
-  let workingGrid = applyColumnGravityToFruits(grid).grid
-  const height = workingGrid.length
+  const is10x10 = is10x10FruitArenaGrid(grid)
+  let workingGrid = is10x10 ? cloneGrid(grid) : applyColumnGravityToFruits(grid).grid
+  const height = is10x10 ? FRUIT_GRID_ROWS : workingGrid.length
   const width = workingGrid[0]?.length ?? BOARD_WIDTH
 
   const cellsByKind = new Map<FruitKind, Array<{ row: number; col: number }>>()
@@ -1013,6 +1677,38 @@ export function purifyTopTwoFruitColors(grid: GridMatrix): CascadeResolutionResu
     totalPoppedInWave: totalInFirstWave,
     mathResonanceFormula: formula,
     waveScore: totalInFirstWave * 90,
+  }
+
+  if (is10x10) {
+    workingGrid = applyFruitGravityAndRefill10x10(workingGrid).grid
+    const secondary = resolveFruitCascades10x10WithRefill(workingGrid)
+    const shiftedWaves: CascadeWave[] = secondary.waves.map((w) => {
+      const nextIdx = w.waveIndex + 1
+      return {
+        ...w,
+        waveIndex: nextIdx,
+        mathResonanceFormula: buildWaveMathResonanceFormula(
+          w.clusters,
+          nextIdx,
+          w.totalPoppedInWave
+        ),
+        waveScore:
+          w.totalPoppedInWave * 65 * nextIdx * (w.clusters.length > 1 ? 2 : 1),
+      }
+    })
+    const allWaves = [phoenixWave, ...shiftedWaves]
+    const totalPoppedBlocks = allWaves.reduce((acc, w) => acc + w.totalPoppedInWave, 0)
+    const totalScoreEarned = allWaves.reduce((acc, w) => acc + w.waveScore, 0)
+
+    return {
+      grid: secondary.grid,
+      waves: allWaves,
+      totalPoppedBlocks,
+      totalWaves: allWaves.length,
+      totalScoreEarned,
+      streakDelta: allWaves.length,
+      isAllClear: false,
+    }
   }
 
   workingGrid = applyColumnGravityToFruits(workingGrid).grid

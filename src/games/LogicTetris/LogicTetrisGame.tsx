@@ -1,6 +1,6 @@
 import React from 'react'
 import { GameMode, SubGameStyle } from './types'
-import { useGameLoop } from './hooks/useGameLoop'
+import { toggleLogicTetrisFullscreen, useGameLoop } from './hooks/useGameLoop'
 import { useLogicTetrisStore } from './state/useLogicTetrisStore'
 import { soundEngine } from './audio/soundEngine'
 import { TetrisCanvas } from './components/TetrisCanvas'
@@ -66,20 +66,22 @@ const HUB_STYLE_BUTTONS: ReadonlyArray<{
   style: SubGameStyle
   label: string
 }> = [
-  { style: 'TETRIS_CLASSIC', label: '🧱 Clássico' },
-  { style: 'FRUIT_MATCH', label: '🍇 Frutas' },
+  { style: 'TETRIS_CLASSIC', label: '🧱 Clássico 20×10' },
+  { style: 'FRUIT_MATCH', label: '🍎 Frutas 10×10' },
   { style: 'TACTILE_GRID', label: '🧩 Grade 10×10' },
 ]
 
 /**
  * Main Orchestrator Component for Logic Tetris (Trinity Expansion) (`LogicTetrisGame.tsx`).
  *
- * Incorporates Auditor Improvements:
+ * Incorporates Auditor Improvements & Master Plan V2:
  * - `Melhoria 07-A`: Connects `LogicCodexDrawer` (`[H]`) with Live Session Diary + 8 Lenses Guide.
  * - `Melhoria 07-B / 06-B / 06-C`: Welcoming 3-Mode `START_HUB` selector (`Zen`, `Arcade`, `Mestre`)
  *   + Trinity Style & Rotation Mode selector (`hub-style-selector`) keeping `btn-start-match` 100%
  *   visible in Desktop (`1440×900`) and Mobile (`390×844`), and celebratory `GAME_OVER` summary card
  *   highlighting `maxStreakInSession` and `totalStyleShiftsCount`.
+ * - `Master Plan V2 (RT-17 / RT-20)`: Proportional Uncut Arena Stage (`max-w-[460px]` for `20×10` vs
+ *   `max-w-[550px]` for `10×10` modes) + Native Fullscreen Toggle (`[F]`, `.lt-fullscreen-active`).
  * - `Melhoria 07-C`: Integrates `TelemetryHUD`, `TetrisCanvas`, `PieceAlchemyBar`, and `TouchControlPad`.
  * - `Melhoria 07-D`: Deterministic `data-testid` attributes for Playwright E2E verification.
  */
@@ -90,6 +92,7 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
   const mode = useLogicTetrisStore((s) => s.mode)
   const activeSubGameStyle = useLogicTetrisStore((s) => s.activeSubGameStyle)
   const styleRotationMode = useLogicTetrisStore((s) => s.styleRotationMode)
+  const isFullscreen = useLogicTetrisStore((s) => s.isFullscreen)
   const score = useLogicTetrisStore((s) => s.score)
   const lines = useLogicTetrisStore((s) => s.lines)
   const level = useLogicTetrisStore((s) => s.level)
@@ -107,6 +110,10 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
   const toggleCodex = useLogicTetrisStore((s) => s.toggleCodex)
   const triggerMathFillHole = useLogicTetrisStore((s) => s.triggerMathFillHole)
 
+  const is10x10Stage =
+    activeSubGameStyle === 'FRUIT_MATCH' || activeSubGameStyle === 'TACTILE_GRID'
+  const stageMaxWidthClass = is10x10Stage ? 'max-w-[550px]' : 'max-w-[460px]'
+
   const handleStartMatch = () => {
     startGame(mode)
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -121,28 +128,36 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
     }
   }
 
+  const handleStartMatchFullscreen = () => {
+    toggleLogicTetrisFullscreen(true)
+    handleStartMatch()
+  }
+
   return (
     <div
-      className={`lt-genesis-shell relative rounded-3xl p-3 sm:p-5 border border-slate-800/90 shadow-2xl ${className}`}
+      className={`lt-genesis-shell relative rounded-3xl p-3 sm:p-5 border border-slate-800/90 shadow-2xl ${
+        isFullscreen ? 'lt-fullscreen-active' : ''
+      } ${className}`}
       data-testid="logic-tetris-game"
       data-game-phase={phase}
       data-game-mode={mode}
       data-active-style={activeSubGameStyle}
       data-rotation-mode={styleRotationMode}
+      data-fullscreen={isFullscreen ? 'true' : 'false'}
     >
-      {/* Main Responsive Arena Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        {/* Left/Center Column: 20x10 Base-10 Canvas + Touch Pad */}
-        <div className="lg:col-span-5 flex flex-col items-center gap-3">
+      {/* Main Responsive Arena Grid — Expanded 6/6 Columns for Proportional 20x10 & 10x10 Stages */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 xl:gap-6 items-start">
+        {/* Left/Center Column: Proportional Uncut Stage Canvas (20x10 vs 10x10) + Touch Pad */}
+        <div className="lg:col-span-6 flex flex-col items-center gap-3">
           <TetrisCanvas
             onCavityClick={() => triggerMathFillHole()}
-            className="w-full max-w-[382px]"
+            className={`w-full ${stageMaxWidthClass}`}
           />
-          <TouchControlPad className="w-full max-w-[382px]" />
+          <TouchControlPad className={`w-full ${stageMaxWidthClass}`} />
         </div>
 
         {/* Right Column: Telemetry HUD + Piece Alchemy Bar */}
-        <div className="lg:col-span-7 flex flex-col gap-3.5">
+        <div className="lg:col-span-6 flex flex-col gap-3.5">
           <TelemetryHUD />
           <PieceAlchemyBar />
         </div>
@@ -170,8 +185,9 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
                   className="text-xs text-slate-300 mt-[2px] leading-snug"
                   style={{ fontSize: '12px' }}
                 >
-                  Jogue os <strong className="text-cyan-300">3 Estilos do Cordão Tríplice</strong> ao
-                  mesmo tempo ou trave no seu favorito! Use a Matemática para{' '}
+                  Jogue os <strong className="text-cyan-300">3 Estilos do Cordão Tríplice</strong> em
+                  arenas proporcionais (<strong className="text-cyan-200">20×10</strong> e{' '}
+                  <strong className="text-emerald-200">10×10 Cheia</strong>)! Use a Matemática para{' '}
                   <strong className="text-amber-300">mudar peças [M]</strong>,{' '}
                   <strong className="text-amber-300">tapar buracos [B]</strong> e ativar o{' '}
                   <strong className="text-purple-300">Protocolo Fênix 142857</strong>!
@@ -295,14 +311,26 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
 
             {/* Hub Footer Actions */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800 flex-wrap">
-              <button
-                type="button"
-                onClick={() => toggleCodex(true)}
-                data-testid="btn-hub-open-codex"
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-mono font-bold text-cyan-200 transition cursor-pointer"
-              >
-                📚 Explorar as 8 Lentes [H]
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => toggleCodex(true)}
+                  data-testid="btn-hub-open-codex"
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-mono font-bold text-cyan-200 transition cursor-pointer"
+                >
+                  📚 Explorar as 8 Lentes [H]
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStartMatchFullscreen}
+                  data-testid="btn-start-match-fullscreen"
+                  title="Iniciar partida diretamente em Tela Cheia [F]"
+                  className="px-3 py-2 rounded-xl bg-purple-950/90 hover:bg-purple-900 border border-purple-400/60 text-xs font-mono font-bold text-purple-100 transition cursor-pointer"
+                >
+                  ⛶ Tela Cheia [F]
+                </button>
+              </div>
 
               <button
                 type="button"

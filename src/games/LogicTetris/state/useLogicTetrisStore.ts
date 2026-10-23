@@ -6,11 +6,13 @@ import {
   DopamineTier,
   FloatingFeedback,
   FruitCascadeOracleReport,
+  FruitCoord,
   FruitPairPiece,
   GameMode,
   GamePhase,
   GridMatrix,
   LogicTetrisPersistentStats,
+  MiraclePowerTier,
   PieceType,
   RotationDirection,
   RotationState,
@@ -41,23 +43,23 @@ import {
   getPieceDefinition,
 } from '../engine/tetrominoes'
 import {
-  computeFruitPairGhostY,
   createSpawnFruitPair,
-  decorateGridWithFruits,
-  hasFruitPairCollision,
-  lockFruitPairAndResolve,
+  forgeWildcardStarsOnBoard,
+  FRUIT_GRID_COLS,
+  FRUIT_GRID_ROWS,
+  generatePlayableFruitBoard10x10,
   magnetizeSingleFruitColor,
   morphFruitPairToWildcardOrTarget,
-   moveFruitPairIfValid,
   purifyTopTwoFruitColors,
-  rotateFruitPairSRS,
   scanFruitCascadeOracle,
+  swapAdjacentFruitsAndResolve,
 } from '../engine/fruitMatchEngine'
 import {
   generateTactilePieceTray,
   morphTactileTrayPiece,
   normalizeGridForTactileTransition,
   placeTactileTrayPiece,
+  purgeMajorityBlocksForTransition,
   purifyTactileGridSecondWind,
   scanTactileGridTopology,
   sealTactileRowOrColCavities,
@@ -67,7 +69,7 @@ import {
   TACTILE_ROW_START,
 } from '../engine/tactileGridEngine'
 import { scanBoardTopology } from '../engine/cavityScanner'
-import { generateMathChallenge } from '../engine/mathEngine'
+import { generateMathChallenge, getMiracleTierSpec } from '../engine/mathEngine'
 import { getSequenceDopamineTier, soundEngine } from '../audio/soundEngine'
 
 const STATS_STORAGE_KEY = 'logic_tetris_v1_stats'
@@ -84,19 +86,19 @@ export const TRINITY_STYLE_CYCLE: readonly SubGameStyle[] = [
 ]
 
 export function getSubGameStyleLabelPt(style: SubGameStyle): string {
-  if (style === 'FRUIT_MATCH') return 'Frutas & Pares em Cascata'
-  if (style === 'TACTILE_GRID') return 'Grade Livre H×V (10×10)'
-  return 'Tetris Clássico (Base-10)'
+  if (style === 'FRUIT_MATCH') return 'Frutas 10×10 (Troca & Cascata)'
+  if (style === 'TACTILE_GRID') return 'Arena Tátil H×V (10×10)'
+  return 'Tetris Clássico (20×10)'
 }
 
 export function getSubGameStylePedagogicalSubtitle(style: SubGameStyle): string {
   if (style === 'FRUIT_MATCH') {
-    return 'Alquimia dos Cachos — Agrupamento & Multiplicação (2 + 1 = 3)'
+    return 'Arena 10×10 Cheia de Frutas — Troque Vizinhas & Cascatas (2 + 1 = 3)'
   }
   if (style === 'TACTILE_GRID') {
-    return 'Geometria Base-10 — Linhas Horizontais & Colunas Verticais H×V'
+    return 'Geometria Base-10 (10×10) — Macro-Blocos 3×3 & Cruzamentos H×V'
   }
-  return 'Arquitetura Clássica — Área & Encaixe Base-10'
+  return 'Arquitetura Clássica (20×10) — Área & Encaixe Base-10'
 }
 
 function getNextCycleStyle(current: SubGameStyle): SubGameStyle {
@@ -245,11 +247,17 @@ export interface LogicTetrisStoreState {
   styleTransitionTo: SubGameStyle | null
   totalStyleShiftsCount: number
 
-  // Style #2 (FRUIT_MATCH) State:
+  // Style #2 (FRUIT_MATCH 10×10 Swap & Cascade) State:
   activeFruitPair: FruitPairPiece
   nextFruitPair: FruitPairPiece
   fruitOracle: FruitCascadeOracleReport
   lastCascadeWaves: CascadeWave[]
+  selectedFruitCell: FruitCoord | null
+  fruitCursor: FruitCoord
+  lastSwappedCells: [FruitCoord, FruitCoord] | null
+  invalidSwapBounceUntil: number
+  lastPurgedBlocksCount: number
+  isFullscreen: boolean
 
   // Style #3 (TACTILE_GRID) State:
   tactileTray: TactilePieceOption[]
@@ -262,9 +270,11 @@ export interface LogicTetrisStoreState {
   // Unified Pedagogical Telemetry (Melhoria 04-A):
   lastMathResonanceFormula: string | null
   lastMiracleToast: string | null
+  selectedMiracleTier: MiraclePowerTier
 
   // Actions:
   setMode: (mode: GameMode) => void
+  setMiraclePowerTier: (tier: MiraclePowerTier) => void
   startGame: (mode?: GameMode) => void
   pauseGame: () => void
   resumeGame: () => void
@@ -281,7 +291,7 @@ export interface LogicTetrisStoreState {
   tickLoop: (dtMs: number) => void
   triggerMathMorph: (targetPiece?: PieceType) => void
   setMorphTargetPiece: (targetPiece: PieceType) => void
-  triggerMathFillHole: () => void
+  triggerMathFillHole: (explicitTier?: MiraclePowerTier) => void
   cancelMathIntervention: () => void
   forfeitSecondWind: () => void
   submitMathChoice: (choiceIndex: number) => 'CORRECT' | 'ELASTIC_BOUNCE' | 'IGNORED'
@@ -302,6 +312,11 @@ export interface LogicTetrisStoreState {
   setTactileCursorPosition: (col: number, row: number) => void
   placeSelectedTactilePieceAt: (col?: number, row?: number) => boolean
   moveUp: () => boolean
+  selectOrSwapFruitAt: (row: number, col: number) => boolean
+  swapFruitCells: (from: FruitCoord, to: FruitCoord) => boolean
+  swapFruitInDirection: (dRow: -1 | 0 | 1, dCol: -1 | 0 | 1) => boolean
+  moveFruitCursor: (dRow: number, dCol: number) => boolean
+  setFullscreen: (active: boolean) => void
 }
 
 const initialGrid = createEmptyGrid()
@@ -324,11 +339,14 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
   })
 
   /**
-   * Passo 4.2 — Scene Transition Engine (`performStyleShift` — Melhorias 04-B, 04-C & RT-12):
-   * Morphs the active board into `targetStyle` in real time, playing the style shift fanfare,
-   * running RT-12 safe normalizers (`decorateGridWithFruits` / `normalizeGridForTactileTransition`),
-   * granting transmutation bonus points, and NEVER resetting `combo` (`streakCount`), renewing
-   * `comboGraceDropsLeft = 3` so the player can carry a 12x+ streak across all 3 styles!
+   * Passo 4.2 — Scene Transition Engine (`performStyleShift` — V2 Majority Purge & Full 10×10 Fruit Board):
+   * - Elimina a maioria (75%–85%) dos blocos acumulados no cenário anterior (`purgeMajorityBlocksForTransition`),
+   *   convertendo cada bloco eliminado em `+30 pts` de bônus!
+   * - Ao entrar em `FRUIT_MATCH`, preenche toda a Arena 10×10 (`rows 0..9, cols 0..9` = 100 células) com frutas
+   *   prontas para troca ortogonal e combos em cascata (`generatePlayableFruitBoard10x10`).
+   * - Ao entrar em `TACTILE_GRID`, adapta para a Arena 10×10 inteira sem cortes (`rows 0..9, cols 0..9`) e sorteia
+   *   a bandeja com Macro-Blocos (`CUBE_3X3`, `CORNER_3X3`, `BAR_1X5`, `RECT_2X3`).
+   * - Nunca reseta `combo` (`streakCount`) e renova `comboGraceDropsLeft = 3`!
    */
   const performStyleShift = (
     targetStyle: SubGameStyle,
@@ -355,7 +373,10 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
 
     soundEngine.playStyleShiftFanfare(targetStyle)
 
-    let nextGrid = state.grid
+    // 1. Elimina a maioria dos blocos (75%–85%) ao trocar de cenário!
+    const purgeRes = purgeMajorityBlocksForTransition(state.grid, targetStyle)
+
+    let nextGrid = purgeRes.grid
     let nextActivePiece = state.activePiece
     let nextActiveFruitPair = state.activeFruitPair
     let nextUpcomingFruitPair = state.nextFruitPair
@@ -363,10 +384,11 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     let nextSelectedTraySlot: 0 | 1 | 2 = state.selectedTraySlot
     let nextCursorCol = state.tactileCursorCol
     let nextCursorRow = state.tactileCursorRow
-    let transmutationBonusPoints = 0
+    let transmutationBonusPoints = purgeRes.transmutationBonusPoints * state.level
 
     if (targetStyle === 'FRUIT_MATCH') {
-      nextGrid = decorateGridWithFruits(state.grid)
+      // Preenche 100% da Arena 10×10 (rows 0..9, cols 0..9) com frutas prontas para trocar!
+      nextGrid = generatePlayableFruitBoard10x10(purgeRes.grid)
       const oracle = scanFruitCascadeOracle(nextGrid)
       nextActiveFruitPair = {
         ...createSpawnFruitPair(oracle.recommendedFruit),
@@ -374,16 +396,16 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       }
       nextUpcomingFruitPair = createSpawnFruitPair()
     } else if (targetStyle === 'TACTILE_GRID') {
-      const norm = normalizeGridForTactileTransition(state.grid)
+      const norm = normalizeGridForTactileTransition(purgeRes.grid)
       nextGrid = norm.grid
-      transmutationBonusPoints = norm.transmutationBonusPoints
+      transmutationBonusPoints += norm.transmutationBonusPoints
       nextTactileTray = generateTactilePieceTray(nextGrid)
       nextSelectedTraySlot = 0
       nextCursorCol = 4
-      nextCursorRow = 14
+      nextCursorRow = 4
     } else {
-      // TETRIS_CLASSIC
-      nextGrid = state.grid
+      // TETRIS_CLASSIC (Torre 20×10 com a maioria dos blocos eliminados e sobreviventes nas linhas 18..19)
+      nextGrid = purgeRes.grid
       const safeSpawn = findSafeMorphPlacement(
         nextGrid,
         createSpawnPiece(state.activePiece.type),
@@ -400,8 +422,12 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     const shiftBonus = 300 * state.level + transmutationBonusPoints
     const nextScore = state.score + shiftBonus
     const styleLabel = getSubGameStyleLabelPt(targetStyle)
-    const toastTitle = `🌀 DOBRA DO CORDÃO TRÍPLICE: ${styleLabel}!`
-    const toastSub = `Cenário transmutado em tempo real · +${shiftBonus} pts · Sequência mantida!`
+    const purgedNote =
+      purgeRes.purgedBlocksCount > 0
+        ? `💥 ${purgeRes.purgedBlocksCount} blocos eliminados`
+        : 'Arena renovada'
+    const toastTitle = `🌀 TROCA DE CENÁRIO: ${styleLabel}!`
+    const toastSub = `${purgedNote} · +${shiftBonus} pts · Sequência mantida!`
 
     const updatedStats: LogicTetrisPersistentStats = {
       ...state.stats,
@@ -422,6 +448,11 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       activePiece: nextActivePiece,
       activeFruitPair: nextActiveFruitPair,
       nextFruitPair: nextUpcomingFruitPair,
+      selectedFruitCell: null,
+      fruitCursor: { row: 4, col: 4 },
+      lastSwappedCells: null,
+      invalidSwapBounceUntil: 0,
+      lastPurgedBlocksCount: purgeRes.purgedBlocksCount,
       tactileTray: nextTactileTray,
       selectedTraySlot: nextSelectedTraySlot,
       tactileCursorCol: nextCursorCol,
@@ -705,41 +736,45 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
   }
 
   /**
-   * Style #2 (`FRUIT_MATCH`) Lock & Multi-Wave Cascade Handler
+   * Style #2 (`FRUIT_MATCH` 10×10 Swap & Cascade) Swap Resolution Handler
    */
-  const lockActiveFruitPairAndAdvance = () => {
+  const executeFruitSwapAndAdvance = (from: FruitCoord, to: FruitCoord): boolean => {
     const state = get()
-    if (state.phase !== 'PLAYING') return
+    if (state.phase !== 'PLAYING') return false
+    if (Date.now() < state.postModalInputGuardUntil) return false
 
-    const cascade = lockFruitPairAndResolve(state.grid, state.activeFruitPair)
-    const nextGrid = cascade.grid
-    const wavesCleared = cascade.totalWaves
+    const swapRes = swapAdjacentFruitsAndResolve(state.grid, from, to)
+    if (!swapRes.validSwap) {
+      soundEngine.playElasticBounce()
+      set({
+        selectedFruitCell: null,
+        fruitCursor: to,
+        lastSwappedCells: [from, to],
+        invalidSwapBounceUntil: Date.now() + 360,
+        floatingFeedbacks: [
+          ...state.floatingFeedbacks.slice(-5),
+          createFeedbackItem(
+            '🔄 Troca Elástica!',
+            'Alinhe 3+ frutas da mesma cor (2 + 1 = 3) ou use uma Estrela ✦!',
+            'gold'
+          ),
+        ],
+      })
+      return false
+    }
 
+    const nextGrid = swapRes.grid
+    const wavesCleared = Math.max(1, swapRes.totalWaves)
     const nextLines = state.lines + wavesCleared
     const nextLevel = Math.floor(nextLines / 10) + 1
 
-    let nextCombo = state.combo
-    let nextGraceDrops = state.comboGraceDropsLeft
-    if (wavesCleared > 0) {
-      nextCombo = Math.max(0, state.combo) + cascade.streakDelta
-      nextGraceDrops = 3
-    } else if (state.combo > 0) {
-      if (state.comboGraceDropsLeft > 0) {
-        nextGraceDrops = state.comboGraceDropsLeft - 1
-      } else {
-        nextCombo = -1
-        nextGraceDrops = 3
-      }
-    } else {
-      nextCombo = -1
-      nextGraceDrops = 3
-    }
-
-    const nextMaxStreak = Math.max(state.maxStreakInSession, Math.max(0, nextCombo))
-    const nextDopamineTier = getSequenceDopamineTier(Math.max(0, nextCombo))
-    const comboBonus = wavesCleared > 0 && nextCombo > 0 ? nextCombo * 45 * state.level : 0
-    const cascadeScore = cascade.totalScoreEarned * state.level + comboBonus
-    const nextScore = state.score + cascadeScore + 12
+    const nextCombo = Math.max(0, state.combo) + Math.max(1, swapRes.streakDelta)
+    const nextGraceDrops = 3
+    const nextMaxStreak = Math.max(state.maxStreakInSession, nextCombo)
+    const nextDopamineTier = getSequenceDopamineTier(nextCombo)
+    const comboBonus = nextCombo > 0 ? nextCombo * 50 * state.level : 0
+    const cascadeScore = swapRes.totalScoreEarned * state.level + comboBonus
+    const nextScore = state.score + cascadeScore
 
     const prevTenBucket = Math.floor(state.lines / 10)
     const nextTenBucket = Math.floor(nextLines / 10)
@@ -748,41 +783,38 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     const nextPhoenixShields =
       state.mode === 'zen' ? 99 : Math.min(3, state.phoenixShields + earnedShield)
 
-    const chargeGain = wavesCleared > 0 ? wavesCleared * 25 : 8
+    const chargeGain = wavesCleared * 25
     const nextLogicCharge = Math.min(100, state.logicCharge + chargeGain)
 
     const oracles = computeUnifiedOracles(nextGrid)
-    const candidatePair = state.nextFruitPair
-    const upcomingPair = createSpawnFruitPair()
-
     const nextFeedbacks = [...state.floatingFeedbacks].slice(-5)
-    let resonanceFormula = state.lastMathResonanceFormula
-    if (wavesCleared > 0) {
-      soundEngine.playSequenceDopamine(
-        Math.max(1, nextCombo),
-        wavesCleared,
-        'FRUIT_MATCH'
+    soundEngine.playSequenceDopamine(
+      Math.max(1, nextCombo),
+      wavesCleared,
+      'FRUIT_MATCH'
+    )
+    const lastWave = swapRes.waves[swapRes.waves.length - 1]
+    const resonanceFormula =
+      lastWave?.mathResonanceFormula ??
+      `${swapRes.totalPoppedBlocks} × 1 = ${swapRes.totalPoppedBlocks} Frutas!`
+
+    nextFeedbacks.push(
+      createFeedbackItem(
+        wavesCleared >= 2
+          ? `🍇 Cascata ×${wavesCleared}! (${swapRes.totalPoppedBlocks} Frutas!)`
+          : `🍎 Troca Explosiva! (${swapRes.totalPoppedBlocks} Frutas!)`,
+        `${resonanceFormula} · +${cascadeScore} pts`,
+        wavesCleared >= 2 ? 'gold' : 'green'
       )
-      const lastWave = cascade.waves[cascade.waves.length - 1]
-      resonanceFormula = lastWave?.mathResonanceFormula ?? null
+    )
+    if (nextCombo >= 12) {
       nextFeedbacks.push(
         createFeedbackItem(
-          wavesCleared >= 2
-            ? `🍇 Cascata ×${wavesCleared}! (${cascade.totalPoppedBlocks} Frutas!)`
-            : `🍎 Cacho Explosivo! (${cascade.totalPoppedBlocks} Frutas!)`,
-          `${resonanceFormula ?? ''} · +${cascadeScore} pts`,
-          wavesCleared >= 2 ? 'gold' : 'green'
+          `👑 SEQUÊNCIA LENDÁRIA ×${nextCombo}! DOPAMINA MÁXIMA!`,
+          `Sinfonia Gênesis 12×+ em cascata!`,
+          'gold'
         )
       )
-      if (nextCombo >= 12) {
-        nextFeedbacks.push(
-          createFeedbackItem(
-            `👑 SEQUÊNCIA LENDÁRIA ×${nextCombo}! DOPAMINA MÁXIMA!`,
-            `Sinfonia Gênesis 12×+ em cascata!`,
-            'gold'
-          )
-        )
-      }
     }
 
     const updatedStats: LogicTetrisPersistentStats = {
@@ -792,38 +824,14 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     }
     savePersistentStats(updatedStats)
 
-    const nextShiftProgress =
-      wavesCleared > 0 ? state.styleShiftProgress + 1 : state.styleShiftProgress
-
-    if (hasFruitPairCollision(nextGrid, candidatePair)) {
-      triggerSecondWindOrGameOver(
-        nextGrid,
-        nextScore,
-        nextLines,
-        nextLevel,
-        nextCombo,
-        nextGraceDrops,
-        nextMaxStreak,
-        nextDopamineTier,
-        nextLogicCharge,
-        nextPhoenixShields,
-        nextFeedbacks,
-        updatedStats,
-        {
-          activeFruitPair: candidatePair,
-          nextFruitPair: upcomingPair,
-          lastCascadeWaves: cascade.waves,
-          lastMathResonanceFormula: resonanceFormula,
-          styleShiftProgress: nextShiftProgress,
-        }
-      )
-      return
-    }
+    const nextShiftProgress = state.styleShiftProgress + 1
 
     set({
       grid: nextGrid,
-      activeFruitPair: candidatePair,
-      nextFruitPair: upcomingPair,
+      selectedFruitCell: null,
+      fruitCursor: to,
+      lastSwappedCells: [from, to],
+      invalidSwapBounceUntil: 0,
       canHold: true,
       score: nextScore,
       lines: nextLines,
@@ -837,7 +845,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       topology: oracles.topology,
       fruitOracle: oracles.fruitOracle,
       tactileTopology: oracles.tactileTopology,
-      lastCascadeWaves: cascade.waves,
+      lastCascadeWaves: swapRes.waves,
       lastMathResonanceFormula: resonanceFormula,
       styleShiftProgress: nextShiftProgress,
       floatingFeedbacks: nextFeedbacks,
@@ -849,12 +857,13 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     })
 
     if (
-      wavesCleared > 0 &&
       state.styleRotationMode === 'SIMULTANEOUS' &&
       nextShiftProgress >= STYLE_SHIFT_TARGET
     ) {
       performStyleShift('TACTILE_GRID', { isAutoCycle: true })
     }
+
+    return true
   }
 
   return {
@@ -911,14 +920,55 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     nextFruitPair: createSpawnFruitPair('GRAPE_NEON', 'BERRY_CYAN'),
     fruitOracle: initialOracles.fruitOracle,
     lastCascadeWaves: [],
+    selectedFruitCell: null,
+    fruitCursor: { row: 4, col: 4 },
+    lastSwappedCells: null,
+    invalidSwapBounceUntil: 0,
+    lastPurgedBlocksCount: 0,
+    isFullscreen: false,
     tactileTray: generateTactilePieceTray(initialGrid),
     selectedTraySlot: 0,
     tactileCursorCol: 4,
-    tactileCursorRow: 14,
+    tactileCursorRow: 4,
     tactileTopology: initialOracles.tactileTopology,
     lastClearedCols: [],
     lastMathResonanceFormula: null,
     lastMiracleToast: null,
+    selectedMiracleTier: 1,
+
+    setMiraclePowerTier: (tier: MiraclePowerTier) => {
+      const state = get()
+      soundEngine.playRotate()
+      if (
+        (state.phase === 'MATH_MORPH' || state.phase === 'MATH_FILL_HOLE') &&
+        state.activeChallenge
+      ) {
+        const topCavity = state.topology.buriedCavities[0]
+        const missingInRow =
+          state.activeSubGameStyle === 'TACTILE_GRID'
+            ? state.tactileTopology.bestAxisToSeal?.missing
+            : topCavity?.missingInRow
+        const nextChallenge = generateMathChallenge({
+          mode: state.mode,
+          interventionType: state.activeChallenge.interventionType,
+          level: state.level,
+          targetPiece: state.activeChallenge.targetPiece,
+          missingInRow,
+          miracleTier: tier,
+          excludeIds: state.recentChallengeIds,
+        })
+        set({
+          selectedMiracleTier: tier,
+          activeChallenge: nextChallenge,
+          eliminatedChoiceValues: [],
+          lastWrongDiagnosis: null,
+          wrongAttemptsOnCurrentChallenge: 0,
+          recentChallengeIds: [...state.recentChallengeIds.slice(-8), nextChallenge.id],
+        })
+      } else {
+        set({ selectedMiracleTier: tier })
+      }
+    },
 
     setMode: (mode: GameMode) => {
       const currentStats = get().stats
@@ -937,12 +987,15 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     startGame: (explicitMode?: GameMode) => {
       const state = get()
       const targetMode = explicitMode ?? state.mode
-      const freshGrid = createEmptyGrid()
+      const startingStyle: SubGameStyle =
+        state.phase === 'START_HUB' ? state.activeSubGameStyle : 'TETRIS_CLASSIC'
+      const freshGrid =
+        startingStyle === 'FRUIT_MATCH'
+          ? generatePlayableFruitBoard10x10()
+          : createEmptyGrid()
       const freshBag = ensureQueueDepth([], 8)
       const [firstPiece, ...restQueue] = freshBag
       const freshOracles = computeUnifiedOracles(freshGrid)
-      const startingStyle: SubGameStyle =
-        state.phase === 'START_HUB' ? state.activeSubGameStyle : 'TETRIS_CLASSIC'
       const updatedStats: LogicTetrisPersistentStats = {
         ...state.stats,
         preferredMode: targetMode,
@@ -983,10 +1036,15 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         activeFruitPair: createSpawnFruitPair(),
         nextFruitPair: createSpawnFruitPair(),
         lastCascadeWaves: [],
+        selectedFruitCell: null,
+        fruitCursor: { row: 4, col: 4 },
+        lastSwappedCells: null,
+        invalidSwapBounceUntil: 0,
+        lastPurgedBlocksCount: 0,
         tactileTray: generateTactilePieceTray(freshGrid),
         selectedTraySlot: 0,
         tactileCursorCol: 4,
-        tactileCursorRow: 14,
+        tactileCursorRow: 4,
         lastClearedCols: [],
         lastMathResonanceFormula: null,
         lastMiracleToast: null,
@@ -1001,7 +1059,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
               : targetMode === 'master'
                 ? '🔥 Modo Mestre da Balança!'
                 : '⚡ Logic Tetris Gênesis!',
-            'Use [M] Mudar Peça, [B] Tapar Buraco ou [G] Trocar Estilo!',
+            'Use [M] Mudar Peça, [B] Tapar Buraco, [G] Trocar Estilo ou [F] Tela Cheia!',
             'cyan'
           ),
         ],
@@ -1317,6 +1375,101 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       return true
     },
 
+    setFullscreen: (active: boolean) => {
+      set({ isFullscreen: active })
+    },
+
+    moveFruitCursor: (dRow: number, dCol: number) => {
+      const state = get()
+      if (state.phase !== 'PLAYING') return false
+      const nextRow = Math.max(
+        0,
+        Math.min(FRUIT_GRID_ROWS - 1, state.fruitCursor.row + dRow)
+      )
+      const nextCol = Math.max(
+        0,
+        Math.min(FRUIT_GRID_COLS - 1, state.fruitCursor.col + dCol)
+      )
+      if (
+        nextRow === state.fruitCursor.row &&
+        nextCol === state.fruitCursor.col
+      ) {
+        return false
+      }
+      soundEngine.playMove()
+      set({
+        fruitCursor: { row: nextRow, col: nextCol },
+      })
+      return true
+    },
+
+    swapFruitCells: (from: FruitCoord, to: FruitCoord) => {
+      return executeFruitSwapAndAdvance(from, to)
+    },
+
+    selectOrSwapFruitAt: (row: number, col: number) => {
+      const state = get()
+      if (state.phase !== 'PLAYING') return false
+      if (Date.now() < state.postModalInputGuardUntil) return false
+
+      const clampedRow = Math.max(0, Math.min(FRUIT_GRID_ROWS - 1, row))
+      const clampedCol = Math.max(0, Math.min(FRUIT_GRID_COLS - 1, col))
+      const target: FruitCoord = { row: clampedRow, col: clampedCol }
+
+      const currentSel = state.selectedFruitCell
+      if (!currentSel) {
+        soundEngine.playMove()
+        set({
+          selectedFruitCell: target,
+          fruitCursor: target,
+        })
+        return true
+      }
+
+      if (currentSel.row === target.row && currentSel.col === target.col) {
+        soundEngine.playRotate()
+        set({
+          selectedFruitCell: null,
+          fruitCursor: target,
+        })
+        return true
+      }
+
+      const manhattan =
+        Math.abs(currentSel.row - target.row) +
+        Math.abs(currentSel.col - target.col)
+
+      if (manhattan === 1) {
+        return executeFruitSwapAndAdvance(currentSel, target)
+      }
+
+      // Clicou em uma fruta não adjacente: transfere a seleção para ela
+      soundEngine.playMove()
+      set({
+        selectedFruitCell: target,
+        fruitCursor: target,
+      })
+      return true
+    },
+
+    swapFruitInDirection: (dRow: -1 | 0 | 1, dCol: -1 | 0 | 1) => {
+      const state = get()
+      if (state.phase !== 'PLAYING') return false
+      const origin = state.selectedFruitCell ?? state.fruitCursor
+      const targetRow = origin.row + dRow
+      const targetCol = origin.col + dCol
+      if (
+        targetRow < 0 ||
+        targetRow >= FRUIT_GRID_ROWS ||
+        targetCol < 0 ||
+        targetCol >= FRUIT_GRID_COLS
+      ) {
+        soundEngine.playElasticBounce()
+        return false
+      }
+      return executeFruitSwapAndAdvance(origin, { row: targetRow, col: targetCol })
+    },
+
     moveHorizontal: (dir: -1 | 1) => {
       const state = get()
       if (state.phase !== 'PLAYING') return false
@@ -1326,23 +1479,10 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       }
 
       if (state.activeSubGameStyle === 'FRUIT_MATCH') {
-        const movedPair = moveFruitPairIfValid(
-          state.grid,
-          state.activeFruitPair,
-          dir,
-          0
-        )
-        if (!movedPair) return false
-        soundEngine.playMove()
-        const isOnFloor = hasFruitPairCollision(state.grid, movedPair, 0, 1)
-        const canResetLock = state.lockResetCount < MAX_LOCK_RESETS
-        set({
-          activeFruitPair: movedPair,
-          lockDelayMs: isOnFloor && canResetLock ? 0 : state.lockDelayMs,
-          lockResetCount:
-            isOnFloor && canResetLock ? state.lockResetCount + 1 : state.lockResetCount,
-        })
-        return true
+        if (state.selectedFruitCell) {
+          return get().swapFruitInDirection(0, dir)
+        }
+        return get().moveFruitCursor(0, dir)
       }
 
       const moved = movePieceIfValid(state.grid, state.activePiece, dir, 0)
@@ -1367,6 +1507,12 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       if (state.activeSubGameStyle === 'TACTILE_GRID') {
         return get().moveTactileCursor(0, -1)
       }
+      if (state.activeSubGameStyle === 'FRUIT_MATCH') {
+        if (state.selectedFruitCell) {
+          return get().swapFruitInDirection(-1, 0)
+        }
+        return get().moveFruitCursor(-1, 0)
+      }
       return get().rotatePiece('CW')
     },
 
@@ -1390,20 +1536,20 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       }
 
       if (state.activeSubGameStyle === 'FRUIT_MATCH') {
-        const rotatedPair = rotateFruitPairSRS(
-          state.grid,
-          state.activeFruitPair,
-          direction
-        )
+        // Alterna seleção na fruta sob o cursor (ou executa a troca recomendada se já selecionada!)
+        if (state.selectedFruitCell) {
+          const rightCol = state.selectedFruitCell.col + 1
+          if (rightCol < FRUIT_GRID_COLS) {
+            return executeFruitSwapAndAdvance(state.selectedFruitCell, {
+              row: state.selectedFruitCell.row,
+              col: rightCol,
+            })
+          }
+          set({ selectedFruitCell: null })
+          return true
+        }
         soundEngine.playRotate()
-        const isOnFloor = hasFruitPairCollision(state.grid, rotatedPair, 0, 1)
-        const canResetLock = state.lockResetCount < MAX_LOCK_RESETS
-        set({
-          activeFruitPair: rotatedPair,
-          lockDelayMs: isOnFloor && canResetLock ? 0 : state.lockDelayMs,
-          lockResetCount:
-            isOnFloor && canResetLock ? state.lockResetCount + 1 : state.lockResetCount,
-        })
+        set({ selectedFruitCell: { ...state.fruitCursor } })
         return true
       }
 
@@ -1432,20 +1578,10 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       }
 
       if (state.activeSubGameStyle === 'FRUIT_MATCH') {
-        const movedPair = moveFruitPairIfValid(
-          state.grid,
-          state.activeFruitPair,
-          0,
-          1
-        )
-        if (!movedPair) return false
-        soundEngine.playSoftDrop()
-        set({
-          activeFruitPair: movedPair,
-          score: state.score + 1,
-          gravityAccumulatorMs: 0,
-        })
-        return true
+        if (state.selectedFruitCell) {
+          return get().swapFruitInDirection(1, 0)
+        }
+        return get().moveFruitCursor(1, 0)
       }
 
       const moved = movePieceIfValid(state.grid, state.activePiece, 0, 1)
@@ -1478,17 +1614,21 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       }
 
       if (state.activeSubGameStyle === 'FRUIT_MATCH') {
-        soundEngine.playHardDrop()
-        const ghostY = computeFruitPairGhostY(state.grid, state.activeFruitPair)
-        const dropDistance = Math.max(0, ghostY - state.activeFruitPair.y)
-        set({
-          activeFruitPair: {
-            ...state.activeFruitPair,
-            y: ghostY,
-          },
-          score: state.score + dropDistance * 2,
-        })
-        lockActiveFruitPairAndAdvance()
+        if (!state.selectedFruitCell) {
+          soundEngine.playMove()
+          set({ selectedFruitCell: { ...state.fruitCursor } })
+          return
+        }
+        // Se já havia uma fruta selecionada e o jogador aperta Espaço/Enter novamente:
+        // se o cursor moveu para uma vizinha, troca; senão, desmarca ou usa a melhor troca vizinha!
+        const sel = state.selectedFruitCell
+        const cur = state.fruitCursor
+        if (Math.abs(sel.row - cur.row) + Math.abs(sel.col - cur.col) === 1) {
+          executeFruitSwapAndAdvance(sel, cur)
+          return
+        }
+        soundEngine.playRotate()
+        set({ selectedFruitCell: null })
         return
       }
 
@@ -1524,33 +1664,21 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         return true
       }
 
-      if (!state.canHold) return false
-
       if (state.activeSubGameStyle === 'FRUIT_MATCH') {
-        soundEngine.playHold()
-        const swappedActive: FruitPairPiece = {
-          ...state.nextFruitPair,
-          x: 4,
-          y: 1,
-          orientation: 0,
-          graceFloatMs: 400,
+        // Em FRUIT_MATCH 10×10, [C] move o cursor diretamente para a melhor troca disponível do Oráculo!
+        const bestSwap = state.fruitOracle.bestSwap
+        if (bestSwap) {
+          soundEngine.playHold()
+          set({
+            fruitCursor: { ...bestSwap.from },
+            selectedFruitCell: { ...bestSwap.from },
+          })
+          return true
         }
-        const swappedNext: FruitPairPiece = {
-          ...state.activeFruitPair,
-          x: 4,
-          y: 1,
-          orientation: 0,
-        }
-        set({
-          activeFruitPair: swappedActive,
-          nextFruitPair: swappedNext,
-          canHold: false,
-          gravityAccumulatorMs: 0,
-          lockDelayMs: 0,
-          lockResetCount: 0,
-        })
-        return true
+        return false
       }
+
+      if (!state.canHold) return false
 
       soundEngine.playHold()
       const currentType = state.activePiece.type
@@ -1607,8 +1735,11 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         return
       }
 
-      // 2. Style #3 (`TACTILE_GRID`) has zero falling gravity!
-      if (state.activeSubGameStyle === 'TACTILE_GRID') {
+      // 2. Style #2 (`FRUIT_MATCH` 10×10 Swap) & Style #3 (`TACTILE_GRID` 10×10) have zero falling piece timer!
+      if (
+        state.activeSubGameStyle === 'TACTILE_GRID' ||
+        state.activeSubGameStyle === 'FRUIT_MATCH'
+      ) {
         return
       }
 
@@ -1618,24 +1749,11 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         const baseInterval = computeBaseGravityIntervalMs(state.level, state.mode)
         const nextAcc = state.gravityAccumulatorMs + bulletDt
         if (nextAcc >= baseInterval) {
-          if (state.activeSubGameStyle === 'FRUIT_MATCH') {
-            const movedPair = moveFruitPairIfValid(
-              state.grid,
-              state.activeFruitPair,
-              0,
-              1
-            )
-            set({
-              activeFruitPair: movedPair ?? state.activeFruitPair,
-              gravityAccumulatorMs: 0,
-            })
-          } else {
-            const moved = movePieceIfValid(state.grid, state.activePiece, 0, 1)
-            set({
-              activePiece: moved ?? state.activePiece,
-              gravityAccumulatorMs: 0,
-            })
-          }
+          const moved = movePieceIfValid(state.grid, state.activePiece, 0, 1)
+          set({
+            activePiece: moved ?? state.activePiece,
+            gravityAccumulatorMs: 0,
+          })
         } else {
           set({ gravityAccumulatorMs: nextAcc })
         }
@@ -1644,58 +1762,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
 
       if (state.phase !== 'PLAYING') return
 
-      // 4. Style #2 (`FRUIT_MATCH`) Falling Pair Gravity & Lock Delay
-      if (state.activeSubGameStyle === 'FRUIT_MATCH') {
-        const currentGrace = state.activeFruitPair.graceFloatMs ?? 0
-        const nextGrace = Math.max(0, currentGrace - dtMs)
-        const updatedPair: FruitPairPiece =
-          currentGrace !== nextGrace
-            ? { ...state.activeFruitPair, graceFloatMs: nextGrace }
-            : state.activeFruitPair
-
-        const isOnFloor = hasFruitPairCollision(state.grid, updatedPair, 0, 1)
-        if (isOnFloor) {
-          const lockDelta = nextGrace > 0 ? dtMs * 0.35 : dtMs
-          const nextLockDelay = state.lockDelayMs + lockDelta
-          if (nextLockDelay >= LOCK_DELAY_LIMIT_MS) {
-            set({ activeFruitPair: updatedPair, lockDelayMs: 0 })
-            lockActiveFruitPairAndAdvance()
-            return
-          }
-          set({
-            activeFruitPair: updatedPair,
-            lockDelayMs: nextLockDelay,
-            gravityAccumulatorMs: 0,
-          })
-          return
-        }
-
-        const baseInterval = computeBaseGravityIntervalMs(state.level, state.mode)
-        const effectiveInterval = state.isSoftDropping
-          ? Math.min(55, baseInterval * 0.12)
-          : nextGrace > 0
-            ? baseInterval / 0.35
-            : baseInterval
-
-        const nextAcc = state.gravityAccumulatorMs + dtMs
-        if (nextAcc >= effectiveInterval) {
-          const movedPair = moveFruitPairIfValid(state.grid, updatedPair, 0, 1)
-          set({
-            activeFruitPair: movedPair ?? updatedPair,
-            gravityAccumulatorMs: nextAcc - effectiveInterval,
-            lockDelayMs: 0,
-            score: state.isSoftDropping && movedPair ? state.score + 1 : state.score,
-          })
-        } else {
-          set({
-            activeFruitPair: updatedPair,
-            gravityAccumulatorMs: nextAcc,
-          })
-        }
-        return
-      }
-
-      // 5. Style #1 (`TETRIS_CLASSIC`) Falling Tetromino Gravity & Lock Delay
+      // 4. Style #1 (`TETRIS_CLASSIC`) Falling Tetromino Gravity & Lock Delay
       const currentGrace = state.activePiece.graceFloatMs ?? 0
       const nextGrace = Math.max(0, currentGrace - dtMs)
       const updatedPiece: ActivePiece =
@@ -1763,6 +1830,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         interventionType: 'MORPH',
         level: state.level,
         targetPiece: chosenTarget,
+        miracleTier: state.selectedMiracleTier,
         excludeIds: state.recentChallengeIds,
       })
 
@@ -1790,11 +1858,12 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       }
     },
 
-    triggerMathFillHole: () => {
+    triggerMathFillHole: (explicitTier?: MiraclePowerTier) => {
       const state = get()
       if (state.phase !== 'PLAYING' && state.phase !== 'MATH_FILL_HOLE') return
 
       soundEngine.playOpenIntervention()
+      const activeTier: MiraclePowerTier = explicitTier ?? state.selectedMiracleTier
       const topCavity = state.topology.buriedCavities[0]
       const missingInRow =
         state.activeSubGameStyle === 'TACTILE_GRID'
@@ -1806,11 +1875,13 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         interventionType: 'FILL_HOLE',
         level: state.level,
         missingInRow,
+        miracleTier: activeTier,
         excludeIds: state.recentChallengeIds,
       })
 
       set({
         phase: 'MATH_FILL_HOLE',
+        selectedMiracleTier: activeTier,
         activeChallenge: challenge,
         eliminatedChoiceValues: [],
         lastWrongDiagnosis: null,
@@ -1929,12 +2000,25 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         return list
       }
 
+      const miracleSpec = getMiracleTierSpec(
+        challenge.miracleTier ?? state.selectedMiracleTier
+      )
+      const nextPhoenixShields = miracleSpec.grantsPhoenixShield
+        ? state.mode === 'zen'
+          ? 99
+          : Math.min(5, state.phoenixShields + 1)
+        : state.phoenixShields
+      const shieldBonusSuffix = miracleSpec.grantsPhoenixShield
+        ? ' + 🛡️ +1 Escudo Fênix'
+        : ''
+
       // ---------------------------------------------------------------------
       // 1. Miracle 1: MATH_MORPH ([M] — Polymorphic across the 3 Styles!)
       // ---------------------------------------------------------------------
       if (state.phase === 'MATH_MORPH') {
         soundEngine.playMorphSuccess()
-        const bonusPoints = (wasFirstTry ? 250 : 150) * state.level
+        const baseMorphPts = Math.max(wasFirstTry ? 250 : 150, miracleSpec.bonusScore)
+        const bonusPoints = baseMorphPts * state.level
         const nextScore = state.score + bonusPoints
 
         const updatedStats: LogicTetrisPersistentStats = {
@@ -1950,32 +2034,45 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             state.activeFruitPair,
             'STAR_PRISM'
           )
+          const starCount = Math.min(6, 1 + miracleSpec.tier)
+          const starredGrid = forgeWildcardStarsOnBoard(
+            state.grid,
+            starCount,
+            state.fruitCursor
+          )
+          const oracles = computeUnifiedOracles(starredGrid)
           const logEntry: SolvedChallengeLog = {
             challenge,
             solvedAt: Date.now(),
             wasFirstTry,
-            effectSummary: 'Par de Frutas transmutado em Par Coringa Estelar (✦ + ✦)!',
+            effectSummary:
+              `${starCount} Estrelas Coringa Douradas (✦) materializadas na Arena 10×10 (${miracleSpec.titlePt}${shieldBonusSuffix})!`,
           }
           set({
             phase: 'PLAYING',
+            grid: starredGrid,
             activeFruitPair: wildcardPair,
+            topology: oracles.topology,
+            fruitOracle: oracles.fruitOracle,
+            tactileTopology: oracles.tactileTopology,
             score: nextScore,
+            phoenixShields: nextPhoenixShields,
             combo: nextCombo,
             comboGraceDropsLeft: nextGraceDrops,
             maxStreakInSession: nextMaxStreak,
             lastDopamineTier: nextDopamineTier,
-            logicCharge: Math.min(100, state.logicCharge + 20),
+            logicCharge: Math.min(100, state.logicCharge + 20 * miracleSpec.tier),
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
             wrongAttemptsOnCurrentChallenge: 0,
             solvedHistory: [logEntry, ...state.solvedHistory].slice(0, 30),
-            lastMiracleToast: '⭐ Par Coringa Estelar (✦ + ✦)!',
+            lastMiracleToast: `⭐ ${starCount} Estrelas Coringa (✦) na Arena${shieldBonusSuffix}!`,
             floatingFeedbacks: buildFeedbackListWithLegend(
               state.floatingFeedbacks,
               createFeedbackItem(
-                '⭐ Par Coringa Estelar (✦ + ✦)!',
-                `Conecta com qualquer cor para fechar 2 + 1 = 3 · +${bonusPoints} pts`,
+                `⭐ ${starCount} Estrelas Coringa (✦) na Arena!`,
+                `${miracleSpec.titlePt} · +${bonusPoints} pts${shieldBonusSuffix}`,
                 'gold'
               )
             ),
@@ -2003,28 +2100,29 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             challenge,
             solvedAt: Date.now(),
             wasFirstTry,
-            effectSummary: `Bandeja Tátil moldada para ${def.namePt} (${def.areaFormula})`,
+            effectSummary: `Bandeja Tátil moldada para ${def.namePt} (${def.areaFormula}) · ${miracleSpec.titlePt}${shieldBonusSuffix}`,
           }
           set({
             phase: 'PLAYING',
             tactileTray: updatedTray,
             score: nextScore,
+            phoenixShields: nextPhoenixShields,
             combo: nextCombo,
             comboGraceDropsLeft: nextGraceDrops,
             maxStreakInSession: nextMaxStreak,
             lastDopamineTier: nextDopamineTier,
-            logicCharge: Math.min(100, state.logicCharge + 20),
+            logicCharge: Math.min(100, state.logicCharge + 20 * miracleSpec.tier),
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
             wrongAttemptsOnCurrentChallenge: 0,
             solvedHistory: [logEntry, ...state.solvedHistory].slice(0, 30),
-            lastMiracleToast: `✨ Bandeja Moldada: ${def.namePt}!`,
+            lastMiracleToast: `✨ Bandeja Moldada: ${def.namePt}${shieldBonusSuffix}!`,
             floatingFeedbacks: buildFeedbackListWithLegend(
               state.floatingFeedbacks,
               createFeedbackItem(
                 `✨ Bandeja Moldada: ${def.namePt}!`,
-                `Área ${def.areaFormula} pronta para encaixe H×V · +${bonusPoints} pts`,
+                `Área ${def.areaFormula} · +${bonusPoints} pts${shieldBonusSuffix}`,
                 'cyan'
               )
             ),
@@ -2048,7 +2146,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           challenge,
           solvedAt: Date.now(),
           wasFirstTry,
-          effectSummary: `Peça transmutada para ${def.namePt} (${def.areaFormula})`,
+          effectSummary: `Peça transmutada para ${def.namePt} (${def.areaFormula}) · ${miracleSpec.titlePt}${shieldBonusSuffix}`,
         }
 
         set({
@@ -2059,22 +2157,23 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             graceFloatMs: GRACE_FLOAT_AFTER_MORPH_MS,
           },
           score: nextScore,
+          phoenixShields: nextPhoenixShields,
           combo: nextCombo,
           comboGraceDropsLeft: nextGraceDrops,
           maxStreakInSession: nextMaxStreak,
           lastDopamineTier: nextDopamineTier,
-          logicCharge: Math.min(100, state.logicCharge + 20),
+          logicCharge: Math.min(100, state.logicCharge + 20 * miracleSpec.tier),
           activeChallenge: null,
           eliminatedChoiceValues: [],
           lastWrongDiagnosis: null,
           wrongAttemptsOnCurrentChallenge: 0,
           solvedHistory: [logEntry, ...state.solvedHistory].slice(0, 30),
-          lastMiracleToast: `✨ Alquimia: ${def.namePt}!`,
+          lastMiracleToast: `✨ Alquimia: ${def.namePt}${shieldBonusSuffix}!`,
           floatingFeedbacks: buildFeedbackListWithLegend(
             state.floatingFeedbacks,
             createFeedbackItem(
               `✨ Alquimia: ${def.namePt}!`,
-              `Área ${def.areaFormula} · +${bonusPoints} pts`,
+              `Área ${def.areaFormula} · +${bonusPoints} pts${shieldBonusSuffix}`,
               'cyan'
             )
           ),
@@ -2093,24 +2192,37 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       // ---------------------------------------------------------------------
       if (state.phase === 'MATH_FILL_HOLE') {
         soundEngine.playSealHoleSuccess()
-        const maxToSeal = state.mode === 'zen' ? 3 : wasFirstTry ? 3 : 2
+        const maxToSeal =
+          miracleSpec.tier === 1 && state.mode !== 'zen' && !wasFirstTry
+            ? 2
+            : miracleSpec.maxHolesToSeal
 
         if (state.activeSubGameStyle === 'FRUIT_MATCH') {
           const magResult = magnetizeSingleFruitColor(
             state.grid,
             state.fruitOracle.mostFragmentedFruit
           )
+          const finalFruitGrid =
+            miracleSpec.tier >= 2
+              ? forgeWildcardStarsOnBoard(
+                  magResult.grid,
+                  miracleSpec.tier,
+                  state.fruitCursor
+                )
+              : magResult.grid
           const effectiveCombo = Math.max(
             nextCombo,
             Math.max(0, state.combo) + Math.max(1, magResult.streakDelta)
           )
           const effectiveMaxStreak = Math.max(state.maxStreakInSession, effectiveCombo)
           const effectiveTier = getSequenceDopamineTier(effectiveCombo)
-          const magScore = Math.max(250, magResult.totalScoreEarned) * state.level
+          const magScore =
+            Math.max(miracleSpec.bonusScore, magResult.totalScoreEarned + miracleSpec.bonusScore) *
+            state.level
           const nextScore = state.score + magScore
           const nextLines = state.lines + Math.max(1, magResult.totalWaves)
           const nextLevel = Math.floor(nextLines / 10) + 1
-          const oracles = computeUnifiedOracles(magResult.grid)
+          const oracles = computeUnifiedOracles(finalFruitGrid)
           const formula =
             magResult.waves[magResult.waves.length - 1]?.mathResonanceFormula ??
             'Imã Magnético de Frutas!'
@@ -2119,7 +2231,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             challenge,
             solvedAt: Date.now(),
             wasFirstTry,
-            effectSummary: `Imã de Frutas colapsou ${magResult.totalPoppedBlocks} blocos (${formula})`,
+            effectSummary: `Imã de Frutas (${miracleSpec.titlePt}) colapsou ${magResult.totalPoppedBlocks} blocos (${formula})${shieldBonusSuffix}`,
           }
 
           const updatedStats: LogicTetrisPersistentStats = {
@@ -2134,8 +2246,9 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
 
           set({
             phase: 'PLAYING',
-            grid: magResult.grid,
+            grid: finalFruitGrid,
             score: nextScore,
+            phoenixShields: nextPhoenixShields,
             lines: nextLines,
             level: nextLevel,
             combo: effectiveCombo,
@@ -2147,7 +2260,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             tactileTopology: oracles.tactileTopology,
             lastCascadeWaves: magResult.waves,
             lastMathResonanceFormula: formula,
-            lastMiracleToast: `🧲 Imã de Frutas: ${formula}`,
+            lastMiracleToast: `🧲 Imã (${miracleSpec.titlePt}): ${formula}${shieldBonusSuffix}`,
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
@@ -2157,7 +2270,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
               state.floatingFeedbacks,
               createFeedbackItem(
                 `🧲 Imã de Frutas! (${magResult.totalPoppedBlocks} Blocos!)`,
-                `${formula} · +${magScore} pts`,
+                `${formula} · +${magScore} pts${shieldBonusSuffix}`,
                 'gold'
               ),
               effectiveCombo
@@ -2185,7 +2298,8 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           const nextLines = state.lines + clearedCount
           const nextLevel = Math.floor(nextLines / 10) + 1
           const sealBonus =
-            (sealedCount * 150 + sealRes.clearResult.scoreEarned) * state.level
+            (sealedCount * 150 + sealRes.clearResult.scoreEarned + miracleSpec.bonusScore) *
+            state.level
           const nextScore = state.score + sealBonus
           const oracles = computeUnifiedOracles(sealRes.grid)
           const axisLabel = sealRes.axisSealed === 'COL' ? 'Coluna Vertical' : 'Linha Horizontal'
@@ -2197,7 +2311,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             challenge,
             solvedAt: Date.now(),
             wasFirstTry,
-            effectSummary: `Selou ${sealedCount} buraco(s) na ${axisLabel} (${formula})`,
+            effectSummary: `Selou ${sealedCount} buraco(s) (${miracleSpec.titlePt}) na ${axisLabel} (${formula})${shieldBonusSuffix}`,
           }
 
           const updatedStats: LogicTetrisPersistentStats = {
@@ -2213,6 +2327,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             phase: 'PLAYING',
             grid: sealRes.grid,
             score: nextScore,
+            phoenixShields: nextPhoenixShields,
             lines: nextLines,
             level: nextLevel,
             combo: effectiveCombo,
@@ -2226,7 +2341,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             lastClearedCols: sealRes.clearResult.clearedCols,
             lastSealedCoords: sealRes.sealedCoordinates,
             lastMathResonanceFormula: formula,
-            lastMiracleToast: `⚖️ ${axisLabel} Selada a Ouro!`,
+            lastMiracleToast: `⚖️ ${sealedCount} Casas Seladas (${miracleSpec.titlePt})${shieldBonusSuffix}!`,
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
@@ -2235,8 +2350,8 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             floatingFeedbacks: buildFeedbackListWithLegend(
               state.floatingFeedbacks,
               createFeedbackItem(
-                `⚖️ ${axisLabel} Selada a Ouro!`,
-                `${formula} · +${sealBonus} pts`,
+                `⚖️ ${sealedCount} Casas Seladas (${miracleSpec.titlePt})!`,
+                `${formula} · +${sealBonus} pts${shieldBonusSuffix}`,
                 'gold'
               ),
               effectiveCombo
@@ -2261,7 +2376,8 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           const nextLines = state.lines + cleared
           const nextLevel = Math.floor(nextLines / 10) + 1
           const clearScore = computeLineClearBaseScore(cleared) * state.level
-          const sealBonus = sealedCount * 150 * state.level + clearScore
+          const sealBonus =
+            (sealedCount * 150 + miracleSpec.bonusScore) * state.level + clearScore
           const nextScore = state.score + sealBonus
 
           const oracles = computeUnifiedOracles(sealResult.grid)
@@ -2281,7 +2397,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             challenge,
             solvedAt: Date.now(),
             wasFirstTry,
-            effectSummary: `Selou ${sealedCount} buraco(s) soterrado(s)${cleared > 0 ? ` e limpou ${cleared} linha(s)!` : ''}`,
+            effectSummary: `Selou ${sealedCount} buraco(s) (${miracleSpec.titlePt})${cleared > 0 ? ` e limpou ${cleared} linha(s)!` : ''}${shieldBonusSuffix}`,
           }
 
           const updatedStats: LogicTetrisPersistentStats = {
@@ -2298,6 +2414,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             grid: sealResult.grid,
             activePiece: safeActivePiece,
             score: nextScore,
+            phoenixShields: nextPhoenixShields,
             lines: nextLines,
             level: nextLevel,
             combo: nextCombo,
@@ -2312,14 +2429,14 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             lastWrongDiagnosis: null,
             wrongAttemptsOnCurrentChallenge: 0,
             solvedHistory: [logEntry, ...state.solvedHistory].slice(0, 30),
-            lastMiracleToast: `⚖️ ${sealedCount} Buraco(s) Selado(s) a Ouro!`,
+            lastMiracleToast: `⚖️ ${sealedCount} Buraco(s) Selado(s) (${miracleSpec.titlePt})${shieldBonusSuffix}!`,
             floatingFeedbacks: buildFeedbackListWithLegend(
               state.floatingFeedbacks,
               createFeedbackItem(
-                `⚖️ ${sealedCount} Buraco(s) Selado(s) a Ouro!`,
+                `⚖️ ${sealedCount} Buraco(s) Selado(s) (${miracleSpec.titlePt})!`,
                 cleared > 0
-                  ? `Cascata Base-10: +${cleared} linha(s) limpa(s)! (+${sealBonus} pts)`
-                  : `Cristais da Balança materializados! (+${sealBonus} pts)`,
+                  ? `Cascata Base-10: +${cleared} linha(s) limpa(s)! (+${sealBonus} pts${shieldBonusSuffix})`
+                  : `Cristais da Balança materializados! (+${sealBonus} pts${shieldBonusSuffix})`,
                 'gold'
               )
             ),
@@ -2335,18 +2452,18 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           return 'CORRECT'
         }
 
-        // If 0 buried holes in TETRIS_CLASSIC, grant Golden Monomino (1x1)
+        // If 0 buried holes in TETRIS_CLASSIC, grant Golden Monomino (1x1) + Miracle Bonus
         const goldenDot = findSafeMorphPlacement(
           state.grid,
           state.activePiece,
           'DOT_1X1'
         )
-        const nextScore = state.score + 200 * state.level
+        const nextScore = state.score + (200 + miracleSpec.bonusScore) * state.level
         const logEntry: SolvedChallengeLog = {
           challenge,
           solvedAt: Date.now(),
           wasFirstTry,
-          effectSummary: 'Tabuleiro sem buracos soterrados → Monominó Dourado (1×1) concedido!',
+          effectSummary: `Tabuleiro sem buracos soterrados → Monominó Dourado (1×1) + ${miracleSpec.titlePt}${shieldBonusSuffix} concedido!`,
         }
         const updatedStats: LogicTetrisPersistentStats = {
           ...state.stats,
@@ -2360,6 +2477,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           phase: 'PLAYING',
           activePiece: goldenDot,
           score: nextScore,
+          phoenixShields: nextPhoenixShields,
           combo: nextCombo,
           comboGraceDropsLeft: nextGraceDrops,
           maxStreakInSession: nextMaxStreak,

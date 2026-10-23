@@ -7,11 +7,25 @@ import {
   RotationState,
   SpecialPieceType,
   StandardPieceType,
+  TactileMacroPieceType,
 } from '../types'
 
 export const STANDARD_PIECE_TYPES: StandardPieceType[] = ['I', 'O', 'T', 'S', 'Z', 'J', 'L']
 export const SPECIAL_PIECE_TYPES: SpecialPieceType[] = ['DOT_1X1', 'DOMINO_1X2']
-export const ALL_PIECE_TYPES: PieceType[] = [...STANDARD_PIECE_TYPES, ...SPECIAL_PIECE_TYPES]
+export const CLASSIC_PIECE_TYPES: PieceType[] = [...STANDARD_PIECE_TYPES, ...SPECIAL_PIECE_TYPES]
+export const TACTILE_MACRO_PIECE_TYPES: TactileMacroPieceType[] = [
+  'CUBE_3X3',
+  'CORNER_3X3',
+  'BAR_1X5',
+  'RECT_2X3',
+  'TRIO_1X3',
+  'CORNER_2X2',
+]
+export const ALL_PIECE_TYPES: PieceType[] = [
+  ...STANDARD_PIECE_TYPES,
+  ...SPECIAL_PIECE_TYPES,
+  ...TACTILE_MACRO_PIECE_TYPES,
+]
 
 export const TETROMINO_DEFS: Record<PieceType, PieceDefinition> = {
   I: {
@@ -306,6 +320,206 @@ export const TETROMINO_DEFS: Record<PieceType, PieceDefinition> = {
       3: [
         [1, 0],
         [1, 0],
+      ],
+    },
+  },
+  CUBE_3X3: {
+    type: 'CUBE_3X3',
+    label: '3×3',
+    namePt: 'Cubo Solar 3×3 (9 Blocos)',
+    pedagogicalNote:
+      'Quadrado dos 9 (3 × 3 = 9 = 10 − 1): Conecta com a Lente 7 (Infinito dos 9 Quadrados). Deixa apenas 1 coluna ou linha faltando para completar a Dezena 10!',
+    color: '#f59e0b',
+    glowColor: 'rgba(245, 158, 11, 0.75)',
+    borderColor: '#fde68a',
+    symbol: '⊞',
+    areaFormula: '3 × 3 = 9',
+    blockCount: 9,
+    matrices: {
+      0: [
+        [1, 1, 1],
+        [1, 1, 1],
+        [1, 1, 1],
+      ],
+      1: [
+        [1, 1, 1],
+        [1, 1, 1],
+        [1, 1, 1],
+      ],
+      2: [
+        [1, 1, 1],
+        [1, 1, 1],
+        [1, 1, 1],
+      ],
+      3: [
+        [1, 1, 1],
+        [1, 1, 1],
+        [1, 1, 1],
+      ],
+    },
+  },
+  CORNER_3X3: {
+    type: 'CORNER_3X3',
+    label: 'L 3×3',
+    namePt: 'Grande Esquadro 3×3 (5 Blocos)',
+    pedagogicalNote:
+      'Esquadro Ortogonal (3 + 3 − 1 = 5): Atua nos dois eixos da Arena 10×10 simultaneamente (3 horizontais + 3 verticais compartilhando 1 vértice)!',
+    color: '#ec4899',
+    glowColor: 'rgba(236, 72, 153, 0.7)',
+    borderColor: '#f9a8d4',
+    symbol: '▛',
+    areaFormula: '3 + 2 = 5',
+    blockCount: 5,
+    matrices: {
+      0: [
+        [1, 1, 1],
+        [1, 0, 0],
+        [1, 0, 0],
+      ],
+      1: [
+        [1, 1, 1],
+        [0, 0, 1],
+        [0, 0, 1],
+      ],
+      2: [
+        [0, 0, 1],
+        [0, 0, 1],
+        [1, 1, 1],
+      ],
+      3: [
+        [1, 0, 0],
+        [1, 0, 0],
+        [1, 1, 1],
+      ],
+    },
+  },
+  BAR_1X5: {
+    type: 'BAR_1X5',
+    label: '1×5',
+    namePt: 'Viga Meridiana 1×5 (Meia Dezena)',
+    pedagogicalNote:
+      'Meia Dezena (1 × 5 = 5): Exatamente metade de uma Linha ou Coluna Base-10 (10 ÷ 2 = 5). Duas Vigas 1×5 selam uma linha inteira!',
+    color: '#0ea5e9',
+    glowColor: 'rgba(14, 165, 233, 0.75)',
+    borderColor: '#7dd3fc',
+    symbol: '━',
+    areaFormula: '1 × 5 = 5',
+    blockCount: 5,
+    matrices: {
+      0: [
+        [1, 1, 1, 1, 1],
+      ],
+      1: [
+        [1],
+        [1],
+        [1],
+        [1],
+        [1],
+      ],
+      2: [
+        [1, 1, 1, 1, 1],
+      ],
+      3: [
+        [1],
+        [1],
+        [1],
+        [1],
+        [1],
+      ],
+    },
+  },
+  RECT_2X3: {
+    type: 'RECT_2X3',
+    label: '2×3',
+    namePt: 'Placa Sólida 2×3 (Meia Dúzia)',
+    pedagogicalNote:
+      'Retângulo Áureo 2×3 (Área 6): Dobro de um trio (2 × 3 = 6). Ideal para preencher clareiras duplas e preparar combos duplos!',
+    color: '#8b5cf6',
+    glowColor: 'rgba(139, 92, 246, 0.7)',
+    borderColor: '#c4b5fd',
+    symbol: '▦',
+    areaFormula: '2 × 3 = 6',
+    blockCount: 6,
+    matrices: {
+      0: [
+        [1, 1, 1],
+        [1, 1, 1],
+      ],
+      1: [
+        [1, 1],
+        [1, 1],
+        [1, 1],
+      ],
+      2: [
+        [1, 1, 1],
+        [1, 1, 1],
+      ],
+      3: [
+        [1, 1],
+        [1, 1],
+        [1, 1],
+      ],
+    },
+  },
+  TRIO_1X3: {
+    type: 'TRIO_1X3',
+    label: '1×3',
+    namePt: 'Trio Linear 1×3',
+    pedagogicalNote:
+      'Tríade Base-10 (1 × 3 = 3): O complemento clássico do 7 (7 + 3 = 10). Fecha linhas e colunas onde faltam exatamente 3 blocos!',
+    color: '#14b8a6',
+    glowColor: 'rgba(20, 184, 166, 0.7)',
+    borderColor: '#5eead4',
+    symbol: '≡',
+    areaFormula: '1 × 3 = 3',
+    blockCount: 3,
+    matrices: {
+      0: [
+        [1, 1, 1],
+      ],
+      1: [
+        [1],
+        [1],
+        [1],
+      ],
+      2: [
+        [1, 1, 1],
+      ],
+      3: [
+        [1],
+        [1],
+        [1],
+      ],
+    },
+  },
+  CORNER_2X2: {
+    type: 'CORNER_2X2',
+    label: 'L 2×2',
+    namePt: 'Cantoneira Curta 2×2 (3 Blocos)',
+    pedagogicalNote:
+      'Triominó em L (2 + 1 = 3): Um quadrado 2×2 menos 1 vértice (4 − 1 = 3). Encaixa em quinas estreitas sem bloquear o eixo vizinho!',
+    color: '#84cc16',
+    glowColor: 'rgba(132, 204, 22, 0.7)',
+    borderColor: '#bef264',
+    symbol: '▙',
+    areaFormula: '2 + 1 = 3',
+    blockCount: 3,
+    matrices: {
+      0: [
+        [1, 1],
+        [1, 0],
+      ],
+      1: [
+        [1, 1],
+        [0, 1],
+      ],
+      2: [
+        [0, 1],
+        [1, 1],
+      ],
+      3: [
+        [1, 0],
+        [1, 1],
       ],
     },
   },

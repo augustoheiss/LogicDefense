@@ -471,6 +471,41 @@ def run_logic_tetris_e2e_suite() -> int:
                 "jukeboxBadge12x": jukebox_badge_text.splitlines()[0],
             }
 
+            # 10b. Escala de Potência do Milagre (Grau I..IV: 3, 5, 10, TODOS os Buracos) & Zero-Spoiler Hints [Master Plan V3]
+            print("[10b/11] Validando Escala de Potência do Milagre (3, 5, 10, TODOS os Buracos) e Dicas Zero-Spoiler...")
+            page.locator('[data-testid="btn-trigger-fill-hole"]').click()
+            modal_v3 = page.locator('[data-testid="math-intervention-modal"]')
+            assert modal_v3.is_visible(), "Modal [B] deve abrir para validar a Escala de Potência do Milagre"
+
+            tier_selector = page.locator('[data-testid="miracle-power-tier-selector"]')
+            assert tier_selector.is_visible(), "Seletor de Potência do Milagre (Grau I..IV) deve estar visível no modal"
+
+            expressions_by_tier = {}
+            for tier_idx in (1, 2, 3, 4):
+                tier_btn = page.locator(f'[data-testid="miracle-tier-btn-{tier_idx}"]')
+                assert tier_btn.is_visible(), f"Botão de Grau {tier_idx} deve estar visível"
+                tier_btn.click()
+                assert tier_btn.get_attribute("data-tier-active") == "true", (
+                    f"Grau {tier_idx} deve ficar ativo após clique"
+                )
+                expr_txt = page.locator('[data-testid="modal-math-expression"]').inner_text()
+                hint_txt = page.locator('[data-testid="modal-guiding-light"]').inner_text()
+                assert "(=" not in hint_txt, (
+                    f"Dica Socrática do Grau {tier_idx} não pode conter spoiler intermediário '(= ...)', recebido: {hint_txt}"
+                )
+                expressions_by_tier[f"tier_{tier_idx}"] = {
+                    "expression": expr_txt,
+                    "hint": hint_txt,
+                }
+
+            # Resolver o desafio Supremo Grau IV (TODOS os Buracos + Escudo Fênix)
+            page.locator('[data-testid="math-choice-correct"], [data-choice-correct="true"]').first.click()
+            assert not modal_v3.is_visible(), "Modal deve fechar após resolver o Milagre Grau IV"
+            telemetry_report["checks"]["miraclePowerScalingAndZeroSpoilerV3"] = {
+                "status": "PASS",
+                "tiers": expressions_by_tier,
+            }
+
             desktop_ctx.close()
 
             # =========================================================================

@@ -5,7 +5,7 @@ import {
   STANDARD_PIECE_TYPES,
   TETROMINO_DEFS,
 } from './tetrominoes'
-import { cloneGrid } from './gridEngine'
+import { cloneGrid, createEmptyGrid } from './gridEngine'
 import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
@@ -14,6 +14,7 @@ import {
   GridMatrix,
   PieceType,
   RotationState,
+  SubGameStyle,
   TactileClearResult,
   TactilePieceOption,
   TactilePlacementResult,
@@ -23,11 +24,12 @@ import {
 export const PIECE_CATALOG = TETROMINO_DEFS
 
 /**
- * Melhoria 03-C: Canonical 10x10 Base-10 Tactile Arena coordinates within the 20x10 GridMatrix.
- * Operating in rows 10..19 and cols 0..9 preserves 100% of block proportions in the Canvas.
+ * Melhoria V2 (Proportional Uncut 10×10 Stage):
+ * A Arena Tátil 10×10 agora ocupa o palco 10×10 inteiro e dedicado nas linhas `0..9` e colunas `0..9`,
+ * eliminando o corte ao meio da antiga torre 20×10 e permitindo blocos de 50px!
  */
-export const TACTILE_ROW_START = 10
-export const TACTILE_ROW_END = 19
+export const TACTILE_ROW_START = 0
+export const TACTILE_ROW_END = 9
 export const TACTILE_COL_START = 0
 export const TACTILE_COL_END = 9
 export const TACTILE_ARENA_SIZE = 10
@@ -401,10 +403,10 @@ export function scanTactileGridTopology(grid: GridMatrix): TactileTopologyReport
     } else if (bestAxisToSeal.missing === 2) {
       recommendedPiece = 'DOMINO_1X2'
     } else {
-      recommendedPiece = 'I'
+      recommendedPiece = 'TRIO_1X3'
     }
   } else {
-    recommendedPiece = occupiedCount > 60 ? 'DOT_1X1' : 'O'
+    recommendedPiece = occupiedCount > 55 ? 'DOT_1X1' : 'CUBE_3X3'
   }
 
   let pedagogicalHint: string
@@ -424,7 +426,7 @@ export function scanTactileGridTopology(grid: GridMatrix): TactileTopologyReport
     }
   } else {
     pedagogicalHint =
-      '💡 Arena Base-10 (10×10): complete 10 blocos na Horizontal OU na Vertical em qualquer posição!'
+      '💡 Arena Base-10 (10×10): use Macro-Blocos (Cubo 3×3 = 9, Viga 1×5 = 5) para fechar 10 na Horizontal OU na Vertical!'
   }
 
   return {
@@ -439,39 +441,100 @@ export function scanTactileGridTopology(grid: GridMatrix): TactileTopologyReport
   }
 }
 
-function randomStandardOrResonantPiece(): { type: PieceType; rotation: RotationState } {
-  const pool: PieceType[] = [
-    ...STANDARD_PIECE_TYPES,
-    'DOT_1X1',
-    'DOMINO_1X2',
-  ]
+const MACRO_HEAVY_POOL: readonly PieceType[] = [
+  'CUBE_3X3',
+  'CORNER_3X3',
+  'BAR_1X5',
+  'RECT_2X3',
+]
+
+const TACTILE_MEDIUM_POOL: readonly PieceType[] = [
+  ...STANDARD_PIECE_TYPES,
+  'TRIO_1X3',
+  'CORNER_2X2',
+]
+
+const TACTILE_AGILE_POOL: readonly PieceType[] = [
+  'DOT_1X1',
+  'DOMINO_1X2',
+  'TRIO_1X3',
+  'CORNER_2X2',
+  'O',
+  'I',
+]
+
+function pickRandomFromPool(pool: readonly PieceType[]): { type: PieceType; rotation: RotationState } {
   const type = pool[Math.floor(Math.random() * pool.length)] ?? 'I'
   const rotation = ALL_ROTATIONS[Math.floor(Math.random() * ALL_ROTATIONS.length)] ?? 0
   return { type, rotation }
 }
 
 /**
- * Melhoria 03-B: Generates a 3-piece Tactile Tray (`TactilePieceOption[3]`) with
- * resonant piece injection (when rows/cols need 1..3 blocks) and an Anti-Deadlock guarantee
- * that at least 1 of the 3 pieces fits in the current 10x10 Tactile Arena.
+ * Melhoria 03-B & V2 (Macro-Polyominoes + RT-18 Cap):
+ * Generates a 3-piece Tactile Tray (`TactilePieceOption[3]`) featuring:
+ * - Slot 0: Macro-Bloco (Cubo 3×3 de 9 quadrados, Grande Esquadro 3×3, Viga 1×5 ou Placa 2×3)
+ *   quando couber na Arena 10×10, limitado a no máximo 1 Macro-Bloco (>= 5 blocos) por bandeja (RT-18)!
+ * - Slot 1: Peça Padrão ou Ressonante recomendada pelo Oráculo (quando faltam 1..3 blocos).
+ * - Slot 2: Peça Ágil (1×1, 1×2, 1×3, Cantoneira 2×2) para garantir fluidez e zero travamento.
  */
 export function generateTactilePieceTray(grid: GridMatrix): TactilePieceOption[] {
   const topology = scanTactileGridTopology(grid)
-  const tray: TactilePieceOption[] = ([0, 1, 2] as const).map((slotIndex) => {
-    const picked = randomStandardOrResonantPiece()
-    return {
-      slotIndex,
-      type: picked.type,
-      rotation: picked.rotation,
-      isUsed: false,
+
+  // Slot 0: Tenta sortear um Macro-Bloco (Cubo 3×3, Canto 3×3, Barra 1×5, Placa 2×3) que caiba no tabuleiro
+  let slot0Picked = pickRandomFromPool(MACRO_HEAVY_POOL)
+  if (
+    findAllValidPlacementsForPiece(grid, slot0Picked.type, slot0Picked.rotation).length === 0
+  ) {
+    // Tenta outro Macro-Bloco que caiba
+    const fittingMacros: Array<{ type: PieceType; rotation: RotationState }> = []
+    for (const mType of MACRO_HEAVY_POOL) {
+      for (const rot of [0, 1] as RotationState[]) {
+        if (findAllValidPlacementsForPiece(grid, mType, rot).length > 0) {
+          fittingMacros.push({ type: mType, rotation: rot })
+          break
+        }
+      }
     }
-  })
+    if (fittingMacros.length > 0) {
+      slot0Picked = fittingMacros[Math.floor(Math.random() * fittingMacros.length)]!
+    } else {
+      slot0Picked = pickRandomFromPool(TACTILE_MEDIUM_POOL)
+    }
+  }
+
+  const slot1Picked = pickRandomFromPool(TACTILE_MEDIUM_POOL)
+  const slot2Picked = pickRandomFromPool(TACTILE_AGILE_POOL)
+
+  const tray: TactilePieceOption[] = [
+    {
+      slotIndex: 0,
+      type: slot0Picked.type,
+      rotation: slot0Picked.rotation,
+      isUsed: false,
+    },
+    {
+      slotIndex: 1,
+      type: slot1Picked.type,
+      rotation: slot1Picked.rotation,
+      isUsed: false,
+    },
+    {
+      slotIndex: 2,
+      type: slot2Picked.type,
+      rotation: slot2Picked.rotation,
+      isUsed: false,
+    },
+  ]
 
   // If the board has a near-complete row or column, inject the recommended resonant piece in slot 1
   if (topology.bestAxisToSeal) {
     const preferredRot: RotationState =
       topology.bestAxisToSeal.axis === 'COL' ? 1 : 0
+    const recDef = getPieceDefinition(topology.recommendedPiece)
+    const slot0Def = getPieceDefinition(tray[0].type)
+    // RT-18: Evita 2 macro-blocos (>= 5) na mesma bandeja
     if (
+      (recDef.blockCount < 5 || slot0Def.blockCount < 5) &&
       findAllValidPlacementsForPiece(grid, topology.recommendedPiece, preferredRot)
         .length > 0
     ) {
@@ -487,6 +550,8 @@ export function generateTactilePieceTray(grid: GridMatrix): TactilePieceOption[]
   // Anti-Deadlock guarantee: ensure at least 1 piece in the tray fits if freeCount > 0
   if (!canAnyTrayPieceFit(grid, tray) && topology.freeCount > 0) {
     const fallbackCandidates: Array<{ type: PieceType; rotation: RotationState }> = [
+      { type: 'TRIO_1X3', rotation: 0 },
+      { type: 'CORNER_2X2', rotation: 0 },
       { type: 'DOMINO_1X2', rotation: 0 },
       { type: 'DOMINO_1X2', rotation: 1 },
       { type: 'DOT_1X1', rotation: 0 },
@@ -496,8 +561,8 @@ export function generateTactilePieceTray(grid: GridMatrix): TactilePieceOption[]
         findAllValidPlacementsForPiece(grid, candidate.type, candidate.rotation)
           .length > 0
       ) {
-        tray[0] = {
-          slotIndex: 0,
+        tray[2] = {
+          slotIndex: 2,
           type: candidate.type,
           rotation: candidate.rotation,
           isUsed: false,
@@ -724,9 +789,26 @@ export function sealTactileRowOrColCavities(
 
   if (axisCandidates.length > 0) {
     chosenAxis = axisCandidates[0].axis
-    targetEmptyCells = [...axisCandidates[0].emptyCells]
+    const seenCoords = new Set<string>()
+    const effectiveLimit = maxToSeal >= 100 ? 20 : Math.max(1, maxToSeal)
+    for (const candidate of axisCandidates) {
+      if (targetEmptyCells.length >= effectiveLimit) break
+      const sortedCells = [...candidate.emptyCells].sort((a, b) => {
+        const aCross = crossroadSet.has(`${a.row},${a.col}`) ? 1 : 0
+        const bCross = crossroadSet.has(`${b.row},${b.col}`) ? 1 : 0
+        return bCross - aCross
+      })
+      for (const cell of sortedCells) {
+        const key = `${cell.row},${cell.col}`
+        if (!seenCoords.has(key)) {
+          seenCoords.add(key)
+          targetEmptyCells.push(cell)
+          if (targetEmptyCells.length >= effectiveLimit) break
+        }
+      }
+    }
   } else {
-    // Fallback if arena is completely empty: seal up to maxToSeal cells on row 19 or col 0
+    // Fallback if arena is completely empty: seal up to maxToSeal cells on row 9 or col 0
     if (preferredAxis === 'COL') {
       chosenAxis = 'COL'
       for (let r = TACTILE_ROW_END; r >= TACTILE_ROW_START; r--) {
@@ -744,14 +826,8 @@ export function sealTactileRowOrColCavities(
     }
   }
 
-  // Prioritize Golden Crossroad cells first
-  targetEmptyCells.sort((a, b) => {
-    const aCross = crossroadSet.has(`${a.row},${a.col}`) ? 1 : 0
-    const bCross = crossroadSet.has(`${b.row},${b.col}`) ? 1 : 0
-    return bCross - aCross
-  })
-
-  const sealedCoordinates = targetEmptyCells.slice(0, Math.max(1, maxToSeal))
+  const effectiveMax = maxToSeal >= 100 ? 20 : Math.max(1, maxToSeal)
+  const sealedCoordinates = targetEmptyCells.slice(0, effectiveMax)
   for (const { row, col } of sealedCoordinates) {
     workingGrid[row][col] = createGoldenTactileCell()
   }
@@ -783,8 +859,9 @@ export function purifyTactileGridSecondWind(
   const workingGrid = cloneGrid(grid)
   let clearedCount = 0
 
-  // Also clear any stray blocks in rows 0..9
-  for (let r = 0; r < TACTILE_ROW_START; r++) {
+  // Also clear any stray blocks outside the 10x10 Tactile Arena (rows 10..19)
+  for (let r = 0; r < BOARD_HEIGHT; r++) {
+    if (r >= TACTILE_ROW_START && r <= TACTILE_ROW_END) continue
     for (let c = 0; c < BOARD_WIDTH; c++) {
       if (workingGrid[r]?.[c] !== null) {
         workingGrid[r][c] = null
@@ -793,7 +870,7 @@ export function purifyTactileGridSecondWind(
     }
   }
 
-  // Rank rows 10..19 by occupancy and clear the 3 most crowded rows + center 4x4 core
+  // Rank rows 0..9 by occupancy and clear the 3 most crowded rows + center 4x4 core
   const rowOccupancies: Array<{ row: number; count: number }> = []
   for (let r = TACTILE_ROW_START; r <= TACTILE_ROW_END; r++) {
     let count = 0
@@ -813,8 +890,10 @@ export function purifyTactileGridSecondWind(
     }
   }
 
-  // Clear central 4x4 sanctuary (rows 13..16, cols 3..6) so any 4-block tetromino fits
-  for (let r = 13; r <= 16; r++) {
+  // Clear central 4x4 sanctuary (rows 3..6, cols 3..6) so any 3x3 Cube or 4-block tetromino fits!
+  const centerStart = TACTILE_ROW_START + 3
+  const centerEnd = TACTILE_ROW_START + 6
+  for (let r = centerStart; r <= centerEnd; r++) {
     for (let c = 3; c <= 6; c++) {
       if (workingGrid[r]?.[c] !== null) {
         workingGrid[r][c] = null
@@ -852,11 +931,148 @@ export function purifyTactileGridSecondWind(
 }
 
 /**
+ * Melhoria V2 (Purificar a Maioria dos Blocos ao Trocar de Cenário):
+ * Quando o jogador (ou a Rotação Automática) troca de cenário entre
+ * `TETRIS_CLASSIC`, `FRUIT_MATCH` e `TACTILE_GRID`, elimina de 75% a 85% dos blocos
+ * acumulados no cenário anterior (mantendo no máximo 10 a 12 blocos sobreviventes):
+ * - Convertendo cada bloco eliminado em `+30 pts` de bônus de transmutação!
+ * - Posicionando os poucos blocos sobreviventes na geometria nativa do novo cenário:
+ *   - `TETRIS_CLASSIC` (20×10): Acomodados na base (linhas 18..19) com zero linhas completas involuntárias.
+ *   - `TACTILE_GRID` (10×10): Acomodados nas linhas `0..9, cols 0..9` com mais de 88 células livres (perfeito para o Cubo 3×3!) e zero blocos nas linhas `10..19`.
+ *   - `FRUIT_MATCH` (10×10): Acomodados como sementes nas linhas `0..9` (que em seguida são completadas para 100 frutas por `generatePlayableFruitBoard10x10`).
+ */
+export function purgeMajorityBlocksForTransition(
+  grid: GridMatrix,
+  targetStyle: SubGameStyle
+): {
+  grid: GridMatrix
+  purgedBlocksCount: number
+  survivingBlocksCount: number
+  transmutationBonusPoints: number
+} {
+  const height = grid.length || BOARD_HEIGHT
+  const width = grid[0]?.length ?? BOARD_WIDTH
+  const allOccupied: Array<{ row: number; col: number; cell: GridCell }> = []
+
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const cell = grid[r]?.[c] ?? null
+      if (cell !== null) {
+        allOccupied.push({ row: r, col: c, cell })
+      }
+    }
+  }
+
+  const totalBefore = allOccupied.length
+  if (totalBefore === 0) {
+    return {
+      grid: createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT),
+      purgedBlocksCount: 0,
+      survivingBlocksCount: 0,
+      transmutationBonusPoints: 0,
+    }
+  }
+
+  // Elimina 80% dos blocos (mantendo no máximo 10 blocos sobreviventes)
+  const targetKeepCount = Math.min(
+    10,
+    Math.max(totalBefore >= 4 ? 2 : 0, Math.floor(totalBefore * 0.2))
+  )
+
+  // Seleciona blocos bem distribuídos nas linhas e colunas (passo coprimo 13 p/ nunca cair apenas em col=0 — Fix AUD-V2-01)
+  const survivors: Array<{ row: number; col: number; cell: GridCell }> = []
+  if (targetKeepCount > 0) {
+    const usedIndices = new Set<number>()
+    const coprimeStep = allOccupied.length >= 20 ? 13 : Math.max(1, Math.floor(allOccupied.length / targetKeepCount))
+    for (let k = 0; k < allOccupied.length && survivors.length < targetKeepCount; k++) {
+      const idx = (k * coprimeStep + Math.floor(k / 3)) % allOccupied.length
+      if (!usedIndices.has(idx)) {
+        usedIndices.add(idx)
+        survivors.push(allOccupied[idx]!)
+      }
+    }
+  }
+
+  const nextGrid = createEmptyGrid(BOARD_WIDTH, BOARD_HEIGHT)
+
+  if (targetStyle === 'TETRIS_CLASSIC') {
+    // Coloca os sobreviventes na base da Torre 20×10 (linhas 19 e 18), sem fechar linha de 10
+    let placed = 0
+    for (const item of survivors) {
+      const targetCol = (item.col + placed) % BOARD_WIDTH
+      // Garante que a coluna 9 da linha 19 fique aberta para nunca auto-limpar no Frame 0
+      const safeCol = targetCol === 9 ? 8 : targetCol
+      const targetRow = nextGrid[19][safeCol] === null ? 19 : 18
+      const baseDef =
+        item.cell.type !== 'SEALED_GOLD' && TETROMINO_DEFS[item.cell.type]
+          ? TETROMINO_DEFS[item.cell.type]
+          : TETROMINO_DEFS.I
+      nextGrid[targetRow][safeCol] = {
+        ...item.cell,
+        color: item.cell.color || baseDef.color,
+        glowColor: item.cell.glowColor || baseDef.glowColor,
+        borderColor: item.cell.borderColor || baseDef.borderColor,
+        symbol: item.cell.fruitKind ? baseDef.symbol : item.cell.symbol || baseDef.symbol,
+        fruitKind: undefined,
+      }
+      placed += 1
+    }
+  } else {
+    // TACTILE_GRID ou FRUIT_MATCH: Arena 10×10 dedicada nas linhas 0..9, colunas 0..9
+    let placed = 0
+    for (const item of survivors) {
+      const rawRow =
+        item.row <= TACTILE_ROW_END
+          ? item.row
+          : Math.max(
+              TACTILE_ROW_START,
+              Math.min(TACTILE_ROW_END, item.row - 10)
+            )
+      const mappedRow = (rawRow + placed * 2) % TACTILE_ARENA_SIZE
+      const mappedCol = (item.col + placed * 3) % TACTILE_ARENA_SIZE
+      // Deixa o santuário central (rows 3..6, cols 3..6) livre para Macro-Blocos 3×3!
+      const finalRow =
+        mappedRow >= 3 && mappedRow <= 6 && mappedCol >= 3 && mappedCol <= 6
+          ? 8
+          : mappedRow
+      if (nextGrid[finalRow][mappedCol] === null) {
+        if (targetStyle === 'TACTILE_GRID') {
+          const baseDef =
+            item.cell.type !== 'SEALED_GOLD' && TETROMINO_DEFS[item.cell.type]
+              ? TETROMINO_DEFS[item.cell.type]
+              : TETROMINO_DEFS.I
+          nextGrid[finalRow][mappedCol] = {
+            ...item.cell,
+            color: item.cell.fruitKind ? baseDef.color : item.cell.color || baseDef.color,
+            glowColor: item.cell.fruitKind ? baseDef.glowColor : item.cell.glowColor || baseDef.glowColor,
+            borderColor: item.cell.fruitKind ? baseDef.borderColor : item.cell.borderColor || baseDef.borderColor,
+            symbol: item.cell.fruitKind ? baseDef.symbol : item.cell.symbol || baseDef.symbol,
+            fruitKind: undefined,
+          }
+        } else {
+          nextGrid[finalRow][mappedCol] = { ...item.cell }
+        }
+        placed += 1
+      }
+    }
+  }
+
+  const purgedBlocksCount = Math.max(0, totalBefore - survivors.length)
+  return {
+    grid: nextGrid,
+    purgedBlocksCount,
+    survivingBlocksCount: survivors.length,
+    transmutationBonusPoints: purgedBlocksCount * 30,
+  }
+}
+
+/**
  * Melhoria 03-C & RT-12: Safe Transition Normalizer (`normalizeGridForTactileTransition`).
- * When switching into `TACTILE_GRID` during Simultaneous Mode:
- * 1. Converts any blocks in the upper rows `0..9` into `transmutationBonusPoints` (+25 pts/block).
+ * When switching into `TACTILE_GRID`:
+ * 1. Translocates any blocks from rows `10..19` into the full-stage `rows 0..9` 10×10 Tactile Arena
+ *    while eliminating excess blocks (`prunedBlocksCount`) into `transmutationBonusPoints` (+25 pts/block).
  * 2. Prevents Frame-0 auto-clears by opening 1 cell in any pre-filled 10/10 row or column.
- * 3. Guarantees at least `TACTILE_MIN_FREE_CELLS_ON_TRANSITION` (48) free cells in the 10x10 arena.
+ * 3. Guarantees at least `TACTILE_MIN_FREE_CELLS_ON_TRANSITION` (48) free cells in the 10x10 arena (`rows 0..9`).
  */
 export function normalizeGridForTactileTransition(grid: GridMatrix): {
   grid: GridMatrix
@@ -866,17 +1082,28 @@ export function normalizeGridForTactileTransition(grid: GridMatrix): {
   const workingGrid = cloneGrid(grid)
   let prunedBlocksCount = 0
 
-  // 1. Prune upper rows 0..9 outside the 10x10 Tactile Arena
-  for (let r = 0; r < TACTILE_ROW_START; r++) {
+  // 1. Se houver blocos nas linhas 10..19 (vindos da Torre 20×10), migra uma amostra leve para 0..9 e limpa 10..19
+  for (let r = TACTILE_ROW_END + 1; r < BOARD_HEIGHT; r++) {
     for (let c = 0; c < BOARD_WIDTH; c++) {
-      if (workingGrid[r]?.[c] !== null) {
+      const cell = workingGrid[r]?.[c] ?? null
+      if (cell !== null) {
+        const targetR = r - 10
+        if (
+          targetR >= TACTILE_ROW_START &&
+          targetR <= TACTILE_ROW_END &&
+          workingGrid[targetR][c] === null &&
+          (r + c) % 3 === 0
+        ) {
+          workingGrid[targetR][c] = cell
+        } else {
+          prunedBlocksCount += 1
+        }
         workingGrid[r][c] = null
-        prunedBlocksCount += 1
       }
     }
   }
 
-  // 2. Ensure no row (10..19) or column (0..9) starts at 10/10 on Frame 0
+  // 2. Ensure no row (0..9) or column (0..9) starts at 10/10 on Frame 0
   for (let r = TACTILE_ROW_START; r <= TACTILE_ROW_END; r++) {
     let full = true
     for (let c = TACTILE_COL_START; c <= TACTILE_COL_END; c++) {
@@ -907,7 +1134,7 @@ export function normalizeGridForTactileTransition(grid: GridMatrix): {
     }
   }
 
-  // 3. Guarantee at least 48 free cells in the 10x10 arena (max 52 occupied cells)
+  // 3. Guarantee at least 48 free cells in the 10x10 arena (rows 0..9)
   let occupiedInArena = 0
   for (let r = TACTILE_ROW_START; r <= TACTILE_ROW_END; r++) {
     for (let c = TACTILE_COL_START; c <= TACTILE_COL_END; c++) {

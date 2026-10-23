@@ -2,6 +2,7 @@ import React from 'react'
 import { GameMode, SubGameStyle } from '../types'
 import { FRUIT_CATALOG } from '../engine/fruitMatchEngine'
 import { getPieceDefinition } from '../engine/tetrominoes'
+import { toggleLogicTetrisFullscreen } from '../hooks/useGameLoop'
 import { useLogicTetrisStore } from '../state/useLogicTetrisStore'
 import { MiniPieceMatrixPreview } from './PieceAlchemyBar'
 
@@ -32,29 +33,30 @@ const STYLE_BUTTONS: ReadonlyArray<{
   {
     style: 'TETRIS_CLASSIC',
     label: '🧱 Clássico',
-    shortHint: 'Queda Base-10',
+    shortHint: 'Torre 20×10',
   },
   {
     style: 'FRUIT_MATCH',
-    label: '🍇 Frutas',
-    shortHint: 'Cascata 2+1=3',
+    label: '🍎 Frutas',
+    shortHint: 'Troca 10×10',
   },
   {
     style: 'TACTILE_GRID',
     label: '🧩 Grade 10×10',
-    shortHint: 'Livre H×V',
+    shortHint: 'Macro H×V',
   },
 ]
 
 /**
  * Telemetry HUD, Trinity Style Switcher & Interactive Tactile Tray (`TelemetryHUD.tsx`).
  *
- * Incorporates Auditor Improvements:
+ * Incorporates Auditor Improvements & Master Plan V2:
  * - `Melhoria 06-B`: Adds `data-testid="trinity-style-hud"` with 3 instant style switcher buttons
  *   (`style-btn-TETRIS_CLASSIC`, `style-btn-FRUIT_MATCH`, `style-btn-TACTILE_GRID`),
  *   rotation mode toggle (`btn-toggle-style-rotation`: `"🌀 Simultâneo (X/4) [L]"` vs. `"🔒 Estilo Travado [L]"`),
  *   and polymorphic Reserve/Queue panel (`btn-hold-piece` + `hud-next-queue` containing `tactile-piece-tray`
  *   with `tactile-tray-slot-0..2` when in `TACTILE_GRID`).
+ * - `Master Plan V2`: Fullscreen button (`btn-toggle-fullscreen` `[F]`) + 10×10 Swap-Fruit Oracle card in `FRUIT_MATCH`.
  * - Preserves 100% of existing `data-testid` attributes (`hud-score`, `hud-lines`, `hud-streak-counter`,
  *   `hud-phoenix-shields`, `btn-hold-piece`, `hud-next-queue`, `btn-toggle-codex`, `btn-toggle-mute`, `btn-toggle-pause`).
  */
@@ -74,14 +76,14 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
   const nextQueue = useLogicTetrisStore((s) => s.nextQueue)
   const solvedCount = useLogicTetrisStore((s) => s.solvedHistory.length)
   const isMuted = useLogicTetrisStore((s) => s.isMuted)
+  const isFullscreen = useLogicTetrisStore((s) => s.isFullscreen)
   const highScore = useLogicTetrisStore((s) => s.stats.highScore)
 
   const activeSubGameStyle = useLogicTetrisStore((s) => s.activeSubGameStyle)
   const styleRotationMode = useLogicTetrisStore((s) => s.styleRotationMode)
   const styleShiftProgress = useLogicTetrisStore((s) => s.styleShiftProgress)
   const styleShiftTarget = useLogicTetrisStore((s) => s.styleShiftTarget)
-  const activeFruitPair = useLogicTetrisStore((s) => s.activeFruitPair)
-  const nextFruitPair = useLogicTetrisStore((s) => s.nextFruitPair)
+  const fruitOracle = useLogicTetrisStore((s) => s.fruitOracle)
   const tactileTray = useLogicTetrisStore((s) => s.tactileTray)
   const selectedTraySlot = useLogicTetrisStore((s) => s.selectedTraySlot)
 
@@ -100,14 +102,10 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
   const nextThree = nextQueue.slice(0, 3)
   const linesToNextShield = 10 - (lines % 10)
 
-  const activePrimaryFruit =
-    FRUIT_CATALOG[activeFruitPair.primary] ?? FRUIT_CATALOG.APPLE_RUBY
-  const activeSecondaryFruit =
-    FRUIT_CATALOG[activeFruitPair.secondary] ?? FRUIT_CATALOG.CITRUS_GOLD
-  const nextPrimaryFruit =
-    FRUIT_CATALOG[nextFruitPair.primary] ?? FRUIT_CATALOG.GRAPE_NEON
-  const nextSecondaryFruit =
-    FRUIT_CATALOG[nextFruitPair.secondary] ?? FRUIT_CATALOG.EMERALD_PEAR
+  const recommendedFruitMeta =
+    FRUIT_CATALOG[fruitOracle.recommendedFruit] ?? FRUIT_CATALOG.APPLE_RUBY
+  const fragmentedFruitMeta =
+    FRUIT_CATALOG[fruitOracle.mostFragmentedFruit] ?? FRUIT_CATALOG.CITRUS_GOLD
 
   const selectedTrayOption = tactileTray[selectedTraySlot]
   const selectedTrayDef = selectedTrayOption
@@ -137,7 +135,25 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
             {modeInfo.badge}
           </span>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => toggleLogicTetrisFullscreen()}
+              data-testid="btn-toggle-fullscreen"
+              title={
+                isFullscreen
+                  ? 'Sair da Tela Cheia (Tecla [F] ou [Esc])'
+                  : 'Expandir Arena em Tela Cheia (Tecla [F])'
+              }
+              className={`px-2 py-1 rounded-lg border text-xs font-mono font-semibold transition cursor-pointer ${
+                isFullscreen
+                  ? 'bg-purple-950/90 hover:bg-purple-900 border-purple-400 text-purple-100'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-slate-700 text-slate-200'
+              }`}
+            >
+              {isFullscreen ? '⛶ Sair [F]' : '⛶ Tela Cheia [F]'}
+            </button>
+
             <button
               type="button"
               onClick={toggleMute}
@@ -331,12 +347,12 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
 
       {/* Polymorphic Hold [C] & Next Queue / Tactile 3-Piece Tray (`Melhoria 06-B`) */}
       <div className="grid grid-cols-2 gap-2.5">
-        {/* Hold Piece Slot / Active Fruit Pair / Rotate Tactile Piece */}
+        {/* Hold Piece Slot / Fruit Swap Oracle Focus / Rotate Tactile Piece */}
         <button
           type="button"
           disabled={
             phase !== 'PLAYING' ||
-            (activeSubGameStyle !== 'TACTILE_GRID' && !canHold)
+            (activeSubGameStyle === 'TETRIS_CLASSIC' && !canHold)
           }
           onClick={handleHoldOrStyleAction}
           data-testid="btn-hold-piece"
@@ -344,7 +360,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
             activeSubGameStyle === 'TACTILE_GRID'
               ? 'Girar peça selecionada da bandeja (Tecla [R])'
               : activeSubGameStyle === 'FRUIT_MATCH'
-                ? 'Trocar par em queda pelo próximo par (Tecla [C] ou [Shift])'
+                ? 'Focar cursor na melhor troca do Oráculo 10×10 (Tecla [C])'
                 : 'Guardar peça atual para usar depois (Tecla [C] ou [Shift])'
           }
           className="lt-glass-panel rounded-2xl p-3 flex flex-col items-center justify-between text-center hover:border-cyan-400/60 transition cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
@@ -354,7 +370,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
               {activeSubGameStyle === 'TACTILE_GRID'
                 ? 'GIRAR PEÇA'
                 : activeSubGameStyle === 'FRUIT_MATCH'
-                  ? 'PAR EM QUEDA'
+                  ? 'ORÁCULO 10×10'
                   : 'RESERVA'}
             </span>
             <span className="px-1.5 py-0.2 rounded bg-slate-800 border border-slate-700 text-cyan-300 font-bold">
@@ -365,12 +381,12 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
           <div className="my-2 min-h-[44px] flex items-center justify-center">
             {activeSubGameStyle === 'FRUIT_MATCH' ? (
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-purple-500/40">
-                <span className="text-lg" title={activeSecondaryFruit.namePt}>
-                  {activeSecondaryFruit.emoji}
+                <span className="text-lg" title={recommendedFruitMeta.namePt}>
+                  {recommendedFruitMeta.emoji}
                 </span>
-                <span className="text-xs font-mono text-amber-300">↔</span>
-                <span className="text-lg" title={activePrimaryFruit.namePt}>
-                  {activePrimaryFruit.emoji}
+                <span className="text-xs font-mono text-amber-300">⇄</span>
+                <span className="text-lg" title={fragmentedFruitMeta.namePt}>
+                  {fragmentedFruitMeta.emoji}
                 </span>
               </div>
             ) : activeSubGameStyle === 'TACTILE_GRID' ? (
@@ -378,7 +394,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
                 <MiniPieceMatrixPreview
                   def={selectedTrayDef}
                   rotation={selectedTrayOption.rotation}
-                  cellSizePx={8}
+                  cellSizePx={selectedTrayDef.matrices[0].length >= 5 ? 5.5 : 8}
                 />
               ) : (
                 <span className="text-[11px] font-mono text-slate-500">Selecione slot</span>
@@ -392,7 +408,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
 
           <div className="text-[10px] font-mono text-slate-300">
             {activeSubGameStyle === 'FRUIT_MATCH'
-              ? `${activeSecondaryFruit.symbol} + ${activePrimaryFruit.symbol} · [R] Girar Par`
+              ? `${fruitOracle.validSwapsCount} trocas · [C] Focar Dica`
               : activeSubGameStyle === 'TACTILE_GRID'
                 ? selectedTrayDef && selectedTrayOption
                   ? `${selectedTrayDef.namePt} (${selectedTrayOption.rotation * 90}°)`
@@ -403,7 +419,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
           </div>
         </button>
 
-        {/* Next 3 Pieces Queue / Next Fruit Pair / Interactive 3-Piece Tactile Tray */}
+        {/* Next 3 Pieces Queue / 10x10 Fruit Swap Status / Interactive 3-Piece Tactile Tray */}
         <div
           className="lt-glass-panel rounded-2xl p-3 flex flex-col justify-between"
           data-testid="hud-next-queue"
@@ -422,6 +438,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
                 {tactileTray.map((opt, idx) => {
                   const def = getPieceDefinition(opt.type)
                   const isSelected = selectedTraySlot === idx && !opt.isUsed
+                  const matrixDim = def.matrices[0]?.length ?? 4
                   return (
                     <button
                       key={`${opt.type}_${idx}`}
@@ -445,7 +462,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
                         <MiniPieceMatrixPreview
                           def={def}
                           rotation={opt.rotation}
-                          cellSizePx={5}
+                          cellSizePx={matrixDim >= 5 ? 3.5 : 5}
                         />
                       </div>
                       <span className="text-[8px] font-mono text-slate-300">
@@ -463,28 +480,28 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ className = '' }) =>
           ) : activeSubGameStyle === 'FRUIT_MATCH' ? (
             <div className="flex flex-col justify-between h-full">
               <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 mb-1.5">
-                <span>PRÓXIMO PAR</span>
+                <span>ARENA 10×10 CHEIA</span>
                 <span className="text-purple-300">CASCATA 3+</span>
               </div>
 
-              <div className="flex items-center justify-center gap-3 my-auto py-1">
+              <div className="flex items-center justify-center gap-2.5 my-auto py-1">
                 <div className="flex flex-col items-center">
-                  <span className="text-xl">{nextSecondaryFruit.emoji}</span>
+                  <span className="text-xl">{recommendedFruitMeta.emoji}</span>
                   <span className="text-[9px] font-mono text-slate-300">
-                    {nextSecondaryFruit.namePt}
+                    {recommendedFruitMeta.namePt}
                   </span>
                 </div>
-                <span className="text-xs font-mono text-purple-300">+</span>
+                <span className="text-xs font-mono text-amber-300 font-bold">⇄ 3+</span>
                 <div className="flex flex-col items-center">
-                  <span className="text-xl">{nextPrimaryFruit.emoji}</span>
+                  <span className="text-xl">{fragmentedFruitMeta.emoji}</span>
                   <span className="text-[9px] font-mono text-slate-300">
-                    {nextPrimaryFruit.namePt}
+                    {fragmentedFruitMeta.namePt}
                   </span>
                 </div>
               </div>
 
               <div className="text-[9px] font-mono text-amber-300/90 text-center mt-[4px]">
-                Junte 2 + 1 = 3+ frutas iguais!
+                Troque 2 frutas vizinhas (Clique/Arraste)!
               </div>
             </div>
           ) : (

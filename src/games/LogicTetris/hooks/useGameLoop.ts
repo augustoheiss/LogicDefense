@@ -12,6 +12,40 @@ const MAX_FRAME_DELTA_MS = 100
 const PRUNE_FEEDBACK_INTERVAL_MS = 400
 
 /**
+ * Toggles Fullscreen mode (`requestFullscreen` / `exitFullscreen` + `.lt-fullscreen-active` CSS fallback)
+ * on the `[data-testid="logic-tetris-game"]` container and syncs `useLogicTetrisStore.isFullscreen`.
+ */
+export function toggleLogicTetrisFullscreen(forceState?: boolean): void {
+  const store = useLogicTetrisStore.getState()
+  const nextState = typeof forceState === 'boolean' ? forceState : !store.isFullscreen
+  store.setFullscreen(nextState)
+
+  if (typeof document === 'undefined') return
+
+  const container = document.querySelector(
+    '[data-testid="logic-tetris-game"]'
+  ) as HTMLElement | null
+
+  if (nextState) {
+    if (
+      container &&
+      typeof container.requestFullscreen === 'function' &&
+      !document.fullscreenElement
+    ) {
+      container.requestFullscreen().catch(() => {
+        // Fallback `.lt-fullscreen-active` class remains active via `store.isFullscreen`
+      })
+    }
+  } else {
+    if (document.fullscreenElement && typeof document.exitFullscreen === 'function') {
+      document.exitFullscreen().catch(() => {
+        // Ignore exit error
+      })
+    }
+  }
+}
+
+/**
  * Deterministic temporal game loop hook (`requestAnimationFrame`) for Logic Tetris Genesis (Trinity Expansion).
  *
  * Incorporates Auditor Improvements:
@@ -21,10 +55,11 @@ const PRUNE_FEEDBACK_INTERVAL_MS = 400
  * - `Melhoria 05-C` & `RT-14`: Polymorphic keyboard routing across all 3 Trinity styles:
  *   - `[G]`: `store.cycleSubGameStyle()` (switch style on demand)
  *   - `[L]`: `store.toggleStyleRotationMode()` (toggle Simultaneous vs. Locked style)
- *   - `ArrowUp` / `W`: `store.moveUp()` (moves cursor up in `TACTILE_GRID`, rotates CW in falling styles)
+ *   - `[F]`: `toggleLogicTetrisFullscreen()` (toggle Fullscreen mode)
+ *   - `ArrowUp` / `W`: `store.moveUp()` (moves cursor up in `TACTILE_GRID` / `FRUIT_MATCH`, rotates CW in `TETRIS_CLASSIC`)
  *   - `R` / `X`: `store.rotatePiece('CW')` in all 3 styles
  *   - `[1]`, `[2]`, `[3]`: `store.selectTactileTraySlot(0 | 1 | 2)` in `TACTILE_GRID`
- *   - `Enter` / `Space`: `store.hardDrop()` (places selected piece in `TACTILE_GRID` or drops in falling styles)
+ *   - `Enter` / `Space`: `store.hardDrop()` (places piece in `TACTILE_GRID`, swaps fruit in `FRUIT_MATCH`, or drops in `TETRIS_CLASSIC`)
  */
 export function useGameLoop(options: UseGameLoopOptions = {}): void {
   const { enabled = true, enableKeyboard = true } = options
@@ -113,6 +148,15 @@ export function useGameLoop(options: UseGameLoopOptions = {}): void {
 
       const store = useLogicTetrisStore.getState()
       const { phase } = store
+
+      // Fullscreen toggle with [F] (Master Plan V2 — RT-20)
+      if (event.key === 'f' || event.key === 'F') {
+        if (phase === 'PLAYING' || phase === 'PAUSED' || phase === 'START_HUB') {
+          event.preventDefault()
+          toggleLogicTetrisFullscreen()
+        }
+        return
+      }
 
       // Pause / Resume toggle with [P]
       if (event.key === 'p' || event.key === 'P') {
@@ -220,7 +264,10 @@ export function useGameLoop(options: UseGameLoopOptions = {}): void {
           break
 
         case 'Enter':
-          if (store.activeSubGameStyle === 'TACTILE_GRID') {
+          if (
+            store.activeSubGameStyle === 'TACTILE_GRID' ||
+            store.activeSubGameStyle === 'FRUIT_MATCH'
+          ) {
             event.preventDefault()
             store.hardDrop()
           }
@@ -271,14 +318,28 @@ export function useGameLoop(options: UseGameLoopOptions = {}): void {
       }
     }
 
+    const handleFullscreenChange = () => {
+      if (typeof document !== 'undefined') {
+        const isNativeFullscreen = Boolean(document.fullscreenElement)
+        const store = useLogicTetrisStore.getState()
+        if (!isNativeFullscreen && store.isFullscreen) {
+          store.setFullscreen(false)
+        } else if (isNativeFullscreen && !store.isFullscreen) {
+          store.setFullscreen(true)
+        }
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
     window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
   }, [enabled, enableKeyboard])
 }

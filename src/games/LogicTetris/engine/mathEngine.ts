@@ -2,11 +2,97 @@ import {
   ArithmeticOp,
   GameMode,
   MathChoice,
+  MiraclePowerTier,
+  MiracleTierSpec,
   PieceType,
+  ProblemTier,
   TetrisMathChallenge,
   TetrisMathLensId,
 } from '../types'
 import { getPieceDefinition } from './tetrominoes'
+
+export const MIRACLE_TIER_SPECS: Record<MiraclePowerTier, MiracleTierSpec> = {
+  1: {
+    tier: 1,
+    icon: '⚡',
+    badge: '⚡ Grau I',
+    shortLabel: '3 Buracos',
+    shortLabelPt: '3 Buracos',
+    title: 'Centelha Ágil (Até 3 Buracos)',
+    titlePt: 'Grau I · 3 Buracos',
+    rewardPt: 'Tapa até 3 buracos (+150 pts/buraco)',
+    descriptionClassic: 'Tapa até 3 buracos soterrados (+150 pts/buraco)',
+    descriptionTactile: 'Preenche até 3 casas na Linha ou Coluna H×V (+450 pts)',
+    descriptionFruit: 'Colapsa 1 espécie de fruta ou forja 2 Estrelas Coringa (+450 pts)',
+    maxHolesToSeal: 3,
+    bonusScore: 0,
+    grantsPhoenixShield: false,
+    mathPreview: 'Amigos do 10, Massinha ou Relógio ×5 Rápido',
+    hotkey: 'F1',
+  },
+  2: {
+    tier: 2,
+    icon: '🔥',
+    badge: '🔥 Grau II',
+    shortLabel: '5 Buracos',
+    shortLabelPt: '5 Buracos',
+    title: 'Forja Dupla (Até 5 Buracos + 400 pts)',
+    titlePt: 'Grau II · 5 Buracos',
+    rewardPt: 'Tapa até 5 buracos de uma vez (+400 pts bônus)',
+    descriptionClassic: 'Tapa até 5 buracos de uma só vez (+200 pts/buraco + 400 pts)',
+    descriptionTactile: 'Fecha até 5 casas em Linha/Coluna H×V de uma vez (+600 pts)',
+    descriptionFruit: 'Colapsa frutas + forja 2 Estrelas Coringa (+400 pts bônus)',
+    maxHolesToSeal: 5,
+    bonusScore: 400,
+    grantsPhoenixShield: false,
+    mathPreview: 'Dobra e Meia (18×15), Regra do 11 (43×11) ou Fator Comum (23×7 + 23×3)',
+    hotkey: 'F2',
+  },
+  3: {
+    tier: 3,
+    icon: '🌟',
+    badge: '🌟 Grau III',
+    shortLabel: '10 Buracos',
+    shortLabelPt: '10 Buracos',
+    title: 'Supernova Simétrica (Até 10 Buracos + 1.000 pts)',
+    titlePt: 'Grau III · 10 Buracos',
+    rewardPt: 'Tapa até 10 buracos de uma vez (+1.000 pts bônus)',
+    descriptionClassic: 'Tapa até 10 buracos de uma só vez (+1.000 pts e explode linhas fechadas!)',
+    descriptionTactile: 'Cruzamento H×V: preenche até 10 casas em Linhas/Colunas (+1.200 pts)',
+    descriptionFruit: 'Tempestade Solar: colapsa frutas + 3 Estrelas (+1.000 pts bônus)',
+    maxHolesToSeal: 10,
+    bonusScore: 1000,
+    grantsPhoenixShield: false,
+    mathPreview: 'Diferença de Quadrados (37 × 43), Quadrados de 5 (65²) ou Trincheira ((36×21)÷(7×9))',
+    hotkey: 'F3',
+  },
+  4: {
+    tier: 4,
+    icon: '👑',
+    badge: '👑 Grau IV',
+    shortLabel: 'TODOS + 🛡️',
+    shortLabelPt: 'TODOS + 🛡️',
+    title: 'Gênesis Absoluto (TODOS os Buracos + 🛡️ Escudo Fênix!)',
+    titlePt: 'Grau IV · TODOS + 🛡️ Fênix',
+    rewardPt: 'Tapa TODOS os buracos + 2.500 pts + 🛡️ +1 Escudo Fênix!',
+    descriptionClassic: 'Tapa TODOS os buracos soterrados do tabuleiro de uma vez +2.500 pts +1 Escudo Fênix!',
+    descriptionTactile: 'Purificação Base-10 (até 20 casas H×V) +2.500 pts +1 Escudo Fênix!',
+    descriptionFruit: 'Supernova do Pomar + 4 Estrelas Coringa +2.500 pts +1 Escudo Fênix!',
+    maxHolesToSeal: 200,
+    bonusScore: 2500,
+    grantsPhoenixShield: true,
+    mathPreview: 'Desafio Supremo: 53² − 47², 37×12 + 37×88, 32 × 125 ou Máquina do Tempo (3x − 5 = 31)',
+    hotkey: 'F4',
+  },
+}
+
+export function getMiracleTierSpec(tier: MiraclePowerTier): MiracleTierSpec {
+  return MIRACLE_TIER_SPECS[tier] ?? MIRACLE_TIER_SPECS[1]
+}
+
+export function getAllMiracleTierSpecs(): MiracleTierSpec[] {
+  return [MIRACLE_TIER_SPECS[1], MIRACLE_TIER_SPECS[2], MIRACLE_TIER_SPECS[3], MIRACLE_TIER_SPECS[4]]
+}
 
 export interface MathLensMetadata {
   lensId: TetrisMathLensId
@@ -103,7 +189,7 @@ interface RawDistractor {
 interface RawMathTemplate {
   id: string
   lensId: TetrisMathLensId
-  tier: 1 | 2 | 3 // 1 = Zen/Iniciante, 2 = Arcade, 3 = Mestre
+  tier: ProblemTier // 1 = Centelha (3 buracos), 2 = Forja (5 buracos), 3 = Supernova (10 buracos), 4 = Gênesis (TODOS!)
   expression: string
   correctAnswer: number
   shortHint: string
@@ -122,7 +208,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '18 + 7 = ?',
     correctAnswer: 25,
-    shortHint: '💡 Massinha: Passe 2 do 7 para o 18 virar 20 → agora some 20 + 5 = ?',
+    shortHint: '💡 Massinha da Soma: Empreste do segundo número apenas o que falta para o primeiro virar dezena redonda — quanto fica a soma?',
     stepByStep: [
       'O 18 está a apenas 2 passos de virar a dezena redonda 20.',
       'Tiramos 2 da massinha do 7 (que vira 5) e entregamos ao 18 (que vira 20).',
@@ -152,7 +238,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '19 + 8 = ?',
     correctAnswer: 27,
-    shortHint: '💡 Massinha: Passe 1 do 8 para o 19 fechar a dezena 20 → 20 + 7 = ?',
+    shortHint: '💡 Massinha da Soma: Complete o primeiro número até a dezena redonda tirando do segundo — qual é o total?',
     stepByStep: [
       'O 19 só precisa de +1 para virar 20.',
       'Tiramos 1 do 8 (que passa a ser 7) e damos ao 19 (que vira 20).',
@@ -182,7 +268,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '28 + 6 = ?',
     correctAnswer: 34,
-    shortHint: '💡 Massinha: Passe 2 do 6 para o 28 fechar a dezena 30 → 30 + 4 = ?',
+    shortHint: '💡 Massinha da Soma: Passe unidades da parcela menor para fechar a próxima dezena redonda — quanto dá?',
     stepByStep: [
       'O 28 pede +2 para fechar a dezena 30.',
       'Quebramos o 6 em (2 + 4): o 2 completa o 30 e sobram 4.',
@@ -212,7 +298,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '29 + 16 = ?',
     correctAnswer: 45,
-    shortHint: '💡 Massinha: Passe 1 do 16 para o 29 virar 30 → agora some 30 + 15 = ?',
+    shortHint: '💡 Massinha da Soma: Transfira o que falta para arredondar o primeiro termo e some com o que restou do segundo — qual é o valor?',
     stepByStep: [
       'O 29 está a 1 unidade de virar 30.',
       'Transferimos 1 do 16 para o 29: temos 30 + 15.',
@@ -242,7 +328,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '47 + 38 = ?',
     correctAnswer: 85,
-    shortHint: '💡 Massinha: Passe 3 do 38 para o 47 fechar a dezena 50 → 50 + 35 = ?',
+    shortHint: '💡 Massinha da Soma: Um lado cede poucas unidades para o outro fechar dezena exata — quanto fica após o equilíbrio?',
     stepByStep: [
       'O 47 precisa de +3 para virar a dezena redonda 50.',
       'Tiramos 3 do 38 (que vira 35) e entregamos ao 47 (que vira 50).',
@@ -272,7 +358,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '88 + 35 = ?',
     correctAnswer: 123,
-    shortHint: '💡 Massinha: Passe 2 do 35 para o 88 fechar a dezena 90 → 90 + 33 = ?',
+    shortHint: '💡 Massinha na Centena: Arredonde o primeiro termo entregando unidades do segundo e atravesse a barreira do 100 — quanto dá?',
     stepByStep: [
       'O 88 pede apenas +2 para fechar 90.',
       'Tiramos 2 do 35 (que vira 33) e formamos 90 + 33.',
@@ -298,7 +384,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
   },
 
   // =========================================================================
-  // LENTE 2: A PEÇA QUE FALTA / AMIGOS DO 10 (+) — 'equacao-balanca'
+  // LENTE 2: A PEÇA QUE FALTA / AMIGOS DO 10 & MÁQUINA DO TEMPO (+) — 'equacao-balanca'
   // =========================================================================
   {
     id: 'falta_9_10',
@@ -337,7 +423,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 2,
     expression: '8 + [ ? ] = 10',
     correctAnswer: 2,
-    shortHint: '💡 Amigos do 10: A linha tem 10 colunas e 8 já estão cheias → 10 − 8 = ?',
+    shortHint: '💡 Amigos do 10: Qual é o par complementar que fecha a dezena inteira?',
     stepByStep: [
       'Visualize a linha de 10 colunas no tabuleiro: 8 blocos acesos deixam um espaço de 2.',
       'O par perfeito do 8 na Base 10 é o 2 (8 + 2 = 10)!',
@@ -367,7 +453,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 3,
     expression: '7 + [ ? ] = 10',
     correctAnswer: 3,
-    shortHint: '💡 Amigos do 10: Na grade de 10 colunas, 7 estão cheias → 10 − 7 = ?',
+    shortHint: '💡 Amigos do 10: Na grade de 10 colunas, quantas casas vazias restam para completar a linha?',
     stepByStep: [
       'Na grade Base-10 do Tetris, 7 blocos preenchidos deixam 3 casas vazias.',
       '7 e 3 são os Amigos do 10: 7 + 3 = 10!',
@@ -397,7 +483,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 4,
     expression: '6 + [ ? ] = 10',
     correctAnswer: 4,
-    shortHint: '💡 Amigos do 10: A linha fecha com 10 blocos e já temos 6 → 10 − 6 = ?',
+    shortHint: '💡 Amigos do 10: Qual complemento fecha exatamente as 10 colunas da linha?',
     stepByStep: [
       'Se uma linha tem 6 blocos, faltam 4 colunas — exatamente a área de 1 Tetrominó!',
       '6 + 4 = 10!',
@@ -427,7 +513,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 3,
     expression: '7 + [ ? ] = 15',
     correctAnswer: 8,
-    shortHint: '💡 Ponte do 10: De 7 até 10 (+3) e de 10 até 15 (+5) → some os saltos: 3 + 5 = ?',
+    shortHint: '💡 Ponte do 10: Use a dezena 10 como trampolim intermediário e some os dois saltos — qual é a distância total?',
     stepByStep: [
       'Use o 10 como trampolim: de 7 para completar 10 faltam 3.',
       'De 10 para chegar em 15 faltam mais 5.',
@@ -458,7 +544,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 6,
     expression: '14 + [ ? ] = 20',
     correctAnswer: 6,
-    shortHint: '💡 Amigo do 4 na Dezena: Olhe para a unidade 4. Quanto falta de 4 para fechar 10: 10 − 4 = ?',
+    shortHint: '💡 Amigos do 10 na Dezena: Olhe apenas para o algarismo das unidades — qual par fecha a próxima dezena?',
     stepByStep: [
       'Olhe apenas para a unidade 4: quanto falta de 4 para fechar 10?',
       'Como 4 + 6 = 10, então 14 + 6 fecha exatamente a dezena 20!',
@@ -488,7 +574,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     missingBlockResonance: 3,
     expression: '37 + [ ? ] = 50',
     correctAnswer: 13,
-    shortHint: '💡 Ponte da Dezena: De 37 até 40 (+3) e de 40 até 50 (+10) → 3 + 10 = ?',
+    shortHint: '💡 Ponte da Dezena: Complete primeiro até a dezena redonda seguinte e depois suba as dezenas restantes — quanto falta?',
     stepByStep: [
       'Primeiro complete a dezena imediatamente acima: de 37 até 40 faltam 3.',
       'Depois suba de 40 até 50: faltam 10.',
@@ -512,6 +598,66 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
       },
     ],
   },
+  {
+    id: 'maquina_tempo_4x_20_60',
+    lensId: 'amigos_do_10_falta',
+    tier: 3,
+    expression: '4x − 20 = 60 → x = ?',
+    correctAnswer: 20,
+    shortHint: '💡 Máquina do Tempo das Equações: Rebobine o filme de trás para frente! Desfaça primeiro a subtração e depois a multiplicação — quanto vale x?',
+    stepByStep: [
+      'Na Máquina do Tempo (equacoes-maquina-do-tempo), desfazemos a última operação primeiro.',
+      'O oposto de tirar 20 é somar 20: 60 + 20 = 80.',
+      'O oposto de multiplicar por 4 é dividir por 4: 80 ÷ 4 = 20!',
+    ],
+    distractors: [
+      {
+        value: 10,
+        trapDiagnosis:
+          'Cuidado! Você fez 60 − 20 = 40 e dividiu por 4 (= 10). Na Máquina do Tempo, o oposto de "− 20" é "+ 20" → (60 + 20) ÷ 4 = 20!',
+      },
+      {
+        value: 15,
+        trapDiagnosis:
+          '15 é 60 ÷ 4 sem desfazer o "− 20" primeiro! Some 60 + 20 = 80 e depois divida por 4 = 20.',
+      },
+      {
+        value: 25,
+        trapDiagnosis:
+          'Quase! 60 + 20 = 80, e a quarta parte de 80 (metade de 40) é 20!',
+      },
+    ],
+  },
+  {
+    id: 'maquina_tempo_3x_5_31',
+    lensId: 'amigos_do_10_falta',
+    tier: 4,
+    expression: '3x − 5 = 31 → x = ?',
+    correctAnswer: 12,
+    shortHint: '💡 Máquina do Tempo Suprema: Use a operação inversa na ordem reversa para isolar o mistério x — qual número original entrou na máquina?',
+    stepByStep: [
+      'O número x foi multiplicado por 3 e depois perdeu 5, chegando em 31.',
+      '1º Passo Inverso: devolva os 5 que saíram → 31 + 5 = 36.',
+      '2º Passo Inverso: desfaça o triplo dividindo por 3 → 36 ÷ 3 = 12!',
+    ],
+    distractors: [
+      {
+        value: 8,
+        trapDiagnosis:
+          'Se x fosse 8, 3 × 8 − 5 daria 19! Lembre-se de SOMAR 5 ao 31 (36) antes de dividir por 3 → 12.',
+      },
+      {
+        value: 9,
+        trapDiagnosis:
+          'Você fez (31 − 5) = 26, perto de 27 ÷ 3 = 9! O inverso de "− 5" na Máquina do Tempo é "+ 5": (31 + 5) ÷ 3 = 12!',
+      },
+      {
+        value: 14,
+        trapDiagnosis:
+          'Quase! 31 + 5 = 36, e 36 dividido em 3 partes iguais (30÷3 + 6÷3) é 12!',
+      },
+    ],
+  },
 
   // =========================================================================
   // LENTE 3: O HACK JAPONÊS (−) — 'aritmetica-elegante-01'
@@ -522,7 +668,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '42 − 19 = ?',
     correctAnswer: 23,
-    shortHint: '💡 Hack Japonês: Some +1 nos DOIS números para arredondar → 43 − 20 = ?',
+    shortHint: '💡 Hack Japonês: O Subtraendo é o Rei! Some a mesma quantidade nos DOIS números até o segundo virar dezena redonda — qual é a diferença?',
     stepByStep: [
       'O Subtraendo (19) é o Rei: ele só precisa de +1 para virar 20.',
       'Para a distância entre os dois não mudar, somamos +1 também no 42 (que vira 43).',
@@ -552,7 +698,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '34 − 19 = ?',
     correctAnswer: 15,
-    shortHint: '💡 Hack Japonês: Some +1 nos dois lados para arredondar o 19 → 35 − 20 = ?',
+    shortHint: '💡 Hack Japonês: Desloque ambos os números para frente pela mesma quantidade até zerar a unidade do subtraendo — quanto sobra?',
     stepByStep: [
       'Olhe para o 19: somando +1 ele vira 20.',
       'Some +1 também no 34 para manter a mesma distância: 34 + 1 = 35.',
@@ -582,7 +728,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '63 − 28 = ?',
     correctAnswer: 35,
-    shortHint: '💡 Hack Japonês: Some +2 nos dois lados para o 28 virar 30 → 65 − 30 = ?',
+    shortHint: '💡 Hack Japonês: Veja quanto falta para o subtraendo fechar dezena redonda e some esse mesmo valor nos dois termos — quanto dá?',
     stepByStep: [
       'O 28 precisa de +2 para virar a dezena redonda 30.',
       'Somamos +2 também no 63 → ele vira 65.',
@@ -612,7 +758,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '73 − 38 = ?',
     correctAnswer: 35,
-    shortHint: '💡 Hack Japonês: Some +2 nos dois números para o 38 virar 40 → 75 − 40 = ?',
+    shortHint: '💡 Hack Japonês: Arredonde o número que está subtraindo somando o mesmo valor nos dois lados da conta — qual é o resultado?',
     stepByStep: [
       'O subtraendo 38 pede +2 para virar 40.',
       'Damos +2 também ao 73, que vira 75.',
@@ -642,7 +788,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '85 − 27 = ?',
     correctAnswer: 58,
-    shortHint: '💡 Hack Japonês: Some +3 nos dois lados para o 27 virar 30 → 88 − 30 = ?',
+    shortHint: '💡 Hack Japonês: Nunca peça emprestado! Avance os dois números juntos até o segundo virar múltiplo de 10 — quanto resta?',
     stepByStep: [
       'O 27 está a +3 de virar 30.',
       'Somamos +3 nos dois termos: (85 + 3) − (27 + 3) = 88 − 30.',
@@ -672,7 +818,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '100 − 37 = ?',
     correctAnswer: 63,
-    shortHint: '💡 Hack do 99: Tire 1 dos dois lados (99 − 36) ou some +3 nos dois → 103 − 40 = ?',
+    shortHint: '💡 Hack do 99 (Sem Empréstimo): Tire 1 dos dois lados para transformar o 100 em 99 ou suba os dois juntos — quanto dá?',
     stepByStep: [
       'Caminho A (Hack Japonês +3): Some +3 nos dois → 103 − 40 = 63.',
       'Caminho B (Truque do 99): Tire 1 dos dois → 99 − 36 = 63 (9−3=6 e 9−6=3).',
@@ -706,7 +852,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '50 − 34 = ?',
     correctAnswer: 16,
-    shortHint: '💡 Elevador: De 34 até 40 (+6) e de 40 até 50 (+10) → some os andares: 6 + 10 = ?',
+    shortHint: '💡 Regra do Elevador: Suba primeiro até o próximo andar redondo e depois até o andar final — quantos andares você subiu ao todo?',
     stepByStep: [
       'Imagine que você está no andar 34 e quer subir até o 50.',
       'Do 34 até o 40 o elevador sobe 6 andares.',
@@ -736,7 +882,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '25 − 18 = ?',
     correctAnswer: 7,
-    shortHint: '💡 Elevador na Ponte do 20: De 18 até 20 (+2) e de 20 até 25 (+5) → 2 + 5 = ?',
+    shortHint: '💡 Elevador na Ponte do 20: Meça a distância do andar inicial até o 20 e some com a subida restante — qual é a distância?',
     stepByStep: [
       'Do andar 18 até o andar 20 subimos 2 andares.',
       'Do 20 até o 25 subimos mais 5 andares.',
@@ -766,7 +912,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '10 + 6 − 8 = ?',
     correctAnswer: 8,
-    shortHint: '💡 Balança Base-10: Resolva 10 − 8 primeiro (= 2) e some com o 6 → 2 + 6 = ?',
+    shortHint: '💡 Balança Base-10: Em vez de seguir na ordem bruta, resolva primeiro a diferença a partir do 10 e junte com a outra parcela — quanto dá?',
     stepByStep: [
       'Em vez de somar 10 + 6 = 16 para depois subtrair 8, use os Amigos do 10!',
       '10 − 8 sobra 2 imediatamente.',
@@ -796,7 +942,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '70 − 43 = ?',
     correctAnswer: 27,
-    shortHint: '💡 Elevador: De 43 até 50 (+7) e de 50 até 70 (+20) → some os saltos: 7 + 20 = ?',
+    shortHint: '💡 Regra do Elevador: Suba até a dezena redonda imediatamente acima e depois conte as dezenas até o topo — qual é a subida total?',
     stepByStep: [
       'Do 43 até o 50 o elevador sobe 7 andares (3 + 7 = 10).',
       'Do 50 até o 70 sobe mais 20 andares.',
@@ -826,7 +972,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '110 − 76 = ?',
     correctAnswer: 34,
-    shortHint: '💡 Elevador: De 76 até 80 (+4) e de 80 até 110 (+30) → 30 + 4 = ?',
+    shortHint: '💡 Elevador em Dois Estágios: Complete primeiro a dezena 80 e depois meça os andares até 110 — qual é a distância?',
     stepByStep: [
       'De 76 até 80 subimos +4.',
       'De 80 até 100 subimos +20, e até 110 mais +10 (total +30).',
@@ -850,9 +996,39 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
       },
     ],
   },
+  {
+    id: 'peso_alivio_neg_15_4_5',
+    lensId: 'regra_elevador',
+    tier: 4,
+    expression: '−15 − (−4) × 5 = ?',
+    correctAnswer: 5,
+    shortHint: '💡 Peso & Alívio de Sinais: Tirar um peso negativo (−(−4)) vira alívio positivo! Resolva primeiro a multiplicação e compare com a dívida — quanto sobra?',
+    stepByStep: [
+      'Pela regra do Peso & Alívio (matematica-sinais-peso-alivio), tirar um peso negativo −(−4) equivale a ganhar alívio +4.',
+      'Multiplicando primeiro: (+4) × 5 = +20 de alívio.',
+      'Juntando com o peso inicial: −15 + 20 = 5!',
+    ],
+    distractors: [
+      {
+        value: 25,
+        trapDiagnosis:
+          'Cuidado! Você somou 15 + 20 = 35 ou ignorou o sinal negativo do −15. Com −15 + 20, o saldo positivo é 5!',
+      },
+      {
+        value: 35,
+        trapDiagnosis:
+          'O 15 inicial é um peso negativo (−15)! Quando entra o alívio +20, abata a dívida de 15 → sobram 5.',
+      },
+      {
+        value: 95,
+        trapDiagnosis:
+          'Atenção à hierarquia na Trincheira: nunca faça −15 − (−4) antes de multiplicar o (−4) × 5! Primeiro (+4) × 5 = +20, depois −15 + 20 = 5.',
+      },
+    ],
+  },
 
   // =========================================================================
-  // LENTE 5: A BASE DO UNIVERSO (×2, ×4, ×8) — 'magia-calculo-mental-multiplicacao'
+  // LENTE 5: A BASE DO UNIVERSO (×2, ×4, ×8, ×125) — 'magia-calculo-mental-multiplicacao'
   // =========================================================================
   {
     id: 'dobro_15_4',
@@ -860,7 +1036,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '15 × 4 = ?',
     correctAnswer: 60,
-    shortHint: '💡 Dobro do Dobro: O 1º dobro de 15 é 30. Agora dobre o 30 → 30 × 2 = ?',
+    shortHint: '💡 Dobro do Dobro: Multiplicar por 4 é dobrar o número duas vezes seguidas — qual é o dobro do dobro?',
     stepByStep: [
       'Multiplicar por 4 (a área de um Tetrominó!) é dobrar duas vezes seguidas.',
       '1º Dobro: 15 × 2 = 30.',
@@ -890,7 +1066,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '25 × 4 = ?',
     correctAnswer: 100,
-    shortHint: '💡 Dobro do Dobro: O 1º dobro de 25 é 50. Agora dobre o 50 → 50 × 2 = ?',
+    shortHint: '💡 Dobro do Dobro: Dobre o primeiro fator uma vez e depois dobre o resultado novamente — que centena se forma?',
     stepByStep: [
       'Pense em 4 moedas de 25: o dobro de 25 é 50.',
       'O dobro de 50 fecha exatamente a centena: 100!',
@@ -919,7 +1095,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '16 × 4 = ?',
     correctAnswer: 64,
-    shortHint: '💡 Dobro do Dobro: O 1º dobro de 16 é 32. Agora dobre o 32 → 32 × 2 = ?',
+    shortHint: '💡 Dobro do Dobro: Encontre o dobro de 16 e dobre mais uma vez — qual potência de 2 aparece?',
     stepByStep: [
       '1º Dobro: 16 + 16 = 32.',
       '2º Dobro: 32 + 32 = 64!',
@@ -948,7 +1124,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '35 × 4 = ?',
     correctAnswer: 140,
-    shortHint: '💡 Dobro do Dobro: O 1º dobro de 35 é 70. Agora dobre o 70 → 70 × 2 = ?',
+    shortHint: '💡 Dobro do Dobro: Todo número terminado em 5 vira dezena redonda no 1º dobro! Dobre duas vezes seguidas — quanto dá?',
     stepByStep: [
       'Todo número terminado em 5 fica redondo ao dobrar!',
       '1º Dobro: 35 × 2 = 70.',
@@ -978,7 +1154,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '15 × 8 = ?',
     correctAnswer: 120,
-    shortHint: '💡 Triplo Dobro (×8): 15 dobra para 30, que dobra para 60. Dobre o 60 → 60 × 2 = ?',
+    shortHint: '💡 Triplo Dobro (×8): Multiplicar por 8 é dobrar 3 vezes seguidas (×2 → ×2 → ×2) — aonde você chega?',
     stepByStep: [
       'Multiplicar por 8 é dobrar 3 vezes seguidas!',
       '15 × 2 = 30 → 30 × 2 = 60 → 60 × 2 = 120!',
@@ -1001,9 +1177,69 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
       },
     ],
   },
+  {
+    id: 'milenar_24_125',
+    lensId: 'dobro_do_dobro_248',
+    tier: 4,
+    expression: '24 × 125 = ?',
+    correctAnswer: 3000,
+    shortHint: '💡 Fatoração Milenar (×125): Sabendo que 8 × 125 fecha um milhar exato (1000), divida o primeiro fator por 8 — quantos milhares se formam?',
+    stepByStep: [
+      'Na Magia do Cálculo Mental, 125 é o amigo milenar do 8 (pois 8 × 125 = 1000).',
+      'Quebre o 24 em 3 × 8: temos 3 × (8 × 125).',
+      '3 × 1000 = 3000 instantaneamente!',
+    ],
+    distractors: [
+      {
+        value: 2000,
+        trapDiagnosis:
+          '2000 seria 16 × 125 (pois 16 ÷ 8 = 2)! Para 24 × 125, como 24 ÷ 8 = 3, temos 3 × 1000 = 3000.',
+      },
+      {
+        value: 2400,
+        trapDiagnosis:
+          '2400 é 24 × 100! Ainda faltam os 24 × 25 (= 600) → 2400 + 600 = 3000.',
+      },
+      {
+        value: 4000,
+        trapDiagnosis:
+          '4000 é 32 × 125 (pois 32 ÷ 8 = 4)! Para 24, temos 24 ÷ 8 = 3 → 3000.',
+      },
+    ],
+  },
+  {
+    id: 'milenar_32_125',
+    lensId: 'dobro_do_dobro_248',
+    tier: 4,
+    expression: '32 × 125 = ?',
+    correctAnswer: 4000,
+    shortHint: '💡 Fatoração Milenar (×125): Como 125 × 8 fecha 1000, descubra quantos grupos de 8 cabem no primeiro fator — qual milhar aparece?',
+    stepByStep: [
+      'O segredo do 125 é que ele é a oitava parte de 1000 (8 × 125 = 1000).',
+      'Divida 32 por 8 (= 4) e multiplique o 125 por 8 (= 1000).',
+      '4 × 1000 = 4000 de cabeça!',
+    ],
+    distractors: [
+      {
+        value: 3000,
+        trapDiagnosis:
+          '3000 é 24 × 125! Como 32 tem 4 grupos de 8 (4 × 8 = 32), o resultado é 4 × 1000 = 4000.',
+      },
+      {
+        value: 3200,
+        trapDiagnosis:
+          '3200 é apenas 32 × 100! Somando com 32 × 25 (= 800), fechamos 4000.',
+      },
+      {
+        value: 8000,
+        trapDiagnosis:
+          '8000 seria 64 × 125! Dividindo 32 por 8 encontramos 4 → 4000.',
+      },
+    ],
+  },
 
   // =========================================================================
-  // LENTE 6: O NOSSO RELÓGIO (×5) & DOBRAR E MEIAR — 'regra-de-ouro-2'
+  // LENTE 6: O NOSSO RELÓGIO (×5), DOBRAR E MEIAR & TRUQUE DO 11/101 — 'regra-de-ouro-2'
   // =========================================================================
   {
     id: 'relogio_14_5',
@@ -1011,7 +1247,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '14 × 5 = ?',
     correctAnswer: 70,
-    shortHint: '💡 Dobra e Meia: Corte o 14 pela metade (= 7) e dobre o 5 (= 10) → 7 × 10 = ?',
+    shortHint: '💡 Lente Dobra e Meia: Multiplicar por 5 é metade de multiplicar por 10! Corte o fator par ao meio e multiplique por 10 — quanto dá?',
     stepByStep: [
       'Assim como esticar um quadrado 2×2 em uma barra 1×4, cortamos o 14 pela metade (= 7) e dobramos o 5 (= 10).',
       'A conta vira 7 × 10 = 70 instantaneamente!',
@@ -1040,7 +1276,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '18 × 5 = ?',
     correctAnswer: 90,
-    shortHint: '💡 Dobra e Meia: Corte o 18 pela metade (= 9) e dobre o 5 (= 10) → 9 × 10 = ?',
+    shortHint: '💡 Lente Dobra e Meia: Se você corta o número par pela metade e dobra o 5 para virar dezena, qual área se mantém?',
     stepByStep: [
       'Multiplicar por 5 é multiplicar por 10 e pegar a metade!',
       'Metade de 18 é 9, e o dobro de 5 é 10 → 9 × 10 = 90!',
@@ -1069,7 +1305,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '24 × 5 = ?',
     correctAnswer: 120,
-    shortHint: '💡 Dobra e Meia: Corte o 24 pela metade (= 12) e dobre o 5 (= 10) → 12 × 10 = ?',
+    shortHint: '💡 Lente Dobra e Meia: Transforme o retângulo tirando a metade do número par e dobrando o 5 — que produto aparece?',
     stepByStep: [
       'Corte o 24 pela metade (= 12) e dobre o 5 (= 10).',
       'A área do retângulo não muda: 12 × 10 = 120!',
@@ -1093,12 +1329,102 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     ],
   },
   {
+    id: 'onze_43_11',
+    lensId: 'relogio_5_dobra_meia',
+    tier: 2,
+    expression: '43 × 11 = ?',
+    correctAnswer: 473,
+    shortHint: '💡 Segredo do 11: Afaste os dois algarismos das pontas e coloque exatamente no meio a soma deles — que número de 3 dígitos surge?',
+    stepByStep: [
+      'Multiplicar por 11 é somar 10 vezes o número mais 1 vez ele mesmo.',
+      'Truque Visual do Repositório: abra o 4 e o 3 nas pontas → 4 [ _ ] 3.',
+      'No meio vai a soma dos dois dígitos (4 + 3 = 7) → 473!',
+    ],
+    distractors: [
+      {
+        value: 433,
+        trapDiagnosis:
+          '430 é 43 × 10! Faltou somar mais 1 vez o 43 (430 + 43 = 473), ou colocar 4 + 3 = 7 no meio → 473.',
+      },
+      {
+        value: 443,
+        trapDiagnosis:
+          'Quase! No meio do 4 e do 3 colocamos a soma 4 + 3 = 7 (e não 4) → 473!',
+      },
+      {
+        value: 483,
+        trapDiagnosis:
+          'Olhe a soma central: 4 + 3 é 7 (e não 8), formando 473!',
+      },
+    ],
+  },
+  {
+    id: 'onze_53_11',
+    lensId: 'relogio_5_dobra_meia',
+    tier: 2,
+    expression: '53 × 11 = ?',
+    correctAnswer: 583,
+    shortHint: '💡 Segredo do 11: Abra os dois dígitos do número e encaixe a soma deles no centro — qual valor aparece?',
+    stepByStep: [
+      'Pelo Truque do 11 (magia-calculo-mental-multiplicacao), separe a dezena 5 e a unidade 3.',
+      'Some os dois algarismos: 5 + 3 = 8.',
+      'Coloque o 8 no centro: 583!',
+    ],
+    distractors: [
+      {
+        value: 533,
+        trapDiagnosis:
+          '530 é apenas 53 × 10! Somando mais 53 (ou colocando 5 + 3 = 8 no meio), temos 583.',
+      },
+      {
+        value: 553,
+        trapDiagnosis:
+          'No centro vai a soma dos dois dígitos (5 + 3 = 8), formando 583!',
+      },
+      {
+        value: 573,
+        trapDiagnosis:
+          'Quase! 5 + 3 é 8 (e não 7), então o dígito do meio é 8 → 583.',
+      },
+    ],
+  },
+  {
+    id: 'espelho_101_43',
+    lensId: 'relogio_5_dobra_meia',
+    tier: 2,
+    expression: '101 × 43 = ?',
+    correctAnswer: 4343,
+    shortHint: '💡 Espelho do 101: Multiplicar por 101 é somar 100 vezes o número com 1 vez ele mesmo — qual número espelhado se forma?',
+    stepByStep: [
+      '101 é 100 + 1 (o Espelho de 2 dígitos do nosso repositório!).',
+      '43 × 100 = 4300, mais 43 × 1 = 43.',
+      'O número simplesmente se repete no espelho: 4343!',
+    ],
+    distractors: [
+      {
+        value: 4303,
+        trapDiagnosis:
+          '4300 + 43 preenche tanto a dezena quanto a unidade: o 43 se repete inteiro → 4343!',
+      },
+      {
+        value: 4313,
+        trapDiagnosis:
+          'Multiplicar por 101 repete o número de 2 dígitos lado a lado: 4300 + 43 = 4343!',
+      },
+      {
+        value: 4443,
+        trapDiagnosis:
+          '43 × 100 é 4300 (e não 4400). Com mais 43, forma o espelho perfeito 4343!',
+      },
+    ],
+  },
+  {
     id: 'dobra_meia_18_15',
     lensId: 'relogio_5_dobra_meia',
-    tier: 3,
+    tier: 2,
     expression: '18 × 15 = ?',
     correctAnswer: 270,
-    shortHint: '💡 Dobra e Meia: Metade de 18 (= 9) × Dobro de 15 (= 30) → 9 × 30 = ?',
+    shortHint: '💡 Regra de Ouro (Dobra e Meia): Corte o fator par pela metade e dobre o fator terminado em 5 — quanto dá o novo produto?',
     stepByStep: [
       '18 × 15 parece difícil na vertical, mas observe a Regra de Ouro da Área!',
       'Corte o 18 pela metade (= 9) e dobre o 15 (= 30).',
@@ -1128,7 +1454,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '16 × 25 = ?',
     correctAnswer: 400,
-    shortHint: '💡 Dobra e Meia Duplo: 16 ÷ 4 = 4 e 25 × 4 = 100 → agora faça 4 × 100 = ?',
+    shortHint: '💡 Dobra e Meia Duplo (×25): Como 25 × 4 fecha 100, divida o primeiro fator por 4 e multiplique por 100 — quanto dá?',
     stepByStep: [
       'Em vez de multiplicar 16 × 25, transforme o retângulo duas vezes:',
       '16 × 25 = 8 × 50 = 4 × 100.',
@@ -1154,7 +1480,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
   },
 
   // =========================================================================
-  // LENTE 7: O INFINITO QUE COMPLETA (×9) & DIFERENÇA DE QUADRADOS — 'diferenca-quadrados-fator-comum'
+  // LENTE 7: O INFINITO QUE COMPLETA (×9), DIFERENÇA DE QUADRADOS & FATOR COMUM — 'diferenca-quadrados-fator-comum'
   // =========================================================================
   {
     id: 'nove_9_8',
@@ -1162,7 +1488,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '9 × 8 = ?',
     correctAnswer: 72,
-    shortHint: '💡 Truque do 9 (Base 10): Multiplique 10 × 8 (= 80) e tire 8 → 80 − 8 = ?',
+    shortHint: '💡 Truque do 9 (Base 10): Multiplique o número por 10 e depois subtraia 1 vez ele mesmo — quanto resta?',
     stepByStep: [
       'O 9 é 10 menos 1 (uma linha quase cheia do Tetris!).',
       '8 linhas de 10 blocos dão 80; tirando 1 bloco de cada uma das 8 linhas: 80 − 8 = 72!',
@@ -1191,7 +1517,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '12 × 8 = ?',
     correctAnswer: 96,
-    shortHint: '💡 Simetria na Base 10: (10 + 2) × (10 − 2) vira 10² − 2² → 100 − 4 = ?',
+    shortHint: '💡 Diferença de Quadrados na Base 10: Os dois fatores têm o 10 exatamente no meio! Faça (Centro)² − (Distância)² — quanto dá?',
     stepByStep: [
       '12 e 8 estão à mesma distância do centro 10 (10 + 2 e 10 − 2).',
       'Pela Diferença de Quadrados: 10² − 2² = 100 − 4 = 96!',
@@ -1220,7 +1546,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '19 × 6 = ?',
     correctAnswer: 114,
-    shortHint: '💡 Arredonde para 20: Multiplique 20 × 6 (= 120) e tire 6 → 120 − 6 = ?',
+    shortHint: '💡 Vizinho da Dezena: Arredonde o 19 para a dezena redonda acima, multiplique e desconte o excesso — qual é o valor?',
     stepByStep: [
       '19 está colado na dezena redonda 20 (19 = 20 − 1).',
       'Multiplique 20 × 6 = 120 e tire 1 vez o 6: 120 − 6 = 114!',
@@ -1244,12 +1570,71 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     ],
   },
   {
+    id: 'fator_comum_23_7_3',
+    lensId: 'infinito_9_quadrados',
+    tier: 2,
+    expression: '23 × 7 + 23 × 3 = ?',
+    correctAnswer: 230,
+    shortHint: '💡 Fator Comum em Evidência: O mesmo número multiplica os dois blocos! Coloque-o em evidência e some primeiro os dois parceiros — quanto dá?',
+    stepByStep: [
+      'Não multiplique 23 × 7 nem 23 × 3 separadamente!',
+      'Coloque o fator comum 23 em evidência: 23 × (7 + 3).',
+      'Como 7 + 3 fecha a dezena 10, temos 23 × 10 = 230 na hora!',
+    ],
+    distractors: [
+      {
+        value: 207,
+        trapDiagnosis:
+          '207 seria 23 × 9! Como 7 + 3 fecha exatamente 10 grupos de 23, temos 23 × 10 = 230.',
+      },
+      {
+        value: 210,
+        trapDiagnosis:
+          'Quase! O fator em evidência é 23 (e não 21). Multiplicando 23 por (7 + 3) chegamos a 230!',
+      },
+      {
+        value: 460,
+        trapDiagnosis:
+          'Cuidado para não somar o 23 duas vezes (46 × 10)! O 23 fica em evidência uma única vez: 23 × (7 + 3) = 230.',
+      },
+    ],
+  },
+  {
+    id: 'fator_comum_17_6_4',
+    lensId: 'infinito_9_quadrados',
+    tier: 2,
+    expression: '17 × 6 + 17 × 4 = ?',
+    correctAnswer: 170,
+    shortHint: '💡 Fator Comum em Evidência: Una os dois blocos pelo fator repetido e some os complementos da Base 10 — qual é o resultado?',
+    stepByStep: [
+      '6 grupos de 17 mais 4 grupos de 17 formam (6 + 4) grupos de 17.',
+      'Como 6 + 4 = 10, a conta inteira vira 17 × 10 = 170!',
+    ],
+    distractors: [
+      {
+        value: 153,
+        trapDiagnosis:
+          '153 seria 17 × 9! Como 6 + 4 = 10, temos 17 × 10 = 170.',
+      },
+      {
+        value: 160,
+        trapDiagnosis:
+          'O fator comum é 17 (e não 16): 17 × (6 + 4) = 170!',
+      },
+      {
+        value: 340,
+        trapDiagnosis:
+          'Não duplique o fator comum! 6 pacotes de 17 + 4 pacotes de 17 = 10 pacotes de 17 = 170.',
+      },
+    ],
+  },
+  {
     id: 'quadrados_21_19',
     lensId: 'infinito_9_quadrados',
     tier: 3,
     expression: '21 × 19 = ?',
     correctAnswer: 399,
-    shortHint: '💡 Diferença de Quadrados no 20: (20 + 1)(20 − 1) vira 20² − 1² → 400 − 1 = ?',
+    shortHint: '💡 Diferença de Quadrados (a² − b²): Encontre a dezena redonda no meio dos dois fatores e faça (Centro)² − (Distância)² — quanto dá?',
     stepByStep: [
       '21 e 19 são vizinhos simétricos do 20 (20 + 1 e 20 − 1).',
       'O quadrado de 20 é 400; tirando 1² (= 1), temos 400 − 1 = 399 em 1 segundo!',
@@ -1272,9 +1657,340 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
       },
     ],
   },
+  {
+    id: 'quadrados_28_32',
+    lensId: 'infinito_9_quadrados',
+    tier: 3,
+    expression: '28 × 32 = ?',
+    correctAnswer: 896,
+    shortHint: '💡 Diferença de Quadrados (a² − b²): Descubra a dezena redonda exatamente no meio entre 28 e 32 e calcule (Centro)² − (Distância)² — qual valor surge?',
+    stepByStep: [
+      'O centro simétrico entre 28 e 32 é a dezena 30, com distância 2 para cada lado (30 − 2 e 30 + 2).',
+      'Pela Diferença de Quadrados (diferenca-quadrados-fator-comum): 30² − 2².',
+      '900 − 4 = 896 sem armar conta!',
+    ],
+    distractors: [
+      {
+        value: 884,
+        trapDiagnosis:
+          'Quase! O quadrado da distância 2 é 2² = 4 (e não 16) → 900 − 4 = 896.',
+      },
+      {
+        value: 892,
+        trapDiagnosis:
+          'A distância até o centro 30 é 2, e 2² = 4 (e não 8) → 900 − 4 = 896!',
+      },
+      {
+        value: 904,
+        trapDiagnosis:
+          'Cuidado com o sinal: (30 − 2)(30 + 2) é 30² MENOS 2², logo subtraímos 4 de 900 → 896!',
+      },
+    ],
+  },
+  {
+    id: 'quadrados_37_43',
+    lensId: 'infinito_9_quadrados',
+    tier: 3,
+    expression: '37 × 43 = ?',
+    correctAnswer: 1591,
+    shortHint: '💡 Diferença de Quadrados (a² − b²): Qual dezena redonda mora exatamente no meio entre 37 e 43? Eleve esse centro ao quadrado e subtraia o quadrado da distância!',
+    stepByStep: [
+      'Joia Clássica do Repositório Heiss-Lab: 37 é (40 − 3) e 43 é (40 + 3)!',
+      'Aplicando a Diferença de Quadrados: (40 − 3) × (40 + 3) = 40² − 3².',
+      'Como 40² = 1600 e 3² = 9, fazemos 1600 − 9 = 1591 de cabeça!',
+    ],
+    distractors: [
+      {
+        value: 1581,
+        trapDiagnosis:
+          'Muito perto! De 1600 tirando 9 (pois 3² = 9) descemos apenas para a dezena 90: 1600 − 9 = 1591!',
+      },
+      {
+        value: 1594,
+        trapDiagnosis:
+          'Você tirou 6 (2 × 3) em vez de tirar o quadrado da distância (3² = 9) → 1600 − 9 = 1591!',
+      },
+      {
+        value: 1609,
+        trapDiagnosis:
+          'Na Diferença de Quadrados sempre SUBTRAÍMOS o quadrado da distância: 1600 − 9 = 1591 (e não + 9)!',
+      },
+    ],
+  },
+  {
+    id: 'quadrados_47_53',
+    lensId: 'infinito_9_quadrados',
+    tier: 3,
+    expression: '47 × 53 = ?',
+    correctAnswer: 2491,
+    shortHint: '💡 Diferença de Quadrados (a² − b²): Encontre a dezena redonda no centro entre 47 e 53 e aplique (Centro)² − (Distância)² — quanto dá?',
+    stepByStep: [
+      '47 e 53 estão ambos a 3 unidades de distância do centro 50: (50 − 3) × (50 + 3).',
+      'Elevamos o centro ao quadrado (50² = 2500) e subtraímos a distância ao quadrado (3² = 9).',
+      '2500 − 9 = 2491!',
+    ],
+    distractors: [
+      {
+        value: 2481,
+        trapDiagnosis:
+          'Quase! 2500 − 9 permanece na casa dos 2490 → 2491.',
+      },
+      {
+        value: 2494,
+        trapDiagnosis:
+          'Lembre-se de elevar a distância 3 ao quadrado (3² = 9, e não 6) → 2500 − 9 = 2491!',
+      },
+      {
+        value: 2509,
+        trapDiagnosis:
+          'Pela identidade (a − b)(a + b) = a² − b², subtraímos 9 de 2500 → 2491!',
+      },
+    ],
+  },
+  {
+    id: 'quadrados_48_52',
+    lensId: 'infinito_9_quadrados',
+    tier: 3,
+    expression: '48 × 52 = ?',
+    correctAnswer: 2496,
+    shortHint: '💡 Diferença de Quadrados (a² − b²): Identifique o centro redondo entre 48 e 52 e desconte do quadrado dele o quadrado da distância — qual é o produto?',
+    stepByStep: [
+      '48 é (50 − 2) e 52 é (50 + 2): simetria perfeita em torno do 50!',
+      '50² = 2500 e 2² = 4.',
+      '2500 − 4 = 2496 instantaneamente!',
+    ],
+    distractors: [
+      {
+        value: 2484,
+        trapDiagnosis:
+          'A distância até 50 é 2, cujo quadrado é 4 (e não 16) → 2500 − 4 = 2496!',
+      },
+      {
+        value: 2492,
+        trapDiagnosis:
+          'Quase! O quadrado de 2 é 4 (e não 8) → 2500 − 4 = 2496.',
+      },
+      {
+        value: 2504,
+        trapDiagnosis:
+          'Subtraia o quadrado da distância: 2500 − 4 = 2496!',
+      },
+    ],
+  },
+  {
+    id: 'quadrado_5_35',
+    lensId: 'infinito_9_quadrados',
+    tier: 3,
+    expression: '35² (35 × 35) = ?',
+    correctAnswer: 1225,
+    shortHint: '💡 Quadrados Terminados em 5: Multiplique o algarismo das dezenas pelo seu sucessor imediato n × (n + 1) e cole 25 no final — que número se forma?',
+    stepByStep: [
+      'Pelo segredo dos Quadrados Perfeitos terminados em 5 (quadrados-perfeitos-ajustes):',
+      'Pegue a dezena 3 e multiplique pelo próximo número inteiro (4): 3 × 4 = 12.',
+      'Anexe 25 à direita das centenas: 1225!',
+    ],
+    distractors: [
+      {
+        value: 925,
+        trapDiagnosis:
+          'Você fez 3 × 3 = 9 nas centenas! O segredo é multiplicar a dezena 3 pelo SUCESSOR 4 (3 × 4 = 12) → 1225!',
+      },
+      {
+        value: 1025,
+        trapDiagnosis:
+          'Quase! O produto da dezena 3 pelo seu sucessor 4 é 3 × 4 = 12 → 1225.',
+      },
+      {
+        value: 1525,
+        trapDiagnosis:
+          '1525 seria se fizéssemos 3 × 5! O sucessor de 3 é 4 → 3 × 4 = 12, formando 1225.',
+      },
+    ],
+  },
+  {
+    id: 'quadrado_5_65',
+    lensId: 'infinito_9_quadrados',
+    tier: 3,
+    expression: '65² (65 × 65) = ?',
+    correctAnswer: 4225,
+    shortHint: '💡 Quadrados Terminados em 5: Multiplique a dezena pelo próximo número inteiro após ela e anexe o final clássico de 5² — quanto dá?',
+    stepByStep: [
+      'Todo quadrado terminado em 5 termina em 25!',
+      'Para descobrir as centenas, multiplique a dezena 6 pelo seu sucessor 7: 6 × 7 = 42.',
+      'Juntando as duas partes: 4225!',
+    ],
+    distractors: [
+      {
+        value: 3625,
+        trapDiagnosis:
+          '3625 é a armadilha de fazer 6 × 6 = 36! Multiplique o 6 pelo SUCESSOR 7 (6 × 7 = 42) → 4225!',
+      },
+      {
+        value: 4025,
+        trapDiagnosis:
+          'Quase! Na tabuada, 6 × 7 vale 42 (e não 40) → 4225.',
+      },
+      {
+        value: 4825,
+        trapDiagnosis:
+          '48 é 6 × 8! O sucessor imediato de 6 é 7 (6 × 7 = 42) → 4225.',
+      },
+    ],
+  },
+  {
+    id: 'fator_comum_45_18_8',
+    lensId: 'infinito_9_quadrados',
+    tier: 3,
+    expression: '45 × 18 − 45 × 8 = ?',
+    correctAnswer: 450,
+    shortHint: '💡 Fator Comum na Subtração: Coloque o número repetido em evidência e subtraia primeiro os dois multiplicadores — quanto resta?',
+    stepByStep: [
+      '18 grupos de 45 menos 8 grupos de 45 deixam exatamente (18 − 8) grupos de 45!',
+      'Como 18 − 8 = 10, fazemos 45 × 10 = 450 em 1 segundo!',
+    ],
+    distractors: [
+      {
+        value: 360,
+        trapDiagnosis:
+          '18 − 8 fecha exatamente 10 (e não 8)! Multiplicando 45 × 10 temos 450.',
+      },
+      {
+        value: 405,
+        trapDiagnosis:
+          '405 seria 45 × 9! Como 18 − 8 = 10, o resultado redondo é 450.',
+      },
+      {
+        value: 900,
+        trapDiagnosis:
+          '900 seria 45 × 20! Como estamos subtraindo (18 − 8 = 10), fica 45 × 10 = 450.',
+      },
+    ],
+  },
+  {
+    id: 'quadrados_inv_53_47',
+    lensId: 'infinito_9_quadrados',
+    tier: 4,
+    expression: '53² − 47² = ?',
+    correctAnswer: 600,
+    shortHint: '💡 Diferença de Quadrados Inversa: Proibido elevar ao quadrado no braço! Use a² − b² = (a + b) × (a − b): multiplique a soma dos dois pela diferença entre eles!',
+    stepByStep: [
+      'Desafio Supremo do Repositório (diferenca-quadrados-fator-comum): a² − b² = (a + b) × (a − b)!',
+      'Soma dos termos: 53 + 47 = 100.',
+      'Diferença dos termos: 53 − 47 = 6.',
+      'Multiplicando: 100 × 6 = 600 sem sofrer!',
+    ],
+    distractors: [
+      {
+        value: 36,
+        trapDiagnosis:
+          '36 é (53 − 47)² = 6²! Mas a² − b² não é (a − b)²: multiplique a SOMA (100) pela DIFERENÇA (6) → 600!',
+      },
+      {
+        value: 400,
+        trapDiagnosis:
+          'Quase! A distância entre 47 e 53 é 3 + 3 = 6 (e não 4). Multiplicando pela soma 100: 100 × 6 = 600!',
+      },
+      {
+        value: 1000,
+        trapDiagnosis:
+          '1000 seria se a diferença fosse 10 (como em 55² − 45²)! Entre 53 e 47 a diferença é 6 → 100 × 6 = 600.',
+      },
+    ],
+  },
+  {
+    id: 'quadrados_inv_55_45',
+    lensId: 'infinito_9_quadrados',
+    tier: 4,
+    expression: '55² − 45² = ?',
+    correctAnswer: 1000,
+    shortHint: '💡 Diferença de Quadrados Inversa: Transforme a² − b² em (a + b) × (a − b) — quanto dá a soma multiplicada pela diferença?',
+    stepByStep: [
+      'Aplicando a lente a² − b² = (a + b) × (a − b):',
+      'Soma: 55 + 45 = 100.',
+      'Diferença: 55 − 45 = 10.',
+      'Produto: 100 × 10 = 1000 em 2 segundos!',
+    ],
+    distractors: [
+      {
+        value: 100,
+        trapDiagnosis:
+          '100 é apenas (55 − 45)² = 10²! Multiplique a soma (100) pela diferença (10) → 100 × 10 = 1000!',
+      },
+      {
+        value: 500,
+        trapDiagnosis:
+          'De 45 até 55 a distância é 10 (e não 5)! Multiplicando pela soma 100: 100 × 10 = 1000.',
+      },
+      {
+        value: 2000,
+        trapDiagnosis:
+          '55 + 45 fecha 100 (e não 200). Multiplicado pela diferença 10, resulta em 1000!',
+      },
+    ],
+  },
+  {
+    id: 'fator_comum_37_12_88',
+    lensId: 'infinito_9_quadrados',
+    tier: 4,
+    expression: '37 × 12 + 37 × 88 = ?',
+    correctAnswer: 3700,
+    shortHint: '💡 Fator Comum Centenário: Coloque o fator repetido em evidência e some primeiro os dois parceiros que fecham uma centena redonda — qual é o total?',
+    stepByStep: [
+      'Joia de Ouro do Repositório (diferenca-quadrados-fator-comum): o 37 aparece nos dois blocos!',
+      'Colocando o 37 em evidência: 37 × (12 + 88).',
+      'Como 12 + 88 = 100, fazemos 37 × 100 = 3700 instantaneamente!',
+    ],
+    distractors: [
+      {
+        value: 370,
+        trapDiagnosis:
+          'Quase! 12 + 88 fecha 100 (uma centena, com dois zeros), e não 10 → 37 × 100 = 3700!',
+      },
+      {
+        value: 3330,
+        trapDiagnosis:
+          '12 + 88 fecha exatamente 100 (e não 90)! Basta acrescentar dois zeros ao 37 → 3700.',
+      },
+      {
+        value: 7400,
+        trapDiagnosis:
+          'Cuidado para não somar 37 + 37 = 74! O fator comum 37 fica em evidência uma só vez: 37 × (12 + 88) = 3700.',
+      },
+    ],
+  },
+  {
+    id: 'quadrado_5_95',
+    lensId: 'infinito_9_quadrados',
+    tier: 4,
+    expression: '95² (95 × 95) = ?',
+    correctAnswer: 9025,
+    shortHint: '💡 Quadrado Supremo Terminado em 5: Multiplique a dezena pelo seu sucessor imediato e anexe 25 ao final — qual número de 4 dígitos aparece?',
+    stepByStep: [
+      'Para elevar 95 ao quadrado de cabeça, olhe para a dezena 9.',
+      'Multiplique 9 pelo seu sucessor 10: 9 × 10 = 90.',
+      'Cole o 25 no final: 9025!',
+    ],
+    distractors: [
+      {
+        value: 8125,
+        trapDiagnosis:
+          '8125 é a armadilha de fazer 9 × 9 = 81! Multiplique o 9 pelo SUCESSOR 10 (9 × 10 = 90) → 9025!',
+      },
+      {
+        value: 8525,
+        trapDiagnosis:
+          'Multiplique a dezena 9 pelo próximo número inteiro (10): 9 × 10 = 90 → 9025!',
+      },
+      {
+        value: 9525,
+        trapDiagnosis:
+          '9 × 10 dá 90 nas centenas (e não 95), seguido de 25 → 9025!',
+      },
+    ],
+  },
 
   // =========================================================================
-  // LENTE 8: CORTA NO MEIO & DIVISORES (÷) — 'segredo-divisores'
+  // LENTE 8: CORTA NO MEIO, DIVISORES & TRINCHEIRA DE FRAÇÕES (÷) — 'segredo-divisores'
   // =========================================================================
   {
     id: 'div_36_4',
@@ -1282,7 +1998,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '36 ÷ 4 = ?',
     correctAnswer: 9,
-    shortHint: '💡 Corta no Meio 2×: A metade de 36 é 18. Agora corte o 18 ao meio: 18 ÷ 2 = ?',
+    shortHint: '💡 Corta no Meio 2×: Dividir por 4 é achar a metade da metade! Corte o número ao meio duas vezes seguidas — quanto dá?',
     stepByStep: [
       'Dividir por 4 é cortar ao meio duas vezes seguidas!',
       '1ª Metade: 36 ÷ 2 = 18.',
@@ -1312,7 +2028,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 1,
     expression: '48 ÷ 4 = ?',
     correctAnswer: 12,
-    shortHint: '💡 Corta no Meio 2×: A metade de 48 é 24. Agora corte o 24 ao meio: 24 ÷ 2 = ?',
+    shortHint: '💡 Corta no Meio 2×: Tire a metade do número e depois corte essa metade ao meio novamente — qual é a quarta parte?',
     stepByStep: [
       '1ª Metade: 48 ÷ 2 = 24.',
       '2ª Metade: 24 ÷ 2 = 12!',
@@ -1341,7 +2057,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '84 ÷ 4 = ?',
     correctAnswer: 21,
-    shortHint: '💡 Corta no Meio 2×: A metade de 84 é 42. Agora corte o 42 ao meio: 42 ÷ 2 = ?',
+    shortHint: '💡 Corta no Meio 2×: Divida tanto as dezenas quanto as unidades pela metade duas vezes — quanto resulta?',
     stepByStep: [
       '1ª Metade: 84 ÷ 2 = 42.',
       '2ª Metade: 42 ÷ 2 = 21!',
@@ -1370,7 +2086,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '85 ÷ 5 = ?',
     correctAnswer: 17,
-    shortHint: '💡 Dividir por 5: Dobre o 85 (= 170) e corte o zero final: 170 ÷ 10 = ?',
+    shortHint: '💡 Segredo de Dividir por 5: Dobre o número inteiro primeiro e depois divida por 10 cortando o zero final — quanto sobra?',
     stepByStep: [
       'Dividir por 5 é o mesmo que multiplicar por 2 e dividir por 10!',
       'O dobro de 85 é 170 (80×2=160 + 5×2=10).',
@@ -1400,7 +2116,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 2,
     expression: '60 ÷ 12 = ?',
     correctAnswer: 5,
-    shortHint: '💡 Relógio Base-60: Corte ao meio duas vezes → 60 ÷ 12 vira 30 ÷ 6 = ?',
+    shortHint: '💡 Relógio Base-60: Simplifique cortando os dois números ao meio ou pense nos minutos de cada hora do relógio — quantos grupos cabem?',
     stepByStep: [
       'No relógio de 60 minutos com 12 marcações, cada marcação vale 5 minutos!',
       'Ou simplifique cortando ao meio: 60 ÷ 12 = 30 ÷ 6 = 5!',
@@ -1429,7 +2145,7 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
     tier: 3,
     expression: '(24 × 5) ÷ 12 = ?',
     correctAnswer: 10,
-    shortHint: '💡 Simplifique Primeiro: Divida 24 por 12 (= 2) e multiplique pelo 5 → 2 × 5 = ?',
+    shortHint: '💡 Simplifique Antes de Multiplicar: Divida primeiro o fator múltiplo pelo divisor lá fora e só depois multiplique — quanto dá?',
     stepByStep: [
       'Nunca multiplique 24 × 5 primeiro se você pode simplificar os Senhores do Tempo!',
       '24 dividido por 12 dá exatamente 2.',
@@ -1453,6 +2169,66 @@ const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
       },
     ],
   },
+  {
+    id: 'trincheira_36_21_7_9',
+    lensId: 'corta_no_meio_div',
+    tier: 3,
+    expression: '(36 × 21) ÷ (7 × 9) = ?',
+    correctAnswer: 12,
+    shortHint: '💡 Trincheira de Frações: Proibido multiplicar 36 × 21! Simplifique cada fator de cima pelo seu divisor amigo lá embaixo — qual produto simples sobra?',
+    stepByStep: [
+      'Regra de Ouro das Frações (fracoes-operacoes): simplifique antes de multiplicar!',
+      'Divida o 36 pelo 9 (= 4) e divida o 21 pelo 7 (= 3).',
+      'Agora multiplique os sobreviventes: 4 × 3 = 12!',
+    ],
+    distractors: [
+      {
+        value: 7,
+        trapDiagnosis:
+          'Você somou 4 + 3 = 7 em vez de multiplicar! Como o sinal entre 36 e 21 é ×, fazemos 4 × 3 = 12.',
+      },
+      {
+        value: 9,
+        trapDiagnosis:
+          'Quase! 36 ÷ 9 = 4 (e não 3). Multiplicando por 21 ÷ 7 (= 3), chegamos a 4 × 3 = 12!',
+      },
+      {
+        value: 16,
+        trapDiagnosis:
+          '21 ÷ 7 é 3 (e não 4). Então 4 × 3 = 12!',
+      },
+    ],
+  },
+  {
+    id: 'trincheira_45_16_9_8',
+    lensId: 'corta_no_meio_div',
+    tier: 3,
+    expression: '(45 × 16) ÷ (9 × 8) = ?',
+    correctAnswer: 10,
+    shortHint: '💡 Corte Cruzado na Trincheira: Cancele cada número do primeiro grupo pelo seu divisor direto no segundo grupo — quanto dá o produto final?',
+    stepByStep: [
+      'Simplifique cada par compatível antes de multiplicar:',
+      '45 ÷ 9 = 5, e 16 ÷ 8 = 2.',
+      'Multiplicando os resultados: 5 × 2 = 10!',
+    ],
+    distractors: [
+      {
+        value: 7,
+        trapDiagnosis:
+          '7 é a soma (5 + 2)! Como estamos multiplicando os fatores simplificados, 5 × 2 = 10.',
+      },
+      {
+        value: 15,
+        trapDiagnosis:
+          '16 ÷ 8 vale 2 (e não 3)! Portanto 5 × 2 = 10.',
+      },
+      {
+        value: 20,
+        trapDiagnosis:
+          '45 ÷ 9 é 5, e 16 ÷ 8 é 2 → 5 × 2 = 10!',
+      },
+    ],
+  },
 ]
 
 export interface GenerateChallengeOptions {
@@ -1463,6 +2239,7 @@ export interface GenerateChallengeOptions {
   missingInRow?: number
   preferredOp?: ArithmeticOp
   preferredLensId?: TetrisMathLensId
+  miracleTier?: MiraclePowerTier
   excludeIds?: string[]
   rng?: () => number
 }
@@ -1530,7 +2307,12 @@ function enrichStepsWithBoardGeometry(
   const steps = [...baseSteps]
 
   if (options.interventionType === 'FILL_HOLE') {
-    if (options.missingInRow !== undefined && options.missingInRow >= 1 && options.missingInRow <= 9) {
+    const tierSpec = options.miracleTier ? getMiracleTierSpec(options.miracleTier) : null
+    if (tierSpec && tierSpec.tier >= 2) {
+      steps.push(
+        `👑 Milagre Escalonado (${tierSpec.badge}): Esta conta sela até ${tierSpec.maxHolesToSeal >= 100 ? 'TODOS os' : tierSpec.maxHolesToSeal} buracos de uma só vez!`
+      )
+    } else if (options.missingInRow !== undefined && options.missingInRow >= 1 && options.missingInRow <= 9) {
       const filled = 10 - options.missingInRow
       steps.push(
         `⚖️ Conexão Base-10 no Tabuleiro: A linha soterrada tem ${filled} blocos preenchidos e ${options.missingInRow} espaço(s) vazio(s) (${filled} + ${options.missingInRow} = 10)!`
@@ -1556,23 +2338,30 @@ function enrichStepsWithBoardGeometry(
 
 /**
  * Generates a dynamic, pedagogically grounded math challenge from the 4 operations
- * and 8 Repository Lenses, synchronized with the player's current board intervention.
+ * and 8 Repository Lenses, synchronized with the player's current board intervention
+ * and chosen `miracleTier` (Graus I a IV — Master Plan V3).
  */
 export function generateMathChallenge(options: GenerateChallengeOptions): TetrisMathChallenge {
   const rng = options.rng ?? Math.random
   const excludeSet = new Set(options.excludeIds ?? [])
 
-  // Determine allowed difficulty tiers based on GameMode and level
-  const maxTier: 1 | 2 | 3 =
-    options.mode === 'zen'
-      ? 2
-      : options.mode === 'master'
-        ? 3
-        : (options.level ?? 1) >= 4
-          ? 3
-          : 2
+  let candidates: ReadonlyArray<RawMathTemplate>
 
-  let candidates = RAW_PROBLEM_BANK.filter((p) => p.tier <= maxTier)
+  // When explicit MiraclePowerTier (1..4) is selected, match that exact ProblemTier!
+  if (options.miracleTier !== undefined) {
+    const exactTierPool = RAW_PROBLEM_BANK.filter((p) => p.tier === options.miracleTier)
+    candidates = exactTierPool.length > 0 ? exactTierPool : RAW_PROBLEM_BANK
+  } else {
+    const maxTier: ProblemTier =
+      options.mode === 'zen'
+        ? 2
+        : options.mode === 'master'
+          ? 4
+          : (options.level ?? 1) >= 4
+            ? 3
+            : 2
+    candidates = RAW_PROBLEM_BANK.filter((p) => p.tier <= maxTier)
+  }
 
   // Filter by explicit preferredLensId or preferredOp if specified
   if (options.preferredLensId) {
@@ -1581,10 +2370,9 @@ export function generateMathChallenge(options: GenerateChallengeOptions): Tetris
   } else if (options.preferredOp) {
     const byOp = candidates.filter((p) => TETRIS_MATH_LENSES[p.lensId].op === options.preferredOp)
     if (byOp.length > 0) candidates = byOp
-  } else {
-    // Contextual pedagogical prioritization (Melhoria 02-A)
+  } else if (!options.miracleTier || options.miracleTier === 1) {
+    // Contextual pedagogical prioritization for Tier 1 quick interventions
     if (options.interventionType === 'FILL_HOLE') {
-      // When sealing a hole, prioritize Base-10 complement / Japanese Hack / Massinha
       if (options.missingInRow !== undefined) {
         const resonant = candidates.filter(
           (p) => p.missingBlockResonance === options.missingInRow && !excludeSet.has(p.id)
@@ -1614,7 +2402,6 @@ export function generateMathChallenge(options: GenerateChallengeOptions): Tetris
       (options.targetPiece === 'I' || options.targetPiece === 'O') &&
       rng() < 0.65
     ) {
-      // Highlight area invariance (Dobrar e Meiar / Dobro do Dobro) when morphing to I or O
       const areaLenses = candidates.filter(
         (p) => p.lensId === 'relogio_5_dobra_meia' || p.lensId === 'dobro_do_dobro_248'
       )
@@ -1644,6 +2431,8 @@ export function generateMathChallenge(options: GenerateChallengeOptions): Tetris
     interventionType: options.interventionType,
     targetPiece: options.targetPiece,
     relatedLessonSlug: lensMeta.relatedLessonSlug,
+    tier: chosen.tier,
+    miracleTier: options.miracleTier ?? (chosen.tier as MiraclePowerTier),
   }
 }
 
@@ -1655,11 +2444,12 @@ export function getAllMathLenses(): MathLensMetadata[] {
 }
 
 /**
- * Deterministic Zero-Spoiler Invariant Validator (`RT-10` — Phase 01).
+ * Deterministic Zero-Spoiler Invariant Validator (`RT-10` & `RT-V3-02`).
  * Inspects 100% of items in `RAW_PROBLEM_BANK` and verifies that:
  * 1. No `shortHint` ends with the `correctAnswer` number.
  * 2. No `shortHint` contains spoiler patterns (`= ${correctAnswer}`, `→ ${correctAnswer}`, `é ${correctAnswer}`).
- * 3. Every `shortHint` ends with a Socratic guiding question (`?`).
+ * 3. No `shortHint` reveals pre-computed intermediate numbers like `(= 7)`, `(= 10)`, or `→ 20 + 5 = ?`.
+ * 4. Every `shortHint` ends with a Socratic guiding question (`?` or `!`).
  */
 export function verifyZeroSpoilerProblemBank(): { valid: boolean; violations: string[] } {
   const violations: string[] = []
@@ -1683,9 +2473,14 @@ export function verifyZeroSpoilerProblemBank(): { valid: boolean; violations: st
       violations.push(`[${item.id}] shortHint contém padrão de spoiler para (${ans}): "${hint}"`)
     }
 
-    // 3. Ensure shortHint ends with '?'
-    if (!hint.endsWith('?')) {
-      violations.push(`[${item.id}] shortHint deve terminar com '?' socrático: "${hint}"`)
+    // 3. Check if shortHint contains intermediate pre-computed spoilers like `(= 7)` or `→ 7 × 10 = ?`
+    if (/\(\s*=\s*\d+\s*\)/.test(hint) || /→\s*\d+\s*[+−×÷]\s*\d+\s*=\s*\?/.test(hint)) {
+      violations.push(`[${item.id}] shortHint contém cálculo intermediário mastigado: "${hint}"`)
+    }
+
+    // 4. Ensure shortHint contains Socratic question mark '?'
+    if (!hint.includes('?')) {
+      violations.push(`[${item.id}] shortHint deve conter '?' socrático: "${hint}"`)
     }
   }
 

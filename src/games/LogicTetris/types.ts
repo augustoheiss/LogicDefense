@@ -82,7 +82,47 @@ export type GamePhase =
 
 export type StandardPieceType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L'
 export type SpecialPieceType = 'DOT_1X1' | 'DOMINO_1X2'
-export type PieceType = StandardPieceType | SpecialPieceType
+export type TactileMacroPieceType =
+  | 'CUBE_3X3'   // 9 quadrados (3x3 = 9, Lente 7: Infinito dos 9 Quadrados!)
+  | 'CORNER_3X3' // Grande Canto 3x3 de 5 blocos (3 + 2 = 5)
+  | 'BAR_1X5'    // Barra 1x5 (Meia Linha Base-10: 1 x 5 = 5)
+  | 'RECT_2X3'   // Bloco 2x3 (Meia Dúzia: 2 x 3 = 6)
+  | 'TRIO_1X3'   // Trio 1x3 (1 x 3 = 3)
+  | 'CORNER_2X2' // Cantoneira 2x2 de 3 blocos (2 + 1 = 3)
+export type PieceType = StandardPieceType | SpecialPieceType | TactileMacroPieceType
+
+export interface FruitCoord {
+  row: number // 0..9 na Arena 10x10 de Frutas
+  col: number // 0..9 na Arena 10x10 de Frutas
+}
+
+export interface FruitSwapMove {
+  from: FruitCoord
+  to: FruitCoord
+  expectedClusterSize: number
+  fruitKind: FruitKind
+}
+
+export interface FruitSwapResolutionResult {
+  validSwap: boolean // true se formou pelo menos 1 grupo >= 3 (ou usou STAR_PRISM)
+  grid: GridMatrix   // Tabuleiro 10x10 após gravidade e reposição de frutas pelo topo
+  waves: CascadeWave[]
+  totalPoppedBlocks: number
+  totalWaves: number
+  totalScoreEarned: number
+  streakDelta: number
+  remainingValidSwaps: number
+  wasBoardReshuffled: boolean
+}
+
+export interface StageViewportMetrics {
+  style: SubGameStyle
+  activeRows: 10 | 20
+  activeCols: 10
+  cellSizePx: number     // 34px no 20x10; 50px nos modos 10x10!
+  canvasWidthPx: number
+  canvasHeightPx: number
+}
 
 export type RotationState = 0 | 1 | 2 | 3 // 0°, 90°, 180°, 270° (SRS)
 export type RotationDirection = 'CW' | 'CCW' | '180'
@@ -163,15 +203,17 @@ export interface CascadeResolutionResult {
 
 export interface FruitCascadeOracleReport {
   recommendedFruit: FruitKind
-  recommendedCol: number     // Coluna 0..9 com maior potencial de cascata ou fechamento 2 + 1 = 3
-  readyPairsCount: number    // Quantos pares conectados de 2 blocos já existem esperando +1
-  mostFragmentedFruit: FruitKind // Cor com mais blocos isolados (alvo ideal do Imã [B])
+  recommendedCol: number     // Coluna 0..9 com maior potencial de cascata ou troca 2 + 1 = 3
+  readyPairsCount: number    // Quantas trocas adjacentes válidas estão prontas na Arena 10x10
+  mostFragmentedFruit: FruitKind // Cor com mais blocos na Arena 10x10 (alvo ideal do Imã [B])
   fragmentedCount: number    // Quantidade de blocos dessa cor no tabuleiro
-  pedagogicalHint: string    // Ex: "💡 2 Maçãs Rubi na col 4: falta +1 para fechar 2 + 1 = 3!"
+  pedagogicalHint: string    // Ex: "💡 Troque na linha 4, col 3 ↔ col 4 para fechar 3 Maçãs Rubi!"
+  bestSwap?: FruitSwapMove | null
+  validSwapsCount?: number
 }
 
 export interface GoldenCrossroad {
-  row: number                // Linha da Arena 10x10 (10..19)
+  row: number                // Linha da Arena 10x10 (0..9)
   col: number                // Coluna da Arena 10x10 (0..9)
   rowMissing: number         // Quantos blocos faltam na linha horizontal (1..3)
   colMissing: number         // Quantos blocos faltam na coluna vertical (1..3)
@@ -179,12 +221,12 @@ export interface GoldenCrossroad {
 
 export interface TactileClearResult {
   grid: GridMatrix
-  clearedRows: number[]      // Índices das linhas horizontais limpas (em 10..19)
+  clearedRows: number[]      // Índices das linhas horizontais limpas (em 0..9)
   clearedCols: number[]      // Índices das colunas verticais limpas (em 0..9)
   totalLinesAndCols: number  // clearedRows.length + clearedCols.length
   uniqueClearedBlocks: number// Total real de células apagadas (aplicando Inclusão-Exclusão R*10 + C*10 - R*C)
   isCrossClear: boolean      // true quando clearedRows.length >= 1 && clearedCols.length >= 1
-  isAllClear: boolean        // true quando toda a Arena 10x10 (rows 10..19) ficou vazia
+  isAllClear: boolean        // true quando toda a Arena 10x10 (rows 0..9) ficou vazia
   mathResonanceFormula: string // Melhoria 03-A: Ex: "10 (Linha) + 10 (Coluna) − 1 (Cruzamento) = 19 Blocos!"
   scoreEarned: number
   streakDelta: number        // Melhoria 03-B: +1 por linha/coluna +1 extra se isCrossClear
@@ -202,7 +244,7 @@ export interface TactilePlacementResult {
 export interface TactileTopologyReport {
   occupiedCount: number      // 0..100 na Arena 10x10
   freeCount: number          // 100 - occupiedCount
-  rowComplements: Record<number, number> // Mapa row (10..19) -> faltam 1..3 blocos para 10
+  rowComplements: Record<number, number> // Mapa row (0..9) -> faltam 1..3 blocos para 10
   colComplements: Record<number, number> // Mapa col (0..9) -> faltam 1..3 blocos para 10
   goldenCrossroads: GoldenCrossroad[]    // Coordenadas (r,c) vazias onde linha E coluna faltam 1..3 blocos!
   bestAxisToSeal: { axis: 'ROW' | 'COL'; index: number; missing: number; targetCells: Array<{ row: number; col: number }> } | null
@@ -211,6 +253,28 @@ export interface TactileTopologyReport {
 }
 
 export type ArithmeticOp = '+' | '-' | 'x' | '÷'
+
+export type ProblemTier = 1 | 2 | 3 | 4
+export type MiraclePowerTier = 1 | 2 | 3 | 4
+
+export interface MiracleTierSpec {
+  tier: MiraclePowerTier
+  icon: string
+  badge: string
+  shortLabel: string
+  shortLabelPt: string
+  title: string
+  titlePt: string
+  rewardPt: string
+  descriptionClassic: string
+  descriptionTactile: string
+  descriptionFruit: string
+  maxHolesToSeal: number
+  bonusScore: number
+  grantsPhoenixShield: boolean
+  mathPreview: string
+  hotkey: 'F1' | 'F2' | 'F3' | 'F4'
+}
 
 export type TetrisMathLensId =
   | 'massinha_soma'         // + : 18 + 7 -> 20 + 5 = 25
@@ -237,11 +301,13 @@ export interface TetrisMathChallenge {
   expression: string         // Ex: "42 − 19 = ?" ou "6 + [ ? ] = 10"
   correctAnswer: number
   choices: MathChoice[]
-  shortHint: string          // Luz Guia sempre visível: "💡 Some +1 nos dois: 43 − 20"
+  shortHint: string          // Luz Guia Socrática Zero-Spoiler
   stepByStep: string[]       // Passos claros para o Códice Pedagógico
   interventionType: 'MORPH' | 'FILL_HOLE' | 'SECOND_WIND'
   targetPiece?: PieceType    // Peça escolhida pelo jogador (ou recomendada pelo Oráculo)
   relatedLessonSlug?: string // Slug da aula em /repositorio/:slug (ex: 'equacao-balanca', 'magia-calculo-mental-multiplicacao')
+  tier?: ProblemTier
+  miracleTier?: MiraclePowerTier
 }
 
 export interface BuriedCavity {

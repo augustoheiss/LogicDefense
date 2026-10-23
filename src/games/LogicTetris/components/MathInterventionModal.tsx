@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react'
-import { ALL_PIECE_TYPES, getPieceDefinition } from '../engine/tetrominoes'
+import {
+  getAllMiracleTierSpecs,
+  getMiracleTierSpec,
+} from '../engine/mathEngine'
+import {
+  ALL_PIECE_TYPES,
+  CLASSIC_PIECE_TYPES,
+  getPieceDefinition,
+} from '../engine/tetrominoes'
 import {
   getSubGameStyleLabelPt,
   useLogicTetrisStore,
 } from '../state/useLogicTetrisStore'
+import type { MiraclePowerTier } from '../types'
 import { MiniPieceMatrixPreview } from './PieceAlchemyBar'
 
 /**
@@ -11,8 +20,8 @@ import { MiniPieceMatrixPreview } from './PieceAlchemyBar'
  * Powers the 3 Life-Saving Mathematical Miracles of Logic Tetris across all 3 Trinity Styles:
  * 1. `MATH_MORPH` (`[M]`):
  *    - `TETRIS_CLASSIC`: Transmute the falling piece into `I, O, T, S, Z, J, L, 1×1, 1×2`.
- *    - `FRUIT_MATCH`: Forge a Star Prism Wildcard Pair (`✦ + ✦`).
- *    - `TACTILE_GRID`: Transmute the selected Tray Slot into `1×1` or chosen shape.
+ *    - `FRUIT_MATCH`: Forge 2 Star Prism Wildcards (`✦ + ✦`) on the 10×10 Fruit Board.
+ *    - `TACTILE_GRID`: Transmute the selected Tray Slot into `1×1`, `3×3`, or chosen shape.
  * 2. `MATH_FILL_HOLE` (`[B]`):
  *    - `TETRIS_CLASSIC`: Seal buried cavities with Golden Crystals (`SEALED_GOLD`).
  *    - `FRUIT_MATCH`: Magnetic Fruit Collapse (`magnetizeSingleFruitColor`).
@@ -42,13 +51,19 @@ export const MathInterventionModal: React.FC = () => {
   const secondWindStepsRemaining = useLogicTetrisStore((s) => s.secondWindStepsRemaining)
   const secondWindStepsTotal = useLogicTetrisStore((s) => s.secondWindStepsTotal)
   const phoenixShields = useLogicTetrisStore((s) => s.phoenixShields)
+  const selectedMiracleTier = useLogicTetrisStore((s) => s.selectedMiracleTier)
 
   const submitMathChoice = useLogicTetrisStore((s) => s.submitMathChoice)
   const cancelMathIntervention = useLogicTetrisStore((s) => s.cancelMathIntervention)
   const setMorphTargetPiece = useLogicTetrisStore((s) => s.setMorphTargetPiece)
+  const setMiraclePowerTier = useLogicTetrisStore((s) => s.setMiraclePowerTier)
   const forfeitSecondWind = useLogicTetrisStore((s) => s.forfeitSecondWind)
 
   const [bouncingValue, setBouncingValue] = useState<number | null>(null)
+  const miracleTierSpecs = getAllMiracleTierSpecs()
+  const activeMiracleSpec = getMiracleTierSpec(
+    activeChallenge?.miracleTier ?? selectedMiracleTier
+  )
 
   const isModalOpen =
     activeChallenge !== null &&
@@ -58,6 +73,32 @@ export const MathInterventionModal: React.FC = () => {
     if (!isModalOpen || !activeChallenge) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (phase === 'MATH_MORPH' || phase === 'MATH_FILL_HOLE') {
+        if (event.key === 'F1') {
+          event.preventDefault()
+          event.stopPropagation()
+          setMiraclePowerTier(1)
+          return
+        }
+        if (event.key === 'F2') {
+          event.preventDefault()
+          event.stopPropagation()
+          setMiraclePowerTier(2)
+          return
+        }
+        if (event.key === 'F3') {
+          event.preventDefault()
+          event.stopPropagation()
+          setMiraclePowerTier(3)
+          return
+        }
+        if (event.key === 'F4') {
+          event.preventDefault()
+          event.stopPropagation()
+          setMiraclePowerTier(4)
+          return
+        }
+      }
       if (event.key === '1' || event.code === 'Numpad1') {
         event.preventDefault()
         event.stopPropagation()
@@ -111,7 +152,14 @@ export const MathInterventionModal: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true })
     }
-  }, [isModalOpen, activeChallenge, phase, submitMathChoice, cancelMathIntervention])
+  }, [
+    isModalOpen,
+    activeChallenge,
+    phase,
+    submitMathChoice,
+    cancelMathIntervention,
+    setMiraclePowerTier,
+  ])
 
   if (!isModalOpen || !activeChallenge) {
     return null
@@ -136,25 +184,28 @@ export const MathInterventionModal: React.FC = () => {
     secondWindStepsTotal - secondWindStepsRemaining + 1
   )
 
+  const selectablePieces =
+    activeSubGameStyle === 'TACTILE_GRID' ? ALL_PIECE_TYPES : CLASSIC_PIECE_TYPES
+
   // Contextual Trinity Miracle Label (Melhoria 06-A)
   const styleLabel = getSubGameStyleLabelPt(activeSubGameStyle)
   const styleContextBadgeText =
     activeSubGameStyle === 'FRUIT_MATCH'
       ? isSecondWind
-        ? `🍇 ${styleLabel} · Protocolo Fênix: Colapsar 2 Cores Dominantes`
+        ? `🍎 ${styleLabel} · Protocolo Fênix: Colapsar 2 Cores Dominantes`
         : isFillHole
-          ? `🍇 ${styleLabel} · Imã Magnético de Frutas`
-          : `🍇 ${styleLabel} · Forjar Par Coringa Estelar (✦ + ✦)`
+          ? `🍎 ${styleLabel} · Imã Magnético (${activeMiracleSpec.titlePt})`
+          : `🍎 ${styleLabel} · Forjar Estrelas Coringa (${activeMiracleSpec.titlePt})`
       : activeSubGameStyle === 'TACTILE_GRID'
         ? isSecondWind
           ? `🧩 ${styleLabel} · Protocolo Fênix: Liberar Espaço na Arena 10×10`
           : isFillHole
-            ? `🧩 ${styleLabel} · Selar Linha Horizontal ou Coluna Vertical`
+            ? `🧩 ${styleLabel} · Selar ${activeMiracleSpec.shortLabelPt} (${activeMiracleSpec.titlePt})`
             : `🧩 ${styleLabel} · Moldar Peça da Bandeja (${targetPieceDef.namePt})`
         : isSecondWind
           ? `🧱 ${styleLabel} · Protocolo Fênix: Purificar ${rowsToPurify} Linhas`
           : isFillHole
-            ? `🧱 ${styleLabel} · Selar Cavidades Soterradas com Ouro`
+            ? `🧱 ${styleLabel} · Selar ${activeMiracleSpec.shortLabelPt} com Ouro (${activeMiracleSpec.titlePt})`
             : `🧱 ${styleLabel} · Moldar Peça em Queda (${targetPieceDef.namePt})`
 
   const themeClasses = isSecondWind
@@ -165,7 +216,7 @@ export const MathInterventionModal: React.FC = () => {
         title: '🔥 Protocolo Fênix 142857 — Salvação de Emergência!',
         subtitle:
           activeSubGameStyle === 'FRUIT_MATCH'
-            ? 'Resolva para colapsar as 2 cores de frutas mais populosas e continuar jogando!'
+            ? 'Resolva para colapsar as 2 cores de frutas mais populosas na grade 10×10 e disparar cascatas!'
             : activeSubGameStyle === 'TACTILE_GRID'
               ? 'Resolva para purificar a Arena 10×10, renovar a bandeja e continuar jogando!'
               : `Resolva para purificar as ${rowsToPurify} linhas inferiores e continuar jogando!`,
@@ -177,18 +228,18 @@ export const MathInterventionModal: React.FC = () => {
           badge: 'bg-amber-400/20 border-amber-300/60 text-amber-200',
           title:
             activeSubGameStyle === 'FRUIT_MATCH'
-              ? '🧲 Alquimia Magnética — Imã de Frutas Isoladas'
+              ? `🧲 Alquimia Magnética — ${activeMiracleSpec.icon} ${activeMiracleSpec.titlePt}`
               : activeSubGameStyle === 'TACTILE_GRID'
-                ? '✦ Alquimia H×V — Selar Linha ou Coluna Quase Cheia'
-                : '✦ Alquimia de Balança — Selar Cavidades Soterradas com Ouro',
+                ? `✦ Alquimia H×V — ${activeMiracleSpec.icon} ${activeMiracleSpec.titlePt} (${activeMiracleSpec.shortLabelPt})`
+                : `✦ Alquimia de Balança — ${activeMiracleSpec.icon} ${activeMiracleSpec.titlePt} (${activeMiracleSpec.shortLabelPt})`,
           subtitle:
             activeSubGameStyle === 'FRUIT_MATCH'
-              ? 'Estoura todas as frutas isoladas da cor mais fragmentada e dispara cascatas!'
+              ? `${activeMiracleSpec.rewardPt} · Conta mais elegante = recompensa maior!`
               : activeSubGameStyle === 'TACTILE_GRID'
-                ? 'Materializa Cristais Dourados (✦) na Linha ou Coluna mais próxima de fechar 10!'
+                ? `Preenche até ${activeMiracleSpec.maxHolesToSeal >= 20 ? 'TODAS as casas necessárias' : `${activeMiracleSpec.maxHolesToSeal} casas`} em linhas/colunas H×V (${activeMiracleSpec.rewardPt})!`
                 : buriedCount > 0
-                  ? `Materializa Cristais Dourados (✦) diretamente em até ${Math.min(3, buriedCount)} buraco(s) soterrado(s)!`
-                  : 'Tabuleiro sem buracos soterrados: concederá o Monominó Dourado (1×1)!',
+                  ? `Materializa Cristais Dourados (✦) em ${activeMiracleSpec.maxHolesToSeal >= 200 ? `TODOS os ${buriedCount} buracos soterrados` : `até ${Math.min(activeMiracleSpec.maxHolesToSeal, buriedCount)} de ${buriedCount} buraco(s)`} de uma só vez!`
+                  : `Tabuleiro sem buracos soterrados: concederá o Monominó Dourado (1×1) + +${activeMiracleSpec.bonusScore} pts!`,
         }
       : {
           border: 'border-cyan-400/80 shadow-[0_0_42px_rgba(34,211,238,0.32)]',
@@ -196,16 +247,16 @@ export const MathInterventionModal: React.FC = () => {
           badge: 'bg-cyan-400/20 border-cyan-300/60 text-cyan-200',
           title:
             activeSubGameStyle === 'FRUIT_MATCH'
-              ? '⭐ Alquimia dos Cachos — Par Coringa Estelar (✦ + ✦)'
+              ? `⭐ Alquimia dos Cachos — ${activeMiracleSpec.icon} ${activeMiracleSpec.titlePt}`
               : activeSubGameStyle === 'TACTILE_GRID'
-                ? '🔮 Alquimia da Bandeja — Moldar Peça Tátil'
-                : '🔮 Alquimia Geométrica — Moldar Peça Ideal',
+                ? `🔮 Alquimia da Bandeja — Moldar Peça (${activeMiracleSpec.icon} ${activeMiracleSpec.titlePt})`
+                : `🔮 Alquimia Geométrica — Moldar Peça (${activeMiracleSpec.icon} ${activeMiracleSpec.titlePt})`,
           subtitle:
             activeSubGameStyle === 'FRUIT_MATCH'
-              ? 'Transmute o par atual em Estrelas Prisma (✦ + ✦) que conectam com qualquer fruta!'
+              ? `Forja ${Math.min(6, 1 + activeMiracleSpec.tier)} Estrelas Prisma (✦) na grade 10×10 + +${activeMiracleSpec.bonusScore} pts!`
               : activeSubGameStyle === 'TACTILE_GRID'
-                ? `Transmute o slot selecionado da bandeja para ${targetPieceDef.namePt} (${targetPieceDef.areaFormula})!`
-                : `Bullet-Time 0.12× Ativo · Transmute a peça atual para ${targetPieceDef.namePt} (${targetPieceDef.areaFormula})!`,
+                ? `Transmute o slot da bandeja para ${targetPieceDef.namePt} (${targetPieceDef.areaFormula}) + +${activeMiracleSpec.bonusScore} pts!`
+                : `Bullet-Time 0.12× Ativo · Transmute para ${targetPieceDef.namePt} (${targetPieceDef.areaFormula}) + +${activeMiracleSpec.bonusScore} pts!`,
         }
 
   const handleChoiceClick = (idx: number, choiceValue: number) => {
@@ -225,6 +276,7 @@ export const MathInterventionModal: React.FC = () => {
       data-testid="math-intervention-modal"
       data-intervention-type={activeChallenge.interventionType}
       data-active-style={activeSubGameStyle}
+      data-miracle-tier={activeMiracleSpec.tier}
     >
       <div
         className={`w-full max-w-lg rounded-2xl bg-slate-900/95 border-2 ${themeClasses.border} overflow-hidden flex flex-col`}
@@ -257,7 +309,8 @@ export const MathInterventionModal: React.FC = () => {
               </span>
             ) : (
               <span className="text-[11px] font-mono text-slate-300">
-                Teclas rápidas: <strong className="text-white">[1] [2] [3] [4]</strong> ·{' '}
+                Teclas: <strong className="text-white">[1..4]</strong> resp ·{' '}
+                <strong className="text-amber-300">[F1..F4]</strong> grau ·{' '}
                 <strong className="text-slate-200">[Esc]</strong> voltar
               </span>
             )}
@@ -273,7 +326,57 @@ export const MathInterventionModal: React.FC = () => {
         </div>
 
         {/* Body Content */}
-        <div className="p-4 flex flex-col gap-3.5">
+        <div className="p-4 flex flex-col gap-3">
+          {/* Seletor de Potência do Milagre (Grau I..IV: 3 Buracos, 5 Buracos, 10 Buracos, TODOS + Fênix) */}
+          {!isSecondWind && (
+            <div
+              className="rounded-xl bg-slate-950/85 border border-amber-500/35 p-2.5 flex flex-col gap-1.5"
+              data-testid="miracle-power-tier-selector"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-300 font-bold">
+                  ⚡ Escala de Potência do Milagre (Conta mais difícil = Recompensa maior!)
+                </span>
+                {buriedCount > 0 && activeSubGameStyle === 'TETRIS_CLASSIC' && (
+                  <span className="text-[10px] font-mono text-slate-300">
+                    Cavidades atuais: <strong className="text-amber-300">{buriedCount}</strong>
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {miracleTierSpecs.map((spec) => {
+                  const isActiveTier = spec.tier === activeMiracleSpec.tier
+                  return (
+                    <button
+                      key={spec.tier}
+                      type="button"
+                      onClick={() => setMiraclePowerTier(spec.tier as MiraclePowerTier)}
+                      data-testid={`miracle-tier-btn-${spec.tier}`}
+                      data-tier-active={isActiveTier ? 'true' : 'false'}
+                      className={`px-2 py-1.5 rounded-lg border text-left transition cursor-pointer flex flex-col justify-between ${
+                        isActiveTier
+                          ? 'bg-amber-500/25 border-amber-300 text-white shadow-[0_0_15px_rgba(251,191,36,0.28)]'
+                          : 'bg-slate-900/90 hover:bg-slate-800 border-slate-700/80 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-mono font-extrabold text-amber-200">
+                          {spec.icon} {spec.shortLabelPt}
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-400">
+                          [F{spec.tier}]
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-mono text-cyan-200/90 leading-tight mt-0.5">
+                        +{spec.bonusScore} pts{spec.grantsPhoenixShield ? ' + 🛡️' : ''}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {/* Inline Target Piece Selector when in MATH_MORPH (`Melhoria 05-C`) */}
           {isMorph && activeSubGameStyle !== 'FRUIT_MATCH' && (
             <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-2.5 flex flex-col gap-2">
@@ -299,7 +402,7 @@ export const MathInterventionModal: React.FC = () => {
                 <span className="text-[10px] font-mono text-slate-400 mr-1">
                   Trocar formato:
                 </span>
-                {ALL_PIECE_TYPES.map((type) => {
+                {selectablePieces.map((type) => {
                   const def = getPieceDefinition(type)
                   const isSelected = type === targetPieceType
                   const isOracle = type === recommendedPieceType

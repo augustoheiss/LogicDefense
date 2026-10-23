@@ -1,7 +1,20 @@
 import React from 'react'
-import { PieceDefinition, PieceType, RotationState } from '../types'
+import {
+  MiraclePowerTier,
+  PieceDefinition,
+  PieceType,
+  RotationState,
+} from '../types'
 import { FRUIT_CATALOG } from '../engine/fruitMatchEngine'
-import { ALL_PIECE_TYPES, getPieceDefinition } from '../engine/tetrominoes'
+import {
+  getAllMiracleTierSpecs,
+  getMiracleTierSpec,
+} from '../engine/mathEngine'
+import {
+  CLASSIC_PIECE_TYPES,
+  TACTILE_MACRO_PIECE_TYPES,
+  getPieceDefinition,
+} from '../engine/tetrominoes'
 import { useLogicTetrisStore } from '../state/useLogicTetrisStore'
 
 export interface PieceAlchemyBarProps {
@@ -10,7 +23,7 @@ export interface PieceAlchemyBarProps {
 }
 
 /**
- * Renders a compact 4x4 or 2x2 mini-matrix preview of a tetromino / special piece
+ * Renders a compact 4x4, 5x5, or 3x3 mini-matrix preview of a tetromino / macro-polyomino
  * in the requested rotation state (`0 | 1 | 2 | 3`).
  */
 export const MiniPieceMatrixPreview: React.FC<{
@@ -19,6 +32,8 @@ export const MiniPieceMatrixPreview: React.FC<{
   rotation?: RotationState
 }> = ({ def, cellSizePx = 7, rotation = 0 }) => {
   const matrix = def.matrices[rotation] ?? def.matrices[0]
+  const effectiveCellSize =
+    matrix.length >= 5 && cellSizePx > 5 ? Math.max(4, cellSizePx - 1.5) : cellSizePx
 
   return (
     <div
@@ -31,8 +46,8 @@ export const MiniPieceMatrixPreview: React.FC<{
             <span
               key={cIdx}
               style={{
-                width: `${cellSizePx}px`,
-                height: `${cellSizePx}px`,
+                width: `${effectiveCellSize}px`,
+                height: `${effectiveCellSize}px`,
                 backgroundColor: val === 1 ? def.color : 'rgba(15, 23, 42, 0.35)',
                 borderColor: val === 1 ? def.borderColor : 'transparent',
                 boxShadow: val === 1 ? `0 0 5px ${def.glowColor}` : 'none',
@@ -50,12 +65,13 @@ export const MiniPieceMatrixPreview: React.FC<{
  * Polymorphic Tactical Piece Alchemy Bar (`PieceAlchemyBar.tsx`) — Adapts its Oracle
  * and Life-Saving Mathematical Miracles (`[M]` & `[B]`) across all 3 Trinity Styles:
  * - `TETRIS_CLASSIC`: Morph active falling tetromino (`[M]`) or Seal Buried Cavities (`[B]`).
- * - `FRUIT_MATCH`: Forge Star Prism Wildcard Pair `✦ + ✦` (`[M]`) or Magnetic Fruit Collapse (`[B]`).
- * - `TACTILE_GRID`: Morph selected Tray Slot (`[M]`) or Seal Horizontal/Vertical Line (`[B]`).
+ * - `FRUIT_MATCH`: Forge 2 Wildcard Star Prisms `✦ + ✦` on the 10×10 board (`[M]`) or Magnetic Fruit Collapse (`[B]`).
+ * - `TACTILE_GRID`: Morph selected Tray Slot into Classic or Macro-Blocks (`[M]`) or Seal H×V Line (`[B]`).
  *
- * Incorporates Auditor Improvements:
+ * Incorporates Auditor Improvements & Master Plan V2:
  * - `Melhoria 05-A / 06-A`: Polymorphic Oracle (`data-testid="oracle-recommendation-reason"`)
  *   and contextual labels on `btn-trigger-morph` and `btn-trigger-fill-hole`.
+ * - `Master Plan V2 (RT-18)`: Macro-Polyominoes (`3×3`, `L3×3`, `1×5`, `2×3`, `1×3`, `L2×2`) available in `TACTILE_GRID`.
  * - `Melhoria 05-D`: Preserves all deterministic `data-testid` attributes (`piece-alchemy-bar`,
  *   `alchemy-piece-${type}`, `btn-trigger-morph`, `btn-trigger-fill-hole`).
  */
@@ -72,10 +88,15 @@ export const PieceAlchemyBar: React.FC<PieceAlchemyBarProps> = ({
   const tactileTray = useLogicTetrisStore((s) => s.tactileTray)
   const selectedTraySlot = useLogicTetrisStore((s) => s.selectedTraySlot)
   const activeChallenge = useLogicTetrisStore((s) => s.activeChallenge)
+  const selectedMiracleTier = useLogicTetrisStore((s) => s.selectedMiracleTier)
 
   const triggerMathMorph = useLogicTetrisStore((s) => s.triggerMathMorph)
   const setMorphTargetPiece = useLogicTetrisStore((s) => s.setMorphTargetPiece)
   const triggerMathFillHole = useLogicTetrisStore((s) => s.triggerMathFillHole)
+  const setMiraclePowerTier = useLogicTetrisStore((s) => s.setMiraclePowerTier)
+
+  const miracleTierSpecs = getAllMiracleTierSpecs()
+  const activeMiracleSpec = getMiracleTierSpec(selectedMiracleTier)
 
   const isInteractive =
     phase === 'PLAYING' || phase === 'MATH_MORPH' || phase === 'MATH_FILL_HOLE'
@@ -111,7 +132,7 @@ export const PieceAlchemyBar: React.FC<PieceAlchemyBarProps> = ({
   // Contextual Oracle Badge & Pedagogical Text (Melhoria 06-A)
   const oracleBadgeText =
     activeSubGameStyle === 'FRUIT_MATCH'
-      ? `★ ORÁCULO: ${recommendedFruitMeta.emoji} ${recommendedFruitMeta.namePt} (Col ${fruitOracle.recommendedCol + 1})`
+      ? `★ ORÁCULO: ${recommendedFruitMeta.emoji} ${recommendedFruitMeta.namePt} (${fruitOracle.validSwapsCount} trocas)`
       : activeSubGameStyle === 'TACTILE_GRID'
         ? `★ ORÁCULO: ${recommendedDef.label} (${recommendedDef.symbol}) · ${tactileTopology.goldenCrossroads.length} Cruzamento(s) ✚`
         : `★ ORÁCULO: ${recommendedDef.label} (${recommendedDef.symbol})`
@@ -126,35 +147,35 @@ export const PieceAlchemyBar: React.FC<PieceAlchemyBarProps> = ({
   // Contextual [M] & [B] Labels (Melhoria 06-A)
   const morphTitle =
     activeSubGameStyle === 'FRUIT_MATCH'
-      ? '⭐ Par Coringa (✦ + ✦)'
+      ? '⭐ 2 Estrelas Coringa (✦ + ✦)'
       : activeSubGameStyle === 'TACTILE_GRID'
         ? `✨ Moldar Bandeja (${currentDef.label} → ${recommendedDef.label})`
         : `✨ Mudar Peça Atual (${currentDef.label} → ${recommendedDef.label})`
 
   const morphSubtitle =
     activeSubGameStyle === 'FRUIT_MATCH'
-      ? 'Conecta com qualquer fruta para fechar 2 + 1 = 3!'
+      ? 'Forja 2 Estrelas Prisma na grade 10×10 p/ fechar 3+!'
       : activeSubGameStyle === 'TACTILE_GRID'
-        ? 'Transmuta o slot ativo p/ 1×1 ou formato ideal!'
+        ? 'Transmuta o slot ativo p/ 1×1, 3×3 ou formato ideal!'
         : 'Escolhe a melhor peça p/ o tabuleiro Base-10!'
 
   const fillHoleTitle =
     activeSubGameStyle === 'FRUIT_MATCH'
-      ? `🧲 Imã de Frutas (${fragmentedFruitMeta.emoji})`
+      ? `🧲 Imã de Frutas (${fragmentedFruitMeta.emoji} · ${activeMiracleSpec.icon} Grau ${activeMiracleSpec.tier})`
       : activeSubGameStyle === 'TACTILE_GRID'
-        ? '✦ Selar Linha/Coluna H×V'
+        ? `✦ Selar ${activeMiracleSpec.shortLabelPt} H×V (${activeMiracleSpec.icon})`
         : buriedCount > 0
-          ? `🧱 Tapar ${buriedCount} Buraco${buriedCount > 1 ? 's' : ''}`
-          : '💎 Forjar Cristal 1×1'
+          ? `🧱 Tapar ${activeMiracleSpec.maxHolesToSeal >= 200 ? `TODOS (${buriedCount})` : `até ${activeMiracleSpec.maxHolesToSeal}`} Buracos (${activeMiracleSpec.icon})`
+          : `💎 Forjar Cristal 1×1 (+${activeMiracleSpec.bonusScore} pts)`
 
   const fillHoleSubtitle =
     activeSubGameStyle === 'FRUIT_MATCH'
-      ? `Colapsa todas as frutas ${fragmentedFruitMeta.namePt} isoladas!`
+      ? `Colapsa ${fragmentedFruitMeta.namePt} + +${activeMiracleSpec.bonusScore} pts${activeMiracleSpec.grantsPhoenixShield ? ' + 🛡️' : ''}!`
       : activeSubGameStyle === 'TACTILE_GRID'
-        ? 'Preenche até 3 casas na Linha ou Coluna H×V!'
+        ? `${activeMiracleSpec.rewardPt} na Arena 10×10!`
         : topCavity
-          ? `Linha a +${topCavity.missingInRow} do 10 · Sela com Ouro!`
-          : 'Sem buracos: concede Monominó 1×1!'
+          ? `${activeMiracleSpec.rewardPt} · Linha a +${topCavity.missingInRow} do 10!`
+          : `Sem buracos: concede Monominó 1×1 + +${activeMiracleSpec.bonusScore} pts!`
 
   const isFillHoleHighlighted =
     activeSubGameStyle === 'FRUIT_MATCH'
@@ -164,6 +185,62 @@ export const PieceAlchemyBar: React.FC<PieceAlchemyBarProps> = ({
           Object.keys(tactileTopology.rowComplements).length > 0 ||
           Object.keys(tactileTopology.colComplements).length > 0
         : buriedCount > 0
+
+  const renderPieceButton = (type: PieceType) => {
+    const def = getPieceDefinition(type)
+    const isRecommended = type === recommendedType
+    const isCurrentlyActive =
+      activeSubGameStyle === 'TACTILE_GRID'
+        ? currentTrayOpt?.type === type
+        : type === activePiece.type
+    const isSelectedInModal =
+      phase === 'MATH_MORPH' && activeChallenge?.targetPiece === type
+
+    return (
+      <button
+        key={type}
+        type="button"
+        disabled={!isInteractive}
+        onClick={() => handleSelectPiece(type)}
+        data-testid={`alchemy-piece-${type}`}
+        title={`${def.namePt} (${def.areaFormula}) — ${def.pedagogicalNote}`}
+        className={`relative flex flex-col items-center justify-between p-1.5 rounded-xl border text-center transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${
+          isSelectedInModal
+            ? 'bg-cyan-950/90 border-cyan-300 ring-2 ring-cyan-400/50'
+            : isRecommended
+              ? 'bg-amber-950/60 border-amber-400/80 lt-oracle-recommended'
+              : isCurrentlyActive
+                ? 'bg-slate-800/90 border-cyan-500/50'
+                : 'bg-slate-900/75 hover:bg-slate-800/90 border-slate-800 hover:border-slate-600'
+        }`}
+      >
+        {/* Oracle Star Indicator */}
+        {isRecommended && (
+          <span
+            className="absolute -top-1.5 -right-1 px-1 py-0.2 rounded-full bg-amber-400 text-slate-950 text-[8px] font-extrabold tracking-tight shadow"
+            data-testid={`oracle-badge-${type}`}
+          >
+            ★ ORÁCULO
+          </span>
+        )}
+
+        <div className="flex items-center justify-between w-full px-0.5 text-[10px] font-mono">
+          <span className="font-bold text-slate-100">{def.label}</span>
+          <span style={{ color: def.borderColor }} className="font-bold">
+            {def.symbol}
+          </span>
+        </div>
+
+        <div className="my-1 flex items-center justify-center min-h-[34px]">
+          <MiniPieceMatrixPreview def={def} cellSizePx={6} />
+        </div>
+
+        <span className="text-[9px] font-mono text-slate-300/90 leading-none">
+          {def.areaFormula}
+        </span>
+      </button>
+    )
+  }
 
   return (
     <section
@@ -244,79 +321,105 @@ export const PieceAlchemyBar: React.FC<PieceAlchemyBarProps> = ({
         </button>
       </div>
 
-      {/* 9-Piece Direct Selection Grid (7 Standard Tetrominoes + 1x1 Monomino + 1x2 Domino) */}
-      <div>
-        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1.5">
-          <span>
-            {activeSubGameStyle === 'TACTILE_GRID'
-              ? 'CLIQUE P/ MOLDAR O SLOT SELECIONADO DA BANDEJA:'
-              : 'CLIQUE NA PEÇA QUE VOCÊ PRECISA MOLDAR:'}
+      {/* Escala de Potência do Milagre [B]: 3 Buracos | 5 Buracos | 10 Buracos | TODOS + Fênix */}
+      <div
+        className="rounded-xl bg-slate-950/75 border border-amber-500/30 px-2.5 py-2 flex flex-col gap-1.5"
+        data-testid="alchemy-miracle-tier-bar"
+      >
+        <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+          <span className="text-amber-300 font-bold">
+            ⚡ ESCALA DE POTÊNCIA DO MILAGRE [B] (CONTA MAIS DIFÍCIL = MAIOR RECOMPENSA):
           </span>
-          <span className="text-cyan-300">ÁREA & SIMETRIA BASE-10</span>
+          <span className="text-slate-400">
+            Ativo: <strong className="text-amber-200">{activeMiracleSpec.titlePt}</strong>
+          </span>
         </div>
 
-        <div
-          className={`grid ${
-            compact ? 'grid-cols-3 gap-1.5' : 'grid-cols-3 sm:grid-cols-9 gap-1.5'
-          }`}
-        >
-          {ALL_PIECE_TYPES.map((type) => {
-            const def = getPieceDefinition(type)
-            const isRecommended = type === recommendedType
-            const isCurrentlyActive =
-              activeSubGameStyle === 'TACTILE_GRID'
-                ? currentTrayOpt?.type === type
-                : type === activePiece.type
-            const isSelectedInModal =
-              phase === 'MATH_MORPH' && activeChallenge?.targetPiece === type
-
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          {miracleTierSpecs.map((spec) => {
+            const isSelected = spec.tier === selectedMiracleTier
             return (
               <button
-                key={type}
+                key={spec.tier}
                 type="button"
                 disabled={!isInteractive}
-                onClick={() => handleSelectPiece(type)}
-                data-testid={`alchemy-piece-${type}`}
-                title={`${def.namePt} (${def.areaFormula}) — ${def.pedagogicalNote}`}
-                className={`relative flex flex-col items-center justify-between p-1.5 rounded-xl border text-center transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${
-                  isSelectedInModal
-                    ? 'bg-cyan-950/90 border-cyan-300 ring-2 ring-cyan-400/50'
-                    : isRecommended
-                      ? 'bg-amber-950/60 border-amber-400/80 lt-oracle-recommended'
-                      : isCurrentlyActive
-                        ? 'bg-slate-800/90 border-cyan-500/50'
-                        : 'bg-slate-900/75 hover:bg-slate-800/90 border-slate-800 hover:border-slate-600'
+                onClick={() => {
+                  setMiraclePowerTier(spec.tier as MiraclePowerTier)
+                  if (phase === 'PLAYING') {
+                    triggerMathFillHole(spec.tier as MiraclePowerTier)
+                  }
+                }}
+                data-testid={`alchemy-miracle-tier-btn-${spec.tier}`}
+                data-tier-selected={isSelected ? 'true' : 'false'}
+                className={`px-2 py-1.5 rounded-lg border text-left transition cursor-pointer flex items-center justify-between gap-1 disabled:opacity-40 ${
+                  isSelected
+                    ? 'bg-amber-500/25 border-amber-300 text-white shadow'
+                    : 'bg-slate-900/85 hover:bg-slate-800 border-slate-800 text-slate-300'
                 }`}
               >
-                {/* Oracle Star Indicator */}
-                {isRecommended && (
-                  <span
-                    className="absolute -top-1.5 -right-1 px-1 py-0.2 rounded-full bg-amber-400 text-slate-950 text-[8px] font-extrabold tracking-tight shadow"
-                    data-testid={`oracle-badge-${type}`}
-                  >
-                    ★ ORÁCULO
-                  </span>
-                )}
-
-                <div className="flex items-center justify-between w-full px-0.5 text-[10px] font-mono">
-                  <span className="font-bold text-slate-100">{def.label}</span>
-                  <span style={{ color: def.borderColor }} className="font-bold">
-                    {def.symbol}
-                  </span>
-                </div>
-
-                <div className="my-1 flex items-center justify-center min-h-[34px]">
-                  <MiniPieceMatrixPreview def={def} cellSizePx={6} />
-                </div>
-
-                <span className="text-[9px] font-mono text-slate-300/90 leading-none">
-                  {def.areaFormula}
+                <span className="text-[10px] font-mono font-bold text-amber-200">
+                  {spec.icon} {spec.shortLabelPt}
+                </span>
+                <span className="text-[9px] font-mono text-cyan-300">
+                  +{spec.bonusScore}
                 </span>
               </button>
             )
           })}
         </div>
       </div>
+
+      {/* Polymorphic Bottom Section: Fruit Alchemy Panel in FRUIT_MATCH (AUD-V2-03) vs Piece Grid */}
+      {activeSubGameStyle === 'FRUIT_MATCH' ? (
+        <div
+          className="rounded-xl bg-slate-950/80 border border-emerald-500/30 p-2.5 flex flex-col gap-2"
+          data-testid="fruit-alchemy-power-panel"
+        >
+          <div className="flex items-center justify-between text-[10px] font-mono text-emerald-300">
+            <span>🍎 ALQUIMIA DA COLHEITA 10×10 (TROCA ADJACENTE & CASCATAS):</span>
+            <span className="text-amber-300">
+              {fruitOracle.validSwapsCount} TROCAS VÁLIDAS NO TABULEIRO
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-snug">
+            Clique ou arraste qualquer fruta para uma vizinha H×V para formar <strong>3, 4 ou 5 iguais</strong>,
+            ou escolha um Grau de Potência acima para lançar o <strong>Imã Magnético [B]</strong> ou forjar{' '}
+            <strong>Estrelas Coringa (✦) [M]</strong>!
+          </p>
+        </div>
+      ) : (
+        <div>
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1.5">
+            <span>
+              {activeSubGameStyle === 'TACTILE_GRID'
+                ? 'CLIQUE P/ MOLDAR O SLOT SELECIONADO DA BANDEJA:'
+                : 'CLIQUE NA PEÇA QUE VOCÊ PRECISA MOLDAR:'}
+            </span>
+            <span className="text-cyan-300">ÁREA & SIMETRIA BASE-10</span>
+          </div>
+
+          <div
+            className={`grid ${
+              compact ? 'grid-cols-3 gap-1.5' : 'grid-cols-3 sm:grid-cols-9 gap-1.5'
+            }`}
+          >
+            {CLASSIC_PIECE_TYPES.map((type) => renderPieceButton(type))}
+          </div>
+
+          {/* Macro-Polyominoes Row for TACTILE_GRID 10x10 (Master Plan V2 — RT-18) */}
+          {activeSubGameStyle === 'TACTILE_GRID' && (
+            <div className="mt-2 pt-2 border-t border-slate-800/80">
+              <div className="flex items-center justify-between text-[10px] font-mono text-emerald-300 mb-1.5">
+                <span>🧩 MACRO-BLOCOS DA ARENA TÁTIL 10×10 (3×3, L3×3, 1×5, 2×3):</span>
+                <span className="text-amber-300">COMBOS H×V</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                {TACTILE_MACRO_PIECE_TYPES.map((type) => renderPieceButton(type))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }
