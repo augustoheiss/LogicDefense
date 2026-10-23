@@ -70,6 +70,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const effectiveExpirationDate = isReviewer ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
   const isReconciling = useRef(false);
+  const rcConfiguredRef = useRef(false);
 
   const syncStates = useCallback(async (active: boolean, plan: 'monthly' | 'yearly' | null) => {
     if (auth.mode !== 'authenticated' || !auth.user || isReconciling.current) return;
@@ -196,6 +197,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const fetchOfferings = useCallback(async () => {
+    if (!rcConfiguredRef.current) {
+      setIsLoading(false);
+      return;
+    }
     try {
       const offerings = await Purchases.getOfferings();
       const currentOffering = offerings.current;
@@ -251,8 +256,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setIsLoading(false);
         return;
       }
-      const apiKey = Platform.OS === 'ios' ? APPLE_API_KEY : GOOGLE_API_KEY;
-      if (!apiKey) {
+      const apiKey = (Platform.OS === 'ios' ? APPLE_API_KEY : GOOGLE_API_KEY).trim();
+      if (!apiKey || apiKey.includes('placeholder')) {
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.info('[RevenueCat] API key not set — running in Local-First License mode.');
         }
@@ -263,6 +268,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
         Purchases.setLogLevel(isDev ? Purchases.LOG_LEVEL.DEBUG : Purchases.LOG_LEVEL.WARN);
         Purchases.configure({ apiKey });
+        rcConfiguredRef.current = true;
 
         // Register Listener
         const listener = (info: any) => {
@@ -276,12 +282,20 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       } catch (e) {
         console.warn('RevenueCat config error:', e);
       }
-      await fetchOfferings();
+      if (rcConfiguredRef.current) {
+        await fetchOfferings();
+      } else {
+        setIsLoading(false);
+      }
     }
     init();
   }, [updateProStatus, fetchOfferings]);
 
   const purchasePackage = useCallback(async (pkg: any): Promise<string | null> => {
+    if (!rcConfiguredRef.current) {
+      Alert.alert('Indisponível', 'O serviço de assinaturas da loja não está configurado neste ambiente.');
+      return null;
+    }
     setIsProcessing(true);
     try {
       const packageToBuy = pkg._rcOriginalPackage || pkg;
@@ -320,6 +334,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
+    if (!rcConfiguredRef.current) {
+      Alert.alert('Indisponível', 'O serviço de assinaturas da loja não está configurado neste ambiente.');
+      return false;
+    }
     setIsProcessing(true);
     try {
       const customerInfo = await Purchases.restorePurchases();

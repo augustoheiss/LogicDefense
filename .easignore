@@ -17,21 +17,31 @@ test-results/
 playwright-report/
 **/playwright-report/
 
-# Unrelated sibling folders in LogicDefense root
-Assistente-Moeda-App/
-Music/
-backend/
-docs/
-master-plan/
-public/
-scripts/
-src/
-tests/
-*.db
-simulacao_assistente_moeda_5anos.csv
+# Unrelated sibling folders anchored ONLY at LogicDefense root
+/Assistente-Moeda-App/
+/Music/
+/backend/
+/docs/
+/master-plan/
+/public/
+/scripts/
+/src/
+/tests/
+/*.db
+/simulacao_assistente_moeda_5anos.csv
 
 # Heavy documentation & marketing assets inside Sekundo
-Sekundo/playstore-assets/
-Sekundo/master-plan/
-Sekundo/docs/
-Sekundo/packages/backend/
+/Sekundo/playstore-assets/
+/Sekundo/master-plan/
+/Sekundo/docs/
+/Sekundo/packages/backend/
+
+# Explicit safety whitelist: NEVER ignore Sekundo source code or assets
+!Sekundo/packages/app/src/
+!Sekundo/packages/app/src/**
+!Sekundo/packages/app/assets/
+!Sekundo/packages/app/assets/**
+!Sekundo/packages/coin-engine/src/
+!Sekundo/packages/coin-engine/src/**
+!Sekundo/packages/core/src/
+!Sekundo/packages/core/src/**

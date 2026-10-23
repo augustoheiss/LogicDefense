@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.heisslab.assistentemoeda",
-      "versionCode": 3,
+      "versionCode": 27,
       "adaptiveIcon": {
         "backgroundColor": "#12151C",
         "foregroundImage": "./assets/images/app-icon.png"
@@ -37,7 +37,12 @@
       "favicon": "./assets/images/app-icon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "root": "./src/app"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -50,25 +55,16 @@
           }
         }
       ],
-      "expo-sharing",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "extraDependencies": [
-              "com.android.billingclient:billing:8.0.0"
-            ]
-          }
-        }
-      ]
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": false,
-      "reactCompiler": false,
-      "baseUrl": "/laboratorio/sekundo"
+      "reactCompiler": false
     },
     "extra": {
-      "router": {},
+      "router": {
+        "root": "./src/app"
+      },
       "eas": {
         "projectId": "444742d2-f4df-4a57-a412-98ede4bd6e1d"
       }
@@ -78,6 +74,9 @@
       "policy": "appVersion"
     },
     "updates": {
+      "enabled": false,
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/444742d2-f4df-4a57-a412-98ede4bd6e1d"
     }
   }

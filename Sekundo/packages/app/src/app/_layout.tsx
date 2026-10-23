@@ -55,20 +55,24 @@ class RootErrorBoundary extends React.Component<
 }
 
 export default function RootLayout() {
-  // Hide splash screen on mount on native
+  // Hide splash screen on mount on native (with safety fallback timer)
   useEffect(() => {
     if (Platform.OS !== 'web') {
       SplashScreen.hideAsync().catch(() => {});
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync().catch(() => {});
+      }, 1500);
+      return () => clearTimeout(timer);
     }
   }, []);
 
   // Configure Android system navigation bar for fullscreen immersive feel
   useEffect(() => {
     if (Platform.OS === 'android') {
-      NavigationBar.setVisibilityAsync('hidden');
+      Promise.resolve(NavigationBar.setVisibilityAsync('hidden')).catch(() => {});
       const navBarAny = NavigationBar as any;
       if (typeof navBarAny.setBehaviorAsync === 'function') {
-        navBarAny.setBehaviorAsync('sticky-immersive');
+        Promise.resolve(navBarAny.setBehaviorAsync('sticky-immersive')).catch(() => {});
       }
     }
   }, []);
