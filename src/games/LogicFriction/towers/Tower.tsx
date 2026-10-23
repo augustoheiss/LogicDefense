@@ -43,6 +43,9 @@ import {
 import { useGameStore } from '../state/useGameStore'
 import type { TargetPriority } from '../state/useGameStore'
 import { emitProjectile } from './ProjectileManager'
+import { CrossQuad25D, StackedBillboard25D } from '../sprites/Sprite25D'
+import { noRaycast, type SpriteKey } from '../sprites/spriteAtlasRegistry'
+import { recordPointerDown, isCleanTapGesture } from '../hooks/useTouchCameraGate'
 
 interface TowerProps {
   id: string
@@ -68,6 +71,7 @@ const CRYSTAL_Y_BASE = BASE_H + PILLAR_H + 0.6 // Float above the pillar tip
 
 export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority = 'FIRST' }: TowerProps) {
   const crystalRef = useRef<THREE.Mesh>(null)
+  const turret25DRef = useRef<THREE.Group>(null)
   const beamRef = useRef<THREE.Mesh>(null)
   const baseRef = useRef<THREE.Mesh>(null)
   const pillarRef = useRef<THREE.Mesh>(null)
@@ -135,6 +139,12 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
       crystalRef.current.rotation.y += delta * (buffed ? 4.2 : 1.2)
       crystalRef.current.position.y =
         CRYSTAL_Y_BASE + Math.sin(state.clock.elapsedTime * (buffed ? CRYSTAL_HOVER_SPEED * 2 : CRYSTAL_HOVER_SPEED)) * CRYSTAL_HOVER_AMP
+    }
+    if (turret25DRef.current) {
+      const hoverY = 2.55 + Math.sin(state.clock.elapsedTime * (buffed ? 4.0 : 2.2)) * 0.12
+      const recoilScale = 1 + beamVisualRef.current * 1.35
+      turret25DRef.current.position.y = hoverY
+      turret25DRef.current.scale.setScalar(recoilScale)
     }
     if (overdriveRingRef.current) {
       overdriveRingRef.current.visible = buffed
@@ -326,8 +336,13 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
     }
   })
 
-  // ── Click to select and upgrade ──
+  // ── Click to select and upgrade (gated by tap-vs-drag so camera rotation never selects towers) ──
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    recordPointerDown(e.nativeEvent.clientX, e.nativeEvent.clientY)
+  }
+
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    if (!isCleanTapGesture(e.nativeEvent.clientX, e.nativeEvent.clientY)) return
     e.stopPropagation()
     setSelectedEntity({ id, type: 'tower' })
 
@@ -342,6 +357,32 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
   const isUpgradeMode = useGameStore(s => s.isUpgradeMode)
   const coreLevel = useGameStore(s => s.coreLevel)
   const gold = useGameStore(s => s.gold)
+  const visualStyle = useGameStore(s => s.visualStyle)
+  const isBuffActive = useGameStore(s => s.isBuffActive)
+  const mathZonePosition = useGameStore(s => s.mathZonePosition)
+
+  const zoneCenter = MATH_ZONE_POSITIONS[mathZonePosition]
+  const inMathZone = Math.hypot(safePos[0] - zoneCenter[0], safePos[2] - zoneCenter[2]) < MATH_ZONE_SENSOR_RADIUS
+  const displayOpacity25D = !isSolid ? 0.42 : inMathZone ? 0.32 : 0.98
+  const towerTint25D = isBuffActive ? '#fffbeb' : isUpgradeMode ? '#86efac' : '#ffffff'
+
+  const baseSpriteKey: SpriteKey =
+    type === 'HEAVY'
+      ? 'TOWER_HEAVY_BASE'
+      : type === 'SLOW'
+        ? 'TOWER_SLOW_BASE'
+        : type === 'SNIPER'
+          ? 'TOWER_SNIPER_BASE'
+          : 'TOWER_RAPID_BASE'
+
+  const turretSpriteKey: SpriteKey =
+    type === 'HEAVY'
+      ? 'TOWER_HEAVY_TURRET'
+      : type === 'SLOW'
+        ? 'TOWER_SLOW_TURRET'
+        : type === 'SNIPER'
+          ? 'TOWER_SNIPER_TURRET'
+          : 'TOWER_RAPID_TURRET'
 
   const canUpgrade = safeLevel < coreLevel
   const upgradeCost = bp.cost * safeLevel
@@ -379,40 +420,88 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
   // ZERO dynamic lights.
   // ═══════════════════════════════════════════════════════════════
   const visualContent = (
-    <group onPointerDown={handlePointerDown}>
-      {/* ── Stone Base Foundation ── */}
-      <mesh ref={baseRef} position={[0, BASE_H / 2, 0]} receiveShadow castShadow>
-        <boxGeometry args={[BASE_W, BASE_H, BASE_W]} />
-        <meshLambertMaterial
-          color="#3a3a4a"
-          emissive={bp.emissive}
-          emissiveIntensity={levelEmissive * 0.3}
-          transparent
-          opacity={isSolid ? 1 : 0.4}
-        />
-      </mesh>
+    <group onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
+      {visualStyle === '2.5D' ? (
+        <>
+          {/* Compact invisible click hitbox so tower selection/upgrade works without blocking nearby floor */}
+          <mesh position={[0, TOWER_HEIGHT / 2, 0]}>
+            <cylinderGeometry args={[0.75, 0.9, TOWER_HEIGHT, 8]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
 
-      {/* ── Tapered Pillar (4 radial segments = pyramidal/obelisk) ── */}
-      <mesh ref={pillarRef} position={[0, BASE_H + PILLAR_H / 2, 0]} castShadow>
-        <cylinderGeometry args={[PILLAR_TOP_R, PILLAR_BOT_R, PILLAR_H, 4]} />
-        <meshLambertMaterial
-          color="#5a5a6a"
-          emissive={bp.emissive}
-          emissiveIntensity={levelEmissive * 0.5}
-          transparent
-          opacity={isSolid ? 1 : 0.4}
-        />
-      </mesh>
+          {/* 2.5D Cross-Quad Pedestal Base */}
+          <CrossQuad25D
+            spriteKey={baseSpriteKey}
+            width={2.4 + (safeLevel - 1) * 0.12}
+            height={2.5 + (safeLevel - 1) * 0.12}
+            yOffset={1.25}
+            planes={2}
+            opacity={displayOpacity25D}
+            tint={towerTint25D}
+          />
 
-      {/* ── Floating Energy Crystal (octahedron) ── */}
-      <mesh ref={crystalRef} position={[0, CRYSTAL_Y_BASE, 0]}>
-        <octahedronGeometry args={[CRYSTAL_R]} />
-        <meshBasicMaterial
-          color={bp.color}
-          transparent
-          opacity={isSolid ? 1 : 0.4}
-        />
-      </mesh>
+          {/* 2.5D Floating Multi-Layer Turret Head */}
+          <group ref={turret25DRef} position={[0, 2.55, 0]}>
+            <StackedBillboard25D
+              opacity={displayOpacity25D}
+              tint={towerTint25D}
+              layers={[
+                {
+                  spriteKey: turretSpriteKey,
+                  zOffset: -0.1,
+                  width: 2.35,
+                  height: 2.35,
+                  opacity: 0.55,
+                  additive: true,
+                },
+                {
+                  spriteKey: turretSpriteKey,
+                  zOffset: 0.08,
+                  width: 2.15,
+                  height: 2.15,
+                  opacity: 0.98,
+                },
+              ]}
+            />
+          </group>
+        </>
+      ) : (
+        <>
+          {/* ── Stone Base Foundation ── */}
+          <mesh ref={baseRef} position={[0, BASE_H / 2, 0]} receiveShadow castShadow>
+            <boxGeometry args={[BASE_W, BASE_H, BASE_W]} />
+            <meshLambertMaterial
+              color="#3a3a4a"
+              emissive={bp.emissive}
+              emissiveIntensity={levelEmissive * 0.3}
+              transparent
+              opacity={isSolid ? 1 : 0.4}
+            />
+          </mesh>
+
+          {/* ── Tapered Pillar (4 radial segments = pyramidal/obelisk) ── */}
+          <mesh ref={pillarRef} position={[0, BASE_H + PILLAR_H / 2, 0]} castShadow>
+            <cylinderGeometry args={[PILLAR_TOP_R, PILLAR_BOT_R, PILLAR_H, 4]} />
+            <meshLambertMaterial
+              color="#5a5a6a"
+              emissive={bp.emissive}
+              emissiveIntensity={levelEmissive * 0.5}
+              transparent
+              opacity={isSolid ? 1 : 0.4}
+            />
+          </mesh>
+
+          {/* ── Floating Energy Crystal (octahedron) ── */}
+          <mesh ref={crystalRef} position={[0, CRYSTAL_Y_BASE, 0]}>
+            <octahedronGeometry args={[CRYSTAL_R]} />
+            <meshBasicMaterial
+              color={bp.color}
+              transparent
+              opacity={isSolid ? 1 : 0.4}
+            />
+          </mesh>
+        </>
+      )}
     </group>
   )
 
@@ -477,6 +566,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
           key={i}
           position={[0, 0.5 + i * 0.8, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
+          raycast={noRaycast}
         >
           <ringGeometry args={[TOWER_SIZE * 1.4, TOWER_SIZE * 1.6, 8]} />
           <meshBasicMaterial
@@ -494,6 +584,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
         position={[0, 0.08, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={false}
+        raycast={noRaycast}
       >
         <ringGeometry args={[TOWER_SIZE * 1.65, TOWER_SIZE * 2.05, 6]} />
         <meshBasicMaterial
@@ -507,7 +598,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
 
       {/* Range ring — only when selected */}
       {isSelected && (
-        <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
           <ringGeometry args={[baseRange - 0.3, baseRange, 48]} />
           <meshBasicMaterial
             color={bp.color}
@@ -633,7 +724,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
       )}
 
       {/* Laser beam */}
-      <mesh ref={beamRef} position={[0, TOWER_HEIGHT - 0.5, 0]}>
+      <mesh ref={beamRef} position={[0, TOWER_HEIGHT - 0.5, 0]} raycast={noRaycast}>
         <boxGeometry args={[1, 1, 1]} />
         <meshBasicMaterial color={bp.color} transparent opacity={0} />
       </mesh>

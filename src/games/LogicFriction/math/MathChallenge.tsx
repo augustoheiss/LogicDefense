@@ -28,6 +28,12 @@ import {
   ANSWER_PAD_SPACING,
   ANSWER_PAD_SENSOR,
 } from '../config/constants'
+import { getSharedPlaneGeometry, getSharedSpriteTexture, noRaycast } from '../sprites/spriteAtlasRegistry'
+import { CrossQuad25D } from '../sprites/Sprite25D'
+import { recordPointerDown, isCleanTapGesture } from '../hooks/useTouchCameraGate'
+
+const PAD_SYMBOLS = ['▲', '◆', '●', '■'] as const
+const PAD_ACCENT_COLORS = ['#38bdf8', '#c084fc', '#facc15', '#4ade80'] as const
 
 // ── Math Challenge Manager ──────────────────────────────────────────────────────
 export function MathChallenge() {
@@ -222,9 +228,15 @@ interface AnswerPadProps {
   showResult: boolean
 }
 
-function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showResult }: AnswerPadProps) {
+function AnswerPad({ index, label, isCorrect, position, zoneWorldPos, disabled, showResult }: AnswerPadProps) {
   const meshRef = useRef<THREE.Mesh>(null)
+  const runeTopRef = useRef<THREE.Mesh>(null)
   const submittedRef = useRef(false)
+  const visualStyle = useGameStore(s => s.visualStyle)
+  const planeGeo = useMemo(() => getSharedPlaneGeometry(), [])
+  const runeTopTex = useMemo(() => getSharedSpriteTexture('MATH_PAD_RUNE_TOP'), [])
+  const padSymbol = PAD_SYMBOLS[index % PAD_SYMBOLS.length]
+  const padAccent = PAD_ACCENT_COLORS[index % PAD_ACCENT_COLORS.length]
 
   // Reset submittedRef when a new wave starts (disabled resets to false)
   if (!disabled) {
@@ -249,6 +261,9 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
 
   // Subtle idle animation + elevation animation on answer
   useFrame((_, delta) => {
+    if (runeTopRef.current) {
+      runeTopRef.current.rotation.z += delta * 0.6
+    }
     if (!meshRef.current) return
     if (!showResult) {
       const pulse = 0.2 + Math.sin(Date.now() * 0.003) * 0.1
@@ -276,10 +291,15 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
     }, 0)
   }, [disabled, isCorrect, worldPadPos])
 
-  // ── CLICK/TAP: Instant answer submission ──
-  // Clicking the pad directly submits the answer (bypasses walking).
-  // Triple safety: submittedRef + disabled + store's mathAnswered guard.
+  // ── CLICK/TAP: Instant answer submission (disambiguated from camera drag) ──
+  const handlePadPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return
+    recordPointerDown(e.nativeEvent.clientX, e.nativeEvent.clientY)
+  }, [])
+
   const handlePadTap = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return
+    if (!isCleanTapGesture(e.nativeEvent.clientX, e.nativeEvent.clientY)) return
     e.stopPropagation()
     if (disabled || submittedRef.current) return
     submittedRef.current = true
@@ -320,7 +340,8 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
           (pad spacing = 5 units, so r=1.5 leaves 2 units of gap). */}
       <mesh
         position={[0, 1.0, 0]}
-        onPointerDown={handlePadTap}
+        onPointerDown={handlePadPointerDown}
+        onPointerUp={handlePadTap}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
       >
@@ -334,6 +355,7 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         position={[0, ANSWER_PAD_HEIGHT / 2 + 0.2, 0]}
         receiveShadow
         visible={!showResult || isCorrect}
+        raycast={noRaycast}
       >
         <cylinderGeometry args={[ANSWER_PAD_RADIUS, ANSWER_PAD_RADIUS, ANSWER_PAD_HEIGHT, 16]} />
         <meshStandardMaterial
@@ -352,6 +374,7 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         position={[0, ANSWER_PAD_HEIGHT + 0.22, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={!showResult || isCorrect}
+        raycast={noRaycast}
       >
         <ringGeometry args={[ANSWER_PAD_RADIUS - 0.1, ANSWER_PAD_RADIUS + 0.1, 16]} />
         <meshBasicMaterial
@@ -362,10 +385,64 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         />
       </mesh>
 
+      {/* 2.5D Sacred Rune Top & Ascending Light Pillar */}
+      {visualStyle === '2.5D' && (!showResult || isCorrect) && (
+        <>
+          <mesh
+            ref={runeTopRef}
+            geometry={planeGeo}
+            position={[0, ANSWER_PAD_HEIGHT + 0.24, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            scale={[ANSWER_PAD_RADIUS * 2.15, ANSWER_PAD_RADIUS * 2.15, 1]}
+            raycast={noRaycast}
+          >
+            <meshBasicMaterial
+              map={runeTopTex}
+              transparent
+              alphaTest={0.02}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+              color={showResult ? (isCorrect ? '#00ff88' : '#ff4444') : '#ffffff'}
+              opacity={showResult ? (isCorrect ? 0.95 : 0.2) : 0.85}
+            />
+          </mesh>
+          <CrossQuad25D
+            spriteKey="MATH_PAD_PILLAR"
+            width={ANSWER_PAD_RADIUS * 1.85}
+            height={2.5}
+            yOffset={1.55}
+            planes={2}
+            opacity={showResult ? (isCorrect ? 0.85 : 0.12) : 0.48}
+            tint={showResult ? (isCorrect ? '#00ff88' : '#ff4444') : '#fde047'}
+            additive
+          />
+        </>
+      )}
+
       {/* ═══════════════════════════════════════════
           TEXT — SIBLING to RigidBody, not a child.
+          Includes High-Contrast Geometric Symbol (▲, ◆, ●, ■)
           ═══════════════════════════════════════════ */}
       <Billboard>
+        <Text
+          position={[0, ANSWER_PAD_HEIGHT + 2.35, 0]}
+          fontSize={0.75}
+          color={showResult ? labelColor : padAccent}
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.05}
+          outlineColor="#000000"
+        >
+          {padSymbol}
+          <meshBasicMaterial
+            attach="material"
+            color={showResult ? labelColor : padAccent}
+            depthTest={false}
+            transparent
+            opacity={showResult && !isCorrect ? 0.3 : 0.95}
+            toneMapped={false}
+          />
+        </Text>
         <Text
           position={[0, ANSWER_PAD_HEIGHT + 1.2, 0]}
           fontSize={1.4}

@@ -11,6 +11,7 @@ import { onPlayerAttack } from '../player/playerEvents'
 import { enemyRegistry } from './EnemyRegistry'
 import { rebuildObstacles, resetGrid, isPositionBlocked } from './pathfindingGrid'
 import { Enemy } from './Enemy'
+import { EnemyDeathFX } from './EnemyDeathFX'
 import {
   ENEMY_BASE_HP,
   ENEMY_HP_SCALE,
@@ -226,6 +227,7 @@ export function EnemyManager() {
 
   return (
     <>
+      <EnemyDeathFX />
       {enemies.map(e => (
         <Enemy
           key={e.id}

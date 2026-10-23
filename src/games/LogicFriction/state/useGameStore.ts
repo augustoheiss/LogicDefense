@@ -160,8 +160,14 @@ export interface GameStore {
   // ── Settings ──
   isMenuOpen: boolean
   isCameraFree: boolean
+  cameraMode: 'BALANCED' | 'FREE' | 'LOCKED'
+  cameraStepDeltaYaw: number
+  cameraStepSeq: number
+  cameraResetSeq: number
   isPaused: boolean
   isMuted: boolean
+  visualStyle: '2.5D' | '3D_CLASSIC'
+  sceneryDensity: 'FULL' | 'MINIMAL'
 
   // ── Actions ──
   startGame: () => void
@@ -209,9 +215,15 @@ export interface GameStore {
   // Settings
   toggleMenu: () => void
   toggleCameraFree: () => void
+  setCameraMode: (mode: 'BALANCED' | 'FREE' | 'LOCKED') => void
+  cycleCameraMode: () => void
+  rotateCameraByStep: (deltaRad: number) => void
+  resetCameraNorth: () => void
   togglePause: () => void
   setPaused: (v: boolean) => void
   toggleMute: () => void
+  toggleVisualStyle: () => void
+  toggleSceneryDensity: () => void
 
   // Reset
   loadGameState: (snapshot: GameStateSnapshot) => void
@@ -281,9 +293,15 @@ const initialState = {
   actionMode: 'MOVE' as ActionMode,
   moveTarget: null as MoveTarget | null,
   isMenuOpen: false,
-  isCameraFree: false,
+  isCameraFree: true,
+  cameraMode: 'BALANCED' as 'BALANCED' | 'FREE' | 'LOCKED',
+  cameraStepDeltaYaw: 0,
+  cameraStepSeq: 0,
+  cameraResetSeq: 0,
   isPaused: false,
   isMuted: false,
+  visualStyle: '2.5D' as '2.5D' | '3D_CLASSIC',
+  sceneryDensity: 'FULL' as 'FULL' | 'MINIMAL',
 }
 
 // ── Store (persisted) ───────────────────────────────────────────────────────────
@@ -301,6 +319,10 @@ export const useGameStore = create<GameStore>()(
     set({
       ...initialState,
       isMuted: get().isMuted,
+      visualStyle: get().visualStyle,
+      sceneryDensity: get().sceneryDensity,
+      cameraMode: get().cameraMode,
+      isCameraFree: get().isCameraFree,
       isAtLandingPage: false,
       phase: 'PLAYING',
       waveNumber: 1,
@@ -788,7 +810,31 @@ export const useGameStore = create<GameStore>()(
 
   // ── Settings ──
   toggleMenu: () => set(s => ({ isMenuOpen: !s.isMenuOpen })),
-  toggleCameraFree: () => set(s => ({ isCameraFree: !s.isCameraFree })),
+  toggleCameraFree: () => set(s => {
+    const nextMode = s.cameraMode === 'LOCKED' ? 'BALANCED' : s.cameraMode === 'BALANCED' ? 'FREE' : 'LOCKED'
+    return {
+      cameraMode: nextMode,
+      isCameraFree: nextMode !== 'LOCKED',
+    }
+  }),
+  setCameraMode: (mode) => set({
+    cameraMode: mode,
+    isCameraFree: mode !== 'LOCKED',
+  }),
+  cycleCameraMode: () => set(s => {
+    const nextMode = s.cameraMode === 'BALANCED' ? 'FREE' : s.cameraMode === 'FREE' ? 'LOCKED' : 'BALANCED'
+    return {
+      cameraMode: nextMode,
+      isCameraFree: nextMode !== 'LOCKED',
+    }
+  }),
+  rotateCameraByStep: (deltaRad) => set(s => ({
+    cameraStepDeltaYaw: deltaRad,
+    cameraStepSeq: s.cameraStepSeq + 1,
+  })),
+  resetCameraNorth: () => set(s => ({
+    cameraResetSeq: s.cameraResetSeq + 1,
+  })),
   togglePause: () => set(s => ({ isPaused: !s.isPaused })),
   setPaused: (v) => set({ isPaused: v }),
   toggleMute: () => set(s => {
@@ -796,6 +842,12 @@ export const useGameStore = create<GameStore>()(
     soundEngine.setMuted(next)
     return { isMuted: next }
   }),
+  toggleVisualStyle: () => set(s => ({
+    visualStyle: s.visualStyle === '2.5D' ? '3D_CLASSIC' : '2.5D',
+  })),
+  toggleSceneryDensity: () => set(s => ({
+    sceneryDensity: s.sceneryDensity === 'FULL' ? 'MINIMAL' : 'FULL',
+  })),
 
   // ── Load from save slot ──
   loadGameState: (snapshot) => {
@@ -807,6 +859,10 @@ export const useGameStore = create<GameStore>()(
     set({
       ...initialState,
       isMuted: get().isMuted,
+      visualStyle: get().visualStyle,
+      sceneryDensity: get().sceneryDensity,
+      cameraMode: get().cameraMode,
+      isCameraFree: get().isCameraFree,
       isAtLandingPage: false,
       phase: 'PLAYING',
       waveNumber: snapshot.waveNumber,
@@ -835,7 +891,14 @@ export const useGameStore = create<GameStore>()(
     clearRespawnTimer()
     clearAutoWaveTimer()
     resetGrid()
-    set({ ...initialState, isMuted: get().isMuted })
+    set({
+      ...initialState,
+      isMuted: get().isMuted,
+      visualStyle: get().visualStyle,
+      sceneryDensity: get().sceneryDensity,
+      cameraMode: get().cameraMode,
+      isCameraFree: get().isCameraFree,
+    })
   },
 }),
     {
@@ -850,7 +913,15 @@ export const useGameStore = create<GameStore>()(
         constructionSites: state.constructionSites,
         actionMode: state.actionMode,
         selectedBlueprint: state.selectedBlueprint,
+        visualStyle: state.visualStyle,
+        sceneryDensity: state.sceneryDensity,
+        cameraMode: state.cameraMode,
+        isCameraFree: state.isCameraFree,
       }),
     }
   )
 )
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__LF_STORE__ = useGameStore
+}

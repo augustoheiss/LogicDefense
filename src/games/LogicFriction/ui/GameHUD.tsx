@@ -10,6 +10,7 @@ import type { MathZoneDir } from '../config/constants'
 import { getLeaderboard, saveToLeaderboard } from '../state/leaderboard'
 import type { LeaderboardEntry, GameStateSnapshot } from '../state/leaderboard'
 import { LandingPage } from './LandingPage'
+import { getLiveCameraAngles } from '../hooks/useTouchCameraGate'
 
 // ── Props ───────────────────────────────────────────────────────────────────────
 interface GameHUDProps {
@@ -17,32 +18,44 @@ interface GameHUDProps {
   onRestart: () => void  // Reset + fullscreen + startGame
 }
 
+function useIsMobileViewport(breakpoint = 680): boolean {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [breakpoint])
+  return isMobile
+}
+
 // ── Stat Badge ──────────────────────────────────────────────────────────────────
-function StatBadge({ label, value, color, icon }: {
-  label: string; value: string | number; color: string; icon: string
+function StatBadge({ label, value, color, icon, compact = false }: {
+  label: string; value: string | number; color: string; icon: string; compact?: boolean
 }) {
   return (
     <div style={{
       background: 'rgba(0,0,0,0.8)',
       border: `1px solid ${color}40`,
       borderRadius: 8,
-      padding: '6px 14px',
+      padding: compact ? '4px 8px' : '6px 14px',
       display: 'flex',
       alignItems: 'center',
-      gap: 8,
-      minWidth: 80,
+      gap: compact ? 5 : 8,
+      minWidth: compact ? 52 : 80,
     }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
+      <span style={{ fontSize: compact ? 13 : 16 }}>{icon}</span>
       <div>
         <div style={{
-          fontSize: 9,
+          fontSize: compact ? 8 : 9,
           color: '#64748b',
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
           fontWeight: 700,
         }}>{label}</div>
         <div style={{
-          fontSize: 15,
+          fontSize: compact ? 12 : 15,
           color,
           fontWeight: 800,
           fontFamily: "'Courier New', monospace",
@@ -105,8 +118,8 @@ function BuffBadge() {
 }
 
 // ── HP Bar ───────────────────────────────────────────────────────────────────────
-function HPBar({ current, max, color, label }: {
-  current: number; max: number; color: string; label: string
+function HPBar({ current, max, color, label, compact = false }: {
+  current: number; max: number; color: string; label: string; compact?: boolean
 }) {
   const ratio = Math.max(0, current / max)
   return (
@@ -114,8 +127,8 @@ function HPBar({ current, max, color, label }: {
       background: 'rgba(0,0,0,0.8)',
       border: `1px solid ${color}30`,
       borderRadius: 8,
-      padding: '6px 12px',
-      minWidth: 140,
+      padding: compact ? '4px 8px' : '6px 12px',
+      minWidth: compact ? 105 : 140,
     }}>
       <div style={{
         display: 'flex',
@@ -124,14 +137,14 @@ function HPBar({ current, max, color, label }: {
         marginBottom: 4,
       }}>
         <span style={{
-          fontSize: 9,
+          fontSize: compact ? 8 : 9,
           color: '#64748b',
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
           fontWeight: 700,
         }}>{label}</span>
         <span style={{
-          fontSize: 13,
+          fontSize: compact ? 11 : 13,
           color,
           fontWeight: 800,
           fontFamily: "'Courier New', monospace",
@@ -254,7 +267,7 @@ function PedagogicalInsightToast() {
   return (
     <div style={{
       position: 'absolute',
-      bottom: 18,
+      bottom: 68,
       left: 16,
       maxWidth: 420,
       width: 'calc(100vw - 32px)',
@@ -328,15 +341,19 @@ function TowerSelector() {
   const gold = useGameStore(s => s.gold)
   const setSelectedBlueprint = useGameStore(s => s.setSelectedBlueprint)
   const toggleUpgradeMode = useGameStore(s => s.toggleUpgradeMode)
+  const isMobile = useIsMobileViewport()
 
   return (
     <div style={{
       display: 'flex',
-      gap: 8,
+      flexWrap: isMobile ? 'wrap' : 'nowrap',
+      justifyContent: 'center',
+      gap: isMobile ? 5 : 8,
+      maxWidth: 'calc(100vw - 16px)',
       pointerEvents: 'auto',
       background: 'rgba(4,4,14,0.95)',
       borderRadius: 12,
-      padding: '6px 10px',
+      padding: isMobile ? '5px 6px' : '6px 10px',
       border: '1px solid rgba(255,255,255,0.08)',
       backdropFilter: 'blur(8px)',
     }}>
@@ -357,20 +374,20 @@ function TowerSelector() {
                 ? `${bp.color}30`
                 : 'rgba(0,0,0,0.6)',
               border: `2px solid ${isSelected ? bp.color : 'rgba(255,255,255,0.1)'}`,
-              borderRadius: 10,
-              padding: '10px 18px',
+              borderRadius: isMobile ? 8 : 10,
+              padding: isMobile ? '5px 8px' : '10px 18px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
+              gap: isMobile ? 5 : 10,
               transition: 'all 0.15s ease',
               opacity: canAfford ? 1 : 0.5,
             }}
           >
-            <span style={{ fontSize: 28 }}>{bp.icon}</span>
+            <span style={{ fontSize: isMobile ? 16 : 28 }}>{bp.icon}</span>
             <div style={{ textAlign: 'left' }}>
               <div style={{
-                fontSize: 18,
+                fontSize: isMobile ? 11 : 18,
                 color: isSelected ? bp.color : '#94a3b8',
                 fontWeight: 800,
                 fontFamily: "'Courier New', monospace",
@@ -378,7 +395,7 @@ function TowerSelector() {
                 letterSpacing: '0.05em',
               }}>[{idx + 1}] {bp.label}</div>
               <div style={{
-                fontSize: 16,
+                fontSize: isMobile ? 11 : 16,
                 color: canAfford ? '#ffd700' : '#ff4444',
                 fontFamily: "'Courier New', monospace",
                 fontWeight: 700,
@@ -389,11 +406,13 @@ function TowerSelector() {
       })}
 
       {/* Divider */}
-      <div style={{
-        width: 1,
-        background: 'rgba(255,255,255,0.1)',
-        margin: '0 4px',
-      }} />
+      {!isMobile && (
+        <div style={{
+          width: 1,
+          background: 'rgba(255,255,255,0.1)',
+          margin: '0 4px',
+        }} />
+      )}
 
       {/* Upgrade mode toggle */}
       <button
@@ -403,20 +422,20 @@ function TowerSelector() {
             ? 'rgba(0,255,136,0.2)'
             : 'rgba(0,0,0,0.6)',
           border: `2px solid ${isUpgradeMode ? '#00ff88' : 'rgba(255,255,255,0.1)'}`,
-          borderRadius: 10,
-          padding: '10px 18px',
+          borderRadius: isMobile ? 8 : 10,
+          padding: isMobile ? '5px 8px' : '10px 18px',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          gap: isMobile ? 5 : 10,
           transition: 'all 0.15s ease',
           animation: isUpgradeMode ? 'lf-cta-glow 1.5s ease infinite' : 'none',
         }}
       >
-        <span style={{ fontSize: 28 }}>🛠️</span>
+        <span style={{ fontSize: isMobile ? 16 : 28 }}>🛠️</span>
         <div style={{ textAlign: 'left' }}>
           <div style={{
-            fontSize: 18,
+            fontSize: isMobile ? 11 : 18,
             color: isUpgradeMode ? '#00ff88' : '#94a3b8',
             fontWeight: 800,
             fontFamily: "'Courier New', monospace",
@@ -424,7 +443,7 @@ function TowerSelector() {
             letterSpacing: '0.05em',
           }}>[U] UPGRADE</div>
           <div style={{
-            fontSize: 16,
+            fontSize: isMobile ? 10 : 16,
             color: '#64748b',
             fontFamily: "'Courier New', monospace",
             fontWeight: 700,
@@ -453,6 +472,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const mathStreak = useGameStore(s => s.mathStreak)
   const isMuted = useGameStore(s => s.isMuted)
   const toggleMute = useGameStore(s => s.toggleMute)
+  const isMobile = useIsMobileViewport()
 
   // ── Keyboard Shortcuts (1-4: Towers, B: Build/Move toggle, U: Upgrade mode) ──
   useEffect(() => {
@@ -507,7 +527,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
       {/* Pause & Mute buttons (top-right, below settings) */}
       <div style={{
         position: 'absolute',
-        top: 56,
+        top: isMobile ? 52 : 56,
         right: 12,
         zIndex: 200,
         pointerEvents: 'auto',
@@ -521,9 +541,9 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
             background: 'rgba(0,0,0,0.8)',
             border: '1px solid rgba(255,255,255,0.15)',
             borderRadius: 10,
-            padding: '8px 12px',
+            padding: isMobile ? '6px 9px' : '8px 12px',
             color: isMuted ? '#ff4444' : '#00ff88',
-            fontSize: 16,
+            fontSize: isMobile ? 14 : 16,
             fontWeight: 800,
             cursor: 'pointer',
             fontFamily: "'Courier New', monospace",
@@ -537,19 +557,19 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
             background: 'rgba(0,0,0,0.8)',
             border: '1px solid rgba(255,255,255,0.15)',
             borderRadius: 10,
-            padding: '8px 14px',
+            padding: isMobile ? '6px 10px' : '8px 14px',
             color: '#94a3b8',
-            fontSize: 16,
+            fontSize: isMobile ? 14 : 16,
             fontWeight: 800,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
+            gap: 4,
             transition: 'all 0.2s ease',
             fontFamily: "'Courier New', monospace",
           }}
         >
-          ⏸ <span style={{ fontSize: 12, letterSpacing: '0.08em' }}>PAUSAR</span>
+          ⏸ {!isMobile && <span style={{ fontSize: 12, letterSpacing: '0.08em' }}>PAUSAR</span>}
         </button>
       </div>
 
@@ -558,25 +578,26 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         position: 'absolute',
         top: 12,
         left: 12,
-        right: 80,
+        right: isMobile ? 102 : 80,
         display: 'flex',
-        gap: 10,
+        gap: isMobile ? 6 : 10,
         flexWrap: 'wrap',
         pointerEvents: 'none',
         zIndex: 10,
       }}>
-        <HPBar current={coreHp} max={maxCoreHp} color="#00d4ff" label={`Core LV${coreLevel}`} />
+        <HPBar current={coreHp} max={maxCoreHp} color="#00d4ff" label={`Core LV${coreLevel}`} compact={isMobile} />
         <HPBar
           current={playerHp}
           max={maxPlayerHp}
           color={isPlayerDead ? '#ff4444' : '#00ff88'}
           label={isPlayerDead ? 'Player 💀' : 'Player'}
+          compact={isMobile}
         />
-        <StatBadge label="Wave" value={waveNumber} color="#a855f7" icon="🌊" />
-        <StatBadge label="Gold" value={gold} color="#ffd700" icon="💰" />
-        <StatBadge label="Enemies" value={enemiesAlive} color="#ff4444" icon="👾" />
+        <StatBadge label="Wave" value={waveNumber} color="#a855f7" icon="🌊" compact={isMobile} />
+        <StatBadge label="Gold" value={gold} color="#ffd700" icon="💰" compact={isMobile} />
+        <StatBadge label="Enemies" value={enemiesAlive} color="#ff4444" icon="👾" compact={isMobile} />
         {mathStreak > 0 && (
-          <StatBadge label="Streak" value={`x${mathStreak}`} color="#00ff88" icon="🔥" />
+          <StatBadge label="Streak" value={`x${mathStreak}`} color="#00ff88" icon="🔥" compact={isMobile} />
         )}
         <BuffBadge />
       </div>
@@ -584,23 +605,27 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
       {/* Action Mode Toggle + Math Compass + Tower Selection Bar */}
       <div style={{
         position: 'absolute',
-        top: 70,
+        top: isMobile ? 96 : 70,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 100,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 6,
+        gap: isMobile ? 4 : 6,
         pointerEvents: 'none',
+        width: isMobile ? 'calc(100vw - 16px)' : 'auto',
       }}>
         <ActionModeToggle />
         <MathCompassBar />
         {actionMode === 'BUILD' && <TowerSelector />}
       </div>
 
-      {/* Pedagogical Insight Toast (Bottom-Left) */}
+      {/* Pedagogical Insight Toast (Bottom-Left above Camera Pod) */}
       <PedagogicalInsightToast />
+
+      {/* Ergonomic 1-Thumb Camera Control Pod (Bottom-Left) */}
+      <CameraControlPod />
 
       {/* Wave Clear — auto-advance countdown banner */}
       {phase === 'WAVE_CLEAR' && <WaveCountdownBanner waveNumber={waveNumber} />}
@@ -662,8 +687,8 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         </div>
       )}
 
-      {/* Controls hint at bottom */}
-      <ControlsHint />
+      {/* Controls hint at bottom (Desktop only) */}
+      {!isMobile && <ControlsHint />}
     </>
   )
 }
@@ -796,13 +821,181 @@ function WaveCountdownBanner({ waveNumber }: { waveNumber: number }) {
   )
 }
 
-// ── Settings Menu ───────────────────────────────────────────────────────────────
+// ── Settings Menu & Ergonomic Camera Control Pod ───────────────────────────────
+function azimuthToCardinal(rad: number): string {
+  const norm = ((rad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+  const idx = Math.round(norm / (Math.PI / 4)) % 8
+  const dirs = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO']
+  return dirs[idx] ?? 'N'
+}
+
+function CameraControlPod() {
+  const cameraMode = useGameStore(s => s.cameraMode)
+  const cycleCameraMode = useGameStore(s => s.cycleCameraMode)
+  const rotateCameraByStep = useGameStore(s => s.rotateCameraByStep)
+  const resetCameraNorth = useGameStore(s => s.resetCameraNorth)
+  const [compassDir, setCompassDir] = useState('N')
+  const isMobile = useIsMobileViewport()
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const { azimuthRad } = getLiveCameraAngles()
+      setCompassDir(azimuthToCardinal(azimuthRad))
+    }, 180)
+    return () => clearInterval(id)
+  }, [])
+
+  const cameraModeLabel =
+    cameraMode === 'BALANCED'
+      ? 'Equilibrada ⚖️'
+      : cameraMode === 'FREE'
+      ? 'Livre 360° 🔓'
+      : 'Fixa 🔒'
+
+  const cameraModeShort =
+    cameraMode === 'BALANCED' ? '⚖️' : cameraMode === 'FREE' ? '🔓' : '🔒'
+
+  return (
+    <div
+      id="camera-control-pod"
+      onPointerDown={(e) => e.stopPropagation()}
+      style={{
+        position: 'absolute',
+        bottom: isMobile ? 76 : 16,
+        left: 12,
+        zIndex: 140,
+        pointerEvents: 'auto',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 3,
+        background: 'rgba(4, 8, 22, 0.88)',
+        border: '1px solid rgba(56, 189, 248, 0.38)',
+        borderRadius: 10,
+        padding: '4px 6px',
+        backdropFilter: 'blur(8px)',
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.55)',
+        fontFamily: "'Courier New', monospace",
+      }}
+    >
+      <button
+        type="button"
+        title="Girar câmera -45°"
+        onClick={() => rotateCameraByStep(-Math.PI / 4)}
+        disabled={cameraMode === 'LOCKED'}
+        style={{
+          background: 'rgba(56, 189, 248, 0.12)',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          borderRadius: 7,
+          color: cameraMode === 'LOCKED' ? '#475569' : '#38bdf8',
+          fontSize: 13,
+          fontWeight: 900,
+          padding: '6px 9px',
+          minWidth: 34,
+          minHeight: 34,
+          cursor: cameraMode === 'LOCKED' ? 'not-allowed' : 'pointer',
+          fontFamily: "'Courier New', monospace",
+        }}
+      >
+        ↺
+      </button>
+      <button
+        type="button"
+        title="Centralizar câmera no Norte (45°)"
+        onClick={() => resetCameraNorth()}
+        style={{
+          background: 'rgba(0, 255, 136, 0.12)',
+          border: '1px solid rgba(0, 255, 136, 0.35)',
+          borderRadius: 7,
+          color: '#00ff88',
+          fontSize: 11,
+          fontWeight: 900,
+          padding: '6px 8px',
+          minWidth: 46,
+          minHeight: 34,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 3,
+          fontFamily: "'Courier New', monospace",
+        }}
+      >
+        <span>🧭</span>
+        <span>{compassDir}</span>
+      </button>
+      <button
+        type="button"
+        title="Girar câmera +45°"
+        onClick={() => rotateCameraByStep(Math.PI / 4)}
+        disabled={cameraMode === 'LOCKED'}
+        style={{
+          background: 'rgba(56, 189, 248, 0.12)',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          borderRadius: 7,
+          color: cameraMode === 'LOCKED' ? '#475569' : '#38bdf8',
+          fontSize: 13,
+          fontWeight: 900,
+          padding: '6px 9px',
+          minWidth: 34,
+          minHeight: 34,
+          cursor: cameraMode === 'LOCKED' ? 'not-allowed' : 'pointer',
+          fontFamily: "'Courier New', monospace",
+        }}
+      >
+        ↻
+      </button>
+      <button
+        type="button"
+        title={`Modo de Câmera: ${cameraModeLabel} (toque para alternar)`}
+        onClick={cycleCameraMode}
+        style={{
+          background: cameraMode === 'BALANCED'
+            ? 'rgba(250, 204, 21, 0.16)'
+            : cameraMode === 'FREE'
+            ? 'rgba(0, 255, 136, 0.14)'
+            : 'rgba(148, 163, 184, 0.12)',
+          border: `1px solid ${
+            cameraMode === 'BALANCED'
+              ? 'rgba(250, 204, 21, 0.45)'
+              : cameraMode === 'FREE'
+              ? 'rgba(0, 255, 136, 0.4)'
+              : 'rgba(148, 163, 184, 0.3)'
+          }`,
+          borderRadius: 7,
+          color: cameraMode === 'BALANCED' ? '#fde047' : cameraMode === 'FREE' ? '#00ff88' : '#94a3b8',
+          fontSize: 12,
+          fontWeight: 900,
+          padding: '6px 8px',
+          minWidth: 34,
+          minHeight: 34,
+          cursor: 'pointer',
+          fontFamily: "'Courier New', monospace",
+        }}
+      >
+        {cameraModeShort}
+      </button>
+    </div>
+  )
+}
+
 function SettingsMenu() {
   const isMenuOpen = useGameStore(s => s.isMenuOpen)
   const isCameraFree = useGameStore(s => s.isCameraFree)
+  const cameraMode = useGameStore(s => s.cameraMode)
+  const visualStyle = useGameStore(s => s.visualStyle)
+  const sceneryDensity = useGameStore(s => s.sceneryDensity)
   const toggleMenu = useGameStore(s => s.toggleMenu)
-  const toggleCameraFree = useGameStore(s => s.toggleCameraFree)
+  const cycleCameraMode = useGameStore(s => s.cycleCameraMode)
+  const toggleVisualStyle = useGameStore(s => s.toggleVisualStyle)
+  const toggleSceneryDensity = useGameStore(s => s.toggleSceneryDensity)
   const explanationLog = useGameStore(s => s.explanationLog)
+
+  const cameraModeLabel =
+    cameraMode === 'BALANCED'
+      ? 'Equilibrada ⚖️'
+      : cameraMode === 'FREE'
+      ? 'Livre 360° 🔓'
+      : 'Fixa 🔒'
 
   return (
     <div style={{
@@ -812,6 +1005,9 @@ function SettingsMenu() {
       zIndex: 200,
       pointerEvents: 'auto',
       fontFamily: "'Courier New', monospace",
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'flex-end',
     }}>
       {/* Gear button */}
       <button
@@ -844,7 +1040,9 @@ function SettingsMenu() {
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 10,
           padding: 12,
-          minWidth: 260,
+          width: 340,
+          maxWidth: 'calc(100vw - 24px)',
+          boxSizing: 'border-box',
           backdropFilter: 'blur(12px)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
         }}>
@@ -859,9 +1057,9 @@ function SettingsMenu() {
             Configurações
           </div>
 
-          {/* Camera Free toggle */}
+          {/* Camera Mode 3-state cycle toggle (Equilibrada / Livre 360° / Fixa) */}
           <button
-            onClick={toggleCameraFree}
+            onClick={cycleCameraMode}
             style={{
               width: '100%',
               background: isCameraFree
@@ -883,12 +1081,72 @@ function SettingsMenu() {
           >
             <span>🎥 Câmera Livre</span>
             <span style={{
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 900,
             }}>
-              {isCameraFree ? 'ON 🔓' : 'OFF 🔒'}
+              {cameraModeLabel}
             </span>
           </button>
+
+          {/* 2.5D Visual Style toggle */}
+          <button
+            onClick={toggleVisualStyle}
+            style={{
+              width: '100%',
+              marginTop: 6,
+              background: visualStyle === '2.5D'
+                ? 'rgba(0,212,255,0.14)'
+                : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${visualStyle === '2.5D' ? '#00d4ff50' : 'rgba(255,255,255,0.08)'}`,
+              borderRadius: 8,
+              padding: '10px 12px',
+              color: visualStyle === '2.5D' ? '#38bdf8' : '#94a3b8',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              transition: 'all 0.2s ease',
+              fontFamily: "'Courier New', monospace",
+            }}
+          >
+            <span>🎨 Visual</span>
+            <span style={{ fontSize: 13, fontWeight: 900 }}>
+              {visualStyle === '2.5D' ? '2.5D HD-Cyber ✨' : '3D Clássico 🧊'}
+            </span>
+          </button>
+
+          {/* Scenery Density toggle */}
+          {visualStyle === '2.5D' && (
+            <button
+              onClick={toggleSceneryDensity}
+              style={{
+                width: '100%',
+                marginTop: 6,
+                background: sceneryDensity === 'FULL'
+                  ? 'rgba(168,85,247,0.14)'
+                  : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${sceneryDensity === 'FULL' ? '#a855f750' : 'rgba(255,255,255,0.08)'}`,
+                borderRadius: 8,
+                padding: '10px 12px',
+                color: sceneryDensity === 'FULL' ? '#c084fc' : '#94a3b8',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                transition: 'all 0.2s ease',
+                fontFamily: "'Courier New', monospace",
+              }}
+            >
+              <span>🌿 Cenário 2.5D</span>
+              <span style={{ fontSize: 13, fontWeight: 900 }}>
+                {sceneryDensity === 'FULL' ? 'Completo 🌌' : 'Mínimo ⚡'}
+              </span>
+            </button>
+          )}
 
           {/* ── Answer Log (Log de Respostas) ── */}
           {explanationLog.length > 0 && (

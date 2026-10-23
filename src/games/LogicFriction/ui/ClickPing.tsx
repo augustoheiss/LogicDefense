@@ -8,6 +8,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGameStore } from '../state/useGameStore'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
+import { noRaycast } from '../sprites/spriteAtlasRegistry'
 
 const PING_DURATION = 0.6      // seconds
 const PING_MAX_SCALE = 3.0     // max ring expansion
@@ -69,7 +70,7 @@ export function ClickPing() {
   })
 
   return (
-    <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
+    <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} visible={false} raycast={noRaycast}>
       <ringGeometry args={[0.3, 0.5, 24]} />
       <meshBasicMaterial
         color={POINT_COLOR}

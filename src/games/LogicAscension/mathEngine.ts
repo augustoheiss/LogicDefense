@@ -377,7 +377,7 @@ function genTier2(cycle: number): Question {
         summary: `Metade de ${evenN} é ${evenN / 2}. Agora multiplique por 10 colocando um zero: ${ans}!`,
       },
       {
-        badge: '🖐️ Jeito 3 — Decomposição (${Math.floor(evenN / 10) * 10} + ${evenN % 10})',
+        badge: `🖐️ Jeito 3 — Decomposição (${Math.floor(evenN / 10) * 10} + ${evenN % 10})`,
         summary: `(${Math.floor(evenN / 10) * 10} × 5) + (${evenN % 10} × 5) = ${Math.floor(evenN / 10) * 50} + ${(evenN % 10) * 5} = ${ans}!`,
       },
     ],
@@ -480,7 +480,7 @@ function genTier3(cycle: number): Question {
           summary: `Primeiro o produto: ${B} × ${C} = ${prod}. Depois o troco: ${A} − ${prod} = ${ans}!`,
         },
         {
-          badge: '🌉 Jeito 2 — A Ponte até ${A}',
+          badge: `🌉 Jeito 2 — A Ponte até ${A}`,
           summary: `Como ${B} × ${C} = ${prod}, pense: quanto falta de ${prod} para chegar em ${A}? Faltam ${ans}!`,
         },
         {
@@ -675,7 +675,7 @@ function genTier4(cycle: number): Question {
         summary: `(${A}/${D1}) × (${D2}/${A}) = os "${A}" se cancelam e sobra ${D2} ÷ ${D1} = ${correctInt}!`,
       },
       {
-        badge: '🧱 Jeito 3 — Mesmo Denominador (${D2})',
+        badge: `🧱 Jeito 3 — Mesmo Denominador (${D2})`,
         summary: `Converta ${A}/${D1} para ${A * correctInt}/${D2}. Agora divida os numeradores: (${A * correctInt}) ÷ ${A} = ${correctInt}!`,
       },
     ],

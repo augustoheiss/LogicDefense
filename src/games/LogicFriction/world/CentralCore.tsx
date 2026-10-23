@@ -14,6 +14,9 @@ import { Text, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { CORE_SIZE, CORE_COLLIDER_SIZE, CORE_UPGRADE_BASE_COST } from '../config/constants'
 import { useGameStore } from '../state/useGameStore'
+import { getSharedPlaneGeometry, getSharedSpriteTexture, noRaycast } from '../sprites/spriteAtlasRegistry'
+import { StackedBillboard25D } from '../sprites/Sprite25D'
+import { recordPointerDown, isCleanTapGesture } from '../hooks/useTouchCameraGate'
 
 // ── Ground Pulsing Golden Ring Shader Component ───────────────────────────────────
 interface GoldenRingEffectProps {
@@ -85,7 +88,7 @@ function GoldenRingEffect({ active }: GoldenRingEffectProps) {
   }, [])
 
   return (
-    <mesh position={[0, -CORE_SIZE - 0.42, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh position={[0, -CORE_SIZE - 0.42, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
       <planeGeometry args={[12, 12]} />
       <shaderMaterial
         ref={materialRef}
@@ -102,12 +105,53 @@ function GoldenRingEffect({ active }: GoldenRingEffectProps) {
 export function CentralCore() {
   const meshRef = useRef<THREE.Mesh>(null)
   const glowRef = useRef<THREE.Mesh>(null)
+  const mandalaRef = useRef<THREE.Mesh>(null)
+  const coreHpRingMatRef = useRef<THREE.ShaderMaterial>(null)
+
+  const coreHpRingShader = useMemo(() => {
+    return {
+      uniforms: {
+        uRatio: { value: 1.0 },
+        uColor: { value: new THREE.Color('#00ff88') },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uRatio;
+        uniform vec3 uColor;
+        varying vec2 vUv;
+        void main() {
+          vec2 p = vUv - 0.5;
+          float r = length(p);
+          float ringMask = smoothstep(0.42, 0.445, r) * (1.0 - smoothstep(0.475, 0.495, r));
+          if (ringMask < 0.01) discard;
+          float angle = atan(p.x, p.y);
+          float normAngle = (angle + 3.14159265) / 6.2831853;
+          float fill = step(normAngle, clamp(uRatio, 0.0, 1.0));
+          vec3 col = mix(vec3(0.06, 0.09, 0.14), uColor, fill);
+          float alpha = ringMask * mix(0.22, 0.85, fill);
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+    }
+  }, [])
 
   // Subscribe to store states
   const isUpgradeMode = useGameStore(s => s.isUpgradeMode)
   const coreLevel = useGameStore(s => s.coreLevel)
   const gold = useGameStore(s => s.gold)
   const isBuffActive = useGameStore(s => s.isBuffActive)
+  const coreHp = useGameStore(s => s.coreHp)
+  const maxCoreHp = useGameStore(s => s.maxCoreHp)
+  const visualStyle = useGameStore(s => s.visualStyle)
+
+  const planeGeo = useMemo(() => getSharedPlaneGeometry(), [])
+  const mandalaTex = useMemo(() => getSharedSpriteTexture('CORE_BASE_MANDALA'), [])
 
   const upgradeCost = coreLevel * CORE_UPGRADE_BASE_COST
   const canAfford = gold >= upgradeCost
@@ -154,22 +198,50 @@ export function CentralCore() {
       matGlow.color.set(storeBuffActive ? '#ffd700' : '#00d4ff')
       matGlow.opacity = storeBuffActive ? 0.18 : 0.1
     }
+
+    if (mandalaRef.current) {
+      mandalaRef.current.rotation.z += delta * (storeBuffActive ? 0.65 : 0.22)
+    }
+
+    if (coreHpRingMatRef.current) {
+      const ratio = maxCoreHp > 0 ? Math.max(0, coreHp / maxCoreHp) : 1
+      coreHpRingMatRef.current.uniforms.uRatio.value = ratio
+      const hex = storeBuffActive
+        ? '#ffd700'
+        : ratio > 0.5
+        ? '#00ff88'
+        : ratio > 0.25
+        ? '#facc15'
+        : '#ff2244'
+      coreHpRingMatRef.current.uniforms.uColor.value.set(hex)
+    }
   })
 
-  // ── Click to upgrade core (only in upgrade mode) ──
+  // ── Click to upgrade core (only in upgrade mode, gated by tap-vs-drag) ──
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     const state = useGameStore.getState()
+    if (!state.isUpgradeMode) return
+    recordPointerDown(e.nativeEvent.clientX, e.nativeEvent.clientY)
+  }
+
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    const state = useGameStore.getState()
     if (!state.isUpgradeMode) return  // Let rays pass through to Arena
+    if (!isCleanTapGesture(e.nativeEvent.clientX, e.nativeEvent.clientY)) return
     e.stopPropagation()
     state.upgradeCore()
   }
 
   // Core visual scale grows slightly per level
   const levelScale = 1 + (coreLevel - 1) * 0.1
-
-  // Null raycast function — makes R3F Raycaster skip this group entirely,
-  // allowing clicks to reach the Arena floor behind the core.
-  const noRaycast = () => null
+  const hpRatio = maxCoreHp > 0 ? coreHp / maxCoreHp : 1
+  const coreTint = isBuffActive
+    ? '#fffbeb'
+    : hpRatio <= 0.25
+      ? '#ff6b6b'
+      : hpRatio <= 0.5
+        ? '#fde047'
+        : '#ffffff'
 
   return (
     <group position={[0, CORE_SIZE + 0.5, 0]}>
@@ -188,32 +260,117 @@ export function CentralCore() {
       {/* Ground pulsing golden ring shader */}
       <GoldenRingEffect active={isBuffActive} />
 
+      {/* 2.5D Ground Sacred Logic Mandala + Radial Core HP Ring */}
+      {visualStyle === '2.5D' && (
+        <>
+          <mesh
+            ref={mandalaRef}
+            geometry={planeGeo}
+            position={[0, -CORE_SIZE - 0.38, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            scale={[8.2 * levelScale, 8.2 * levelScale, 1]}
+            raycast={noRaycast}
+          >
+            <meshBasicMaterial
+              map={mandalaTex}
+              transparent
+              alphaTest={0.02}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+              color={isBuffActive ? '#ffd700' : '#38bdf8'}
+              opacity={isBuffActive ? 0.9 : 0.72}
+            />
+          </mesh>
+          <mesh
+            geometry={planeGeo}
+            position={[0, -CORE_SIZE - 0.36, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            scale={[9.4 * levelScale, 9.4 * levelScale, 1]}
+            raycast={noRaycast}
+          >
+            <shaderMaterial
+              ref={coreHpRingMatRef}
+              args={[coreHpRingShader]}
+              transparent
+              depthWrite={false}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        </>
+      )}
+
       {/* Visual group — raycast={noRaycast} makes raycaster skip the Core
           so clicks pass through to the Arena floor behind it.
           onPointerDown still fires for upgrade mode (Three.js event bubbling). */}
-      <group scale={[levelScale, levelScale, levelScale]} onPointerDown={handlePointerDown} raycast={noRaycast}>
-        {/* Visual: Octahedron core */}
-        <mesh ref={meshRef} castShadow>
-          <octahedronGeometry args={[CORE_SIZE, 0]} />
-          <meshStandardMaterial
-            color="#00d4ff"
-            emissive="#00d4ff"
-            emissiveIntensity={0.6}
-            metalness={0.5}
-            roughness={0.2}
-          />
-        </mesh>
+      <group scale={[levelScale, levelScale, levelScale]} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} raycast={noRaycast}>
+        {visualStyle === '2.5D' ? (
+          <>
+            {/* Compact upgrade click target mesh (only raycastable in upgrade mode) */}
+            <mesh raycast={isUpgradeMode ? undefined : noRaycast}>
+              <sphereGeometry args={[CORE_SIZE * 0.95, 12, 12]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+            </mesh>
+            {/* 4-Layer 2.5D Citadel of Archimedes */}
+            <StackedBillboard25D
+              yOffset={0.35}
+              tint={coreTint}
+              layers={[
+                {
+                  spriteKey: 'CORE_ASTROLABE_BACK',
+                  zOffset: -0.35,
+                  width: 5.8,
+                  height: 5.8,
+                  opacity: 0.85,
+                  spinSpeed: isBuffActive ? 1.1 : 0.38,
+                  additive: true,
+                },
+                {
+                  spriteKey: isBuffActive ? 'CORE_CITADEL_BUFF' : 'CORE_CITADEL_BODY',
+                  zOffset: 0,
+                  width: 4.9,
+                  height: 5.5,
+                  opacity: 0.98,
+                  pulseSpeed: isBuffActive ? 3.8 : 2.0,
+                  pulseAmplitude: 0.04,
+                },
+                {
+                  spriteKey: 'CORE_SHIELD_FRONT',
+                  zOffset: 0.38,
+                  width: 5.2,
+                  height: 5.2,
+                  opacity: isBuffActive ? 0.88 : 0.65,
+                  spinSpeed: isBuffActive ? -0.85 : -0.28,
+                  additive: true,
+                },
+              ]}
+            />
+          </>
+        ) : (
+          <>
+            {/* Visual: Octahedron core */}
+            <mesh ref={meshRef} castShadow>
+              <octahedronGeometry args={[CORE_SIZE, 0]} />
+              <meshStandardMaterial
+                color="#00d4ff"
+                emissive="#00d4ff"
+                emissiveIntensity={0.6}
+                metalness={0.5}
+                roughness={0.2}
+              />
+            </mesh>
 
-        {/* Glow sphere */}
-        <mesh ref={glowRef}>
-          <sphereGeometry args={[CORE_SIZE * 1.6, 16, 16]} />
-          <meshBasicMaterial
-            color="#00d4ff"
-            transparent
-            opacity={0.1}
-            side={THREE.BackSide}
-          />
-        </mesh>
+            {/* Glow sphere */}
+            <mesh ref={glowRef}>
+              <sphereGeometry args={[CORE_SIZE * 1.6, 16, 16]} />
+              <meshBasicMaterial
+                color="#00d4ff"
+                transparent
+                opacity={0.1}
+                side={THREE.BackSide}
+              />
+            </mesh>
+          </>
+        )}
       </group>
 
       {/* Level indicator rings — one per level */}
@@ -222,6 +379,7 @@ export function CentralCore() {
           key={i}
           position={[0, -CORE_SIZE - 0.4 - i * 0.4, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
+          raycast={noRaycast}
         >
           <ringGeometry args={[
             CORE_SIZE * (1.2 + i * 0.3) * levelScale,

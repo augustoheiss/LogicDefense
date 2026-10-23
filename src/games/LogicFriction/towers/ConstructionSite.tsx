@@ -20,6 +20,8 @@ import {
   SITE_EXPIRY_MS,
   TOWER_BLUEPRINTS,
 } from '../config/constants'
+import { CrossQuad25D, StackedBillboard25D } from '../sprites/Sprite25D'
+import { noRaycast, type SpriteKey } from '../sprites/spriteAtlasRegistry'
 
 // Distance threshold for walk-to-fund (in world units)
 const FUND_DISTANCE = 2.5
@@ -43,6 +45,16 @@ export function ConstructionSite({ id, position, type }: ConstructionSiteProps) 
   const bp = TOWER_BLUEPRINTS[type]
   const bpColor = bp?.color ?? '#ffd700'
   const bpCost = bp?.cost ?? 50
+  const visualStyle = useGameStore(s => s.visualStyle)
+
+  const previewTurretKey: SpriteKey =
+    type === 'HEAVY'
+      ? 'TOWER_HEAVY_TURRET'
+      : type === 'SLOW'
+        ? 'TOWER_SLOW_TURRET'
+        : type === 'SNIPER'
+          ? 'TOWER_SNIPER_TURRET'
+          : 'TOWER_RAPID_TURRET'
 
   // Memoize the world position vector for the distance check
   const worldPos = useMemo(
@@ -129,33 +141,66 @@ export function ConstructionSite({ id, position, type }: ConstructionSiteProps) 
 
   return (
     <group ref={groupRef} position={position}>
-      {/* Visual: Holographic wireframe box */}
-      <mesh ref={meshRef}>
-        <boxGeometry args={[SITE_SIZE * 2, SITE_SIZE * 2, SITE_SIZE * 2]} />
-        <meshStandardMaterial
-          color={bpColor}
-          emissive={bpColor}
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.15}
-          wireframe
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+      {visualStyle === '2.5D' ? (
+        <>
+          <CrossQuad25D
+            spriteKey="SITE_HOLOGRAM_CAGE"
+            width={SITE_SIZE * 2.3}
+            height={SITE_SIZE * 2.6}
+            yOffset={0.2}
+            planes={2}
+            opacity={0.78}
+            tint={bpColor}
+            additive
+          />
+          <StackedBillboard25D
+            yOffset={0.45}
+            tint={bpColor}
+            layers={[
+              {
+                spriteKey: previewTurretKey,
+                zOffset: 0.05,
+                width: 1.9,
+                height: 1.9,
+                opacity: 0.52,
+                additive: true,
+                pulseSpeed: 4.0,
+                pulseAmplitude: 0.08,
+              },
+            ]}
+          />
+        </>
+      ) : (
+        <>
+          {/* Visual: Holographic wireframe box */}
+          <mesh ref={meshRef} raycast={noRaycast}>
+            <boxGeometry args={[SITE_SIZE * 2, SITE_SIZE * 2, SITE_SIZE * 2]} />
+            <meshStandardMaterial
+              color={bpColor}
+              emissive={bpColor}
+              emissiveIntensity={0.5}
+              transparent
+              opacity={0.15}
+              wireframe
+              side={THREE.DoubleSide}
+            />
+          </mesh>
 
-      {/* Inner glow sphere */}
-      <mesh ref={glowRef}>
-        <sphereGeometry args={[SITE_SIZE * 0.8, 12, 12]} />
-        <meshBasicMaterial
-          color={bpColor}
-          transparent
-          opacity={0.3}
-          side={THREE.BackSide}
-        />
-      </mesh>
+          {/* Inner glow sphere */}
+          <mesh ref={glowRef} raycast={noRaycast}>
+            <sphereGeometry args={[SITE_SIZE * 0.8, 12, 12]} />
+            <meshBasicMaterial
+              color={bpColor}
+              transparent
+              opacity={0.3}
+              side={THREE.BackSide}
+            />
+          </mesh>
+        </>
+      )}
 
       {/* Ground marker ring */}
-      <mesh position={[0, -SITE_SIZE + 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, -SITE_SIZE + 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
         <ringGeometry args={[SITE_SIZE * 0.6, SITE_SIZE * 1.2, 6]} />
         <meshBasicMaterial
           color={bpColor}

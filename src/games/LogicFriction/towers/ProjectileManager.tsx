@@ -13,6 +13,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { soundEngine } from '../audio/soundEngine'
+import { noRaycast } from '../sprites/spriteAtlasRegistry'
 
 // ── Event Types ─────────────────────────────────────────────────────────────────
 
@@ -143,13 +144,13 @@ function BoltProjectile({ proj }: { proj: ActiveProjectile }) {
 
   return (
     <group ref={groupRef} position={[proj.fromX, proj.fromY, proj.fromZ]}>
-      <mesh rotation={[0, rotY, 0]}>
+      <mesh rotation={[0, rotY, 0]} raycast={noRaycast}>
         <cylinderGeometry args={[0.08, 0.08, 0.4, 4]} />
-        <meshBasicMaterial ref={coreMatRef} color={proj.color} transparent opacity={1} />
+        <meshBasicMaterial ref={coreMatRef} color={proj.color} transparent opacity={1} depthWrite={false} />
       </mesh>
-      <mesh rotation={[0, rotY, 0]}>
+      <mesh rotation={[0, rotY, 0]} raycast={noRaycast}>
         <cylinderGeometry args={[0.15, 0.0, 0.6, 4]} />
-        <meshBasicMaterial ref={trailMatRef} color={proj.color} transparent opacity={0.3} />
+        <meshBasicMaterial ref={trailMatRef} color={proj.color} transparent opacity={0.3} depthWrite={false} />
       </mesh>
     </group>
   )
@@ -196,7 +197,7 @@ function MortarProjectile({ proj }: { proj: ActiveProjectile }) {
 
   return (
     <group>
-      <mesh ref={sphereRef} position={[proj.fromX, proj.fromY, proj.fromZ]}>
+      <mesh ref={sphereRef} position={[proj.fromX, proj.fromY, proj.fromZ]} raycast={noRaycast}>
         <sphereGeometry args={[0.25, 6, 6]} />
         <meshBasicMaterial color={proj.color} />
       </mesh>
@@ -205,6 +206,7 @@ function MortarProjectile({ proj }: { proj: ActiveProjectile }) {
         position={[proj.toX, 0.2, proj.toZ]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={false}
+        raycast={noRaycast}
       >
         <ringGeometry args={[0.8, 1.0, 16]} />
         <meshBasicMaterial
@@ -212,6 +214,7 @@ function MortarProjectile({ proj }: { proj: ActiveProjectile }) {
           color={proj.color}
           transparent
           opacity={0.6}
+          depthWrite={false}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -231,21 +234,24 @@ function ShockwaveProjectile({ proj }: { proj: ActiveProjectile }) {
     const progress = Math.min(1, Math.max(0, age / proj.maxAge))
     const scale = Math.max(0.1, progress * proj.range)
     meshRef.current.scale.set(scale, scale, 1)
-    matRef.current.opacity = 0.4 * (1 - progress)
+    matRef.current.opacity = 0.35 * (1 - progress)
   })
 
   return (
     <mesh
       ref={meshRef}
-      position={[proj.fromX, 0.3, proj.fromZ]}
+      position={[proj.fromX, 0.12, proj.fromZ]}
       rotation={[-Math.PI / 2, 0, 0]}
+      raycast={noRaycast}
     >
-      <ringGeometry args={[0.85, 1.0, 32]} />
+      <ringGeometry args={[0.96, 1.0, 48]} />
       <meshBasicMaterial
         ref={matRef}
         color={proj.color}
         transparent
-        opacity={0.4}
+        opacity={0.35}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -283,13 +289,13 @@ function RailgunProjectile({ proj }: { proj: ActiveProjectile }) {
 
   return (
     <group>
-      <mesh position={[midX, midY, midZ]} rotation={euler}>
+      <mesh position={[midX, midY, midZ]} rotation={euler} raycast={noRaycast}>
         <cylinderGeometry args={[0.12, 0.12, dist, 4]} />
-        <meshBasicMaterial ref={coreMatRef} color={proj.color} transparent opacity={0.9} />
+        <meshBasicMaterial ref={coreMatRef} color={proj.color} transparent opacity={0.9} depthWrite={false} />
       </mesh>
-      <mesh position={[midX, midY, midZ]} rotation={euler}>
+      <mesh position={[midX, midY, midZ]} rotation={euler} raycast={noRaycast}>
         <cylinderGeometry args={[0.25, 0.25, dist, 4]} />
-        <meshBasicMaterial ref={glowMatRef} color={proj.color} transparent opacity={0.2} />
+        <meshBasicMaterial ref={glowMatRef} color={proj.color} transparent opacity={0.2} depthWrite={false} />
       </mesh>
     </group>
   )

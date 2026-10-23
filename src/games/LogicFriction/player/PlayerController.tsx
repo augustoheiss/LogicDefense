@@ -17,8 +17,12 @@ import * as THREE from 'three'
 const _forward = new THREE.Vector3()
 const _right = new THREE.Vector3()
 const _moveDir = new THREE.Vector3()
+const _prevOrbitTarget = new THREE.Vector3()
+const _desiredTarget = new THREE.Vector3()
+const _deltaTarget = new THREE.Vector3()
 import { useKeyboard, keys } from '../hooks/useInput'
 import { useGameStore } from '../state/useGameStore'
+import { recordPointerDown, isCleanTapGesture } from '../hooks/useTouchCameraGate'
 import { playerPositionRef, fireAttack } from './playerEvents'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
 import { findPath } from './pathfinding'
@@ -37,6 +41,8 @@ import {
   PLAYER_PULSE_DAMAGE,
   ARENA_RADIUS,
 } from '../config/constants'
+import { getSharedPlaneGeometry, getSharedSpriteTexture, noRaycast } from '../sprites/spriteAtlasRegistry'
+import { StackedBillboard25D } from '../sprites/Sprite25D'
 
 // ── Pathfinding cache ──
 // Only recalculate A* when the target or obstacle count changes
@@ -54,6 +60,18 @@ const ENTITY_RECALC_DIST = 2.0     // Recalc path if entity moved > this
 export function PlayerController() {
   const rigidBodyRef = useRef<RapierRigidBody>(null)
   const meshRef = useRef<THREE.Mesh>(null)
+  const avatar25DGroupRef = useRef<THREE.Group>(null)
+  const flipXRef = useRef(false)
+  const slashMeshRef = useRef<THREE.Mesh>(null)
+  const ghost1MeshRef = useRef<THREE.Mesh>(null)
+  const ghost2MeshRef = useRef<THREE.Mesh>(null)
+  const ghostOffsetRef = useRef({ x: 0, z: 0 })
+  const ghostRingBufRef = useRef(
+    Array.from({ length: 8 }, () => ({ x: 0, z: 0 }))
+  )
+  const ghostRingHeadRef = useRef(0)
+  const ghostSampleTimerRef = useRef(0)
+  const attackAngleRef = useRef(0)
   const attackRingRef = useRef<THREE.Mesh>(null)
   const pulseRingRef = useRef<THREE.Mesh>(null)
   const merkabaRing1Ref = useRef<THREE.Mesh>(null)
@@ -64,6 +82,12 @@ export function PlayerController() {
   const selectedEntity = useGameStore(s => s.selectedEntity)
   const setSelectedEntity = useGameStore(s => s.setSelectedEntity)
   const isBuffActive = useGameStore(s => s.isBuffActive)
+  const insideMathZone = useGameStore(s => s.insideMathZone)
+  const visualStyle = useGameStore(s => s.visualStyle)
+
+  const planeGeo = getSharedPlaneGeometry()
+  const slashTex = getSharedSpriteTexture('PLAYER_MELEE_SLASH')
+  const buffBodyTex = getSharedSpriteTexture('PLAYER_ARCHITECT_BUFF')
 
   const effectiveRange = isBuffActive ? PLAYER_ATTACK_RANGE * 1.5 : PLAYER_ATTACK_RANGE
 
@@ -329,7 +353,8 @@ export function PlayerController() {
 
       if (attackTarget) {
         attackCooldownRef.current = effectiveCooldown
-        attackVisualRef.current = 0.2
+        attackVisualRef.current = 0.22
+        attackAngleRef.current = Math.atan2(attackTarget.x - pos.x, attackTarget.z - pos.z)
         soundEngine.playPlayerAttack(buffed)
         fireAttack(pos.x, pos.z, effectiveDamage, effectiveRange)
       }
@@ -419,11 +444,96 @@ export function PlayerController() {
     //   mat.opacity = inZone ? 0.3 : 1.0
     // }
 
-    // ── Camera Follow (OrbitControls-aware) ──
-    const orbitTarget = (controls as any)?.target as THREE.Vector3 | undefined
+    // ── 2.5D Walk-Cycle Squash/Stretch, Stride Tilt, Directional Flip & After-Image Ghost Trail ──
+    const vel = rb.linvel()
+    const speed = Math.hypot(vel.x, vel.z)
+    const isMoving = speed > 0.6
+    if (avatar25DGroupRef.current) {
+      if (isMoving) {
+        const lateralDot = vel.x * _right.x + vel.z * _right.z
+        if (Math.abs(lateralDot) > 0.35) {
+          flipXRef.current = lateralDot < 0
+        }
+      }
+      const t = performance.now() * 0.001
+      const bobY = isMoving ? Math.abs(Math.sin(t * 12)) * 0.16 : Math.sin(t * 2.6) * 0.04
+      const squash = isMoving ? 1 + Math.sin(t * 24) * 0.07 : 1 + Math.sin(t * 2.6) * 0.025
+      const strideTilt = isMoving ? Math.sin(t * 12) * 0.065 : 0
+      avatar25DGroupRef.current.position.y = 0.35 + bobY
+      avatar25DGroupRef.current.rotation.z = strideTilt
+      avatar25DGroupRef.current.scale.set(1 / Math.sqrt(squash), squash, 1)
+    }
+
+    // ── After-Image Ghost Trail (Ring Buffer 60ms / 120ms echoes when buffed & moving) ──
+    ghostSampleTimerRef.current += delta
+    if (ghostSampleTimerRef.current >= 0.02) {
+      ghostSampleTimerRef.current = 0
+      const head = (ghostRingHeadRef.current + 1) & 7
+      ghostRingHeadRef.current = head
+      ghostRingBufRef.current[head].x = pos.x
+      ghostRingBufRef.current[head].z = pos.z
+    }
+
+    if (ghost1MeshRef.current && ghost2MeshRef.current) {
+      const targetGx = isMoving ? -vel.x * 0.085 : 0
+      const targetGz = isMoving ? -vel.z * 0.085 : 0
+      ghostOffsetRef.current.x += (targetGx - ghostOffsetRef.current.x) * Math.min(1, delta * 14)
+      ghostOffsetRef.current.z += (targetGz - ghostOffsetRef.current.z) * Math.min(1, delta * 14)
+
+      const slot60 = ghostRingBufRef.current[(ghostRingHeadRef.current + 5) & 7]
+      const slot120 = ghostRingBufRef.current[(ghostRingHeadRef.current + 2) & 7]
+      const hist1X = (slot60.x - pos.x) * 0.5 + ghostOffsetRef.current.x * 0.5
+      const hist1Z = (slot60.z - pos.z) * 0.5 + ghostOffsetRef.current.z * 0.5
+      const hist2X = (slot120.x - pos.x) * 0.5 + ghostOffsetRef.current.x * 0.95
+      const hist2Z = (slot120.z - pos.z) * 0.5 + ghostOffsetRef.current.z * 0.95
+
+      const trailMag = Math.hypot(hist1X, hist1Z)
+      const showGhosts = buffed && trailMag > 0.1 && !state.insideMathZone
+      ghost1MeshRef.current.visible = showGhosts
+      ghost2MeshRef.current.visible = showGhosts
+
+      if (showGhosts) {
+        const yawToCam = Math.atan2(camera.position.x - pos.x, camera.position.z - pos.z)
+        const dirSign = flipXRef.current ? -1 : 1
+        ghost1MeshRef.current.position.set(hist1X, 0.48, hist1Z)
+        ghost1MeshRef.current.rotation.set(0, yawToCam, 0)
+        ghost1MeshRef.current.scale.set(1.85 * dirSign, 2.15, 1)
+
+        ghost2MeshRef.current.position.set(hist2X, 0.44, hist2Z)
+        ghost2MeshRef.current.rotation.set(0, yawToCam, 0)
+        ghost2MeshRef.current.scale.set(1.7 * dirSign, 2.0, 1)
+      }
+    }
+
+    if (slashMeshRef.current) {
+      const activeSlash = attackVisualRef.current > 0.01
+      slashMeshRef.current.visible = activeSlash
+      if (activeSlash) {
+        const progress = 1 - attackVisualRef.current / 0.22
+        const sScale = 2.4 + progress * (buffed ? 3.6 : 2.2)
+        slashMeshRef.current.scale.set(sScale, sScale, 1)
+        slashMeshRef.current.rotation.z = -attackAngleRef.current + (progress - 0.5) * 1.4
+        const sMat = slashMeshRef.current.material as THREE.MeshBasicMaterial
+        sMat.opacity = Math.max(0, (1 - progress) * 0.95)
+        sMat.color.set(buffed ? '#ffd700' : '#38bdf8')
+      }
+    }
+
+    // ── Drift-Free Camera Follow + Velocity Look-Ahead (OrbitControls-aware) ──
+    const orbitTarget = (controls as unknown as { target?: THREE.Vector3 })?.target
     if (orbitTarget) {
-      const playerPos = new THREE.Vector3(pos.x, 0, pos.z)
-      orbitTarget.lerp(playerPos, CAMERA_LERP)
+      let lookX = 0
+      let lookZ = 0
+      if (state.cameraMode === 'BALANCED' && isMoving) {
+        lookX = Math.max(-2.0, Math.min(2.0, vel.x * 0.15))
+        lookZ = Math.max(-2.0, Math.min(2.0, vel.z * 0.15))
+      }
+      _desiredTarget.set(pos.x + lookX, 0, pos.z + lookZ)
+      _prevOrbitTarget.copy(orbitTarget)
+      orbitTarget.lerp(_desiredTarget, CAMERA_LERP)
+      // Translate camera.position by the exact same delta so spherical distance & pitch never drift!
+      _deltaTarget.copy(orbitTarget).sub(_prevOrbitTarget)
+      camera.position.add(_deltaTarget)
     }
   })
 
@@ -568,27 +678,149 @@ export function PlayerController() {
 
       {/* Player orb group — Y=0.6 so the sphere (r=0.6) hovers just above the floor */}
       <group name="player" frustumCulled={false} position={[0, 0.6, 0]}>
-        {/* Sphere avatar — meshBasicMaterial for mobile GPU safety (no lighting) */}
+        {/* Sphere avatar / compact click hitbox — meshBasicMaterial for mobile GPU safety */}
         <mesh
           ref={meshRef}
           castShadow={false}
           frustumCulled={false}
           renderOrder={1}
           onPointerDown={(e) => {
+            recordPointerDown(e.nativeEvent.clientX, e.nativeEvent.clientY)
+          }}
+          onPointerUp={(e) => {
+            if (!isCleanTapGesture(e.nativeEvent.clientX, e.nativeEvent.clientY)) return
             e.stopPropagation()
             setSelectedEntity({ id: 'player', type: 'player' })
           }}
         >
           <sphereGeometry args={[0.6, 16, 16]} />
-          <meshBasicMaterial color={isBuffActive ? '#ffd700' : '#00ffcc'} />
+          <meshBasicMaterial
+            color={isBuffActive ? '#ffd700' : '#00ffcc'}
+            transparent={visualStyle === '2.5D' || insideMathZone}
+            opacity={visualStyle === '2.5D' ? 0 : insideMathZone ? 0.3 : 1}
+            depthWrite={visualStyle !== '2.5D'}
+          />
         </mesh>
 
+        {/* 2.5D Multi-Layer Logic Architect Sprite Stack */}
+        {visualStyle === '2.5D' && (
+          <>
+            <group ref={avatar25DGroupRef} position={[0, 0.35, 0]}>
+              <StackedBillboard25D
+                yOffset={0.15}
+                flipXRef={flipXRef}
+                opacity={insideMathZone ? 0.38 : 1}
+                tint={isBuffActive ? '#fffbeb' : '#ffffff'}
+                layers={[
+                  ...(isBuffActive
+                    ? [
+                        {
+                          spriteKey: 'PLAYER_DIVINE_WINGS' as const,
+                          zOffset: -0.22,
+                          width: 3.2,
+                          height: 2.8,
+                          opacity: 0.94,
+                          additive: true,
+                          pulseSpeed: 4.5,
+                          pulseAmplitude: 0.08,
+                        },
+                      ]
+                    : []),
+                  {
+                    spriteKey: 'PLAYER_ARCHITECT_CLOAK',
+                    zOffset: -0.1,
+                    width: 2.1,
+                    height: 2.35,
+                    opacity: 0.95,
+                  },
+                  {
+                    spriteKey: isBuffActive ? 'PLAYER_ARCHITECT_BUFF' : 'PLAYER_ARCHITECT_BODY',
+                    zOffset: 0.0,
+                    width: 1.95,
+                    height: 2.25,
+                    opacity: 0.99,
+                    flipbookFps: 8,
+                  },
+                  {
+                    spriteKey: 'PLAYER_ARCHITECT_STAFF',
+                    zOffset: 0.14,
+                    width: 2.0,
+                    height: 2.3,
+                    opacity: 0.99,
+                    pulseSpeed: 3.2,
+                    pulseAmplitude: 0.04,
+                  },
+                ]}
+              />
+            </group>
+
+            {/* 2.5D After-Image Ghost Trail (Divine Buff Speed Echoes) */}
+            <mesh
+              ref={ghost1MeshRef}
+              geometry={planeGeo}
+              visible={false}
+              frustumCulled={false}
+              raycast={noRaycast}
+            >
+              <meshBasicMaterial
+                map={buffBodyTex}
+                color="#ffd700"
+                transparent
+                alphaTest={0.05}
+                depthWrite={false}
+                blending={THREE.AdditiveBlending}
+                side={THREE.DoubleSide}
+                opacity={0.42}
+              />
+            </mesh>
+            <mesh
+              ref={ghost2MeshRef}
+              geometry={planeGeo}
+              visible={false}
+              frustumCulled={false}
+              raycast={noRaycast}
+            >
+              <meshBasicMaterial
+                map={buffBodyTex}
+                color="#fef08a"
+                transparent
+                alphaTest={0.05}
+                depthWrite={false}
+                blending={THREE.AdditiveBlending}
+                side={THREE.DoubleSide}
+                opacity={0.22}
+              />
+            </mesh>
+
+            {/* 2.5D Directional Melee Slash Arc */}
+            <mesh
+              ref={slashMeshRef}
+              geometry={planeGeo}
+              position={[0, 0.05, 0]}
+              rotation={[-Math.PI / 2, 0, 0]}
+              visible={false}
+              frustumCulled={false}
+              raycast={noRaycast}
+            >
+              <meshBasicMaterial
+                map={slashTex}
+                transparent
+                alphaTest={0.02}
+                depthWrite={false}
+                blending={THREE.AdditiveBlending}
+                side={THREE.DoubleSide}
+                opacity={0}
+              />
+            </mesh>
+          </>
+        )}
+
         {/* Gyroscopic Merkaba Aura (visible when Divine Buff is active — mobile GPU safe) */}
-        <mesh ref={merkabaRing1Ref} visible={false} frustumCulled={false}>
+        <mesh ref={merkabaRing1Ref} visible={false} frustumCulled={false} raycast={noRaycast}>
           <torusGeometry args={[0.92, 0.045, 8, 28]} />
           <meshBasicMaterial color="#ffd700" transparent opacity={0.85} depthWrite={false} />
         </mesh>
-        <mesh ref={merkabaRing2Ref} visible={false} frustumCulled={false}>
+        <mesh ref={merkabaRing2Ref} visible={false} frustumCulled={false} raycast={noRaycast}>
           <torusGeometry args={[1.12, 0.035, 8, 28]} />
           <meshBasicMaterial color="#00ff88" transparent opacity={0.7} depthWrite={false} />
         </mesh>
@@ -600,6 +832,7 @@ export function PlayerController() {
           rotation={[-Math.PI / 2, 0, 0]}
           frustumCulled={false}
           visible={false}
+          raycast={noRaycast}
         >
           <ringGeometry args={[PLAYER_ATTACK_RANGE * 0.8, PLAYER_ATTACK_RANGE, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0} side={THREE.DoubleSide} />
@@ -612,6 +845,7 @@ export function PlayerController() {
           rotation={[-Math.PI / 2, 0, 0]}
           frustumCulled={false}
           visible={false}
+          raycast={noRaycast}
         >
           <ringGeometry args={[0.82, 1.0, 40]} />
           <meshBasicMaterial
@@ -629,6 +863,7 @@ export function PlayerController() {
             position={[0, -0.38, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
             frustumCulled={false}
+            raycast={noRaycast}
           >
             <ringGeometry args={[effectiveRange - 0.25, effectiveRange, 64]} />
             <meshBasicMaterial

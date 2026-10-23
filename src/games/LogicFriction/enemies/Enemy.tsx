@@ -21,14 +21,22 @@ import * as THREE from 'three'
 import {
   ENEMY_RADIUS,
   ENEMY_DAMAGE,
+  ENEMY_BASE_HP,
+  ENEMY_HP_SCALE,
   CORE_COLLIDER_SIZE,
   BOSS_DAMAGE,
   BOSS_FAILSAFE_TTL,
+  BOSS_TOLL_PER_WAVE,
+  BOSS_NORMAL_HP_MULT,
   SIEGE_FIRE_INTERVAL,
 } from '../config/constants'
 import { useGameStore } from '../state/useGameStore'
 import { enemyRegistry } from './EnemyRegistry'
 import { findEnemyPath, getPathVersion, getObstacleCount } from './pathfindingGrid'
+import { getSharedPlaneGeometry, getSharedSpriteTexture, noRaycast, type SpriteKey } from '../sprites/spriteAtlasRegistry'
+import { StackedBillboard25D } from '../sprites/Sprite25D'
+import { emitEnemyDeathBurst } from './EnemyDeathFX'
+import { recordPointerDown, isCleanTapGesture } from '../hooks/useTouchCameraGate'
 
 interface EnemyProps {
   id: string
@@ -63,12 +71,214 @@ export function Enemy({
 }: EnemyProps) {
   const rbRef = useRef<RapierRigidBody>(null)
   const virusRef = useRef<THREE.Group>(null) // Visual group (rotation/scale target)
+  const sprite25DGroupRef = useRef<THREE.Group>(null)
+  const tint25DRef = useRef<string | undefined>(undefined)
+  const siegeOverlayRef = useRef<THREE.Mesh>(null)
+  const iceShardRef = useRef<THREE.Mesh>(null)
+  const bossHpRingMatRef = useRef<THREE.ShaderMaterial>(null)
   const solidRef = useRef<THREE.Mesh>(null)  // Solid core mesh (color changes on damage)
   const siegeLaserRef = useRef<THREE.Mesh>(null) // Siege mode laser visual
   const hpRef = useRef(hp)
   const aliveRef = useRef(true)
   const lastPosRef = useRef({ x: position[0], z: position[2] })
   const takeCoreDamage = useGameStore(s => s.takeCoreDamage)
+  const visualStyle = useGameStore(s => s.visualStyle)
+
+  const planeGeo = useMemo(() => getSharedPlaneGeometry(), [])
+  const siegeTex = useMemo(() => getSharedSpriteTexture('ENEMY_SIEGE_OVERLAY'), [])
+  const iceTex = useMemo(() => getSharedSpriteTexture('ENEMY_ICE_SHARD'), [])
+
+  const { isPunishMode, burstColor } = useMemo(() => {
+    if (isBoss) {
+      const waveNum = Math.max(1, Math.round(requiredMoney / BOSS_TOLL_PER_WAVE))
+      const normalHpForWave = ENEMY_BASE_HP + (waveNum - 1) * ENEMY_HP_SCALE
+      const punish = hp > normalHpForWave * (BOSS_NORMAL_HP_MULT * 1.5)
+      return { isPunishMode: punish, burstColor: punish ? '#ff0044' : '#ffd700' }
+    }
+    if (id.includes('trojan')) {
+      return { isPunishMode: false, burstColor: '#f59e0b' }
+    }
+    let hash = 0
+    for (let i = 0; i < id.length; i++) {
+      hash = (hash * 31 + id.charCodeAt(i)) | 0
+    }
+    const v = Math.abs(hash) % 3
+    return {
+      isPunishMode: false,
+      burstColor: v === 0 ? '#00f0ff' : v === 1 ? '#a855f7' : '#ec4899',
+    }
+  }, [id, isBoss, requiredMoney, hp])
+
+  const bossHpRingShader = useMemo(() => {
+    if (!isBoss) return null
+    return {
+      uniforms: {
+        uRatio: { value: 1.0 },
+        uColor: { value: new THREE.Color(isPunishMode ? '#ff0044' : '#ffd700') },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uRatio;
+        uniform vec3 uColor;
+        varying vec2 vUv;
+        void main() {
+          vec2 p = vUv - 0.5;
+          float r = length(p);
+          float ringMask = smoothstep(0.35, 0.38, r) * (1.0 - smoothstep(0.46, 0.49, r));
+          if (ringMask < 0.01) discard;
+          float angle = atan(p.x, p.y); // -PI..PI, 0 at top
+          float normAngle = (angle + 3.14159265) / 6.2831853;
+          float fill = step(normAngle, clamp(uRatio, 0.0, 1.0));
+          vec3 col = mix(vec3(0.08, 0.1, 0.16), uColor, fill);
+          float alpha = ringMask * mix(0.28, 0.92, fill);
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+    }
+  }, [isBoss, isPunishMode])
+
+  // Deterministic enemy caste from ID
+  const casteLayers = useMemo(() => {
+    if (isBoss) {
+      return [
+        {
+          spriteKey: 'BOSS_WHEEL_BACK' as SpriteKey,
+          zOffset: -0.32,
+          width: 3.4,
+          height: 3.4,
+          opacity: 0.88,
+          spinSpeed: 0.95,
+          additive: true,
+        },
+        {
+          spriteKey: 'BOSS_WINGS_MID' as SpriteKey,
+          zOffset: -0.16,
+          width: 3.8,
+          height: 3.2,
+          opacity: 0.92,
+          pulseSpeed: 3.2,
+          pulseAmplitude: 0.06,
+        },
+        {
+          spriteKey: 'BOSS_LEVIATHAN_BODY' as SpriteKey,
+          zOffset: 0.0,
+          width: 2.9,
+          height: 3.2,
+          opacity: 0.99,
+        },
+        {
+          spriteKey: (isPunishMode ? 'BOSS_MASK_PUNISH' : 'BOSS_MASK_GOLD') as SpriteKey,
+          zOffset: 0.15,
+          width: 2.1,
+          height: 2.3,
+          opacity: 0.99,
+          pulseSpeed: 4.5,
+          pulseAmplitude: 0.05,
+        },
+        {
+          spriteKey: 'BOSS_SCEPTER_FRONT' as SpriteKey,
+          zOffset: 0.3,
+          width: 2.9,
+          height: 3.1,
+          opacity: 0.98,
+          bobSpeed: 3.5,
+          bobAmplitude: 0.08,
+        },
+      ]
+    }
+
+    if (id.includes('trojan')) {
+      return [
+        {
+          spriteKey: 'ENEMY_TROJAN_BODY' as SpriteKey,
+          zOffset: -0.06,
+          width: 1.55,
+          height: 1.65,
+          opacity: 0.98,
+        },
+        {
+          spriteKey: 'ENEMY_TROJAN_SHIELD' as SpriteKey,
+          zOffset: 0.1,
+          width: 1.45,
+          height: 1.55,
+          opacity: 0.95,
+          pulseSpeed: 5.0,
+          pulseAmplitude: 0.05,
+        },
+      ]
+    }
+
+    let hash = 0
+    for (let i = 0; i < id.length; i++) {
+      hash = (hash * 31 + id.charCodeAt(i)) | 0
+    }
+    const variant = Math.abs(hash) % 3
+    if (variant === 0) {
+      return [
+        {
+          spriteKey: 'ENEMY_CRAWLER_LEGS' as SpriteKey,
+          zOffset: -0.08,
+          width: 1.6,
+          height: 1.45,
+          opacity: 0.95,
+          pulseSpeed: 8.0,
+          pulseAmplitude: 0.06,
+          flipbookFps: 10,
+        },
+        {
+          spriteKey: 'ENEMY_CRAWLER_BODY' as SpriteKey,
+          zOffset: 0.08,
+          width: 1.4,
+          height: 1.4,
+          opacity: 0.99,
+        },
+      ]
+    } else if (variant === 1) {
+      return [
+        {
+          spriteKey: 'ENEMY_PHANTOM_CLOAK' as SpriteKey,
+          zOffset: -0.08,
+          width: 1.5,
+          height: 1.75,
+          opacity: 0.92,
+          bobSpeed: 4.5,
+          bobAmplitude: 0.07,
+        },
+        {
+          spriteKey: 'ENEMY_PHANTOM_MASK' as SpriteKey,
+          zOffset: 0.09,
+          width: 1.35,
+          height: 1.55,
+          opacity: 0.99,
+        },
+      ]
+    } else {
+      return [
+        {
+          spriteKey: 'ENEMY_GOLEM_AURA' as SpriteKey,
+          zOffset: -0.1,
+          width: 1.75,
+          height: 1.75,
+          opacity: 0.85,
+          spinSpeed: 1.4,
+          additive: true,
+        },
+        {
+          spriteKey: 'ENEMY_GOLEM_BODY' as SpriteKey,
+          zOffset: 0.08,
+          width: 1.6,
+          height: 1.7,
+          opacity: 0.99,
+        },
+      ]
+    }
+  }, [id, isBoss, enemyScale])
 
   // ── Pathfinding state ──
   const pathRef = useRef<Array<{ x: number; z: number }> | null>(null)
@@ -113,6 +323,7 @@ export function Enemy({
         }
         if (hpRef.current <= 0) {
           aliveRef.current = false
+          emitEnemyDeathBurst(lastPosRef.current.x, lastPosRef.current.z, burstColor, isBoss)
           if (isBoss && onBossDeath) {
             onBossDeath(id, lastPosRef.current.x, lastPosRef.current.z)
           } else if (onDeath) {
@@ -283,6 +494,7 @@ export function Enemy({
         rb.setLinvel({ x: 0, y: 0, z: 0 }, true)
         takeCoreDamage(contactDamage)
         aliveRef.current = false
+        emitEnemyDeathBurst(pos.x, pos.z, burstColor, isBoss)
         if (isBoss && onBossDeath) {
           onBossDeath(id, pos.x, pos.z)
         } else if (onDeath) {
@@ -386,6 +598,50 @@ export function Enemy({
       }
     }
 
+    // ── 2.5D Walk-Cycle & Status Overlays (Siege & Ice Slow) ──
+    if (sprite25DGroupRef.current) {
+      const isSlowed = speedMultRef.current < 1.0
+      const t = state.clock.elapsedTime * (isSlowed ? 0.5 : 1.0)
+      const bob = Math.abs(Math.sin(t * (isBoss ? 4.5 : 10.5))) * (isBoss ? 0.16 : 0.1)
+      const squash = 1 + Math.sin(t * (isBoss ? 6.0 : 14.0)) * 0.06
+      const baseS = isBoss ? Math.min(enemyScale * 0.85, 2.2) : 1.0
+      sprite25DGroupRef.current.position.y = (isBoss ? 0.85 : 0.35) + bob
+      sprite25DGroupRef.current.scale.set(
+        (baseS / Math.sqrt(squash)),
+        baseS * squash,
+        baseS
+      )
+    }
+
+    if (siegeOverlayRef.current) {
+      siegeOverlayRef.current.visible = siegeModeRef.current
+      if (siegeModeRef.current) {
+        siegeOverlayRef.current.rotation.z += delta * 2.4
+      }
+    }
+
+    if (iceShardRef.current) {
+      iceShardRef.current.visible = speedMultRef.current < 1.0
+    }
+
+    // ── 2.5D Dynamic Damage & Slow Tint Feedback + Boss Radial HP Ring ──
+    {
+      const ratio = Math.max(0, hpRef.current / hp)
+      if (bossHpRingMatRef.current) {
+        bossHpRingMatRef.current.uniforms.uRatio.value = ratio
+      }
+      const isSlowed = speedMultRef.current < 1.0
+      if (isSlowed) {
+        tint25DRef.current = '#67e8f9'
+      } else if (ratio < 0.45) {
+        tint25DRef.current = '#fda4af'
+      } else if (ratio < 0.85) {
+        tint25DRef.current = '#fef08a'
+      } else {
+        tint25DRef.current = '#ffffff'
+      }
+    }
+
     // ── Visual: color shifts as HP drops (damage feedback) + slow tint ──
     if (solidRef.current) {
       const ratio = Math.max(0, hpRef.current / hp)
@@ -429,72 +685,126 @@ export function Enemy({
     >
       <BallCollider args={[colliderRadius]} friction={0} restitution={0} />
 
-      {/* Click-to-follow: set this enemy as the tracked MOBA target */}
+      {/* Click-to-follow: set this enemy as the tracked MOBA target (gated by tap-vs-drag) */}
       <group
         onPointerDown={(e) => {
+          recordPointerDown(e.nativeEvent.clientX, e.nativeEvent.clientY)
+        }}
+        onPointerUp={(e) => {
+          if (!isCleanTapGesture(e.nativeEvent.clientX, e.nativeEvent.clientY)) return
           e.stopPropagation()
           const store = useGameStore.getState()
           if (store.actionMode !== 'MOVE') return
           store.setMoveTarget({ type: 'entity', id })
         }}
       >
-        {/* Virus visual group — rotation + pulse applied here,
-            NOT on the physics body (lockRotations stays intact) */}
-        <group ref={virusRef}>
-          {isBoss ? (
-            <>
-              {/* ── BOSS: Gold icosahedron — meshBasicMaterial only ── */}
-              <mesh ref={solidRef} castShadow>
-                <icosahedronGeometry args={[VIRUS_RADIUS, 1]} />
-                <meshBasicMaterial color="#ffaa00" />
-              </mesh>
+        {visualStyle === '2.5D' ? (
+          <>
+            {/* Compact invisible sphere hitbox for click-to-follow */}
+            <mesh>
+              <sphereGeometry args={[VIRUS_RADIUS * (isBoss ? enemyScale : 1.35), 8, 8]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+            </mesh>
 
-              {/* Wireframe shell — amber hologram */}
-              <mesh>
-                <icosahedronGeometry args={[WIRE_RADIUS, 1]} />
+            {/* 2.5D Multi-Layer Bestiary / Boss Sprite Stack */}
+            <group ref={sprite25DGroupRef} position={[0, isBoss ? 0.85 : 0.35, 0]}>
+              <StackedBillboard25D layers={casteLayers} tintRef={tint25DRef} />
+
+              {/* Siege Mode Artillery Reticle Overlay */}
+              <mesh
+                ref={siegeOverlayRef}
+                geometry={planeGeo}
+                position={[0, 0.1, 0.25]}
+                scale={[1.9, 1.9, 1]}
+                visible={false}
+                raycast={noRaycast}
+              >
                 <meshBasicMaterial
-                  color="#ff8800"
-                  wireframe
+                  map={siegeTex}
                   transparent
-                  opacity={0.5}
+                  alphaTest={0.03}
+                  depthWrite={false}
+                  blending={THREE.AdditiveBlending}
                 />
               </mesh>
 
-              {/* Inner glow core */}
-              <mesh>
-                <icosahedronGeometry args={[VIRUS_RADIUS * 0.6, 0]} />
+              {/* Cryo Slow Ice Shard Overlay */}
+              <mesh
+                ref={iceShardRef}
+                geometry={planeGeo}
+                position={[0, 0, 0.22]}
+                scale={[1.8, 1.8, 1]}
+                visible={false}
+                raycast={noRaycast}
+              >
                 <meshBasicMaterial
-                  color="#ffdd44"
+                  map={iceTex}
                   transparent
-                  opacity={0.3}
+                  alphaTest={0.03}
+                  depthWrite={false}
                 />
               </mesh>
-            </>
-          ) : (
-            <>
-              {/* ── NORMAL: Harsh magenta icosahedron ── */}
-              <mesh ref={solidRef} castShadow>
-                <icosahedronGeometry args={[VIRUS_RADIUS, 0]} />
-                <meshBasicMaterial color="#ff0055" />
-              </mesh>
+            </group>
+          </>
+        ) : (
+          /* Virus visual group — rotation + pulse applied here,
+              NOT on the physics body (lockRotations stays intact) */
+          <group ref={virusRef}>
+            {isBoss ? (
+              <>
+                {/* ── BOSS: Gold icosahedron — meshBasicMaterial only ── */}
+                <mesh ref={solidRef} castShadow>
+                  <icosahedronGeometry args={[VIRUS_RADIUS, 1]} />
+                  <meshBasicMaterial color="#ffaa00" />
+                </mesh>
 
-              {/* Wireframe shell — glitchy hologram overlay */}
-              <mesh>
-                <icosahedronGeometry args={[WIRE_RADIUS, 0]} />
-                <meshBasicMaterial
-                  color="#ff3377"
-                  wireframe
-                  transparent
-                  opacity={0.4}
-                />
-              </mesh>
-            </>
-          )}
-        </group>
+                {/* Wireframe shell — amber hologram */}
+                <mesh>
+                  <icosahedronGeometry args={[WIRE_RADIUS, 1]} />
+                  <meshBasicMaterial
+                    color="#ff8800"
+                    wireframe
+                    transparent
+                    opacity={0.5}
+                  />
+                </mesh>
+
+                {/* Inner glow core */}
+                <mesh>
+                  <icosahedronGeometry args={[VIRUS_RADIUS * 0.6, 0]} />
+                  <meshBasicMaterial
+                    color="#ffdd44"
+                    transparent
+                    opacity={0.3}
+                  />
+                </mesh>
+              </>
+            ) : (
+              <>
+                {/* ── NORMAL: Harsh magenta icosahedron ── */}
+                <mesh ref={solidRef} castShadow>
+                  <icosahedronGeometry args={[VIRUS_RADIUS, 0]} />
+                  <meshBasicMaterial color="#ff0055" />
+                </mesh>
+
+                {/* Wireframe shell — glitchy hologram overlay */}
+                <mesh>
+                  <icosahedronGeometry args={[WIRE_RADIUS, 0]} />
+                  <meshBasicMaterial
+                    color="#ff3377"
+                    wireframe
+                    transparent
+                    opacity={0.4}
+                  />
+                </mesh>
+              </>
+            )}
+          </group>
+        )}
       </group>
 
       {/* ── Siege Mode Laser (thin red beam to core) ── */}
-      <mesh ref={siegeLaserRef} visible={false}>
+      <mesh ref={siegeLaserRef} visible={false} raycast={noRaycast}>
         <boxGeometry args={[1, 1, 1]} />
         <meshBasicMaterial color="#ff2200" transparent opacity={0} />
       </mesh>
@@ -528,8 +838,27 @@ export function Enemy({
         </Html>
       )}
 
+      {/* Boss Radial Ground HP Ring (Gold 10x vs Crimson 30x Punish) */}
+      {isBoss && bossHpRingShader && (
+        <mesh
+          geometry={planeGeo}
+          position={[0, -colliderRadius * 0.58 + 0.02, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          scale={[colliderRadius * 3.4, colliderRadius * 3.4, 1]}
+          raycast={noRaycast}
+        >
+          <shaderMaterial
+            ref={bossHpRingMatRef}
+            args={[bossHpRingShader]}
+            transparent
+            depthWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
+
       {/* Ground shadow ring — subtle positional indicator */}
-      <mesh position={[0, -colliderRadius * 0.6, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, -colliderRadius * 0.6, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
         <ringGeometry args={[
           colliderRadius * 0.6,
           colliderRadius * 1.0,

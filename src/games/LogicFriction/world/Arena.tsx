@@ -17,17 +17,44 @@ import {
   CORE_COLLIDER_SIZE,
 } from '../config/constants'
 import { useGameStore } from '../state/useGameStore'
+import { getSharedPlaneGeometry, getSharedSpriteTexture, noRaycast } from '../sprites/spriteAtlasRegistry'
+import {
+  ensureTouchCameraGateListeners,
+  recordPointerDown,
+  isCleanTapGesture,
+} from '../hooks/useTouchCameraGate'
 
 // ── Slab thickness for the "motherboard" look ──────────────────────────────────
 const SLAB_THICKNESS = 2
 
 // ── Arena Floor ─────────────────────────────────────────────────────────────────
 export function Arena() {
-  // ── Click handler: mode-aware (BUILD places towers, MOVE sets pathfinding target) ──
+  const visualStyle = useGameStore((s) => s.visualStyle)
+  const floorTex = useMemo(() => {
+    const tex = getSharedSpriteTexture('FLOOR_MOTHERBOARD')
+    tex.wrapS = THREE.RepeatWrapping
+    tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(6, 6)
+    return tex
+  }, [])
+
+  useEffect(() => {
+    ensureTouchCameraGateListeners()
+  }, [])
+
+  // ── Pointer Down: record start coordinate for Tap-vs-Drag disambiguation ──
   const handlePointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
-    // Only left-click
     if (e.button !== 0) return
-    // Stop propagation so Canvas doesn't steal the event
+    recordPointerDown(e.nativeEvent.clientX, e.nativeEvent.clientY)
+  }, [])
+
+  // ── Pointer Up: execute BUILD or MOVE only if gesture was a clean tap (<=10px travel) ──
+  const handlePointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
+    // Only left-click / primary touch
+    if (e.button !== 0) return
+    // Disambiguate camera drag / multi-touch pinch from intentional gameplay tap
+    if (!isCleanTapGesture(e.nativeEvent.clientX, e.nativeEvent.clientY)) return
+
     e.stopPropagation()
 
     const state = useGameStore.getState()
@@ -58,10 +85,26 @@ export function Arena() {
       <CylinderCollider args={[SLAB_THICKNESS / 2, ARENA_RADIUS]} />
       {/* Thick motherboard slab — top surface at Y=0.
           meshLambertMaterial: cheapest shadow-capable material for WebGL. */}
-      <mesh receiveShadow onPointerDown={handlePointerDown}>
+      <mesh receiveShadow onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
         <cylinderGeometry args={[ARENA_RADIUS, ARENA_RADIUS, SLAB_THICKNESS, ARENA_SEGMENTS]} />
         <meshLambertMaterial color="#0a0a12" />
       </mesh>
+      {/* 2.5D Motherboard Circuit Trace Layer (non-raycastable so floor clicks are untouched) */}
+      {visualStyle === '2.5D' && (
+        <mesh
+          position={[0, SLAB_THICKNESS / 2 + 0.008, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          raycast={noRaycast}
+        >
+          <circleGeometry args={[ARENA_RADIUS - 0.15, ARENA_SEGMENTS]} />
+          <meshBasicMaterial
+            map={floorTex}
+            transparent
+            opacity={0.75}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
       {/* Neon grid overlaid on the top surface */}
       <CyberGrid />
       {/* Decorative edge glow ring */}
@@ -209,6 +252,7 @@ function CyberGrid() {
         position={[0, 0.04, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={false}
+        raycast={noRaycast}
       >
         <ringGeometry args={[0.88, 1.0, 64]} />
         <meshBasicMaterial
@@ -244,6 +288,7 @@ function EdgeGlow() {
       ref={ringRef}
       position={[0, SLAB_THICKNESS / 2 + 0.03, 0]}
       rotation={[-Math.PI / 2, 0, 0]}
+      raycast={noRaycast}
     >
       <ringGeometry args={[ARENA_RADIUS - 0.3, ARENA_RADIUS, 80]} />
       <meshBasicMaterial
@@ -294,12 +339,23 @@ export function ArenaBoundary() {
 
 // ── Arena Perimeter Pillars (decorative neon columns) ────────────────────────────
 // ZERO dynamic lights. All glow is "faked" via meshBasicMaterial.
-// No useFrame — completely static geometry.
+// In 2.5D mode, all 16 pillars (32 crossing planes) are batched into 1 InstancedMesh.
+const _pillarDummy = new THREE.Object3D()
+
 export function ArenaPillars() {
+  const visualStyle = useGameStore((s) => s.visualStyle)
+  const isBuffActive = useGameStore((s) => s.isBuffActive)
+  const instancedRef = useRef<THREE.InstancedMesh>(null)
   const PILLAR_COUNT = 16
   const PILLAR_RADIUS = 0.35
   const PILLAR_HEIGHT = 5
   const PILLAR_ORBIT = ARENA_RADIUS + 1.5
+
+  const planeGeo = useMemo(() => getSharedPlaneGeometry(), [])
+  const obeliskTex = useMemo(
+    () => getSharedSpriteTexture('PROP_PERIMETER_OBELISK'),
+    []
+  )
 
   const pillars = useMemo(() => {
     return Array.from({ length: PILLAR_COUNT }).map((_, i) => {
@@ -307,9 +363,52 @@ export function ArenaPillars() {
       return {
         x: Math.cos(angle) * PILLAR_ORBIT,
         z: Math.sin(angle) * PILLAR_ORBIT,
+        angle,
       }
     })
-  }, [])
+  }, [PILLAR_ORBIT])
+
+  useEffect(() => {
+    if (visualStyle !== '2.5D' || !instancedRef.current) return
+    const mesh = instancedRef.current
+
+    for (let i = 0; i < pillars.length; i++) {
+      const p = pillars[i]
+      // Plane A (0 deg offset)
+      _pillarDummy.position.set(p.x, 3.2, p.z)
+      _pillarDummy.rotation.set(0, -p.angle, 0)
+      _pillarDummy.scale.set(2.6, 6.6, 1)
+      _pillarDummy.updateMatrix()
+      mesh.setMatrixAt(i * 2, _pillarDummy.matrix)
+
+      // Plane B (90 deg orthogonal cross-plane)
+      _pillarDummy.rotation.set(0, -p.angle + Math.PI / 2, 0)
+      _pillarDummy.updateMatrix()
+      mesh.setMatrixAt(i * 2 + 1, _pillarDummy.matrix)
+    }
+    mesh.instanceMatrix.needsUpdate = true
+  }, [pillars, visualStyle])
+
+  if (visualStyle === '2.5D') {
+    return (
+      <instancedMesh
+        ref={instancedRef}
+        args={[planeGeo, undefined, PILLAR_COUNT * 2]}
+        frustumCulled={false}
+        raycast={noRaycast}
+      >
+        <meshBasicMaterial
+          map={obeliskTex}
+          color={isBuffActive ? '#fef08a' : '#ffffff'}
+          transparent
+          opacity={0.95}
+          alphaTest={0.06}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </instancedMesh>
+    )
+  }
 
   return (
     <group>
