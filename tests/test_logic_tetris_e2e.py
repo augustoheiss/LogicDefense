@@ -605,6 +605,92 @@ def run_logic_tetris_e2e_suite() -> int:
                 "tier4SampleExpressions": tier4_seen_expressions[:8],
             }
 
+            # 10f. Estação de Comando Sekundo Icon-First (Docas Top/Bottom, Zero Barra Lateral, Palco Gigante & Click-to-Reveal) [Master Plan V6]
+            print("[10f/11] Auditando Estação de Comando Sekundo V6 (Docas Top/Bottom, Palco 10x10 Gigante >= 600px e Popover Click-to-Reveal)...")
+            page.locator('[data-testid="style-btn-FRUIT_MATCH"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "FRUIT_MATCH"
+            time.sleep(1.0)  # Aguardar conclusão da transição de 900ms para captura limpa do tabuleiro 10x10 cheio
+
+            top_dock_box = page.locator('[data-testid="telemetry-top-dock"]').bounding_box()
+            fruit_canvas_box = page.locator('[data-testid="logic-tetris-canvas"]').bounding_box()
+            bottom_alchemy_box = page.locator('[data-testid="piece-alchemy-bar"]').bounding_box()
+            bottom_touch_box = page.locator('[data-testid="touch-control-pad"]').bounding_box()
+
+            assert (
+                top_dock_box is not None
+                and fruit_canvas_box is not None
+                and bottom_alchemy_box is not None
+                and bottom_touch_box is not None
+            ), "Doca Superior, Canvas e Doca Inferior devem possuir boundingBox válido"
+
+            assert top_dock_box["y"] < fruit_canvas_box["y"], (
+                f"Doca Superior (y={top_dock_box['y']}) deve ficar ACIMA do Canvas (y={fruit_canvas_box['y']})"
+            )
+            assert bottom_alchemy_box["y"] > fruit_canvas_box["y"], (
+                f"Doca de Alquimia (y={bottom_alchemy_box['y']}) deve ficar ABAIXO do Canvas (y={fruit_canvas_box['y']})"
+            )
+            assert fruit_canvas_box["width"] >= 600, (
+                f"Palco 10x10 em Desktop deve ter largura expandida >= 600px (obtido: {fruit_canvas_box['width']}px)"
+            )
+
+            shot_v6_fruit = os.path.join(
+                screenshots_dir, "phase09_01_v6_sekundo_top_bottom_dock_fruit_10x10_desktop.png"
+            )
+            page.screenshot(path=shot_v6_fruit, full_page=False)
+            telemetry_report["screenshots"].append(shot_v6_fruit)
+
+            # Testar Sekundo Click-to-Reveal no ícone 💡 do Oráculo
+            page.locator('[data-testid="btn-oracle-reveal"]').click()
+            reveal_popover = page.locator('[data-testid="sekundo-icon-reveal-popover"]')
+            assert reveal_popover.is_visible(), (
+                "Popover Sekundo Click-to-Reveal (sekundo-icon-reveal-popover) deve abrir ao clicar em 💡 btn-oracle-reveal"
+            )
+            oracle_reason_el = page.locator('[data-testid="oracle-recommendation-reason"]')
+            assert oracle_reason_el.is_visible() and len(oracle_reason_el.inner_text()) > 5, (
+                "Popover Sekundo deve revelar a explicação viva do Oráculo (oracle-recommendation-reason)"
+            )
+            oracle_color = page.evaluate("""() => {
+                const el = document.querySelector('[data-testid="oracle-recommendation-reason"]');
+                return el ? window.getComputedStyle(el).color : '';
+            }""")
+            assert "0.06" not in oracle_color, (
+                f"Colisão de cor .mt-2 detectada no Popover Sekundo: {oracle_color}"
+            )
+
+            shot_v6_popover = os.path.join(
+                screenshots_dir, "phase09_02_v6_sekundo_click_to_reveal_popover_desktop.png"
+            )
+            page.screenshot(path=shot_v6_popover, full_page=False)
+            telemetry_report["screenshots"].append(shot_v6_popover)
+
+            page.locator('[data-testid="sekundo-popover-close"]').click()
+            assert not reveal_popover.is_visible(), "Popover Sekundo deve fechar ao clicar em ✕"
+
+            # Capturar também TACTILE_GRID 10x10 e TETRIS_CLASSIC 20x10 no novo layout V6
+            page.locator('[data-testid="style-btn-TACTILE_GRID"]').click()
+            time.sleep(1.0)
+            shot_v6_tactile = os.path.join(
+                screenshots_dir, "phase09_03_v6_sekundo_tactile_10x10_desktop.png"
+            )
+            page.screenshot(path=shot_v6_tactile, full_page=False)
+            telemetry_report["screenshots"].append(shot_v6_tactile)
+
+            page.locator('[data-testid="style-btn-TETRIS_CLASSIC"]').click()
+            time.sleep(1.0)
+            shot_v6_classic = os.path.join(
+                screenshots_dir, "phase09_04_v6_sekundo_classic_20x10_desktop.png"
+            )
+            page.screenshot(path=shot_v6_classic, full_page=False)
+            telemetry_report["screenshots"].append(shot_v6_classic)
+
+            telemetry_report["checks"]["sekundoIconFirstTopBottomDockV6"] = {
+                "status": "PASS",
+                "topDockY": top_dock_box["y"],
+                "fruit10x10CanvasBox": fruit_canvas_box,
+                "bottomAlchemyY": bottom_alchemy_box["y"],
+                "bottomTouchY": bottom_touch_box["y"],
+            }
+
             desktop_ctx.close()
 
             # =========================================================================

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LogicTetrisGame } from '../games/LogicTetris'
 import { TETRIS_MATH_LENSES } from '../games/LogicTetris/engine/mathEngine'
@@ -75,6 +76,7 @@ const LENS_SHOWCASE_ITEMS: readonly LensShowcaseItem[] = [
  */
 export function LogicTetrisPage() {
   const isFullscreen = useLogicTetrisStore((s) => s.isFullscreen)
+  const [showHeroInfo, setShowHeroInfo] = useState(false)
 
   const scrollToArena = () => {
     const el = document.getElementById('lt-arena-anchor')
@@ -90,79 +92,93 @@ export function LogicTetrisPage() {
 
   return (
     <div className="min-h-screen bg-[#040812] text-slate-100" data-testid="logic-tetris-page">
-      {/* Top Quick Navigation Bar (`Melhoria 08-C`) */}
-      <div className="sticky top-0 z-30 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
+      {/* Top Quick Navigation Bar (`Melhoria 08-C` & Sekundo Icon-First) */}
+      <div className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3 py-1.5">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Link
               to="/jogos"
               data-testid="nav-back-games"
-              className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono font-semibold text-cyan-300 transition"
+              title="Voltar para Todos os Jogos"
+              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono font-semibold text-cyan-300 transition"
             >
-              ← Todos os Jogos
+              ← Jogos
             </Link>
-            <span className="hidden sm:inline text-xs font-mono text-slate-400">
-              🏛️ Logic Tetris (Genesis Edition) · Aritmética Salva-Vidas
+            <span className="hidden sm:inline text-xs font-mono font-bold text-slate-300">
+              🏛️ Logic Tetris
             </span>
+            <button
+              type="button"
+              onClick={() => setShowHeroInfo((prev) => !prev)}
+              data-testid="btn-toggle-hero-info"
+              title="Sobre o Logic Tetris (Click-to-Reveal)"
+              className={`w-7 h-7 rounded-lg border text-xs font-mono flex items-center justify-center transition cursor-pointer ${
+                showHeroInfo
+                  ? 'bg-cyan-500/30 border-cyan-300 text-white'
+                  : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-cyan-300'
+              }`}
+            >
+              ℹ️
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Link
               to="/repositorio"
               data-testid="nav-to-repository"
-              className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-amber-200 transition"
+              title="Repositório Didático das 8 Lentes"
+              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-amber-200 transition"
             >
-              📚 Repositório Didático
+              📚 <span className="hidden md:inline">Repositório</span>
             </Link>
             <button
               type="button"
               onClick={scrollToArena}
               data-testid="btn-focus-arena"
-              className="px-3 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-xs font-mono font-bold text-cyan-200 transition cursor-pointer"
+              title="Focar na Arena"
+              className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-xs font-mono font-bold text-cyan-200 transition cursor-pointer"
             >
-              🎯 Focar na Arena
+              🎯 <span className="hidden md:inline">Arena</span>
             </button>
             <button
               type="button"
               onClick={handlePageFullscreen}
               data-testid="btn-page-fullscreen"
-              className="px-3 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/60 text-xs font-mono font-bold text-purple-200 transition cursor-pointer"
+              title="Alternar Tela Cheia [F]"
+              className={`px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition cursor-pointer ${
+                isFullscreen
+                  ? 'bg-purple-500/40 border-purple-300 text-white'
+                  : 'bg-purple-500/20 hover:bg-purple-500/30 border-purple-400/60 text-purple-200'
+              }`}
             >
-              {isFullscreen ? '⛶ Sair da Tela Cheia [F]' : '⛶ Tela Cheia [F]'}
+              {isFullscreen ? '🗗' : '⛶'} <span className="hidden md:inline">[F]</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* =====================================================================
-          SECTION 1: HERO & LIVE EMBEDDED GAME ARENA (ABOVE THE FOLD)
+          SECTION 1: LIVE EMBEDDED GAME ARENA IMMEDIATELY AT TOP OF VIEWPORT
           ===================================================================== */}
-      <section className="relative pt-6 pb-12 px-3 sm:px-6 max-w-[1600px] mx-auto">
-        <div className="text-center max-w-4xl mx-auto mb-6">
-          <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-xs font-mono font-bold text-cyan-300 mb-3">
-            <span>🧶 HEISS-LAB · CORDÃO TRÍPLICE 3-EM-1 · ARENAS PROPORCIONAIS 20×10 & 10×10</span>
-          </span>
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
-            Logic Tetris:{' '}
-            <span className="bg-gradient-to-r from-cyan-400 via-teal-300 to-amber-300 bg-clip-text text-transparent">
-              Onde a Matemática Salva a Sua Vida nos 3 Estilos dos Blocos.
-            </span>
-          </h1>
-          <p className="text-sm sm:text-base text-slate-300 mt-2.5 leading-relaxed">
-            Jogue no <strong className="text-cyan-300">Modo Simultâneo 3-em-1 [L]</strong> (que
-            alterna entre <strong>🧱 Tetris Clássico 20×10</strong>,{' '}
-            <strong>🍎 Frutas 10×10 em Troca & Cascata</strong> e{' '}
-            <strong>🧩 Grade Livre H×V 10×10 com Macro-Blocos 3×3</strong> mantendo sua sequência
-            viva!) ou trave no seu estilo favorito. Use a{' '}
-            <strong>Luz Guia Socrática Zero-Spoiler</strong> das 4 operações para{' '}
-            <strong className="text-cyan-300">transmutar peças [M]</strong>,{' '}
-            <strong className="text-amber-300">selar buracos/colunas [B]</strong> e acionar o{' '}
-            <strong className="text-purple-300">Protocolo Fênix 142857</strong>!
-          </p>
-        </div>
+      <section className="relative pt-2 pb-10 px-2 sm:px-4 max-w-[1600px] mx-auto">
+        {showHeroInfo && (
+          <div className="text-center max-w-3xl mx-auto mb-3 rounded-2xl bg-slate-900/90 border border-cyan-500/40 p-3 animate-fadeIn">
+            <h1 className="text-base sm:text-xl font-extrabold text-white">
+              Logic Tetris:{' '}
+              <span className="bg-gradient-to-r from-cyan-400 via-teal-300 to-amber-300 bg-clip-text text-transparent">
+                Onde a Matemática Salva a Sua Vida nos 3 Estilos dos Blocos
+              </span>
+            </h1>
+            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+              Alterne entre <strong>🧱 Clássico 20×10</strong>, <strong>🍎 Frutas 10×10</strong> e{' '}
+              <strong>🧩 Grade 10×10</strong>. Clique em qualquer ícone nas docas superior e
+              inferior para revelar seu funcionamento!
+            </p>
+          </div>
+        )}
 
         {/* Live Game Anchor */}
-        <div id="lt-arena-anchor" className="scroll-mt-16">
+        <div id="lt-arena-anchor" className="scroll-mt-12">
           <LogicTetrisGame />
         </div>
       </section>

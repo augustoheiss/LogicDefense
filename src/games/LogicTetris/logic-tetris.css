@@ -40,29 +40,38 @@
 
 .lt-board-canvas {
   width: 100%;
-  max-width: 460px;
+  max-width: 360px;
   height: auto;
-  aspect-ratio: 426 / 740;
+  aspect-ratio: 486 / 860;
   background: #060b16;
-  transition:
-    max-width 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.35s ease;
+  transition: box-shadow 0.35s ease;
   box-shadow:
     0 0 36px rgba(6, 182, 212, 0.18),
     0 20px 48px rgba(2, 6, 23, 0.88);
 }
 
 .lt-board-canvas-20x10 {
-  max-width: 460px;
-  aspect-ratio: 426 / 740;
+  max-width: 360px;
+  aspect-ratio: 486 / 860;
 }
 
 .lt-board-canvas-10x10 {
-  max-width: 550px;
-  aspect-ratio: 586 / 560;
+  max-width: 616px;
+  aspect-ratio: 726 / 700;
   box-shadow:
     0 0 42px rgba(168, 85, 247, 0.22),
     0 20px 48px rgba(2, 6, 23, 0.9);
+}
+
+@media (max-width: 639px) {
+  .lt-board-canvas,
+  .lt-board-canvas-20x10 {
+    max-width: 240px;
+  }
+
+  .lt-board-canvas-10x10 {
+    max-width: 340px;
+  }
 }
 
 .lt-fullscreen-active {
@@ -76,14 +85,14 @@
 }
 
 .lt-fullscreen-active .lt-board-canvas-20x10 {
-  max-width: min(520px, 88vw);
-  max-height: 80vh;
+  max-width: min(500px, 88vw);
+  max-height: 82vh;
   width: auto;
 }
 
 .lt-fullscreen-active .lt-board-canvas-10x10 {
-  max-width: min(660px, 92vw);
-  max-height: 78vh;
+  max-width: min(760px, 94vw);
+  max-height: 82vh;
   width: auto;
 }
 

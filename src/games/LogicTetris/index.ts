@@ -3,6 +3,7 @@ export { TetrisCanvas, getStageViewportMetrics } from './components/TetrisCanvas
 export { PieceAlchemyBar, MiniPieceMatrixPreview } from './components/PieceAlchemyBar'
 export { MathInterventionModal } from './components/MathInterventionModal'
 export { TelemetryHUD } from './components/TelemetryHUD'
+export { SekundoIconPopover } from './components/SekundoIconPopover'
 export { LogicCodexDrawer } from './components/LogicCodexDrawer'
 export { TouchControlPad } from './components/TouchControlPad'
 export { useGameLoop, toggleLogicTetrisFullscreen } from './hooks/useGameLoop'

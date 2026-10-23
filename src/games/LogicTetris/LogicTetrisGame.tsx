@@ -112,7 +112,7 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
 
   const is10x10Stage =
     activeSubGameStyle === 'FRUIT_MATCH' || activeSubGameStyle === 'TACTILE_GRID'
-  const stageMaxWidthClass = is10x10Stage ? 'max-w-[550px]' : 'max-w-[460px]'
+  const stageMaxWidthClass = is10x10Stage ? 'max-w-[616px]' : 'max-w-[360px]'
 
   const handleStartMatch = () => {
     startGame(mode)
@@ -135,8 +135,8 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
 
   return (
     <div
-      className={`lt-genesis-shell relative rounded-3xl p-3 sm:p-5 border border-slate-800/90 shadow-2xl ${
-        isFullscreen ? 'lt-fullscreen-active' : ''
+      className={`lt-genesis-shell relative rounded-3xl p-2 sm:p-3 border border-slate-800/90 shadow-2xl max-w-[1120px] mx-auto ${
+        isFullscreen ? 'lt-fullscreen-active max-w-none' : ''
       } ${className}`}
       data-testid="logic-tetris-game"
       data-game-phase={phase}
@@ -145,21 +145,26 @@ export const LogicTetrisGame: React.FC<LogicTetrisGameProps> = ({ className = ''
       data-rotation-mode={styleRotationMode}
       data-fullscreen={isFullscreen ? 'true' : 'false'}
     >
-      {/* Main Responsive Arena Grid — Expanded 6/6 Columns for Proportional 20x10 & 10x10 Stages */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 xl:gap-6 items-start">
-        {/* Left/Center Column: Proportional Uncut Stage Canvas (20x10 vs 10x10) + Touch Pad */}
-        <div className="lg:col-span-6 flex flex-col items-center gap-3">
+      {/* Sekundo Vertical Command Station: Top Telemetry Dock -> Giant Central Arena -> Bottom Alchemy & Control Dock */}
+      <div className="w-full max-w-[1060px] mx-auto flex flex-col items-center gap-1.5">
+        {/* 1. TOP COMMAND & TELEMETRY DOCK */}
+        <TelemetryHUD className="w-full" />
+
+        {/* 2. CENTRAL GIANT ARENA STAGE (Zero Sidebars!) */}
+        <div className="w-full flex flex-col items-center justify-center">
           <TetrisCanvas
             onCavityClick={() => triggerMathFillHole()}
             className={`w-full ${stageMaxWidthClass}`}
           />
-          <TouchControlPad className={`w-full ${stageMaxWidthClass}`} />
         </div>
 
-        {/* Right Column: Telemetry HUD + Piece Alchemy Bar */}
-        <div className="lg:col-span-6 flex flex-col gap-3.5">
-          <TelemetryHUD />
-          <PieceAlchemyBar />
+        {/* 3. BOTTOM ALCHEMY & CONTROL DOCK */}
+        <div
+          className="w-full flex flex-col gap-1"
+          data-testid="bottom-command-dock"
+        >
+          <PieceAlchemyBar className="w-full" />
+          <TouchControlPad className="w-full" />
         </div>
       </div>
 

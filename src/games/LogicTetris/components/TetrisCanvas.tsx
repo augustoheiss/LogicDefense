@@ -112,8 +112,8 @@ const RIGHT_GUTTER = 56
 const TOP_RULER = 30
 const BOTTOM_RULER = 30
 
-export const CLASSIC_CELL_SIZE = 34
-export const ARENA_10X10_CELL_SIZE = 50
+export const CLASSIC_CELL_SIZE = 40
+export const ARENA_10X10_CELL_SIZE = 64
 
 export const CANVAS_LOGICAL_WIDTH =
   LEFT_GUTTER + BOARD_WIDTH * CLASSIC_CELL_SIZE + RIGHT_GUTTER
@@ -2855,70 +2855,76 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
     }
   }
 
+  const visibleFeedbacks = React.useMemo(() => {
+    // Filter out redundant '🌀 TROCA DE CENÁRIO' DOM toast since the Canvas 2D portal already renders it
+    const nonRedundant = floatingFeedbacks.filter(
+      (fb) => !fb.text.startsWith('🌀 TROCA DE CENÁRIO')
+    )
+    if (nonRedundant.length === 0) return []
+    const hasCelebration = nonRedundant.some(
+      (fb) => !fb.text.startsWith('🔄')
+    )
+    const filtered = hasCelebration
+      ? nonRedundant.filter((fb) => !fb.text.startsWith('🔄'))
+      : nonRedundant
+    const deduped: typeof floatingFeedbacks = []
+    for (const fb of filtered) {
+      if (deduped.length === 0 || deduped[deduped.length - 1].text !== fb.text) {
+        deduped.push(fb)
+      }
+    }
+    return deduped.slice(-1)
+  }, [floatingFeedbacks])
+
   return (
     <div className={`lt-canvas-stage relative select-none ${className}`}>
-      {/* Top Pedagogical Status Pill */}
-      <div className="lt-canvas-header-strip w-full max-w-[550px] flex flex-wrap items-center justify-between gap-1.5 px-2.5 py-1.5 text-xs font-mono">
-        <span className="text-cyan-300/95 flex items-center gap-1.5 font-semibold">
-          <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span>{getSubGameStyleLabelPt(activeSubGameStyle)}</span>
-          <span className="px-1.5 py-0.5 rounded bg-slate-800/90 border border-slate-700 text-[10px] text-slate-300">
-            {is10x10Stage ? 'Palco 10×10 (50px)' : 'Torre 20×10 (34px)'}
+      {/* Minimal Icon-First Floating Status Badges (Zero Verbose Text Header) */}
+      <div className="lt-canvas-header-strip w-full flex flex-wrap items-center justify-center gap-1.5 pb-0.5 text-[10px] font-mono leading-tight">
+        {combo >= 12 && (
+          <span
+            className="px-2 py-0.5 rounded-full bg-amber-500/30 border border-amber-300 text-amber-100 font-bold animate-pulse"
+            data-testid="canvas-legendary-streak-badge"
+          >
+            👑 ×{combo}
           </span>
-        </span>
+        )}
 
-        <div className="flex items-center gap-1.5">
-          {combo >= 12 && (
-            <span
-              className="px-2 py-0.5 rounded-full bg-amber-500/30 border border-amber-300 text-amber-100 font-bold animate-pulse"
-              data-testid="canvas-legendary-streak-badge"
-            >
-              👑 SEQUÊNCIA LENDÁRIA ×{combo}
-            </span>
-          )}
+        {lastMathResonanceFormula && (
+          <span
+            className="px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/50 text-purple-200 font-semibold truncate max-w-[210px]"
+            title={lastMathResonanceFormula}
+            data-testid="canvas-math-resonance-badge"
+          >
+            ∑ {lastMathResonanceFormula.split('(')[0].trim()}
+          </span>
+        )}
 
-          {lastMathResonanceFormula && (
-            <span
-              className="px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/50 text-purple-200 font-semibold truncate max-w-[230px]"
-              title={lastMathResonanceFormula}
-              data-testid="canvas-math-resonance-badge"
-            >
-              ∑ {lastMathResonanceFormula}
-            </span>
-          )}
-
-          {activeSubGameStyle === 'FRUIT_MATCH' ? (
-            <span
-              className="px-2 py-0.5 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/50 text-fuchsia-200 font-semibold"
-              data-testid="canvas-fruit-swaps-badge"
-            >
-              🍎 {validSwapsCount} Trocas Prontas (Clique ou Arraste)
-            </span>
-          ) : graceFloatMs > 0 ? (
-            <span
-              className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-semibold animate-pulse"
-              data-testid="grace-float-badge"
-            >
-              🛡️ Flutuação Suave ({(graceFloatMs / 1000).toFixed(1)}s)
-            </span>
-          ) : buriedCount > 0 && activeSubGameStyle === 'TETRIS_CLASSIC' ? (
-            <button
-              type="button"
-              onClick={onCavityClick}
-              className="px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 font-semibold transition cursor-pointer"
-              title="Clique ou pressione [B] para tapar os buracos soterrados com Matemática!"
-              data-testid="canvas-cavity-pill"
-            >
-              ✦ {buriedCount} {buriedCount === 1 ? 'Buraco Soterrado' : 'Buracos Soterrados'} [B]
-            </button>
-          ) : (
-            <span className="text-emerald-300/85">
-              {activeSubGameStyle === 'TACTILE_GRID'
-                ? '❖ Arena 10×10 Sem Cortes'
-                : '✦ Pilha Sem Cavidades'}
-            </span>
-          )}
-        </div>
+        {activeSubGameStyle === 'FRUIT_MATCH' ? (
+          <span
+            className="px-2 py-0.5 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/50 text-fuchsia-200 font-semibold"
+            title={`${validSwapsCount} trocas válidas prontas na Arena 10×10`}
+            data-testid="canvas-fruit-swaps-badge"
+          >
+            🍎 {validSwapsCount}
+          </span>
+        ) : graceFloatMs > 0 ? (
+          <span
+            className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-semibold animate-pulse"
+            data-testid="grace-float-badge"
+          >
+            🛡️ {(graceFloatMs / 1000).toFixed(1)}s
+          </span>
+        ) : buriedCount > 0 && activeSubGameStyle === 'TETRIS_CLASSIC' ? (
+          <button
+            type="button"
+            onClick={onCavityClick}
+            className="px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 font-semibold transition cursor-pointer"
+            title="Clique ou pressione [B] para tapar os buracos soterrados com Matemática!"
+            data-testid="canvas-cavity-pill"
+          >
+            ✦ {buriedCount} [B]
+          </button>
+        ) : null}
       </div>
 
       {/* Main Proportional Base-10 Canvas (20x10 Tower OR 10x10 Full Square Stage) */}
@@ -2947,15 +2953,15 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         />
 
         {/* Floating Feedbacks Overlay (Celebrations & Warm Encouragement) */}
-        {floatingFeedbacks.length > 0 && (
+        {visibleFeedbacks.length > 0 && (
           <div
-            className="pointer-events-none absolute inset-x-3 top-9 flex flex-col items-center gap-1.5 z-20"
+            className="pointer-events-none absolute inset-x-3 top-9 flex flex-col items-center gap-1 z-20"
             aria-live="polite"
           >
-            {floatingFeedbacks.slice(-3).map((fb) => (
+            {visibleFeedbacks.map((fb) => (
               <div
                 key={fb.id}
-                className={`lt-floating-toast lt-toast-${fb.color} px-3 py-1.5 rounded-lg border backdrop-blur-md text-center shadow-lg`}
+                className={`lt-floating-toast lt-toast-${fb.color} px-2.5 py-1 rounded-lg border backdrop-blur-md text-center shadow-lg`}
               >
                 <div className="text-xs font-bold tracking-wide">{fb.text}</div>
                 {fb.subtext && (
