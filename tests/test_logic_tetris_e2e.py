@@ -563,6 +563,48 @@ def run_logic_tetris_e2e_suite() -> int:
                 "verifiedStyles": ["FRUIT_MATCH", "TACTILE_GRID", "TETRIS_CLASSIC"],
             }
 
+            # 10e. Motor Matemático Infinito Isomórfico Zero-Repetição (Grau I..IV, especialmente Grau IV) [Master Plan V5]
+            print("[10e/11] Auditando Motor Matemático Infinito Isomórfico (20 sorteios seguidos no Grau IV sem repetição)...")
+            page.locator('[data-testid="btn-trigger-fill-hole"]').click()
+            modal_v5 = page.locator('[data-testid="math-intervention-modal"]')
+            assert modal_v5.is_visible(), "Modal [B] deve abrir para auditar Zero-Repetição V5"
+
+            tier4_seen_expressions = []
+            for _ in range(20):
+                page.locator('[data-testid="miracle-tier-btn-4"]').click()
+                expr_v5 = page.locator('[data-testid="modal-math-expression"]').inner_text().strip()
+                hint_v5 = page.locator('[data-testid="modal-guiding-light"]').inner_text().strip()
+                assert "(=" not in hint_v5, f"Spoiler intermediário detectado no Grau IV: {hint_v5}"
+                tier4_seen_expressions.append(expr_v5)
+
+            unique_tier4_count = len(set(tier4_seen_expressions))
+            assert unique_tier4_count == 20, (
+                f"Esperado 20 expressões 100% únicas em 20 cliques seguidos no Grau IV, "
+                f"mas obteve {unique_tier4_count}/20 únicas: {tier4_seen_expressions}"
+            )
+
+            # Validar também 12 sorteios seguidos sem repetição nos Graus I, II e III
+            tier_uniqueness_summary = {"tier_4": f"{unique_tier4_count}/20"}
+            for t_idx in (1, 2, 3):
+                t_seen = []
+                for _ in range(12):
+                    page.locator(f'[data-testid="miracle-tier-btn-{t_idx}"]').click()
+                    t_expr = page.locator('[data-testid="modal-math-expression"]').inner_text().strip()
+                    t_seen.append(t_expr)
+                t_unique = len(set(t_seen))
+                assert t_unique == 12, (
+                    f"Esperado 12 expressões únicas seguidas no Grau {t_idx}, obteve {t_unique}/12: {t_seen}"
+                )
+                tier_uniqueness_summary[f"tier_{t_idx}"] = f"{t_unique}/12"
+
+            page.locator('[data-choice-correct="true"]').first.click()
+            assert not modal_v5.is_visible(), "Modal deve fechar após resolver desafio V5"
+            telemetry_report["checks"]["infiniteIsomorphicZeroRepetitionV5"] = {
+                "status": "PASS",
+                "uniquenessByTier": tier_uniqueness_summary,
+                "tier4SampleExpressions": tier4_seen_expressions[:8],
+            }
+
             desktop_ctx.close()
 
             # =========================================================================

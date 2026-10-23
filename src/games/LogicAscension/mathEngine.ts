@@ -95,17 +95,39 @@ function buildQuestion(
   };
 }
 
+// ── Session Anti-Repetition & Subtype Stratification ───────────────────────────
+const SEEN_ASCENSION_EXPRESSIONS = new Set<string>();
+const SEEN_ASCENSION_QUEUE: string[] = [];
+const MAX_SEEN_ASCENSION = 400;
+const RECENT_ASCENSION_LENSES: string[] = [];
+
+function recordAscensionQuestion(q: Question): void {
+  const sig = `${q.expression}=${q.correctAnswer}`;
+  if (!SEEN_ASCENSION_EXPRESSIONS.has(sig)) {
+    SEEN_ASCENSION_EXPRESSIONS.add(sig);
+    SEEN_ASCENSION_QUEUE.push(sig);
+    if (SEEN_ASCENSION_QUEUE.length > MAX_SEEN_ASCENSION) {
+      const oldest = SEEN_ASCENSION_QUEUE.shift();
+      if (oldest) SEEN_ASCENSION_EXPRESSIONS.delete(oldest);
+    }
+  }
+  if (q.lensTitle) {
+    RECENT_ASCENSION_LENSES.push(q.lensTitle);
+    if (RECENT_ASCENSION_LENSES.length > 4) RECENT_ASCENSION_LENSES.shift();
+  }
+}
+
 // ── Tier 1 — Soma & Subtração Inteligente (Massinha, Hack Japonês, Caça-Dezenas) ──
 function genTier1(cycle: number): Question {
-  const t = r(0, 3);
+  const t = r(0, 4);
 
   // Subtype 0: Massinha da Soma (Compensation to nearest 10)
   if (t === 0) {
-    const tensA = r(1 + cycle, 4 + cycle * 2) * 10;
-    const unitA = pick([7, 8, 9]);
+    const tensA = r(1 + cycle, 7 + cycle * 2) * 10;
+    const unitA = pick([6, 7, 8, 9]);
     const A = tensA + unitA;
-    const shift = 10 - unitA; // 1, 2, or 3
-    const B = r(12 + cycle * 5, 26 + cycle * 8);
+    const shift = 10 - unitA; // 1, 2, 3, or 4
+    const B = r(11 + cycle * 4, 38 + cycle * 8);
     const roundedA = A + shift;
     const adjustedB = B - shift;
     const ans = A + B;
@@ -139,15 +161,15 @@ function genTier1(cycle: number): Question {
 
   // Subtype 1: Hack Japonês (Constant-difference subtraction without borrowing)
   if (t === 1) {
-    const tensB = r(1 + cycle, 3 + cycle * 2) * 10;
-    const unitB = pick([7, 8, 9]);
+    const tensB = r(1 + cycle, 5 + cycle * 2) * 10;
+    const unitB = pick([6, 7, 8, 9]);
     const B = tensB + unitB;
-    const shift = 10 - unitB; // +1, +2, or +3 zeroes out B
-    const diff = r(14 + cycle * 4, 38 + cycle * 8);
+    const shift = 10 - unitB; // +1, +2, +3, or +4 zeroes out B
+    const diff = r(12 + cycle * 4, 48 + cycle * 8);
     let A = B + diff;
     // Ensure unit of A < unit of B so traditional subtraction would force borrowing
     if (A % 10 >= unitB) {
-      A = Math.floor(A / 10) * 10 + r(1, unitB - 1);
+      A = Math.floor(A / 10) * 10 + r(0, unitB - 1);
       if (A <= B + 5) A += 10;
     }
     const newA = A + shift;
@@ -183,11 +205,11 @@ function genTier1(cycle: number): Question {
 
   // Subtype 2: Caça-Dezenas (Associative Trio Addition: A + B + C where A+C is round)
   if (t === 2) {
-    const targetRound = pick([20, 30, 40, 50]) + cycle * 20;
-    const uA = pick([6, 7, 8, 9]);
-    const A = r(1, Math.max(1, targetRound / 10 - 2)) * 10 + uA;
+    const targetRound = pick([30, 40, 50, 60, 70, 80, 90, 100]) + cycle * 20;
+    const uA = pick([3, 4, 6, 7, 8, 9]);
+    const A = r(1, Math.max(1, Math.floor(targetRound / 10) - 2)) * 10 + uA;
     const C = targetRound - A;
-    const B = r(11 + cycle * 3, 29 + cycle * 5);
+    const B = r(11 + cycle * 3, 39 + cycle * 6);
     const ans = targetRound + B;
 
     return buildQuestion({
@@ -214,10 +236,45 @@ function genTier1(cycle: number): Question {
     });
   }
 
-  // Subtype 3: A Peça que Falta / Vai-e-Vem (A + B − C where B and C are close)
-  const base = r(25 + cycle * 10, 60 + cycle * 15);
-  const delta = r(2, 6);
-  const B = r(15 + cycle * 4, 28 + cycle * 6);
+  // Subtype 3: Hack dos Nove na Centena (100 - B / 200 - B)
+  if (t === 3) {
+    const hundredBase = pick([100, 200, 300]);
+    const bTens = r(1, 8);
+    const bUnit = r(1, 9);
+    const B = bTens * 10 + bUnit;
+    const ans = hundredBase - B;
+    const nineTens = 9 - bTens;
+    const tenUnit = 10 - bUnit;
+
+    return buildQuestion({
+      expression: `${hundredBase} − ${B}`,
+      lensTitle: 'Hack dos Nove (Troco de Centena)',
+      hint: `Para fechar 9 na dezena (9−${bTens}=${nineTens}) e 10 na unidade (10−${bUnit}=${tenUnit})!`,
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [ans + 10, ans - 10, hundredBase - bTens * 10 + bUnit]),
+      realLifeTip: `Dar o troco de uma nota de R$ 100 em 1 segundo sem precisar emprestar de zero em zero.`,
+      trapNote: `${ans + 10} — completou a dezena para 10 em vez de 9 ao tirar da centena`,
+      methods: [
+        {
+          badge: '⚡ Jeito 1 — Regra 9 na Dezena, 10 na Unidade',
+          summary: `Pense em ${hundredBase - 1} + 1: complete a dezena para 9 (9−${bTens}=${nineTens}) e a unidade para 10 (10−${bUnit}=${tenUnit}) → ${ans}!`,
+        },
+        {
+          badge: '🌉 Jeito 2 — A Ponte até a Centena',
+          summary: `Do ${B} até ${(bTens + 1) * 10} faltam +${tenUnit}; até ${hundredBase} faltam +${ans - tenUnit} → ${ans}!`,
+        },
+        {
+          badge: '🧱 Jeito 3 — Hack Japonês (−1 nos Dois)',
+          summary: `Tire 1 dos dois números: ${hundredBase - 1} − ${B - 1} = ${ans} sem nenhum empréstimo!`,
+        },
+      ],
+    });
+  }
+
+  // Subtype 4: A Peça que Falta / Vai-e-Vem (A + B − C where B and C are close)
+  const base = r(22 + cycle * 10, 75 + cycle * 15);
+  const delta = r(2, 12);
+  const B = r(15 + cycle * 4, 38 + cycle * 6);
   const C = B - delta;
   const ans = base + delta;
   return buildQuestion({
@@ -244,17 +301,17 @@ function genTier1(cycle: number): Question {
   });
 }
 
-// ── Tier 2 — Multiplicação & Divisão Mental (Dobra-Metade, Truque 5/9, Corta no Meio) ──
+// ── Tier 2 — Multiplicação & Divisão Mental (Dobra-Metade, Truque 5/9/11, Corta no Meio) ──
 function genTier2(cycle: number): Question {
-  const t = r(0, 3);
+  const t = r(0, 4);
 
-  // Subtype 0: Dobra e Metade (Friendly Multiplication)
+  // Subtype 0: Dobra e Metade (Friendly Multiplication — Parametric!)
   if (t === 0) {
-    const pairs: Array<[number, number]> = cycle === 0
-      ? [[4, 15], [6, 15], [8, 15], [4, 25], [6, 25], [14, 5], [16, 5], [18, 5]]
-      : [[6, 15], [8, 15], [6, 25], [8, 25], [12, 15], [14, 15], [24, 5], [26, 5], [4, 35]];
-    const [A, B] = pick(pairs);
-    const halfA = A / 2;
+    const bPool = cycle === 0 ? [5, 12, 15, 25, 35] : [12, 14, 15, 16, 18, 25, 35, 45];
+    const B = pick(bPool);
+    const maxHalfA = B >= 25 ? 8 : 12;
+    const halfA = r(2, maxHalfA);
+    const A = halfA * 2;
     const doubleB = B * 2;
     const ans = A * B;
     const bTens = Math.floor(B / 10) * 10;
@@ -287,11 +344,11 @@ function genTier2(cycle: number): Question {
     });
   }
 
-  // Subtype 1: O Truque do 9 (ou 99 / 19) — Multiplicar pelo Redondo e Tirar 1 Grupo
+  // Subtype 1: O Truque do 9 (ou 19 / 29 / 99) — Multiplicar pelo Redondo e Tirar 1 Grupo
   if (t === 1) {
-    const nineFactor = cycle === 0 ? 9 : pick([9, 19]);
-    const roundFactor = nineFactor + 1; // 10 or 20
-    const B = r(4 + cycle * 2, 12 + cycle * 4);
+    const nineFactor = cycle === 0 ? pick([9, 19]) : pick([9, 19, 29, 99]);
+    const roundFactor = nineFactor + 1; // 10, 20, 30, or 100
+    const B = nineFactor === 99 ? r(2, 9) : r(4 + cycle * 2, 16 + cycle * 4);
     const roundProd = roundFactor * B;
     const ans = nineFactor * B;
 
@@ -322,8 +379,8 @@ function genTier2(cycle: number): Question {
 
   // Subtype 2: Corta no Meio (Divisão por Simplificação Sucessiva)
   if (t === 2) {
-    const divisor = pick([4, 6, 8]);
-    const ans = r(11 + cycle * 4, 24 + cycle * 8);
+    const divisor = pick([4, 6, 8, 12, 14, 16]);
+    const ans = r(9 + cycle * 3, 28 + cycle * 8);
     const dividend = divisor * ans;
     const halfDiv = dividend / 2;
     const halfDivisor = divisor / 2;
@@ -356,8 +413,38 @@ function genTier2(cycle: number): Question {
     });
   }
 
-  // Subtype 3: Multiplicação por 5 (Multiplicar por 10 e cortar na metade)
-  const evenN = r(6 + cycle * 4, 18 + cycle * 8) * 2;
+  // Subtype 3: Segredo do 11 (10×N + N / Soma no Meio)
+  if (t === 3) {
+    const B = r(12 + cycle * 3, 34 + cycle * 6);
+    const tenB = B * 10;
+    const ans = 11 * B;
+    return buildQuestion({
+      expression: `11 × ${B}`,
+      lensTitle: 'O Segredo do 11 (10 + 1)',
+      hint: `Faça 10 × ${B} (${tenB}) e some mais 1 vez o ${B}!`,
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [tenB + 1, ans - 10, ans + 11]),
+      realLifeTip: `Calcular 11 mensalidades ou 11 pacotes somando 10 pacotes + 1 pacote extra.`,
+      trapNote: `${tenB + 1} — somou apenas 1 unidade em vez de somar 1 grupo de ${B}`,
+      methods: [
+        {
+          badge: '⚡ Jeito 1 — Dezena + 1 Grupo',
+          summary: `11 × ${B} é (10 × ${B}) + ${B} = ${tenB} + ${B} = ${ans}!`,
+        },
+        {
+          badge: '🪄 Jeito 2 — Abre os Dígitos e Soma no Meio',
+          summary: `Separe os algarismos de ${B} (${Math.floor(B / 10)} e ${B % 10}) e coloque a soma deles (${Math.floor(B / 10) + (B % 10)}) no meio = ${ans}!`,
+        },
+        {
+          badge: '🧱 Jeito 3 — Dezenas Separadas',
+          summary: `11 × ${Math.floor(B / 10) * 10} = ${11 * Math.floor(B / 10) * 10}, mais 11 × ${B % 10} (${11 * (B % 10)}) = ${ans}!`,
+        },
+      ],
+    });
+  }
+
+  // Subtype 4: Multiplicação por 5 (Multiplicar por 10 e cortar na metade)
+  const evenN = r(6 + cycle * 4, 28 + cycle * 8) * 2;
   const tenTimes = evenN * 10;
   const ans = evenN * 5;
   return buildQuestion({
@@ -384,17 +471,18 @@ function genTier2(cycle: number): Question {
   });
 }
 
-// ── Tier 3 — Ordem das Operações (PEMDAS) & Fator Comum Inteligente ───────────
+// ── Tier 3 — Ordem das Operações (PEMDAS), Fator Comum & Quadrados Mágicos ────
 function genTier3(cycle: number): Question {
-  const t = r(0, 3);
+  const t = r(0, 4);
   const rA = (lo: number, hi: number) => r(lo + cycle * 3, hi + cycle * 6);
   const rM = (lo: number, hi: number) => r(lo + cycle,     hi + cycle * 2);
 
-  // Subtype 0: Fator Comum / Distributiva (A × C + B × C where A + B = 10!)
+  // Subtype 0: Fator Comum / Distributiva (A × C + B × C where A + B = 10 or 20!)
   if (t === 0) {
-    const A = r(2, 8);
-    const B = 10 - A;
-    const C = r(4 + cycle * 2, 12 + cycle * 3);
+    const sumTarget = pick([10, 20]);
+    const A = r(2, sumTarget - 2);
+    const B = sumTarget - A;
+    const C = r(4 + cycle * 2, 18 + cycle * 4);
     const ans = (A + B) * C;
     const trap = (A * C + B) * C;
 
@@ -404,12 +492,12 @@ function genTier3(cycle: number): Question {
       hint: `${A} pacotes de ${C} + ${B} pacotes de ${C} = ${A + B} pacotes de ${C}!`,
       correctAnswer: ans,
       wrongAnswers: wrongs(ans, [trap, A * C + B, ans - C]),
-      realLifeTip: `${A} caixas com ${C} itens mais ${B} caixas com ${C} itens formam 10 caixas de ${C}!`,
+      realLifeTip: `${A} caixas com ${C} itens mais ${B} caixas com ${C} itens formam ${sumTarget} caixas de ${C}!`,
       trapNote: `${trap} — somou da esquerda para a direita sem separar os produtos`,
       methods: [
         {
           badge: '⚡ Jeito 1 — Juntar os Pacotes (Distributiva)',
-          summary: `Junte os grupos iguais: (${A} + ${B}) × ${C} = 10 × ${C} = ${ans} instantâneo!`,
+          summary: `Junte os grupos iguais: (${A} + ${B}) × ${C} = ${sumTarget} × ${C} = ${ans} instantâneo!`,
         },
         {
           badge: '🧱 Jeito 2 — PEMDAS Passo a Passo',
@@ -417,7 +505,7 @@ function genTier3(cycle: number): Question {
         },
         {
           badge: '🔍 Jeito 3 — Conferência por Metades',
-          summary: `10 vezes ${C} é ${ans}; tirando ${B}×${C} (${B * C}) sobra exatamente ${A}×${C} (${A * C})!`,
+          summary: `${sumTarget} vezes ${C} é ${ans}; tirando ${B}×${C} (${B * C}) sobra exatamente ${A}×${C} (${A * C})!`,
         },
       ],
     });
@@ -425,9 +513,9 @@ function genTier3(cycle: number): Question {
 
   // Subtype 1: A + B × C (PEMDAS with friendly mental numbers)
   if (t === 1) {
-    const A = rA(10, 25);
-    const B = rM(3, 6);
-    const C = pick([4, 5, 6, 8, 10]);
+    const A = rA(10, 38);
+    const B = rM(3, 9);
+    const C = pick([4, 5, 6, 7, 8, 9, 10, 12]);
     const prod = B * C;
     const ans = A + prod;
     const trap = (A + B) * C;
@@ -459,10 +547,10 @@ function genTier3(cycle: number): Question {
 
   // Subtype 2: A − B × C (PEMDAS Subtraction)
   if (t === 2) {
-    const B = rM(3, 6);
-    const C = pick([4, 5, 6, 8]);
+    const B = rM(3, 9);
+    const C = pick([4, 5, 6, 7, 8, 9]);
     const prod = B * C;
-    const A = prod + rA(8, 25);
+    const A = prod + rA(8, 36);
     const ans = A - prod;
     const trap = (A - B) * C;
 
@@ -491,11 +579,47 @@ function genTier3(cycle: number): Question {
     });
   }
 
-  // Subtype 3: (A ÷ B) + C
-  const B = pick([3, 4, 5, 6]);
-  const M = rM(4, 9);
+  // Subtype 3: Diferença de Quadrados Simétricos (A² − B² = (A−B)×(A+B))
+  if (t === 3) {
+    const sumRound = pick([20, 30, 40, 50]);
+    const half = sumRound / 2;
+    const delta = r(1, Math.min(6, half - 2));
+    const A = half + delta;
+    const B = half - delta;
+    const diff = A - B;
+    const ans = diff * sumRound;
+    const trap = diff * diff;
+
+    return buildQuestion({
+      expression: `${A}² − ${B}²`,
+      lensTitle: 'Diferença de Quadrados',
+      hint: `Use (A − B) × (A + B): (${A} − ${B}) × (${A} + ${B}) = ${diff} × ${sumRound}!`,
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, ans - sumRound, ans + sumRound]),
+      realLifeTip: `Comparar a área de dois terrenos quadrados (${A}×${A} vs ${B}×${B}) em 2 segundos sem elevar ao quadrado!`,
+      trapNote: `${trap} — fez (${A}−${B})² em vez de (${A}−${B})×(${A}+${B})`,
+      methods: [
+        {
+          badge: '⚡ Jeito 1 — Soma × Diferença',
+          summary: `${A}² − ${B}² = (${A} − ${B}) × (${A} + ${B}) = ${diff} × ${sumRound} = ${ans}!`,
+        },
+        {
+          badge: '🧱 Jeito 2 — Quadrados Diretos',
+          summary: `${A}² = ${A * A} e ${B}² = ${B * B}. Subtraindo: ${A * A} − ${B * B} = ${ans}!`,
+        },
+        {
+          badge: '📐 Jeito 3 — Faixa Geométrica em L',
+          summary: `A borda entre os quadrados tem largura ${diff} e comprimento médio ${sumRound}: ${diff} × ${sumRound} = ${ans}!`,
+        },
+      ],
+    });
+  }
+
+  // Subtype 4: (A ÷ B) + C
+  const B = pick([3, 4, 5, 6, 7, 8, 9]);
+  const M = rM(4, 14);
   const A = B * M;
-  const C = rA(10, 24);
+  const C = rA(10, 35);
   const ans = M + C;
   return buildQuestion({
     expression: `${A} ÷ ${B} + ${C}`,
@@ -521,15 +645,15 @@ function genTier3(cycle: number): Question {
   });
 }
 
-// ── Tier 4 — Sinais Inteligentes & Frações Práticas do Cotidiano ──────────────
+// ── Tier 4 — Sinais Inteligentes, Frações Práticas & Máquina do Tempo ─────────
 function genTier4(cycle: number): Question {
-  const t = r(0, 3);
+  const t = r(0, 4);
 
   // Subtype 0: Fração de um Inteiro — (A/D) × N (3 ways to solve!)
   if (t === 0) {
-    const dPool = cycle === 0 ? [2, 4, 5] : [3, 4, 5, 6, 8];
+    const dPool = cycle === 0 ? [2, 3, 4, 5, 6, 8, 10] : [3, 4, 5, 6, 8, 9, 10, 12];
     const D = pick(dPool);
-    const k = r(2 + cycle, 6 + cycle * 2);
+    const k = r(2 + cycle, 12 + cycle * 3);
     const N = D * k;
     const A = r(1, D - 1);
     const ans = A * k;
@@ -561,20 +685,21 @@ function genTier4(cycle: number): Question {
     });
   }
 
-  // Subtype 1: Soma de Frações Práticas (Same or Half/Quarter/Eighth LCD)
+  // Subtype 1: Soma de Frações Práticas (Expanded Denominator Pairs)
   if (t === 1) {
-    const pairs: Array<{ D1: number; D2: number; factor: number }> = cycle === 0
-      ? [
-          { D1: 2, D2: 4, factor: 2 },
-          { D1: 4, D2: 8, factor: 2 },
-        ]
-      : [
-          { D1: 2, D2: 4, factor: 2 },
-          { D1: 4, D2: 8, factor: 2 },
-          { D1: 3, D2: 6, factor: 2 },
-          { D1: 3, D2: 9, factor: 3 },
-          { D1: 6, D2: 12, factor: 2 },
-        ];
+    const pairs: Array<{ D1: number; D2: number; factor: number }> = [
+      { D1: 2, D2: 4, factor: 2 },
+      { D1: 2, D2: 6, factor: 3 },
+      { D1: 2, D2: 8, factor: 4 },
+      { D1: 2, D2: 10, factor: 5 },
+      { D1: 3, D2: 6, factor: 2 },
+      { D1: 3, D2: 9, factor: 3 },
+      { D1: 3, D2: 12, factor: 4 },
+      { D1: 4, D2: 8, factor: 2 },
+      { D1: 4, D2: 12, factor: 3 },
+      { D1: 5, D2: 10, factor: 2 },
+      { D1: 6, D2: 12, factor: 2 },
+    ];
     const { D1, D2, factor } = pick(pairs);
     const A = r(1, Math.max(1, D1 - 1));
     const B = r(1, Math.max(1, D2 - 1));
@@ -590,7 +715,7 @@ function genTier4(cycle: number): Question {
       correctAnswer: fVal(ans),
       wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
       answerLabels: mkFracLabels([ans, trap, d1, d2]),
-      realLifeTip: `Juntar ${A}/${D1} de hora/pizza com ${B}/${D2}: corte as fatias maiores ao meio para somar igual com igual!`,
+      realLifeTip: `Juntar ${A}/${D1} de hora/pizza com ${B}/${D2}: corte as fatias maiores para somar igual com igual!`,
       trapNote: `${fLbl(trap)} — somou os denominadores (${D1}+${D2}=${D1 + D2})`,
       methods: [
         {
@@ -611,9 +736,9 @@ function genTier4(cycle: number): Question {
 
   // Subtype 2: Duplo Negativo — Cancelar uma Dívida: A − (−B × C)
   if (t === 2) {
-    const A = r(12 + cycle * 5, 30 + cycle * 8);
-    const B = r(2 + cycle, 5 + cycle);
-    const C = r(2, 5);
+    const A = r(11 + cycle * 5, 42 + cycle * 8);
+    const B = r(2 + cycle, 8 + cycle);
+    const C = r(2, 8);
     const prod = B * C;
     const ans = A + prod;
     const trap = A - prod;
@@ -643,10 +768,60 @@ function genTier4(cycle: number): Question {
     });
   }
 
-  // Subtype 3: Quantas Fatias Cabem? — Divisão de Frações (A/D1) ÷ (A/D2)
-  const divPairs: Array<[number, number, number]> = cycle === 0
-    ? [[2, 4, 2], [2, 8, 4], [4, 8, 2]]
-    : [[2, 4, 2], [2, 8, 4], [3, 9, 3], [3, 12, 4], [4, 12, 3], [6, 12, 2]];
+  // Subtype 3: Máquina do Tempo (Equação Inversa: K × [ ? ] + B = C)
+  if (t === 3) {
+    const K = r(2, 7);
+    const ans = r(3, 15 + cycle * 3);
+    const B = r(4, 25);
+    const isPlus = Math.random() < 0.6;
+    const C = isPlus ? K * ans + B : K * ans - B;
+    const mid = K * ans;
+    const trap = isPlus ? C - B : C + B; // forgot to divide by K
+
+    return buildQuestion({
+      expression: isPlus ? `${K} × [ ? ] + ${B} = ${C}` : `${K} × [ ? ] − ${B} = ${C}`,
+      lensTitle: 'Máquina do Tempo (Operação Inversa)',
+      hint: isPlus
+        ? `Desfaça o +${B} primeiro (${C} − ${B} = ${mid}), depois divida por ${K}!`
+        : `Desfaça o −${B} primeiro (${C} + ${B} = ${mid}), depois divida por ${K}!`,
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, ans + K, Math.max(1, ans - 2)]),
+      realLifeTip: `Descobrir o preço unitário de ${K} itens sabendo o total final com frete/desconto de R$ ${B}.`,
+      trapNote: `${trap} — desfez a soma/subtração mas esqueceu de dividir por ${K}`,
+      methods: [
+        {
+          badge: '⚡ Jeito 1 — Rebobinar o Filme',
+          summary: isPlus
+            ? `Tire ${B} de ${C} (${mid}) e divida por ${K}: ${mid} ÷ ${K} = ${ans}!`
+            : `Devolva ${B} para ${C} (${mid}) e divida por ${K}: ${mid} ÷ ${K} = ${ans}!`,
+        },
+        {
+          badge: '🪞 Jeito 2 — Teste Direto na Caixa',
+          summary: `${K} × ${ans} = ${mid}, e ${isPlus ? `${mid} + ${B}` : `${mid} − ${B}`} fecha exatamente ${C}!`,
+        },
+        {
+          badge: '⚖️ Jeito 3 — Balança Equilibrada',
+          summary: `Isolando os ${K} pacotes iguais que valem ${mid}, cada pacote vale ${ans}!`,
+        },
+      ],
+    });
+  }
+
+  // Subtype 4: Quantas Fatias Cabem? — Divisão de Frações (A/D1) ÷ (A/D2)
+  const divPairs: Array<[number, number, number]> = [
+    [2, 4, 2],
+    [2, 6, 3],
+    [2, 8, 4],
+    [2, 10, 5],
+    [2, 12, 6],
+    [3, 6, 2],
+    [3, 9, 3],
+    [3, 12, 4],
+    [4, 8, 2],
+    [4, 12, 3],
+    [5, 10, 2],
+    [6, 12, 2],
+  ];
   const [D1, D2, correctInt] = pick(divPairs);
   const A = r(1, Math.max(1, D1 - 1));
   const lhs: Frac = { n: A, d: D1 };
@@ -687,19 +862,41 @@ function genTier4(cycle: number): Question {
  * Generates a unique, stage-scaled basic math question with 3 mental solution paths.
  *
  *   Tier 1 (stages 1–2, 9–10 …): Soma & Subtração Inteligente (Massinha, Hack Japonês, Caça-Dezenas)
- *   Tier 2 (stages 3–4, 11–12 …): Multiplicação & Divisão Descomplicada (Dobra-Metade, Truque 5/9, Corta no Meio)
- *   Tier 3 (stages 5–6, 13–14 …): Ordem das Operações (PEMDAS) & Fator Comum
- *   Tier 4 (stages 7–8, 15–16 …): Sinais Práticos & Frações do Dia a Dia
+ *   Tier 2 (stages 3–4, 11–12 …): Multiplicação & Divisão Descomplicada (Dobra-Metade, Truque 5/9/11, Corta no Meio)
+ *   Tier 3 (stages 5–6, 13–14 …): Ordem das Operações (PEMDAS), Fator Comum & Diferença de Quadrados
+ *   Tier 4 (stages 7–8, 15–16 …): Sinais Práticos, Frações do Dia a Dia & Máquina do Tempo
  */
 export function generateDynamicQuestion(stage: number): Question {
   const cycle = Math.floor((stage - 1) / 8);
   const tier  = Math.floor(((stage - 1) % 8) / 2) + 1;
-  switch (tier) {
-    case 1:  return genTier1(cycle);
-    case 2:  return genTier2(cycle);
-    case 3:  return genTier3(cycle);
-    default: return genTier4(cycle);
+
+  const generateOnce = (): Question => {
+    switch (tier) {
+      case 1:  return genTier1(cycle);
+      case 2:  return genTier2(cycle);
+      case 3:  return genTier3(cycle);
+      default: return genTier4(cycle);
+    }
+  };
+
+  let fallback: Question | null = null;
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const candidate = generateOnce();
+    fallback = candidate;
+    const sig = `${candidate.expression}=${candidate.correctAnswer}`;
+    const isRecentLens =
+      attempt < 16 &&
+      candidate.lensTitle !== undefined &&
+      RECENT_ASCENSION_LENSES.slice(-2).includes(candidate.lensTitle);
+    if (!SEEN_ASCENSION_EXPRESSIONS.has(sig) && !isRecentLens) {
+      recordAscensionQuestion(candidate);
+      return candidate;
+    }
   }
+
+  const chosen = fallback ?? generateOnce();
+  recordAscensionQuestion(chosen);
+  return chosen;
 }
 
 // ── Oracle Constants ───────────────────────────────────────────────────────────

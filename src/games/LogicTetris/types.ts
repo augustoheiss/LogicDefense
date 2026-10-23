@@ -389,6 +389,7 @@ export interface TetrisMathChallenge {
   relatedLessonSlug?: string // Slug da aula em /repositorio/:slug (ex: 'equacao-balanca', 'magia-calculo-mental-multiplicacao')
   tier?: ProblemTier
   miracleTier?: MiraclePowerTier
+  archetypeId?: string       // Identificador da sub-família algébrica isomórfica (Expansão V5)
 }
 
 export interface BuriedCavity {

@@ -33,45 +33,75 @@ function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ── Session Anti-Repetition Memory & Lens Stratification ─────────────────────
+const SEEN_INVADER_EQUATIONS = new Set<string>();
+const SEEN_INVADER_QUEUE: string[] = [];
+const MAX_SEEN_INVADER_HISTORY = 400;
+const RECENT_LENS_SUBTYPES: string[] = [];
+const MAX_RECENT_LENS_SUBTYPES = 4;
+
+function recordSeenEquation(signature: string, subtypeKey: string): void {
+  if (!SEEN_INVADER_EQUATIONS.has(signature)) {
+    SEEN_INVADER_EQUATIONS.add(signature);
+    SEEN_INVADER_QUEUE.push(signature);
+    if (SEEN_INVADER_QUEUE.length > MAX_SEEN_INVADER_HISTORY) {
+      const oldest = SEEN_INVADER_QUEUE.shift();
+      if (oldest) SEEN_INVADER_EQUATIONS.delete(oldest);
+    }
+  }
+  RECENT_LENS_SUBTYPES.push(subtypeKey);
+  if (RECENT_LENS_SUBTYPES.length > MAX_RECENT_LENS_SUBTYPES) {
+    RECENT_LENS_SUBTYPES.shift();
+  }
+}
+
+export function resetInvaderMathSessionHistory(): void {
+  SEEN_INVADER_EQUATIONS.clear();
+  SEEN_INVADER_QUEUE.length = 0;
+  RECENT_LENS_SUBTYPES.length = 0;
+}
+
 // ── Lens 1: A Massinha da Soma (Addition by rounding to nearest 10) ─────────
 function generateMassinhaSoma(wave: number, gentleScale: number): EquationResult {
-  // Choose a base number ending in 7, 8, or 9 so rounding up to the next 10 is super intuitive
-  const maxTens = wave <= 2 ? 2 : wave <= 5 ? 3 : 4;
+  // Choose a base number ending in 6, 7, 8, or 9 so rounding up to the next 10 is super intuitive
+  const maxTens = wave <= 2 ? 3 : wave <= 5 ? 6 : 8;
   const tens = randInt(0, maxTens) * 10;
-  const unit = pickRandom([7, 8, 9]);
-  const a = Math.max(8, tens + unit); // e.g., 8, 9, 17, 18, 19, 28, 29, 38, 39
-  const shift = 10 - unit;            // 1, 2, or 3 steps to reach the next 10
-  const maxB = Math.min(25, Math.round(12 * gentleScale));
-  const b = randInt(shift + 2, Math.max(shift + 5, maxB));
+  const unit = pickRandom(wave <= 2 ? [8, 9] : [6, 7, 8, 9]);
+  const a = Math.max(8, tens + unit);
+  const shift = 10 - unit; // 1, 2, 3, or 4 steps to reach the next 10
+  const maxB = Math.min(46, Math.round((16 + wave * 2) * gentleScale));
+  const b = randInt(shift + 2, Math.max(shift + 7, maxB));
 
   const roundedA = a + shift;
   const adjustedB = b - shift;
   const answer = a + b;
+  const swapOrder = wave >= 3 && Math.random() < 0.35;
+  const display = swapOrder ? `${b} + ${a}` : `${a} + ${b}`;
 
   return {
-    display: `${a} + ${b}`,
+    display,
     answer,
     lensType: 'massinha_soma',
     lensTitle: 'Massinha da Soma',
     shortHint: `💡 Passe ${shift} pro ${a} ➔ ${roundedA} + ${adjustedB}`,
-    fullTip: `Massinha da Soma: Em ${a} + ${b}, tire ${shift} do ${b} e passe para o ${a} virar ${roundedA} redondo! Fica ${roundedA} + ${adjustedB} = ${answer} (sem precisar "subir 1").`,
+    fullTip: `Massinha da Soma: Em ${display}, tire ${shift} do ${b} e passe para o ${a} virar ${roundedA} redondo! Fica ${roundedA} + ${adjustedB} = ${answer} (sem precisar "subir 1").`,
   };
 }
 
 // ── Lens 2: Hack Japonês (Subtraction by constant distance — zero borrowing) ─
 function generateHackJapones(wave: number, gentleScale: number): EquationResult {
-  // Choose subtrahend (bottom number) ending in 7, 8, or 9 so adding +1, +2, or +3 zeroes it out
-  const maxSubTens = wave <= 3 ? 1 : wave <= 6 ? 2 : 3;
+  // Choose subtrahend (bottom number) ending in 6, 7, 8, or 9 so adding +1..+4 zeroes it out
+  const maxSubTens = wave <= 3 ? 2 : wave <= 6 ? 4 : 6;
   const subTens = randInt(0, maxSubTens) * 10;
-  const subUnit = pickRandom([7, 8, 9]);
-  const b = Math.max(8, subTens + subUnit); // e.g., 8, 9, 17, 18, 19, 28, 29
-  const shift = 10 - subUnit;               // +1, +2, or +3
+  const subUnit = pickRandom(wave <= 2 ? [8, 9] : [6, 7, 8, 9]);
+  const b = Math.max(8, subTens + subUnit);
+  const shift = 10 - subUnit;
 
   // Minuend (top number) has a smaller unit than subUnit so traditional subtraction would force borrowing
-  const minDiff = randInt(4, Math.min(28, Math.round(14 * gentleScale)));
+  const minDiff = randInt(4, Math.min(48, Math.round((16 + wave * 2) * gentleScale)));
   let a = b + minDiff;
   if (a % 10 >= subUnit) {
-    a = Math.floor(a / 10) * 10 + randInt(1, subUnit - 1);
+    a = Math.floor(a / 10) * 10 + randInt(0, subUnit - 1);
     if (a <= b + 2) a += 10;
   }
 
@@ -91,46 +121,51 @@ function generateHackJapones(wave: number, gentleScale: number): EquationResult 
 
 // ── Lens 3: Geometria & Atalhos da Multiplicação (Friendly Multiplication) ───
 function generateFriendlyMult(wave: number): EquationResult {
-  const subTypes = wave <= 3
-    ? (['truque_5', 'dobra_metade', 'blocos_5_mais_1'] as const)
-    : (['truque_5', 'truque_9', 'dobra_metade', 'blocos_5_mais_1'] as const);
+  const allSubTypes = wave <= 3
+    ? (['truque_5', 'dobra_metade', 'blocos_5_mais_1', 'truque_9'] as const)
+    : (['truque_5', 'truque_9', 'dobra_metade', 'blocos_5_mais_1', 'segredo_11', 'quadrados_vizinhos'] as const);
 
-  const chosen = pickRandom(subTypes);
+  const filtered = allSubTypes.filter((s) => !RECENT_LENS_SUBTYPES.includes(`mult:${s}`));
+  const chosen = pickRandom(filtered.length > 0 ? filtered : allSubTypes);
 
   if (chosen === 'truque_5') {
-    const evenFactor = pickRandom([4, 6, 8, 12, 14, 16, 18]);
+    const maxHalf = wave <= 3 ? 12 : 24;
+    const evenFactor = randInt(2, maxHalf) * 2;
     const tenTimes = evenFactor * 10;
     const answer = evenFactor * 5;
+    const swap = Math.random() < 0.3;
     return {
-      display: `${evenFactor} × 5`,
+      display: swap ? `5 × ${evenFactor}` : `${evenFactor} × 5`,
       answer,
       lensType: 'dobro_metade_mult',
       lensTitle: 'O Truque do 5',
-      shortHint: `💡 Metade de ${tenTimes} ➔ ${answer}`,
+      shortHint: `💡 ${evenFactor}×10 = ${tenTimes} ➔ corte na metade!`,
       fullTip: `O Truque do 5: Multiplicar por 5 é só multiplicar por 10 (${evenFactor} × 10 = ${tenTimes}) e cortar na metade: ${answer}!`,
     };
   }
 
   if (chosen === 'truque_9') {
-    const b = randInt(3, 9);
-    const tenTimes = b * 10;
-    const answer = 9 * b;
+    const nineBase = wave >= 5 && Math.random() < 0.4 ? pickRandom([9, 19, 29]) : 9;
+    const roundBase = nineBase + 1;
+    const b = nineBase === 9 ? randInt(3, 14) : randInt(2, 7);
+    const tenTimes = b * roundBase;
+    const answer = nineBase * b;
     return {
-      display: `9 × ${b}`,
+      display: `${nineBase} × ${b}`,
       answer,
       lensType: 'dobro_metade_mult',
-      lensTitle: 'O Truque do 9',
-      shortHint: `💡 10×${b} menos ${b} ➔ ${tenTimes} − ${b}`,
-      fullTip: `O Truque do 9: Nove vezes ${b} é igual a dez vezes ${b} (${tenTimes}) menos um ${b}: ${tenTimes} − ${b} = ${answer}!`,
+      lensTitle: `O Truque do ${nineBase}`,
+      shortHint: `💡 ${roundBase}×${b} menos ${b} ➔ ${tenTimes} − ${b}`,
+      fullTip: `O Truque do ${nineBase}: ${nineBase} vezes ${b} é igual a ${roundBase} vezes ${b} (${tenTimes}) menos um ${b}: ${tenTimes} − ${b} = ${answer}!`,
     };
   }
 
   if (chosen === 'dobra_metade') {
-    const pairs: Array<[number, number]> = [
-      [4, 15], [6, 15], [4, 12], [6, 12], [8, 5], [4, 25], [6, 5], [12, 5],
-    ];
-    const [a, b] = pickRandom(pairs);
-    const halfA = a / 2;
+    const bPool = wave <= 3 ? [5, 12, 15, 25] : [5, 12, 14, 15, 16, 18, 25, 35, 45];
+    const b = pickRandom(bPool);
+    const maxHalfA = b >= 25 ? 6 : b >= 15 ? 8 : 11;
+    const halfA = randInt(2, maxHalfA);
+    const a = halfA * 2;
     const doubleB = b * 2;
     const answer = a * b;
     return {
@@ -143,9 +178,39 @@ function generateFriendlyMult(wave: number): EquationResult {
     };
   }
 
-  // 'blocos_5_mais_1': 6 × b or 7 × b decomposed via ×5
-  const b = randInt(4, 9);
-  const a = pickRandom([6, 7]);
+  if (chosen === 'segredo_11') {
+    const b = randInt(11, wave <= 5 ? 18 : 27);
+    const tensPart = b * 10;
+    const answer = 11 * b;
+    return {
+      display: `11 × ${b}`,
+      answer,
+      lensType: 'dobro_metade_mult',
+      lensTitle: 'Segredo do 11 (10 + 1)',
+      shortHint: `💡 10×${b} + ${b} ➔ ${tensPart} + ${b}`,
+      fullTip: `Segredo do 11: Multiplicar por 11 é fazer 10 vezes (${tensPart}) mais 1 vez (${b}): ${tensPart} + ${b} = ${answer}!`,
+    };
+  }
+
+  if (chosen === 'quadrados_vizinhos') {
+    const center = pickRandom([6, 7, 8, 9, 10, 11, 12, 15, 20]);
+    const a = center - 1;
+    const b = center + 1;
+    const sq = center * center;
+    const answer = sq - 1;
+    return {
+      display: `${a} × ${b}`,
+      answer,
+      lensType: 'dobro_metade_mult',
+      lensTitle: 'Vizinhos do Quadrado',
+      shortHint: `💡 (${center}−1)×(${center}+1) ➔ ${sq} − 1`,
+      fullTip: `Vizinhos Simétricos: ${a} e ${b} cercam o ${center}. O produto deles é sempre ${center}² − 1 = ${sq} − 1 = ${answer}!`,
+    };
+  }
+
+  // 'blocos_5_mais_1': 6 × b, 7 × b, or 8 × b decomposed via ×5
+  const b = randInt(4, 14);
+  const a = pickRandom([6, 7, 8]);
   const fivePart = 5 * b;
   const restCount = a - 5;
   const restPart = restCount * b;
@@ -162,11 +227,11 @@ function generateFriendlyMult(wave: number): EquationResult {
 
 // ── Lens 4: Corta no Meio & Espelho (Friendly Division) ─────────────────────
 function generateFriendlyDiv(): EquationResult {
-  const useHalving = Math.random() < 0.65;
+  const roll = Math.random();
 
-  if (useHalving) {
-    const divisor = pickRandom([4, 6, 8]);
-    const answer = randInt(3, 12);
+  if (roll < 0.45) {
+    const divisor = pickRandom([4, 6, 8, 12, 14, 16]);
+    const answer = randInt(3, 16);
     const dividend = divisor * answer;
     const halfDiv = dividend / 2;
     const halfDivisor = divisor / 2;
@@ -180,8 +245,22 @@ function generateFriendlyDiv(): EquationResult {
     };
   }
 
-  const divisor = randInt(3, 9);
-  const answer = randInt(3, 10);
+  if (roll < 0.72) {
+    // Divisão por 5 = Dobrar e cortar o zero!
+    const answer = randInt(4, 24) * 2;
+    const dividend = answer * 5;
+    return {
+      display: `${dividend} ÷ 5`,
+      answer,
+      lensType: 'corta_no_meio_div',
+      lensTitle: 'Divisão Relâmpago ÷5',
+      shortHint: `💡 Dobre ${dividend} e corte o zero final!`,
+      fullTip: `Divisão por 5: Dividir por 5 é o mesmo que multiplicar por 2 e dividir por 10! O dobro de ${dividend} é ${dividend * 2}, cortando o zero dá ${answer}!`,
+    };
+  }
+
+  const divisor = randInt(3, 12);
+  const answer = randInt(3, 14);
   const dividend = divisor * answer;
   return {
     display: `${dividend} ÷ ${divisor}`,
@@ -193,29 +272,41 @@ function generateFriendlyDiv(): EquationResult {
   };
 }
 
-// ── Lens 5: A Peça que Falta (Bridge through 10 / 20 / 30) ──────────────────
+// ── Lens 5: A Peça que Falta (Bridge through 10 / 20 / 30 / 100) ─────────────
 function generatePecaFaltando(wave: number): EquationResult {
   const isRoundTarget = Math.random() < 0.55;
 
   if (isRoundTarget) {
-    const target = pickRandom(wave <= 2 ? [10, 20] : [20, 30, 40, 50]);
-    const answer = randInt(2, 9);
+    const targetPool = wave <= 2 ? [10, 20, 30] : [20, 30, 40, 50, 60, 70, 80, 90, 100];
+    const target = pickRandom(targetPool);
+    const maxAnswer = Math.min(target - 3, wave <= 2 ? 12 : 38);
+    const answer = randInt(2, maxAnswer);
     const start = target - answer;
+    const nextTen = Math.ceil(start / 10) * 10;
+    const unitStep = nextTen - start;
+    const tensStep = target - nextTen;
+    const hintText =
+      tensStep > 0 && unitStep > 0
+        ? `💡 +${unitStep} até ${nextTen}, depois +${tensStep} até ${target}`
+        : `💡 Complete a dezena do ${start} até ${target}`;
     return {
       display: `${start} + [ ? ] = ${target}`,
       answer,
       lensType: 'peca_faltando',
       lensTitle: 'Amigos da Dezena',
-      shortHint: `💡 Do ${start} até ${target} faltam...`,
-      fullTip: `Amigos da Dezena: Para ir do ${start} até a dezena redonda ${target}, basta completar a unidade até 10: faltam exatamente ${answer} passos!`,
+      shortHint: hintText,
+      fullTip: `Amigos da Dezena: Para ir do ${start} até ${target}, complete +${unitStep} até ${nextTen} e some +${tensStep}: faltam exatamente ${answer} passos!`,
     };
   }
 
-  // Bridge through 10 (e.g., 8 + [?] = 15 -> +2 to 10, +5 to 15 -> 7)
-  const start = pickRandom([6, 7, 8, 9, 16, 17, 18, 19]);
+  // Bridge through next multiple of 10 (e.g., 18 + [?] = 25 -> +2 to 20, +5 to 25 -> 7)
+  const maxStartTens = wave <= 2 ? 2 : 6;
+  const startTens = randInt(0, maxStartTens) * 10;
+  const startUnit = pickRandom([6, 7, 8, 9]);
+  const start = Math.max(6, startTens + startUnit);
   const bridge = Math.ceil(start / 10) * 10;
   const step1 = bridge - start;
-  const step2 = randInt(2, 7);
+  const step2 = randInt(2, wave <= 2 ? 8 : 16);
   const target = bridge + step2;
   const answer = step1 + step2;
 
@@ -229,99 +320,93 @@ function generatePecaFaltando(wave: number): EquationResult {
   };
 }
 
-// ── Lens 6: Um Número, Vários Caminhos (Target Number Sense) ─────────────────
+// ── Lens 6: Um Número, Vários Caminhos (Parametric Target Number Sense) ──────
 function generateAlvoMultiplo(wave: number): EquationResult {
-  interface TargetOption {
-    target: number;
-    correctLabel: string;
-    wrongLabels: [string, string];
-    hint: string;
-    tip: string;
+  const styles = ['dezena_unidade', 'dobro_perfeito', 'visao_topo', 'saltos_de_5'] as const;
+  const style = pickRandom(styles);
+
+  if (style === 'dobro_perfeito') {
+    const half = randInt(5, wave <= 2 ? 12 : 24);
+    const target = half * 2;
+    const correctLabel = `${half} + ${half}`;
+    const wrong1 = `${half - 1} + ${half - 1}`;
+    const wrong2 = `${half + 1} + ${half + 2}`;
+    return {
+      display: `🎯 ALVO: ${target}`,
+      answer: target,
+      lensType: 'alvo_multiplo',
+      lensTitle: 'O Poder dos Dobros',
+      shortHint: `💡 Qual dobro exato forma o ${target}?`,
+      fullTip: `O Poder dos Dobros: Enxergar que ${target} é o dobro de ${half} (${half} + ${half} = ${target}) cria uma âncora instantânea!`,
+      customBubbles: [
+        { value: target, label: correctLabel, isCorrect: true },
+        { value: target - 2, label: wrong1, isCorrect: false },
+        { value: target + 3, label: wrong2, isCorrect: false },
+      ],
+    };
   }
 
-  const poolEasy: TargetOption[] = [
-    {
-      target: 12,
-      correctLabel: '10 + 2',
-      wrongLabels: ['8 + 2', '9 + 2'],
-      hint: '💡 Dezena + 2 forma o 12',
-      tip: 'Vários Caminhos: O número 12 pode ser visto como 10 + 2, 6 + 6 ou 3 × 4! Enxergar o 10 dentro dele deixa tudo instantâneo.',
-    },
-    {
-      target: 15,
-      correctLabel: '10 + 5',
-      wrongLabels: ['8 + 5', '20 − 3'],
-      hint: '💡 Qual continha dá 15?',
-      tip: 'Vários Caminhos: 15 é uma dezena inteira (10) mais meia dezena (5): 10 + 5 = 15!',
-    },
-    {
-      target: 16,
-      correctLabel: '8 + 8',
-      wrongLabels: ['7 + 7', '10 + 4'],
-      hint: '💡 Procure o dobro que dá 16',
-      tip: 'O Poder dos Dobros: Saber os dobros (6+6=12, 7+7=14, 8+8=16) funciona como uma âncora rápida para todas as outras contas!',
-    },
-    {
-      target: 18,
-      correctLabel: '20 − 2',
-      wrongLabels: ['20 − 4', '10 + 6'],
-      hint: '💡 18 está a 2 passos do 20',
-      tip: 'Visão pelo Topo: Em vez de contar até 18, veja que ele é simplesmente 20 tirando 2 (20 − 2 = 18)!',
-    },
-    {
-      target: 20,
-      correctLabel: '4 × 5',
-      wrongLabels: ['3 × 5', '12 + 6'],
-      hint: '💡 4 mãos de 5 dedos = 20',
-      tip: 'Vários Caminhos: O 20 é 10 + 10, mas também é 4 grupos de 5 (4 × 5 = 20)!',
-    },
-  ];
+  if (style === 'visao_topo') {
+    const roundTop = randInt(2, wave <= 2 ? 4 : 9) * 10;
+    const recoil = randInt(1, 4);
+    const target = roundTop - recoil;
+    const correctLabel = `${roundTop} − ${recoil}`;
+    const wrong1 = `${roundTop} − ${recoil + 2}`;
+    const wrong2 = `${roundTop - 10} + ${recoil}`;
+    return {
+      display: `🎯 ALVO: ${target}`,
+      answer: target,
+      lensType: 'alvo_multiplo',
+      lensTitle: 'Visão pelo Topo',
+      shortHint: `💡 ${target} está a ${recoil} passo(s) abaixo do ${roundTop}`,
+      fullTip: `Visão pelo Topo: Em vez de contar de baixo, veja que ${target} é simplesmente a dezena ${roundTop} recuando ${recoil} (${roundTop} − ${recoil} = ${target})!`,
+      customBubbles: [
+        { value: target, label: correctLabel, isCorrect: true },
+        { value: target - 2, label: wrong1, isCorrect: false },
+        { value: roundTop - 10 + recoil, label: wrong2, isCorrect: false },
+      ],
+    };
+  }
 
-  const poolMid: TargetOption[] = [
-    ...poolEasy,
-    {
-      target: 24,
-      correctLabel: '20 + 4',
-      wrongLabels: ['18 + 4', '3 × 7'],
-      hint: '💡 Qual expressão monta o 24?',
-      tip: 'Decomposição Limpa: O 24 é 20 + 4, 12 + 12, 3 × 8 ou 4 × 6. Toda conta grande é feita de pedaços pequenos!',
-    },
-    {
-      target: 30,
-      correctLabel: '6 × 5',
-      wrongLabels: ['5 × 5', '20 + 8'],
-      hint: '💡 6 grupos de 5 formam 30',
-      tip: 'Relógio Mental: Assim como no relógio, o 6 na tabuada do 5 marca exatamente 30 minutos (6 × 5 = 30)!',
-    },
-    {
-      target: 25,
-      correctLabel: '30 − 5',
-      wrongLabels: ['30 − 3', '15 + 5'],
-      hint: '💡 30 tirando 5 chega no 25',
-      tip: 'Andando de 5 em 5: Pular de 5 em 5 na reta numérica (30 − 5 = 25) é um dos jeitos mais leves de calcular de cabeça!',
-    },
-    {
-      target: 36,
-      correctLabel: '30 + 6',
-      wrongLabels: ['20 + 6', '5 × 7'],
-      hint: '💡 Dezena 30 + unidade 6',
-      tip: 'Separar Dezenas e Unidades: 36 é literalmente 30 + 6 (e também 6 × 6 ou 4 × 9)!',
-    },
-  ];
+  if (style === 'saltos_de_5') {
+    const mult = randInt(3, wave <= 2 ? 7 : 14);
+    const target = mult * 5;
+    const correctLabel = `${mult} × 5`;
+    const wrong1 = `${mult - 1} × 5`;
+    const wrong2 = `${mult + 1} × 4`;
+    return {
+      display: `🎯 ALVO: ${target}`,
+      answer: target,
+      lensType: 'alvo_multiplo',
+      lensTitle: 'Relógio de 5 em 5',
+      shortHint: `💡 Quantos grupos de 5 formam ${target}?`,
+      fullTip: `Relógio Mental: Contando de 5 em 5, ${mult} grupos de 5 formam exatamente ${target} (${mult} × 5 = ${target})!`,
+      customBubbles: [
+        { value: target, label: correctLabel, isCorrect: true },
+        { value: (mult - 1) * 5, label: wrong1, isCorrect: false },
+        { value: (mult + 1) * 4, label: wrong2, isCorrect: false },
+      ],
+    };
+  }
 
-  const chosen = pickRandom(wave <= 2 ? poolEasy : poolMid);
-
+  // 'dezena_unidade'
+  const tens = randInt(1, wave <= 2 ? 4 : 8) * 10;
+  const unit = randInt(2, 9);
+  const target = tens + unit;
+  const correctLabel = `${tens} + ${unit}`;
+  const wrong1 = `${tens - 10 > 0 ? tens - 10 : tens + 10} + ${unit}`;
+  const wrong2 = `${tens} + ${unit === 9 ? 7 : unit + 2}`;
   return {
-    display: `🎯 ALVO: ${chosen.target}`,
-    answer: chosen.target,
+    display: `🎯 ALVO: ${target}`,
+    answer: target,
     lensType: 'alvo_multiplo',
     lensTitle: 'Vários Caminhos',
-    shortHint: chosen.hint,
-    fullTip: chosen.tip,
+    shortHint: `💡 Dezena ${tens} + unidade ${unit}`,
+    fullTip: `Decomposição Limpa: O número ${target} é formado pela dezena redonda ${tens} mais ${unit} (${tens} + ${unit} = ${target})!`,
     customBubbles: [
-      { value: chosen.target, label: chosen.correctLabel, isCorrect: true },
-      { value: chosen.target - 2, label: chosen.wrongLabels[0], isCorrect: false },
-      { value: chosen.target + 2, label: chosen.wrongLabels[1], isCorrect: false },
+      { value: target, label: correctLabel, isCorrect: true },
+      { value: target - 10, label: wrong1, isCorrect: false },
+      { value: target + 2, label: wrong2, isCorrect: false },
     ],
   };
 }
@@ -361,22 +446,49 @@ export function generateEquation(
     availableLenses = availableLenses.filter((l) => l !== 'alvo_multiplo');
   }
 
-  const lens = pickRandom(availableLenses);
+  let lastResult: EquationResult | null = null;
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const nonRecentLenses = availableLenses.filter(
+      (l) => !RECENT_LENS_SUBTYPES.slice(-2).some((k) => k.startsWith(`${l}:`))
+    );
+    const lens = pickRandom(nonRecentLenses.length > 0 ? nonRecentLenses : availableLenses);
 
-  switch (lens) {
-    case 'massinha_soma':
-      return generateMassinhaSoma(wave, gentleScale);
-    case 'hack_japones':
-      return generateHackJapones(wave, gentleScale);
-    case 'dobro_metade_mult':
-      return generateFriendlyMult(wave);
-    case 'corta_no_meio_div':
-      return generateFriendlyDiv();
-    case 'peca_faltando':
-      return generatePecaFaltando(wave);
-    case 'alvo_multiplo':
-      return generateAlvoMultiplo(wave);
+    let candidate: EquationResult;
+    switch (lens) {
+      case 'massinha_soma':
+        candidate = generateMassinhaSoma(wave, gentleScale);
+        break;
+      case 'hack_japones':
+        candidate = generateHackJapones(wave, gentleScale);
+        break;
+      case 'dobro_metade_mult':
+        candidate = generateFriendlyMult(wave);
+        break;
+      case 'corta_no_meio_div':
+        candidate = generateFriendlyDiv();
+        break;
+      case 'peca_faltando':
+        candidate = generatePecaFaltando(wave);
+        break;
+      case 'alvo_multiplo':
+        candidate = generateAlvoMultiplo(wave);
+        break;
+    }
+
+    lastResult = candidate;
+    const signature = `${candidate.display}=${candidate.answer}|${candidate.customBubbles?.[0]?.label ?? ''}`;
+    if (!SEEN_INVADER_EQUATIONS.has(signature)) {
+      recordSeenEquation(signature, `${lens}:${candidate.lensTitle}`);
+      return candidate;
+    }
   }
+
+  if (lastResult) {
+    const signature = `${lastResult.display}=${lastResult.answer}`;
+    recordSeenEquation(signature, `${lastResult.lensType}:${lastResult.lensTitle}`);
+    return lastResult;
+  }
+  return generateMassinhaSoma(wave, gentleScale);
 }
 
 /**

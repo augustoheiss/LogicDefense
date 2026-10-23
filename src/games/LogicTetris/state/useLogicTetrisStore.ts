@@ -77,6 +77,8 @@ import { generateMathChallenge, getMiracleTierSpec } from '../engine/mathEngine'
 import { getSequenceDopamineTier, soundEngine } from '../audio/soundEngine'
 
 const STATS_STORAGE_KEY = 'logic_tetris_v1_stats'
+const RECENT_MATH_IDS_SESSION_KEY = 'logic_tetris_v5_recent_math_ids'
+const RECENT_MATH_IDS_MAX = 250
 export const LOCK_DELAY_LIMIT_MS = 500
 export const MAX_LOCK_RESETS = 15
 export const POST_MODAL_INPUT_GUARD_MS = 250
@@ -154,6 +156,32 @@ function savePersistentStats(stats: LogicTetrisPersistentStats): void {
   } catch {
     // Graceful no-op if storage is restricted
   }
+}
+
+function loadRecentChallengeIds(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.sessionStorage.getItem(RECENT_MATH_IDS_SESSION_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string').slice(-RECENT_MATH_IDS_MAX)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function appendRecentChallengeId(prev: string[], nextId: string): string[] {
+  const updated = [...prev.filter((id) => id !== nextId), nextId].slice(-RECENT_MATH_IDS_MAX)
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(RECENT_MATH_IDS_SESSION_KEY, JSON.stringify(updated))
+    } catch {
+      // Graceful no-op
+    }
+  }
+  return updated
 }
 
 function ensureQueueDepth(queue: StandardPieceType[], minLength: number = 7): StandardPieceType[] {
@@ -620,7 +648,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         eliminatedChoiceValues: [],
         lastWrongDiagnosis: null,
         wrongAttemptsOnCurrentChallenge: 0,
-        recentChallengeIds: [...state.recentChallengeIds.slice(-8), challenge.id],
+        recentChallengeIds: appendRecentChallengeId(state.recentChallengeIds, challenge.id),
         floatingFeedbacks: nextFeedbacks,
         lastEventCounter: state.lastEventCounter + 1,
         gravityAccumulatorMs: 0,
@@ -1028,7 +1056,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     eliminatedChoiceValues: [],
     lastWrongDiagnosis: null,
     wrongAttemptsOnCurrentChallenge: 0,
-    recentChallengeIds: [],
+    recentChallengeIds: loadRecentChallengeIds(),
     solvedHistory: [],
     floatingFeedbacks: [],
     lastClearedRows: [],
@@ -1103,7 +1131,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           eliminatedChoiceValues: [],
           lastWrongDiagnosis: null,
           wrongAttemptsOnCurrentChallenge: 0,
-          recentChallengeIds: [...state.recentChallengeIds.slice(-8), nextChallenge.id],
+          recentChallengeIds: appendRecentChallengeId(state.recentChallengeIds, nextChallenge.id),
         })
       } else {
         set({ selectedMiracleTier: tier })
@@ -2041,7 +2069,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         eliminatedChoiceValues: [],
         lastWrongDiagnosis: null,
         wrongAttemptsOnCurrentChallenge: 0,
-        recentChallengeIds: [...state.recentChallengeIds.slice(-8), challenge.id],
+        recentChallengeIds: appendRecentChallengeId(state.recentChallengeIds, challenge.id),
         isSoftDropping: false,
       })
     },
@@ -2087,7 +2115,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         eliminatedChoiceValues: [],
         lastWrongDiagnosis: null,
         wrongAttemptsOnCurrentChallenge: 0,
-        recentChallengeIds: [...state.recentChallengeIds.slice(-8), challenge.id],
+        recentChallengeIds: appendRecentChallengeId(state.recentChallengeIds, challenge.id),
         isSoftDropping: false,
       })
     },
@@ -2801,7 +2829,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
             wrongAttemptsOnCurrentChallenge: 0,
-            recentChallengeIds: [...state.recentChallengeIds.slice(-8), nextChallenge.id],
+            recentChallengeIds: appendRecentChallengeId(state.recentChallengeIds, nextChallenge.id),
             solvedHistory: [stepLog, ...state.solvedHistory].slice(0, 30),
             floatingFeedbacks: buildFeedbackListWithLegend(
               state.floatingFeedbacks,

@@ -24,7 +24,49 @@ function getMentalTier(wave: number, waveOffset: number): { tier: 1 | 2 | 3; sca
   return { tier: 1, scale: baseScale }
 }
 
+const SEEN_DEFENSE_PROBLEMS = new Set<string>()
+const SEEN_DEFENSE_QUEUE: string[] = []
+const MAX_SEEN_DEFENSE = 400
+const RECENT_DEFENSE_ARCHETYPES: string[] = []
+
+function recordDefenseProblem(sig: string, archetypeKey: string): void {
+  if (!SEEN_DEFENSE_PROBLEMS.has(sig)) {
+    SEEN_DEFENSE_PROBLEMS.add(sig)
+    SEEN_DEFENSE_QUEUE.push(sig)
+    if (SEEN_DEFENSE_QUEUE.length > MAX_SEEN_DEFENSE) {
+      const oldest = SEEN_DEFENSE_QUEUE.shift()
+      if (oldest) SEEN_DEFENSE_PROBLEMS.delete(oldest)
+    }
+  }
+  RECENT_DEFENSE_ARCHETYPES.push(archetypeKey)
+  if (RECENT_DEFENSE_ARCHETYPES.length > 4) {
+    RECENT_DEFENSE_ARCHETYPES.shift()
+  }
+}
+
 export function generateMathProblem(wave: number, waveOffset: number = 0): MathProblem {
+  let fallback: MathProblem | null = null
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const candidate = generateSingleMathProblem(wave, waveOffset)
+    fallback = candidate
+    const sig = `${candidate.n1}${candidate.op}${candidate.n2}=${candidate.answer}`
+    const archKey = `${candidate.op}:${candidate.lensId ?? ''}`
+    const isRecentArch =
+      attempt < 14 &&
+      RECENT_DEFENSE_ARCHETYPES.slice(-2).includes(archKey) &&
+      wave % 10 !== 0 &&
+      (wave + waveOffset) % 10 !== 0
+    if (!SEEN_DEFENSE_PROBLEMS.has(sig) && !isRecentArch) {
+      recordDefenseProblem(sig, archKey)
+      return candidate
+    }
+  }
+  const chosen = fallback ?? generateSingleMathProblem(wave, waveOffset)
+  recordDefenseProblem(`${chosen.n1}${chosen.op}${chosen.n2}=${chosen.answer}`, `${chosen.op}:${chosen.lensId ?? ''}`)
+  return chosen
+}
+
+function generateSingleMathProblem(wave: number, waveOffset: number = 0): MathProblem {
   const effectiveWave = wave + waveOffset
   let operations: Array<'+' | '-' | 'x' | '÷'> = ['+', '-', 'x']
   if (wave % 10 === 0 || effectiveWave % 10 === 0) {
@@ -395,8 +437,8 @@ function enrichProblemWithPedagogy(
         base === 2
           ? `💡 O dobro direto de ${outro}`
           : base === 4
-            ? `💡 O dobro do dobro: ${outro} ➔ ${outro * 2} ➔ ${answer}`
-            : `💡 O cubo de 2 (dobre 3 vezes): ${outro} ➔ ${outro * 2} ➔ ${outro * 4} ➔ ${answer}`
+            ? `💡 O dobro do dobro: dobre ${outro} (${outro * 2}) e dobre de novo!`
+            : `💡 O cubo de 2 (dobre 3 vezes): ${outro} ➔ ${outro * 2} ➔ ${outro * 4} ➔ dobre de novo!`
       structuredSteps.push({
         badge: '🌌 BASE 2 · 4 · 8',
         title: base === 4 ? 'O Dobro Duas Vezes' : base === 8 ? 'O Dobro Três Vezes' : 'A Simetria Binária',

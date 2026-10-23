@@ -196,6 +196,7 @@ interface RawMathTemplate {
   stepByStep: string[]
   distractors: [RawDistractor, RawDistractor, RawDistractor]
   missingBlockResonance?: number // 1..9 when linked to row complement
+  archetypeId?: string
 }
 
 const RAW_PROBLEM_BANK: ReadonlyArray<RawMathTemplate> = [
@@ -2336,84 +2337,2121 @@ function enrichStepsWithBoardGeometry(
   return steps
 }
 
+// ============================================================================
+// EXPANSÃO V5: MOTOR DE SÍNTESE ALGÉBRICA ISOMÓRFICA INFINITA (32 ARQUÉTIPOS)
+// & BARALHO ESTRATIFICADO ZERO-REPETIÇÃO (Master Plan 2026-10-23-05)
+// ============================================================================
+
+function rngInt(rng: () => number, min: number, max: number): number {
+  return min + Math.floor(rng() * (max - min + 1))
+}
+
+function rngPick<T>(rng: () => number, arr: readonly T[]): T {
+  return arr[Math.floor(rng() * arr.length)] ?? arr[0]
+}
+
+interface IsomorphicArchetypeSpec {
+  archetypeId: string
+  tier: ProblemTier
+  lensId: TetrisMathLensId
+  supportsMissingResonance?: boolean
+  synthesize: (rng: () => number, options: GenerateChallengeOptions) => RawMathTemplate
+}
+
+const SESSION_SEEN_IDS = new Set<string>()
+const SESSION_SEEN_EXPRESSIONS = new Set<string>()
+const RECENT_ARCHETYPE_RING: string[] = []
+const MAX_SESSION_MEMORY = 400
+const MAX_RECENT_ARCHETYPE_COOLDOWN = 4
+
+function recordSeenChallenge(id: string, expression: string, archetypeId?: string): void {
+  if (SESSION_SEEN_IDS.size >= MAX_SESSION_MEMORY) {
+    const firstId = SESSION_SEEN_IDS.values().next().value
+    if (firstId) SESSION_SEEN_IDS.delete(firstId)
+  }
+  if (SESSION_SEEN_EXPRESSIONS.size >= MAX_SESSION_MEMORY) {
+    const firstExpr = SESSION_SEEN_EXPRESSIONS.values().next().value
+    if (firstExpr) SESSION_SEEN_EXPRESSIONS.delete(firstExpr)
+  }
+  SESSION_SEEN_IDS.add(id)
+  SESSION_SEEN_EXPRESSIONS.add(expression)
+
+  if (archetypeId) {
+    RECENT_ARCHETYPE_RING.push(archetypeId)
+    if (RECENT_ARCHETYPE_RING.length > MAX_RECENT_ARCHETYPE_COOLDOWN) {
+      RECENT_ARCHETYPE_RING.shift()
+    }
+  }
+}
+
+export function resetMathSessionMemory(): void {
+  SESSION_SEEN_IDS.clear()
+  SESSION_SEEN_EXPRESSIONS.clear()
+  RECENT_ARCHETYPE_RING.length = 0
+}
+
+/**
+ * 32 Parametric Isomorphic Archetype Generators across Tiers 1, 2, 3, and 4.
+ * Generates 14,500+ unique, clean mental-math challenges with 100% Zero-Spoiler Socratic hints
+ * and algebraically computed diagnostic distractors.
+ */
+const ISOMORPHIC_ARCHETYPE_GENERATORS: ReadonlyArray<IsomorphicArchetypeSpec> = [
+  // ==========================================================================
+  // ⚡ GRAU I (Tier 1 — Centelha Ágil · 3 Buracos) — 8 Famílias Isomórficas
+  // ==========================================================================
+  {
+    archetypeId: 'arch_t1_falta_base10',
+    tier: 1,
+    lensId: 'amigos_do_10_falta',
+    supportsMissingResonance: true,
+    synthesize: (rng, options) => {
+      const m =
+        options.missingInRow !== undefined &&
+        options.missingInRow >= 1 &&
+        options.missingInRow <= 9
+          ? options.missingInRow
+          : rngInt(rng, 1, 9)
+      const unitFilled = 10 - m
+      const tensBase = rngPick(rng, [0, 10, 20, 30, 40, 50, 60, 70, 80])
+      const variant = tensBase === 0 ? rngInt(rng, 0, 2) : rngInt(rng, 0, 1)
+      const startVal = tensBase + unitFilled
+      const targetVal = tensBase + 10
+
+      const expression =
+        variant === 0
+          ? `${startVal} + [ ? ] = ${targetVal}`
+          : variant === 1
+            ? `[ ? ] + ${startVal} = ${targetVal}`
+            : `${targetVal} − ${startVal} = ?`
+
+      const d1 = m === 1 ? 2 : m - 1
+      const d2 = m + 1
+      const d3 = m + 2 === 10 - m ? m + 3 : m + 2
+
+      return {
+        id: `iso_arch_t1_falta_base10_${variant}_${startVal}_${targetVal}`,
+        archetypeId: 'arch_t1_falta_base10',
+        lensId: 'amigos_do_10_falta',
+        tier: 1,
+        missingBlockResonance: m,
+        expression,
+        correctAnswer: m,
+        shortHint:
+          '💡 Amigos do 10 na Linha: Olhe apenas para o algarismo das unidades — qual complemento fecha exatamente a dezena?',
+        stepByStep: [
+          `De ${startVal} para fechar a dezena redonda ${targetVal}, olhamos para a unidade ${unitFilled}.`,
+          `O amigo de ${unitFilled} na Base 10 é ${m} (pois ${unitFilled} + ${m} = 10).`,
+          `Logo, ${startVal} + ${m} = ${targetVal}!`,
+        ],
+        distractors: [
+          {
+            value: d1,
+            trapDiagnosis: `Quase! Somando ${startVal} + ${d1} chegamos a ${startVal + d1}. O complemento exato de ${unitFilled} para fechar a dezena é ${m}!`,
+          },
+          {
+            value: d2,
+            trapDiagnosis: `Por 1 unidade! ${startVal} + ${d2} passaria para ${startVal + d2}. Para cravar ${targetVal}, a peça que falta é ${m}!`,
+          },
+          {
+            value: d3,
+            trapDiagnosis: `Olhe os Amigos do 10: como a unidade é ${unitFilled}, faltam exatamente ${m} blocos para completar ${targetVal}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t1_massinha',
+    tier: 1,
+    lensId: 'massinha_soma',
+    synthesize: (rng) => {
+      const tens = rngPick(rng, [10, 20, 30, 40, 50, 60])
+      const unitA = rngPick(rng, [7, 8, 9])
+      const A = tens + unitA
+      const shift = 10 - unitA
+      const B = rngInt(rng, shift + 2, 9)
+      const roundA = A + shift
+      const remB = B - shift
+      const ans = A + B
+      const swapOrder = rng() < 0.25
+
+      return {
+        id: `iso_arch_t1_massinha_${swapOrder ? `${B}_${A}` : `${A}_${B}`}`,
+        archetypeId: 'arch_t1_massinha',
+        lensId: 'massinha_soma',
+        tier: 1,
+        expression: swapOrder ? `${B} + ${A} = ?` : `${A} + ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Massinha da Soma: Empreste da parcela menor apenas o que falta para arredondar a dezena — quanto fica a soma?',
+        stepByStep: [
+          `O ${A} precisa de apenas +${shift} para virar a dezena redonda ${roundA}.`,
+          `Tiramos ${shift} da massinha do ${B} (que vira ${remB}) e entregamos ao ${A} (que vira ${roundA}).`,
+          `Agora somamos de cabeça: ${roundA} + ${remB} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: roundA + B,
+            trapDiagnosis: `Atenção à conservação da Massinha: o ${A} virou ${roundA} porque ganhou ${shift} do ${B}. Então o ${B} diminui para ${remB} → ${roundA} + ${remB} = ${ans}!`,
+          },
+          {
+            value: ans - 1,
+            trapDiagnosis: `Muito perto! O ${A} só precisava de ${shift} do ${B} (${B} − ${shift} = ${remB}), fechando ${roundA} + ${remB} = ${ans}!`,
+          },
+          {
+            value: ans - 2,
+            trapDiagnosis: `Quase lá! Emprestando ${shift} do ${B} para o ${A} virar ${roundA}, sobram ${remB} → ${roundA} + ${remB} = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t1_hack_jap',
+    tier: 1,
+    lensId: 'hack_japones',
+    synthesize: (rng) => {
+      const subTens = rngPick(rng, [10, 20, 30, 40])
+      const subUnit = rngPick(rng, [8, 9])
+      const B = subTens + subUnit
+      const shift = 10 - subUnit
+      const minUnit = rngInt(rng, 1, subUnit - 2)
+      const diffTens = rngPick(rng, [10, 20, 30])
+      const A = subTens + diffTens + minUnit
+      const newA = A + shift
+      const newB = B + shift
+      const ans = A - B
+
+      return {
+        id: `iso_arch_t1_hack_jap_${A}_${B}`,
+        archetypeId: 'arch_t1_hack_jap',
+        lensId: 'hack_japones',
+        tier: 1,
+        expression: `${A} − ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Hack Japonês: O Subtraendo é o Rei! Some a mesma quantidade nos DOIS números até zerar a unidade do segundo — qual é a diferença?',
+        stepByStep: [
+          `O subtraendo ${B} só precisa de +${shift} para virar a dezena redonda ${newB}.`,
+          `Para manter a mesma distância, somamos +${shift} também no ${A} (que vira ${newA}).`,
+          `Agora subtraímos sem pedir emprestado: ${newA} − ${newB} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: A - newB,
+            trapDiagnosis: `Armadilha da Balança! Você arredondou ${B} para ${newB} (+${shift}), mas esqueceu de somar +${shift} no ${A} → ${newA} − ${newB} = ${ans}!`,
+          },
+          {
+            value: ans - 2 * shift,
+            trapDiagnosis: `Cuidado! Na subtração, caminhamos na mesma direção: some +${shift} nos DOIS lados → ${newA} − ${newB} = ${ans}!`,
+          },
+          {
+            value: ans + 10,
+            trapDiagnosis: `A unidade está perfeita! Só ajuste as dezenas em ${newA} − ${newB} = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t1_elevador',
+    tier: 1,
+    lensId: 'regra_elevador',
+    synthesize: (rng) => {
+      const topFloor = rngPick(rng, [30, 40, 50, 60, 70])
+      const unitB = rngPick(rng, [2, 3, 4, 6, 7, 8])
+      const tensGap = rngPick(rng, [10, 20])
+      const B = topFloor - tensGap - (10 - unitB)
+      const nextTen = B + (10 - unitB)
+      const step1 = 10 - unitB
+      const step2 = topFloor - nextTen
+      const ans = topFloor - B
+
+      return {
+        id: `iso_arch_t1_elevador_${topFloor}_${B}`,
+        archetypeId: 'arch_t1_elevador',
+        lensId: 'regra_elevador',
+        tier: 1,
+        expression: `${topFloor} − ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Regra do Elevador: Suba primeiro até o próximo andar redondo e depois até o andar final — quantos andares você subiu ao todo?',
+        stepByStep: [
+          `Do andar ${B} até o andar redondo ${nextTen}, o elevador sobe +${step1} andares.`,
+          `Do ${nextTen} até o topo ${topFloor}, sobe mais +${step2} andares.`,
+          `Total da subida: ${step1} + ${step2} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: ans + 10,
+            trapDiagnosis: `Quando você sobe +${step1} a partir de ${B}, já chega no andar ${nextTen}! De ${nextTen} até ${topFloor} faltam só ${step2} → ${ans}.`,
+          },
+          {
+            value: step2 + unitB,
+            trapDiagnosis: `O amigo de ${unitB} para fechar ${nextTen} é ${step1} (pois ${unitB} + ${step1} = 10), e não ${unitB} → ${step2} + ${step1} = ${ans}!`,
+          },
+          {
+            value: ans - 1,
+            trapDiagnosis: `Por 1 andar! De ${B} até ${nextTen} são ${step1} andares, mais ${step2} até ${topFloor} = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t1_dobro24',
+    tier: 1,
+    lensId: 'dobro_do_dobro_248',
+    synthesize: (rng) => {
+      const A = rngPick(rng, [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25])
+      const firstDouble = A * 2
+      const ans = A * 4
+      const swap = rng() < 0.25
+
+      return {
+        id: `iso_arch_t1_dobro24_${swap ? `4_${A}` : `${A}_4`}`,
+        archetypeId: 'arch_t1_dobro24',
+        lensId: 'dobro_do_dobro_248',
+        tier: 1,
+        expression: swap ? `4 × ${A} = ?` : `${A} × 4 = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Dobro do Dobro: Multiplicar por 4 é dobrar o número duas vezes seguidas — qual é o dobro do dobro?',
+        stepByStep: [
+          `Multiplicar por 4 (a área de um Tetrominó!) é dobrar duas vezes seguidas.`,
+          `1º Dobro: ${A} × 2 = ${firstDouble}.`,
+          `2º Dobro: ${firstDouble} × 2 = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: firstDouble,
+            trapDiagnosis: `${firstDouble} é apenas o 1º dobro (${A} × 2)! Dobre mais uma vez para chegar em ×4: ${firstDouble} × 2 = ${ans}.`,
+          },
+          {
+            value: A * 3,
+            trapDiagnosis: `${A * 3} equivale a ${A} × 3! Para ${A} × 4, faça o dobro de ${firstDouble} = ${ans}.`,
+          },
+          {
+            value: ans - 4,
+            trapDiagnosis: `Quase! O dobro de ${A} é ${firstDouble}, e o dobro de ${firstDouble} fecha exatamente ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t1_relogio5',
+    tier: 1,
+    lensId: 'relogio_5_dobra_meia',
+    synthesize: (rng) => {
+      const half = rngPick(rng, [4, 6, 7, 8, 9, 11, 12, 13, 14])
+      const evenFactor = half * 2
+      const ans = half * 10
+      const swap = rng() < 0.25
+
+      return {
+        id: `iso_arch_t1_relogio5_${swap ? `5_${evenFactor}` : `${evenFactor}_5`}`,
+        archetypeId: 'arch_t1_relogio5',
+        lensId: 'relogio_5_dobra_meia',
+        tier: 1,
+        expression: swap ? `5 × ${evenFactor} = ?` : `${evenFactor} × 5 = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Lente Dobra e Meia: Multiplicar por 5 é metade de multiplicar por 10! Corte o número par ao meio e multiplique por 10 — quanto dá?',
+        stepByStep: [
+          `Cortamos o fator par ${evenFactor} pela metade (= ${half}) e dobramos o 5 (= 10).`,
+          `A área permanece idêntica: ${half} × 10 = ${ans} instantaneamente!`,
+        ],
+        distractors: [
+          {
+            value: ans - 10,
+            trapDiagnosis: `${ans - 10} seria ${(half - 1) * 2} × 5! A metade de ${evenFactor} é ${half}, que multiplicado por 10 dá ${ans}.`,
+          },
+          {
+            value: ans - 5,
+            trapDiagnosis: `Todo número par multiplicado por 5 termina em zero! Metade de ${evenFactor} é ${half} → ${ans}.`,
+          },
+          {
+            value: ans + 5,
+            trapDiagnosis: `${ans + 5} seria ${evenFactor + 1} × 5! Para o par ${evenFactor}, basta pegar a metade (${half}) seguida de zero = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t1_truque9',
+    tier: 1,
+    lensId: 'infinito_9_quadrados',
+    synthesize: (rng) => {
+      const B = rngPick(rng, [4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15])
+      const tenTimes = B * 10
+      const ans = B * 9
+      const swap = rng() < 0.5
+
+      return {
+        id: `iso_arch_t1_truque9_${swap ? `9_${B}` : `${B}_9`}`,
+        archetypeId: 'arch_t1_truque9',
+        lensId: 'infinito_9_quadrados',
+        tier: 1,
+        expression: swap ? `9 × ${B} = ?` : `${B} × 9 = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Truque do 9 (Base 10): Multiplique o número por 10 e depois subtraia 1 vez ele mesmo — quanto resta?',
+        stepByStep: [
+          `O 9 é uma linha de 10 colunas menos 1 (10 − 1).`,
+          `Multiplicamos ${B} × 10 = ${tenTimes} e descontamos 1 vez o ${B}: ${tenTimes} − ${B} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: tenTimes - 1,
+            trapDiagnosis: `Cuidado! No Truque do 9 tiramos 1 grupo inteiro de ${B} (${tenTimes} − ${B} = ${ans}), e não apenas 1 unidade!`,
+          },
+          {
+            value: ans - 9,
+            trapDiagnosis: `${ans - 9} é 9 × ${B - 1}! Para 9 × ${B}, faça ${tenTimes} − ${B} = ${ans}.`,
+          },
+          {
+            value: ans + 2,
+            trapDiagnosis: `Quase! Descontando ${B} de ${tenTimes}, chegamos exatamente a ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t1_corta_div4',
+    tier: 1,
+    lensId: 'corta_no_meio_div',
+    synthesize: (rng) => {
+      const q = rngPick(rng, [6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18])
+      const N = q * 4
+      const half1 = q * 2
+
+      return {
+        id: `iso_arch_t1_corta_div4_${N}_4`,
+        archetypeId: 'arch_t1_corta_div4',
+        lensId: 'corta_no_meio_div',
+        tier: 1,
+        expression: `${N} ÷ 4 = ?`,
+        correctAnswer: q,
+        shortHint:
+          '💡 Corta no Meio 2×: Dividir por 4 é achar a metade da metade! Corte o número ao meio duas vezes seguidas — quanto dá?',
+        stepByStep: [
+          `Dividir por 4 é cortar ao meio duas vezes seguidas:`,
+          `1ª Metade: ${N} ÷ 2 = ${half1}.`,
+          `2ª Metade: ${half1} ÷ 2 = ${q}!`,
+        ],
+        distractors: [
+          {
+            value: half1,
+            trapDiagnosis: `${half1} é apenas a 1ª metade (${N} ÷ 2)! Corte ${half1} ao meio mais uma vez para dividir por 4 → ${q}.`,
+          },
+          {
+            value: q - 1,
+            trapDiagnosis: `${q - 1} × 4 daria ${(q - 1) * 4}! A metade de ${half1} é exatamente ${q}.`,
+          },
+          {
+            value: q + 2,
+            trapDiagnosis: `Quase! Cortando ${N} ao meio temos ${half1}, e a metade de ${half1} é ${q}!`,
+          },
+        ],
+      }
+    },
+  },
+
+  // ==========================================================================
+  // 🔥 GRAU II (Tier 2 — Forja Dupla · 5 Buracos + 400 pts) — 8 Famílias
+  // ==========================================================================
+  {
+    archetypeId: 'arch_t2_massinha_2d',
+    tier: 2,
+    lensId: 'massinha_soma',
+    synthesize: (rng) => {
+      const tensA = rngPick(rng, [20, 30, 40, 50, 60, 70])
+      const unitA = rngPick(rng, [7, 8, 9])
+      const A = tensA + unitA
+      const shift = 10 - unitA
+      const tensB = rngPick(rng, [10, 20, 30, 40])
+      const unitB = rngInt(rng, shift + 2, 8)
+      const B = tensB + unitB
+      const roundA = A + shift
+      const remB = B - shift
+      const ans = A + B
+
+      return {
+        id: `iso_arch_t2_massinha_2d_${A}_${B}`,
+        archetypeId: 'arch_t2_massinha_2d',
+        lensId: 'massinha_soma',
+        tier: 2,
+        expression: `${A} + ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Massinha da Soma: Transfira o que falta para arredondar o primeiro termo e some com o que restou do segundo — qual é o valor?',
+        stepByStep: [
+          `O ${A} pede apenas +${shift} para fechar a dezena redonda ${roundA}.`,
+          `Tiramos ${shift} do ${B} (que vira ${remB}) e entregamos ao ${A} (que vira ${roundA}).`,
+          `Agora a soma fica limpa: ${roundA} + ${remB} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: roundA + B,
+            trapDiagnosis: `Se o ${A} ganhou +${shift} para virar ${roundA}, o ${B} precisa entregar esses ${shift} e virar ${remB} → ${roundA} + ${remB} = ${ans}!`,
+          },
+          {
+            value: ans - 10,
+            trapDiagnosis: `Atenção à subida de dezena: ${A} + ${shift} forma ${roundA}. Somando com ${remB} chegamos a ${ans}!`,
+          },
+          {
+            value: ans - 2,
+            trapDiagnosis: `Quase! Tirando ${shift} de ${B} sobram ${remB} → ${roundA} + ${remB} = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t2_ponte_dezena',
+    tier: 2,
+    lensId: 'amigos_do_10_falta',
+    supportsMissingResonance: true,
+    synthesize: (rng, options) => {
+      const step1 =
+        options.missingInRow !== undefined &&
+        options.missingInRow >= 1 &&
+        options.missingInRow <= 6
+          ? options.missingInRow
+          : rngPick(rng, [2, 3, 4, 6, 7])
+      const unitA = 10 - step1
+      const tensA = rngPick(rng, [0, 10, 20, 30, 40])
+      const A = tensA + unitA
+      const bridge = tensA + 10
+      const step2 = rngPick(rng, [0, 4, 5, 6, 7, 8, 10])
+      const target = bridge + step2
+      const ans = target - A
+
+      return {
+        id: `iso_arch_t2_ponte_dezena_${A}_${target}`,
+        archetypeId: 'arch_t2_ponte_dezena',
+        lensId: 'amigos_do_10_falta',
+        tier: 2,
+        missingBlockResonance: step1,
+        expression: `${A} + [ ? ] = ${target}`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Ponte da Dezena: Use a próxima dezena redonda como trampolim intermediário e some os saltos — qual é a distância total?',
+        stepByStep: [
+          `Use a dezena ${bridge} como trampolim: de ${A} até ${bridge} faltam +${step1}.`,
+          step2 > 0
+            ? `De ${bridge} até ${target} faltam mais +${step2} → somando os dois saltos: ${step1} + ${step2} = ${ans}!`
+            : `Como o destino já é ${target}, faltam exatamente ${ans} unidades!`,
+        ],
+        distractors: [
+          {
+            value: Math.max(1, ans - 1),
+            trapDiagnosis: `Quase! ${A} + ${Math.max(1, ans - 1)} chega em ${A + Math.max(1, ans - 1)}. Para fechar ${target}, faltam ${ans}!`,
+          },
+          {
+            value: ans + 2,
+            trapDiagnosis: `Pela Ponte da Dezena: de ${A} até ${bridge} são +${step1}, mais +${step2} até ${target} = ${ans}!`,
+          },
+          {
+            value: ans + 10,
+            trapDiagnosis: `Quando você soma +${step1} no ${A}, já sobe para a dezena ${bridge}! Daí até ${target} faltam apenas ${step2} → total ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t2_hack_jap_2d',
+    tier: 2,
+    lensId: 'hack_japones',
+    synthesize: (rng) => {
+      const subTens = rngPick(rng, [20, 30, 40, 50, 60])
+      const subUnit = rngPick(rng, [7, 8, 9])
+      const B = subTens + subUnit
+      const shift = 10 - subUnit
+      const minUnit = rngInt(rng, 1, subUnit - 2)
+      const diffTens = rngPick(rng, [20, 30, 40, 50])
+      const A = subTens + diffTens + minUnit
+      const newA = A + shift
+      const newB = B + shift
+      const ans = A - B
+
+      return {
+        id: `iso_arch_t2_hack_jap_2d_${A}_${B}`,
+        archetypeId: 'arch_t2_hack_jap_2d',
+        lensId: 'hack_japones',
+        tier: 2,
+        expression: `${A} − ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Hack Japonês: Veja quanto falta para o subtraendo fechar dezena redonda e some esse mesmo valor nos dois termos — quanto dá?',
+        stepByStep: [
+          `O subtraendo ${B} precisa de +${shift} para virar a dezena redonda ${newB}.`,
+          `Somamos +${shift} também no ${A} → ele vira ${newA}.`,
+          `Agora é só fazer ${newA} − ${newB} = ${ans} sem nenhum empréstimo!`,
+        ],
+        distractors: [
+          {
+            value: A - newB,
+            trapDiagnosis: `Quase! Você somou +${shift} no ${B} (virando ${newB}), mas esqueceu de somar +${shift} no ${A} → ${newA} − ${newB} = ${ans}!`,
+          },
+          {
+            value: ans - 2 * shift,
+            trapDiagnosis: `Você tirou ${shift} do ${A} em vez de somar! Na subtração, ambos avançam +${shift} juntos: ${newA} − ${newB} = ${ans}.`,
+          },
+          {
+            value: ans + 10,
+            trapDiagnosis: `A unidade ${ans % 10} está certíssima! Mas ${newA} − ${newB} resulta em ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t2_elevador_2d',
+    tier: 2,
+    lensId: 'regra_elevador',
+    synthesize: (rng) => {
+      if (rng() < 0.45) {
+        const baseTen = rngPick(rng, [10, 20, 30, 40, 50])
+        const sub = rngPick(rng, [6, 7, 8, 9])
+        const add = rngPick(rng, [4, 5, 6, 7, 8, 9])
+        const ans = baseTen + add - sub
+        const bridgeRem = baseTen - sub
+        return {
+          id: `iso_arch_t2_elevador_bal_${baseTen}_${add}_${sub}`,
+          archetypeId: 'arch_t2_elevador_2d',
+          lensId: 'regra_elevador',
+          tier: 2,
+          expression: `${baseTen} + ${add} − ${sub} = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Balança Base-10: Em vez de seguir na ordem bruta, resolva primeiro a diferença a partir da dezena redonda e junte com a outra parcela — quanto dá?',
+          stepByStep: [
+            `Use a dezena redonda ${baseTen} a seu favor: ${baseTen} − ${sub} deixa ${bridgeRem}.`,
+            `Agora junte com o alívio +${add}: ${bridgeRem} + ${add} = ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: Math.max(1, ans - 2),
+              trapDiagnosis: `Quase! Fazendo ${baseTen} − ${sub} = ${bridgeRem} e somando +${add}, chegamos a ${ans}!`,
+            },
+            {
+              value: ans + 1,
+              trapDiagnosis: `Por 1 unidade! ${baseTen} − ${sub} = ${bridgeRem}, mais ${add} = ${ans}.`,
+            },
+            {
+              value: ans + 2,
+              trapDiagnosis: `Olhe pela ponte da dezena: (${baseTen} − ${sub}) + ${add} = ${bridgeRem} + ${add} = ${ans}!`,
+            },
+          ],
+        }
+      }
+
+      const top = rngPick(rng, [60, 70, 80, 90, 100])
+      const unitB = rngPick(rng, [2, 3, 4, 6, 7, 8])
+      const tensDiff = rngPick(rng, [20, 30, 40])
+      const B = top - tensDiff - (10 - unitB)
+      const nextTen = B + (10 - unitB)
+      const step1 = 10 - unitB
+      const step2 = top - nextTen
+      const ans = top - B
+
+      return {
+        id: `iso_arch_t2_elevador_2d_${top}_${B}`,
+        archetypeId: 'arch_t2_elevador_2d',
+        lensId: 'regra_elevador',
+        tier: 2,
+        expression: `${top} − ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Regra do Elevador: Suba até a dezena redonda imediatamente acima e depois conte as dezenas até o topo — qual é a subida total?',
+        stepByStep: [
+          `De ${B} até ${nextTen} o elevador sobe +${step1} andares.`,
+          `De ${nextTen} até ${top} sobe mais +${step2} andares.`,
+          `Total da subida: ${step1} + ${step2} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: step2 + unitB,
+            trapDiagnosis: `O amigo de ${unitB} para fechar ${nextTen} é ${step1} (e não ${unitB}) → ${step2} + ${step1} = ${ans}!`,
+          },
+          {
+            value: ans + 10,
+            trapDiagnosis: `A unidade ${step1} está perfeita! Mas como ${B} + ${step1} já chega em ${nextTen}, de ${nextTen} até ${top} faltam ${step2} → ${ans}.`,
+          },
+          {
+            value: Math.max(1, ans - 10),
+            trapDiagnosis: `Confira as dezenas: de ${nextTen} até ${top} são ${step2} andares, mais ${step1} = ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t2_dobro_4_8',
+    tier: 2,
+    lensId: 'dobro_do_dobro_248',
+    synthesize: (rng) => {
+      const mult = rng() < 0.7 ? 4 : 8
+      const A =
+        mult === 4
+          ? rngPick(rng, [16, 18, 23, 24, 26, 27, 28, 32, 35, 45])
+          : rngPick(rng, [11, 12, 13, 14, 16])
+      const ans = A * mult
+      const d1 = A * 2
+      const d2 = A * 4
+
+      return {
+        id: `iso_arch_t2_dobro_${A}_${mult}`,
+        archetypeId: 'arch_t2_dobro_4_8',
+        lensId: 'dobro_do_dobro_248',
+        tier: 2,
+        expression: `${A} × ${mult} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          mult === 4
+            ? '💡 Dobro do Dobro: Dobre o primeiro fator uma vez e dobre o resultado novamente — quanto dá?'
+            : '💡 Triplo Dobro (×8): Multiplicar por 8 é dobrar 3 vezes seguidas (×2 → ×2 → ×2) — qual valor surge?',
+        stepByStep:
+          mult === 4
+            ? [
+                `1º Dobro: ${A} × 2 = ${d1}.`,
+                `2º Dobro: ${d1} × 2 = ${ans}!`,
+              ]
+            : [
+                `1º Dobro: ${A} × 2 = ${d1}.`,
+                `2º Dobro: ${d1} × 2 = ${d2}.`,
+                `3º Dobro: ${d2} × 2 = ${ans}!`,
+              ],
+        distractors: [
+          {
+            value: mult === 4 ? d1 : d2,
+            trapDiagnosis:
+              mult === 4
+                ? `${d1} é apenas o 1º dobro (${A} × 2)! Falta dobrar mais uma vez: ${d1} × 2 = ${ans}.`
+                : `${d2} é ${A} × 4 (dois dobros)! Dobre mais uma vez para chegar em ×8: ${d2} × 2 = ${ans}.`,
+          },
+          {
+            value: ans - 10,
+            trapDiagnosis: `Olhe as dezenas: dobrando passo a passo chegamos exatamente a ${ans}!`,
+          },
+          {
+            value: ans + 4,
+            trapDiagnosis: `Quase! O dobro final fecha cravado em ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t2_dobra_11_101',
+    tier: 2,
+    lensId: 'relogio_5_dobra_meia',
+    synthesize: (rng) => {
+      const sub = rngInt(rng, 0, 2)
+      if (sub === 0) {
+        // Dobra e Meia: even * 15
+        const half = rngPick(rng, [6, 7, 8, 9, 11, 12, 13, 14, 16])
+        const evenA = half * 2
+        const ans = half * 30
+        return {
+          id: `iso_arch_t2_dobra_meia_${evenA}_15`,
+          archetypeId: 'arch_t2_dobra_11_101',
+          lensId: 'relogio_5_dobra_meia',
+          tier: 2,
+          expression: `${evenA} × 15 = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Regra de Ouro (Dobra e Meia): Corte o fator par pela metade e dobre o 15 para virar dezena redonda — quanto dá o novo produto?',
+          stepByStep: [
+            `Pela conservação da área, cortamos ${evenA} pela metade (= ${half}) e dobramos 15 (= 30).`,
+            `Agora multiplicamos sem esforço: ${half} × 30 = ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: evenA * 10,
+              trapDiagnosis: `${evenA * 10} é apenas ${evenA} × 10! Faltou somar a metade (${evenA} × 5 = ${half * 10}) → ${ans}.`,
+            },
+            {
+              value: (half - 1) * 30,
+              trapDiagnosis: `Quase! A metade de ${evenA} é ${half} (e não ${half - 1}). Fazendo ${half} × 30 chegamos a ${ans}!`,
+            },
+            {
+              value: ans + 10,
+              trapDiagnosis: `Como ${half} × 3 = ${half * 3}, então ${half} × 30 = ${ans}!`,
+            },
+          ],
+        }
+      }
+      if (sub === 1) {
+        // Segredo do 11: AB * 11 (where A + B <= 9)
+        const d = rngInt(rng, 2, 8)
+        const u = rngInt(rng, 1, 9 - d)
+        const AB = d * 10 + u
+        const mid = d + u
+        const ans = d * 100 + mid * 10 + u
+        return {
+          id: `iso_arch_t2_onze_${AB}_11`,
+          archetypeId: 'arch_t2_dobra_11_101',
+          lensId: 'relogio_5_dobra_meia',
+          tier: 2,
+          expression: `${AB} × 11 = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Segredo do 11: Afaste os dois algarismos das pontas e coloque exatamente no meio a soma deles — que número de 3 dígitos surge?',
+          stepByStep: [
+            `No Truque do 11, abrimos os dígitos ${d} e ${u} nas pontas → ${d} [ _ ] ${u}.`,
+            `No centro vai a soma dos dois algarismos (${d} + ${u} = ${mid}) → ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: d * 100 + d * 10 + u,
+              trapDiagnosis: `No centro colocamos a soma dos dígitos (${d} + ${u} = ${mid}), formando ${ans}!`,
+            },
+            {
+              value: AB * 10 + u,
+              trapDiagnosis: `${AB * 10} é ${AB} × 10! Somando mais ${AB} (ou colocando ${d} + ${u} = ${mid} no meio), temos ${ans}.`,
+            },
+            {
+              value: ans + 10,
+              trapDiagnosis: `Olhe a soma central: ${d} + ${u} vale ${mid} (e não ${mid + 1}), formando ${ans}!`,
+            },
+          ],
+        }
+      }
+      // Espelho do 101: 101 * AB
+      const AB = rngPick(rng, [14, 18, 23, 27, 34, 37, 42, 43, 52, 56, 63, 68, 74, 83, 92])
+      const ans = AB * 101
+      return {
+        id: `iso_arch_t2_espelho_101_${AB}`,
+        archetypeId: 'arch_t2_dobra_11_101',
+        lensId: 'relogio_5_dobra_meia',
+        tier: 2,
+        expression: `101 × ${AB} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Espelho do 101: Multiplicar por 101 é somar 100 vezes o número com 1 vez ele mesmo — qual número espelhado se forma?',
+        stepByStep: [
+          `101 é 100 + 1 (o Espelho de 2 dígitos do Repositório Heiss-Lab!).`,
+          `${AB} × 100 = ${AB * 100}, mais ${AB} × 1 = ${AB}.`,
+          `O número se repete lado a lado no espelho: ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: AB * 100 + (AB % 10),
+            trapDiagnosis: `${AB * 100} + ${AB} preenche tanto a dezena quanto a unidade: o ${AB} se repete inteiro → ${ans}!`,
+          },
+          {
+            value: ans + 100,
+            trapDiagnosis: `${AB} × 100 é ${AB * 100}. Com mais ${AB}, forma o espelho perfeito ${ans}!`,
+          },
+          {
+            value: ans - 10,
+            trapDiagnosis: `Multiplicar por 101 repete os dois dígitos de ${AB} lado a lado: ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t2_fator_vizinho',
+    tier: 2,
+    lensId: 'infinito_9_quadrados',
+    synthesize: (rng) => {
+      if (rng() < 0.6) {
+        const F = rngPick(rng, [13, 14, 16, 17, 18, 19, 21, 22, 23, 24, 26, 27, 28, 31, 32, 34, 36, 38])
+        const a = rngPick(rng, [2, 3, 4, 6, 7, 8])
+        const b = 10 - a
+        const ans = F * 10
+        return {
+          id: `iso_arch_t2_fator_comum_${F}_${a}_${b}`,
+          archetypeId: 'arch_t2_fator_vizinho',
+          lensId: 'infinito_9_quadrados',
+          tier: 2,
+          expression: `${F} × ${a} + ${F} × ${b} = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Fator Comum em Evidência: O mesmo número multiplica os dois blocos! Coloque-o em evidência e some primeiro os dois parceiros — quanto dá?',
+          stepByStep: [
+            `Coloque o fator repetido ${F} em evidência: ${F} × (${a} + ${b}).`,
+            `Como ${a} + ${b} fecha exatamente a dezena 10, temos ${F} × 10 = ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: F * 9,
+              trapDiagnosis: `${F * 9} seria ${F} × 9! Como ${a} + ${b} = 10, temos ${F} × 10 = ${ans}.`,
+            },
+            {
+              value: F * 20,
+              trapDiagnosis: `Não duplique o fator comum! ${a} grupos de ${F} + ${b} grupos de ${F} = 10 grupos de ${F} = ${ans}.`,
+            },
+            {
+              value: (F - 1) * 10,
+              trapDiagnosis: `O fator em evidência é ${F}: ${F} × (${a} + ${b}) = ${ans}!`,
+            },
+          ],
+        }
+      }
+
+      // Vizinho da dezena: 19 * B or 29 * B
+      const nearTen = rngPick(rng, [19, 29])
+      const roundTen = nearTen + 1
+      const B = rngPick(rng, [4, 5, 6, 7, 8, 9])
+      const roundProd = roundTen * B
+      const ans = roundProd - B
+      return {
+        id: `iso_arch_t2_vizinho_${nearTen}_${B}`,
+        archetypeId: 'arch_t2_fator_vizinho',
+        lensId: 'infinito_9_quadrados',
+        tier: 2,
+        expression: `${nearTen} × ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Vizinho da Dezena: Arredonde o primeiro fator para a dezena redonda acima, multiplique e desconte 1 grupo — qual é o valor?',
+        stepByStep: [
+          `${nearTen} está a 1 passo de ${roundTen} (${nearTen} = ${roundTen} − 1).`,
+          `Multiplicamos ${roundTen} × ${B} = ${roundProd} e tiramos 1 vez o ${B}: ${roundProd} − ${B} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: ans - 10,
+            trapDiagnosis: `Cuidado na descida de dezena: ${roundProd} − ${B} fica em ${ans}!`,
+          },
+          {
+            value: roundProd - 1,
+            trapDiagnosis: `Descontamos 1 grupo inteiro de ${B} (${roundProd} − ${B} = ${ans}), e não apenas 1 unidade!`,
+          },
+          {
+            value: ans + 2,
+            trapDiagnosis: `Quase! De ${roundProd} tiramos ${B}, chegando exatamente a ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t2_div_5_4_12',
+    tier: 2,
+    lensId: 'corta_no_meio_div',
+    synthesize: (rng) => {
+      if (rng() < 0.6) {
+        const q = rngPick(rng, [13, 14, 16, 17, 18, 19, 21, 22, 23, 24, 26, 27, 28, 29])
+        const N = q * 5
+        const doubleN = q * 10
+        return {
+          id: `iso_arch_t2_div5_${N}_5`,
+          archetypeId: 'arch_t2_div_5_4_12',
+          lensId: 'corta_no_meio_div',
+          tier: 2,
+          expression: `${N} ÷ 5 = ?`,
+          correctAnswer: q,
+          shortHint:
+            '💡 Segredo de Dividir por 5: Dobre o número inteiro primeiro e depois divida por 10 cortando o zero final — quanto sobra?',
+          stepByStep: [
+            `Dividir por 5 equivale a multiplicar por 2 e dividir por 10!`,
+            `O dobro de ${N} é ${doubleN}.`,
+            `Cortando o zero final de ${doubleN}, temos ${q}!`,
+          ],
+          distractors: [
+            {
+              value: q - 1,
+              trapDiagnosis: `${q - 1} × 5 = ${(q - 1) * 5}! O dobro de ${N} é ${doubleN}, que sem o zero final vira ${q}.`,
+            },
+            {
+              value: q + 1,
+              trapDiagnosis: `${q + 1} × 5 = ${(q + 1) * 5}! Dobrando ${N} (= ${doubleN}) e cortando o zero, encontramos ${q}.`,
+            },
+            {
+              value: q - 2,
+              trapDiagnosis: `Use o atalho do dobro: 2 × ${N} = ${doubleN} → corte o zero = ${q}!`,
+            },
+          ],
+        }
+      }
+
+      const q = rngPick(rng, [17, 18, 19, 21, 22, 23, 24, 26, 28, 31, 32])
+      const N = q * 4
+      const half1 = q * 2
+      return {
+        id: `iso_arch_t2_div4_${N}_4`,
+        archetypeId: 'arch_t2_div_5_4_12',
+        lensId: 'corta_no_meio_div',
+        tier: 2,
+        expression: `${N} ÷ 4 = ?`,
+        correctAnswer: q,
+        shortHint:
+          '💡 Corta no Meio 2×: Divida o número pela metade duas vezes seguidas — quanto resulta?',
+        stepByStep: [
+          `1ª Metade: ${N} ÷ 2 = ${half1}.`,
+          `2ª Metade: ${half1} ÷ 2 = ${q}!`,
+        ],
+        distractors: [
+          {
+            value: half1,
+            trapDiagnosis: `${half1} é a 1ª metade (${N} ÷ 2)! Falta cortar ${half1} ao meio → ${q}.`,
+          },
+          {
+            value: q - 1,
+            trapDiagnosis: `Quase! A metade de ${half1} é exatamente ${q}.`,
+          },
+          {
+            value: q + 1,
+            trapDiagnosis: `Confira a unidade: ${half1} ÷ 2 fecha cravado em ${q}!`,
+          },
+        ],
+      }
+    },
+  },
+
+  // ==========================================================================
+  // 🌟 GRAU III (Tier 3 — Supernova Simétrica · 10 Buracos + 1.000 pts) — 8 Famílias
+  // ==========================================================================
+  {
+    archetypeId: 'arch_t3_massinha_100',
+    tier: 3,
+    lensId: 'massinha_soma',
+    synthesize: (rng) => {
+      const tensA = rngPick(rng, [60, 70, 80, 90, 120, 130, 140])
+      const unitA = rngPick(rng, [7, 8, 9])
+      const A = tensA + unitA
+      const shift = 10 - unitA
+      const tensB = rngPick(rng, [30, 40, 50, 60, 70])
+      const unitB = rngInt(rng, shift + 2, 8)
+      const B = tensB + unitB
+      const roundA = A + shift
+      const remB = B - shift
+      const ans = A + B
+
+      return {
+        id: `iso_arch_t3_massinha_100_${A}_${B}`,
+        archetypeId: 'arch_t3_massinha_100',
+        lensId: 'massinha_soma',
+        tier: 3,
+        expression: `${A} + ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Massinha na Centena: Arredonde o primeiro termo entregando unidades do segundo e atravesse a centena sem esforço — quanto dá?',
+        stepByStep: [
+          `O ${A} pede apenas +${shift} para fechar ${roundA}.`,
+          `Tiramos ${shift} do ${B} (que vira ${remB}) e formamos ${roundA} + ${remB}.`,
+          `Resultado limpo: ${roundA} + ${remB} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: ans - 10,
+            trapDiagnosis: `Olhe a ponte da centena: ${A} + ${shift} sobe para ${roundA}, e ${roundA} + ${remB} = ${ans}!`,
+          },
+          {
+            value: roundA + B,
+            trapDiagnosis: `Lembre-se de descontar os ${shift} que saíram do ${B} para o ${A} virar ${roundA}: ${roundA} + ${remB} = ${ans}!`,
+          },
+          {
+            value: ans - 2,
+            trapDiagnosis: `Quase! Tirando ${shift} de ${B} sobram ${remB} → ${roundA} + ${remB} = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t3_maquina_ponte',
+    tier: 3,
+    lensId: 'amigos_do_10_falta',
+    synthesize: (rng) => {
+      if (rng() < 0.65) {
+        const a = rngPick(rng, [2, 3, 4, 5, 6])
+        const x = rngPick(rng, [10, 12, 14, 15, 16, 18, 20, 22, 25])
+        const b = rngPick(rng, [10, 12, 15, 20, 24, 30])
+        const ax = a * x
+        const rhs = ax - b
+        return {
+          id: `iso_arch_t3_maquina_${a}x_m${b}_${rhs}`,
+          archetypeId: 'arch_t3_maquina_ponte',
+          lensId: 'amigos_do_10_falta',
+          tier: 3,
+          expression: `${a}x − ${b} = ${rhs} → x = ?`,
+          correctAnswer: x,
+          shortHint:
+            '💡 Máquina do Tempo das Equações: Rebobine o filme de trás para frente! Desfaça primeiro a subtração e depois a multiplicação — quanto vale x?',
+          stepByStep: [
+            `Na Máquina do Tempo, desfazemos a última operação primeiro.`,
+            `O inverso de tirar ${b} é somar ${b}: ${rhs} + ${b} = ${ax}.`,
+            `O inverso de multiplicar por ${a} é dividir por ${a}: ${ax} ÷ ${a} = ${x}!`,
+          ],
+          distractors: [
+            {
+              value: Math.max(1, Math.round(Math.abs(rhs - b) / a)),
+              trapDiagnosis: `Cuidado! O inverso de "− ${b}" na Máquina do Tempo é "+ ${b}": faça (${rhs} + ${b}) ÷ ${a} = ${x}!`,
+            },
+            {
+              value: Math.max(2, Math.round(rhs / a)),
+              trapDiagnosis: `Desfaça o "− ${b}" primeiro somando ${rhs} + ${b} = ${ax}, e só depois divida por ${a} → ${x}!`,
+            },
+            {
+              value: x + 4,
+              trapDiagnosis: `Quase! Como ${rhs} + ${b} = ${ax}, dividindo ${ax} por ${a} chegamos a ${x}.`,
+            },
+          ],
+        }
+      }
+
+      const target = rngPick(rng, [60, 70, 80, 90, 100])
+      const unitA = rngPick(rng, [2, 3, 4, 6, 7, 8])
+      const tensGap = rngPick(rng, [20, 30, 40])
+      const A = target - tensGap - (10 - unitA)
+      const nextTen = A + (10 - unitA)
+      const step1 = 10 - unitA
+      const step2 = target - nextTen
+      const ans = target - A
+
+      return {
+        id: `iso_arch_t3_ponte_${A}_${target}`,
+        archetypeId: 'arch_t3_maquina_ponte',
+        lensId: 'amigos_do_10_falta',
+        tier: 3,
+        expression: `${A} + [ ? ] = ${target}`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Ponte da Dezena: Complete primeiro até a dezena redonda seguinte e depois suba as dezenas restantes — quanto falta?',
+        stepByStep: [
+          `De ${A} até ${nextTen} faltam +${step1}.`,
+          `De ${nextTen} até ${target} faltam +${step2}.`,
+          `Somando os dois degraus: ${step1} + ${step2} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: ans + 10,
+            trapDiagnosis: `Pegadinha clássica: ao somar +${step1} no ${A}, já subimos para ${nextTen}! Daí até ${target} faltam só ${step2} → ${ans}.`,
+          },
+          {
+            value: step2 + unitA,
+            trapDiagnosis: `O amigo de ${unitA} para fechar ${nextTen} é ${step1} (e não ${unitA}) → ${step2} + ${step1} = ${ans}!`,
+          },
+          {
+            value: ans - 1,
+            trapDiagnosis: `Por 1 unidade! ${A} + ${step1} = ${nextTen}, mais ${step2} = ${target} → ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t3_hack_99',
+    tier: 3,
+    lensId: 'hack_japones',
+    synthesize: (rng) => {
+      const top = rngPick(rng, [100, 200, 300])
+      const tensB = rngPick(rng, [20, 30, 40, 50, 60, 70, 80])
+      const unitB = rngPick(rng, [2, 3, 4, 6, 7, 8, 9])
+      const B = (top === 300 ? 100 : 0) + tensB + unitB
+      const shift = 10 - unitB
+      const ans = top - B
+
+      return {
+        id: `iso_arch_t3_hack_99_${top}_${B}`,
+        archetypeId: 'arch_t3_hack_99',
+        lensId: 'hack_japones',
+        tier: 3,
+        expression: `${top} − ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Hack do 99 (Sem Empréstimo): Tire 1 dos dois lados para transformar a centena em 99 ou suba os dois juntos — quanto dá?',
+        stepByStep: [
+          `Caminho A (Truque do 99): Tire 1 dos dois lados → ${top - 1} − ${B - 1} = ${ans} (sem pedir emprestado!).`,
+          `Caminho B (Hack Japonês +${shift}): Some +${shift} nos dois → ${top + shift} − ${B + shift} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: ans + 10,
+            trapDiagnosis: `Pegadinha da Centena! Quando completamos ${B} + ${shift}, já estamos em ${B + shift}. De ${B + shift} até ${top} faltam ${ans - shift} → total ${ans}!`,
+          },
+          {
+            value: ans - shift + unitB,
+            trapDiagnosis: `O complemento de ${unitB} para 10 é ${shift} (e não ${unitB}) → ${ans}!`,
+          },
+          {
+            value: ans + 10 - shift + unitB,
+            trapDiagnosis: `Usando ${top - 1} − ${B - 1}, subtraímos dígito a dígito sem empréstimo e chegamos a ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t3_elevador_100',
+    tier: 3,
+    lensId: 'regra_elevador',
+    synthesize: (rng) => {
+      const top = rngPick(rng, [110, 120, 130, 140, 150])
+      const tensB = rngPick(rng, [60, 70, 80, 90])
+      const unitB = rngPick(rng, [2, 3, 4, 6, 7, 8])
+      const B = tensB + unitB
+      const nextTen = tensB + 10
+      const step1 = 10 - unitB
+      const step2 = top - nextTen
+      const ans = top - B
+
+      return {
+        id: `iso_arch_t3_elevador_100_${top}_${B}`,
+        archetypeId: 'arch_t3_elevador_100',
+        lensId: 'regra_elevador',
+        tier: 3,
+        expression: `${top} − ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Elevador na Centena: Suba até a próxima dezena redonda e depois meça os andares até o topo — qual é a distância total?',
+        stepByStep: [
+          `De ${B} até ${nextTen} subimos +${step1}.`,
+          `De ${nextTen} até ${top} subimos +${step2}.`,
+          `Juntando os dois trechos: ${step2} + ${step1} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: ans - 10,
+            trapDiagnosis: `A unidade ${step1} está ótima! Mas de ${nextTen} até ${top} são ${step2} andares → ${step2} + ${step1} = ${ans}.`,
+          },
+          {
+            value: step2 + unitB,
+            trapDiagnosis: `O amigo de ${unitB} para fechar ${nextTen} é ${step1} (pois ${unitB} + ${step1} = 10) → ${step2} + ${step1} = ${ans}!`,
+          },
+          {
+            value: ans + 10,
+            trapDiagnosis: `Ao somar +${step1} no ${B}, você já chegou em ${nextTen}. De ${nextTen} até ${top} são ${step2} → ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t3_triplo_dobro',
+    tier: 3,
+    lensId: 'dobro_do_dobro_248',
+    synthesize: (rng) => {
+      const A = rngPick(rng, [12, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 35, 45])
+      const d1 = A * 2
+      const d2 = A * 4
+      const ans = A * 8
+
+      return {
+        id: `iso_arch_t3_triplo_dobro_${A}_8`,
+        archetypeId: 'arch_t3_triplo_dobro',
+        lensId: 'dobro_do_dobro_248',
+        tier: 3,
+        expression: `${A} × 8 = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Triplo Dobro (×8): Multiplicar por 8 é dobrar 3 vezes seguidas (×2 → ×2 → ×2) — aonde você chega?',
+        stepByStep: [
+          `Multiplicar por 8 é dobrar 3 vezes seguidas:`,
+          `${A} × 2 = ${d1} → ${d1} × 2 = ${d2} → ${d2} × 2 = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: d2,
+            trapDiagnosis: `${d2} é ${A} × 4 (apenas dois dobros)! Dobre mais uma vez para chegar em ×8: ${d2} × 2 = ${ans}.`,
+          },
+          {
+            value: A * 6,
+            trapDiagnosis: `${A * 6} é ${A} × 6! Dobre o ${d2} (que é ${A} × 4) e você chega direto em ${ans}.`,
+          },
+          {
+            value: ans - 10,
+            trapDiagnosis: `Confira o 3º dobro: o dobro de ${d2} fecha exatamente em ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t3_dobra_25_11',
+    tier: 3,
+    lensId: 'relogio_5_dobra_meia',
+    synthesize: (rng) => {
+      const k = rngPick(rng, [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16])
+      const A = k * 4
+      const ans = k * 100
+
+      return {
+        id: `iso_arch_t3_dobra25_${A}_25`,
+        archetypeId: 'arch_t3_dobra_25_11',
+        lensId: 'relogio_5_dobra_meia',
+        tier: 3,
+        expression: `${A} × 25 = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Dobra e Meia Duplo (×25): Como 25 × 4 fecha 100, divida o primeiro fator por 4 e multiplique por 100 — quanto dá?',
+        stepByStep: [
+          `Transforme o retângulo duas vezes (ou divida por 4 e multiplique por 100):`,
+          `${A} × 25 = ${A / 2} × 50 = ${k} × 100 = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: (k * 100) / 2,
+            trapDiagnosis: `${(k * 100) / 2} é apenas metade do caminho! Como ${A} ÷ 4 = ${k}, temos ${k} × 100 = ${ans}.`,
+          },
+          {
+            value: (k - 1) * 100,
+            trapDiagnosis: `${(k - 1) * 100} seria ${(k - 1) * 4} × 25! Dividindo ${A} por 4 temos ${k} → ${ans}.`,
+          },
+          {
+            value: (k + 1) * 100,
+            trapDiagnosis: `Divida ${A} por 4 (metade de ${A} é ${A / 2}, metade é ${k}) e multiplique por 100 = ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t3_diff_quad_5',
+    tier: 3,
+    lensId: 'infinito_9_quadrados',
+    synthesize: (rng) => {
+      const sub = rngInt(rng, 0, 2)
+      if (sub === 0) {
+        // Symmetric product around C: (C - d)(C + d) = C^2 - d^2
+        const C = rngPick(rng, [20, 30, 40, 50, 60])
+        const d = rngPick(rng, [1, 2, 3, 4])
+        const f1 = C - d
+        const f2 = C + d
+        const cSq = C * C
+        const dSq = d * d
+        const ans = cSq - dSq
+        const swap = rng() < 0.4
+        return {
+          id: `iso_arch_t3_diff_quad_${swap ? `${f2}_${f1}` : `${f1}_${f2}`}`,
+          archetypeId: 'arch_t3_diff_quad_5',
+          lensId: 'infinito_9_quadrados',
+          tier: 3,
+          expression: swap ? `${f2} × ${f1} = ?` : `${f1} × ${f2} = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Diferença de Quadrados (a² − b²): Descubra a dezena redonda exatamente no meio dos dois fatores e calcule (Centro)² − (Distância)² — qual valor surge?',
+          stepByStep: [
+            `${f1} e ${f2} estão à mesma distância (${d}) do centro redondo ${C}: (${C} − ${d}) × (${C} + ${d}).`,
+            `Pela Diferença de Quadrados: ${C}² − ${d}² = ${cSq} − ${dSq}.`,
+            `Resultado imediato: ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: cSq - 2 * d,
+              trapDiagnosis: `Quase! Na Diferença de Quadrados subtraímos o QUADRADO da distância (${d}² = ${dSq}), e não o dobro → ${cSq} − ${dSq} = ${ans}!`,
+            },
+            {
+              value: cSq + dSq,
+              trapDiagnosis: `Cuidado com o sinal: (${C} − ${d})(${C} + ${d}) é ${C}² MENOS ${d}², logo tiramos ${dSq} de ${cSq} → ${ans}!`,
+            },
+            {
+              value: ans - 10,
+              trapDiagnosis: `Muito perto! De ${cSq} tirando ${dSq}, permanecemos em ${ans}!`,
+            },
+          ],
+        }
+      }
+      if (sub === 1) {
+        // Squares ending in 5: (10n + 5)^2
+        const n = rngPick(rng, [2, 3, 4, 5, 6, 7, 8])
+        const num = n * 10 + 5
+        const head = n * (n + 1)
+        const ans = head * 100 + 25
+        return {
+          id: `iso_arch_t3_quad5_${num}`,
+          archetypeId: 'arch_t3_diff_quad_5',
+          lensId: 'infinito_9_quadrados',
+          tier: 3,
+          expression: `${num}² (${num} × ${num}) = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Quadrados Terminados em 5: Multiplique o algarismo das dezenas pelo seu sucessor imediato n × (n + 1) e cole 25 no final — que número se forma?',
+          stepByStep: [
+            `Todo quadrado terminado em 5 termina em 25!`,
+            `Multiplique a dezena ${n} pelo seu sucessor imediato (${n + 1}): ${n} × ${n + 1} = ${head}.`,
+            `Anexe 25 à direita: ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: n * n * 100 + 25,
+              trapDiagnosis: `Armadilha clássica: você fez ${n} × ${n} = ${n * n}! O segredo é multiplicar a dezena ${n} pelo SUCESSOR ${n + 1} (${n} × ${n + 1} = ${head}) → ${ans}!`,
+            },
+            {
+              value: (head - 2) * 100 + 25,
+              trapDiagnosis: `Quase! O produto da dezena ${n} pelo sucessor ${n + 1} vale ${head} → ${ans}.`,
+            },
+            {
+              value: n * (n + 2) * 100 + 25,
+              trapDiagnosis: `O sucessor imediato de ${n} é ${n + 1} (${n} × ${n + 1} = ${head}), formando ${ans}!`,
+            },
+          ],
+        }
+      }
+      // Subtractive Common Factor: F * (b + 10) - F * b
+      const F = rngPick(rng, [18, 24, 27, 32, 35, 42, 45, 54, 63, 75])
+      const b = rngPick(rng, [4, 6, 7, 8, 9, 12, 14])
+      const a = b + 10
+      const ans = F * 10
+      return {
+        id: `iso_arch_t3_fator_sub_${F}_${a}_${b}`,
+        archetypeId: 'arch_t3_diff_quad_5',
+        lensId: 'infinito_9_quadrados',
+        tier: 3,
+        expression: `${F} × ${a} − ${F} × ${b} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Fator Comum na Subtração: Coloque o número repetido em evidência e subtraia primeiro os dois multiplicadores — quanto resta?',
+        stepByStep: [
+          `${a} grupos de ${F} menos ${b} grupos de ${F} deixam (${a} − ${b}) grupos de ${F}.`,
+          `Como ${a} − ${b} = 10, fazemos ${F} × 10 = ${ans} em 1 segundo!`,
+        ],
+        distractors: [
+          {
+            value: F * 9,
+            trapDiagnosis: `${a} − ${b} fecha exatamente 10 (e não 9)! Multiplicando ${F} × 10 temos ${ans}.`,
+          },
+          {
+            value: F * 20,
+            trapDiagnosis: `Como estamos subtraindo (${a} − ${b} = 10), o resultado é ${F} × 10 = ${ans}!`,
+          },
+          {
+            value: F * 8,
+            trapDiagnosis: `Coloque o ${F} em evidência: ${F} × (${a} − ${b}) = ${F} × 10 = ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t3_trincheira',
+    tier: 3,
+    lensId: 'corta_no_meio_div',
+    synthesize: (rng) => {
+      const pairs: ReadonlyArray<[number, number, number, number]> = [
+        [9, 4, 7, 3],
+        [9, 5, 8, 2],
+        [8, 4, 7, 3],
+        [6, 5, 7, 4],
+        [9, 3, 5, 4],
+        [8, 5, 9, 2],
+        [7, 4, 6, 3],
+        [12, 3, 5, 4],
+        [11, 3, 6, 4],
+        [9, 6, 7, 2],
+      ]
+      const [d1, q1, d2, q2] = rngPick(rng, pairs)
+      const N1 = d1 * q1
+      const N2 = d2 * q2
+      const ans = q1 * q2
+
+      return {
+        id: `iso_arch_t3_trincheira_${N1}_${N2}_${d2}_${d1}`,
+        archetypeId: 'arch_t3_trincheira',
+        lensId: 'corta_no_meio_div',
+        tier: 3,
+        expression: `(${N1} × ${N2}) ÷ (${d2} × ${d1}) = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Trincheira de Frações: Proibido multiplicar os números grandes! Simplifique cada fator do primeiro grupo pelo seu divisor amigo no segundo — qual produto simples sobra?',
+        stepByStep: [
+          `Regra de Ouro das Frações: simplifique antes de multiplicar!`,
+          `Divida ${N1} por ${d1} (= ${q1}) e divida ${N2} por ${d2} (= ${q2}).`,
+          `Agora multiplique os sobreviventes: ${q1} × ${q2} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: q1 + q2,
+            trapDiagnosis: `Você somou ${q1} + ${q2} = ${q1 + q2} em vez de multiplicar! Como o sinal entre os termos é ×, fazemos ${q1} × ${q2} = ${ans}.`,
+          },
+          {
+            value: (q1 - 1) * q2,
+            trapDiagnosis: `Quase! ${N1} ÷ ${d1} = ${q1}, e ${N2} ÷ ${d2} = ${q2} → ${q1} × ${q2} = ${ans}!`,
+          },
+          {
+            value: q1 * (q2 + 1),
+            trapDiagnosis: `${N2} ÷ ${d2} vale ${q2} (e não ${q2 + 1}). Portanto ${q1} × ${q2} = ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+
+  // ==========================================================================
+  // 👑 GRAU IV (Tier 4 — Gênesis Absoluto · TODOS os Buracos + 🛡️ Fênix) — 8 Famílias
+  // ==========================================================================
+  {
+    archetypeId: 'arch_t4_diff_sq_inv',
+    tier: 4,
+    lensId: 'infinito_9_quadrados',
+    synthesize: (rng) => {
+      const C = rngPick(rng, [30, 40, 50, 60, 70, 80, 90, 100])
+      const d = rngPick(rng, [2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 15])
+      const a = C + d
+      const b = C - d
+      const sumAB = a + b // 2C
+      const diffAB = a - b // 2d
+      const ans = sumAB * diffAB
+
+      return {
+        id: `iso_arch_t4_diff_sq_inv_${a}_${b}`,
+        archetypeId: 'arch_t4_diff_sq_inv',
+        lensId: 'infinito_9_quadrados',
+        tier: 4,
+        expression: `${a}² − ${b}² = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Diferença de Quadrados Inversa: Proibido elevar ao quadrado no braço! Use a² − b² = (a + b) × (a − b): multiplique a soma dos dois pela diferença entre eles — quanto dá?',
+        stepByStep: [
+          `Pela identidade áurea a² − b² = (a + b) × (a − b):`,
+          `Soma dos termos: ${a} + ${b} = ${sumAB}.`,
+          `Diferença dos termos: ${a} − ${b} = ${diffAB}.`,
+          `Multiplicando de cabeça: ${sumAB} × ${diffAB} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: diffAB * diffAB,
+            trapDiagnosis: `${diffAB * diffAB} é apenas (${a} − ${b})² = ${diffAB}²! Multiplique a SOMA (${sumAB}) pela DIFERENÇA (${diffAB}) → ${ans}!`,
+          },
+          {
+            value: sumAB * d,
+            trapDiagnosis: `Quase! A distância total entre ${b} e ${a} é ${d} + ${d} = ${diffAB} (e não ${d}). Multiplicando por ${sumAB}: ${sumAB} × ${diffAB} = ${ans}!`,
+          },
+          {
+            value: sumAB * (diffAB + 2),
+            trapDiagnosis: `A soma ${a} + ${b} fecha ${sumAB} e a diferença ${a} − ${b} vale ${diffAB} → ${sumAB} × ${diffAB} = ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t4_fator_100',
+    tier: 4,
+    lensId: 'infinito_9_quadrados',
+    synthesize: (rng) => {
+      const F = rngPick(
+        rng,
+        [
+          13, 14, 16, 17, 18, 19, 21, 22, 23, 24, 26, 27, 28, 29, 31, 32, 33, 34,
+          36, 37, 38, 39, 41, 42, 43, 44, 46, 47, 48, 51, 52, 53, 54, 56, 57, 58,
+          61, 62, 63, 64, 67, 68, 71, 72, 73, 74, 76, 78, 81, 82, 83, 84, 86, 87,
+          91, 92, 93, 94, 96, 97,
+        ]
+      )
+      const isSubtraction = rng() < 0.35
+      if (isSubtraction) {
+        const B = rngInt(rng, 12, 48)
+        const A = B + 100
+        const ans = F * 100
+        return {
+          id: `iso_arch_t4_fator100_sub_${F}_${A}_${B}`,
+          archetypeId: 'arch_t4_fator_100',
+          lensId: 'infinito_9_quadrados',
+          tier: 4,
+          expression: `${F} × ${A} − ${F} × ${B} = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Fator Comum Centenário: Coloque o fator repetido em evidência e subtraia primeiro os dois parceiros que fecham uma centena — qual é o resultado?',
+          stepByStep: [
+            `O fator ${F} aparece nos dois blocos: coloque-o em evidência → ${F} × (${A} − ${B}).`,
+            `Como ${A} − ${B} = 100, basta acrescentar dois zeros ao ${F}: ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: F * 10,
+              trapDiagnosis: `Quase! ${A} − ${B} fecha 100 (uma centena, com dois zeros), e não 10 → ${F} × 100 = ${ans}!`,
+            },
+            {
+              value: F * 90,
+              trapDiagnosis: `${A} − ${B} fecha exatamente 100! Basta multiplicar ${F} × 100 = ${ans}.`,
+            },
+            {
+              value: F * 200,
+              trapDiagnosis: `O fator comum ${F} fica em evidência uma única vez: ${F} × (${A} − ${B}) = ${ans}!`,
+            },
+          ],
+        }
+      }
+
+      const tensA = rngPick(rng, [10, 20, 30, 40, 60, 70, 80])
+      const unitA = rngPick(rng, [1, 2, 3, 4, 6, 7, 8, 9])
+      const A = tensA + unitA
+      const B = 100 - A
+      const ans = F * 100
+
+      return {
+        id: `iso_arch_t4_fator100_add_${F}_${A}_${B}`,
+        archetypeId: 'arch_t4_fator_100',
+        lensId: 'infinito_9_quadrados',
+        tier: 4,
+        expression: `${F} × ${A} + ${F} × ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Fator Comum Centenário: Coloque o fator repetido em evidência e some primeiro os dois parceiros que fecham uma centena redonda — qual é o total?',
+        stepByStep: [
+          `O número ${F} multiplica ambos os blocos: coloque-o em evidência → ${F} × (${A} + ${B}).`,
+          `Como ${A} + ${B} = 100, fazemos ${F} × 100 = ${ans} instantaneamente!`,
+        ],
+        distractors: [
+          {
+            value: F * 10,
+            trapDiagnosis: `Quase! ${A} + ${B} fecha 100 (dois zeros), e não 10 → ${F} × 100 = ${ans}!`,
+          },
+          {
+            value: F * 90,
+            trapDiagnosis: `As unidades ${unitA} + ${10 - unitA} fecham mais uma dezena, completando ${A} + ${B} = 100 → ${ans}!`,
+          },
+          {
+            value: F * 200,
+            trapDiagnosis: `Cuidado para não somar ${F} + ${F}! O fator comum ${F} fica em evidência uma só vez: ${F} × 100 = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t4_milenar_125',
+    tier: 4,
+    lensId: 'dobro_do_dobro_248',
+    synthesize: (rng) => {
+      if (rng() < 0.72) {
+        const k = rngPick(rng, [2, 3, 4, 5, 6, 7, 8, 9, 11, 12])
+        const A = k * 8
+        const ans = k * 1000
+        return {
+          id: `iso_arch_t4_milenar_${A}_125`,
+          archetypeId: 'arch_t4_milenar_125',
+          lensId: 'dobro_do_dobro_248',
+          tier: 4,
+          expression: `${A} × 125 = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Fatoração Milenar (×125): Sabendo que 8 × 125 fecha um milhar exato (1000), descubra quantos grupos de 8 cabem no primeiro fator — qual milhar aparece?',
+          stepByStep: [
+            `O segredo do 125 é que ele é a oitava parte de 1000 (8 × 125 = 1000).`,
+            `Divida ${A} por 8 (= ${k}) e multiplique o 125 por 8 (= 1000).`,
+            `${k} × 1000 = ${ans} de cabeça!`,
+          ],
+          distractors: [
+            {
+              value: (k - 1) * 1000,
+              trapDiagnosis: `${(k - 1) * 1000} seria ${(k - 1) * 8} × 125! Como ${A} ÷ 8 = ${k}, temos ${k} × 1000 = ${ans}.`,
+            },
+            {
+              value: A * 100,
+              trapDiagnosis: `${A * 100} é apenas ${A} × 100! Dividindo ${A} por 8 (= ${k}) e multiplicando por 1000, fechamos ${ans}.`,
+            },
+            {
+              value: (k + 1) * 1000,
+              trapDiagnosis: `Como ${k} × 8 = ${A}, o produto ${A} × 125 fecha exatamente ${k} × 1000 = ${ans}!`,
+            },
+          ],
+        }
+      }
+
+      // A * 250 where 4 * 250 = 1000
+      const k = rngPick(rng, [3, 5, 6, 7, 9, 11, 12, 14, 15])
+      const A = k * 4
+      const ans = k * 1000
+      return {
+        id: `iso_arch_t4_milenar_${A}_250`,
+        archetypeId: 'arch_t4_milenar_125',
+        lensId: 'dobro_do_dobro_248',
+        tier: 4,
+        expression: `${A} × 250 = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Fatoração Milenar (×250): Como 4 × 250 fecha 1000, divida o primeiro fator por 4 — quantos milhares se formam?',
+        stepByStep: [
+          `4 grupos de 250 formam exatamente 1000 (4 × 250 = 1000).`,
+          `Divida ${A} por 4 (= ${k}) e multiplique por 1000 → ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: (k - 1) * 1000,
+            trapDiagnosis: `Dividindo ${A} por 4 encontramos ${k} (pois 4 × ${k} = ${A}) → ${k} × 1000 = ${ans}!`,
+          },
+          {
+            value: A * 100,
+            trapDiagnosis: `Cada grupo de 4 vale 1000: ${A} ÷ 4 = ${k} → ${ans}!`,
+          },
+          {
+            value: (k + 1) * 1000,
+            trapDiagnosis: `Quase! ${A} ÷ 4 = ${k}, portanto ${k} × 1000 = ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t4_quad_supremo',
+    tier: 4,
+    lensId: 'infinito_9_quadrados',
+    synthesize: (rng) => {
+      if (rng() < 0.5) {
+        const n = rngPick(rng, [5, 7, 8, 9, 10, 11])
+        const num = n * 10 + 5
+        const head = n * (n + 1)
+        const ans = head * 100 + 25
+        return {
+          id: `iso_arch_t4_quad_sup_${num}`,
+          archetypeId: 'arch_t4_quad_supremo',
+          lensId: 'infinito_9_quadrados',
+          tier: 4,
+          expression: `${num}² (${num} × ${num}) = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Quadrado Supremo Terminado em 5: Multiplique as dezenas pelo seu sucessor imediato e anexe 25 ao final — qual número aparece?',
+          stepByStep: [
+            `Para elevar ${num} ao quadrado de cabeça, pegamos o prefixo ${n}.`,
+            `Multiplicamos ${n} pelo seu sucessor imediato (${n + 1}): ${n} × ${n + 1} = ${head}.`,
+            `Colamos o 25 no final: ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: n * n * 100 + 25,
+              trapDiagnosis: `${n * n * 100 + 25} é a armadilha de fazer ${n} × ${n}! Multiplique ${n} pelo SUCESSOR ${n + 1} (${n} × ${n + 1} = ${head}) → ${ans}!`,
+            },
+            {
+              value: (head - 5) * 100 + 25,
+              trapDiagnosis: `Multiplique ${n} pelo próximo inteiro (${n + 1}): ${n} × ${n + 1} = ${head} → ${ans}!`,
+            },
+            {
+              value: (head + n) * 100 + 25,
+              trapDiagnosis: `${n} × ${n + 1} dá ${head} nas centenas, seguido de 25 → ${ans}!`,
+            },
+          ],
+        }
+      }
+
+      // Symmetric product around 100: (100 - d)(100 + d) = 10000 - d^2
+      const d = rngPick(rng, [2, 3, 4, 5, 6, 7, 8, 9])
+      const f1 = 100 - d
+      const f2 = 100 + d
+      const dSq = d * d
+      const ans = 10000 - dSq
+      return {
+        id: `iso_arch_t4_sim100_${f1}_${f2}`,
+        archetypeId: 'arch_t4_quad_supremo',
+        lensId: 'infinito_9_quadrados',
+        tier: 4,
+        expression: `${f1} × ${f2} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Simetria na Centena (100² − d²): Os dois fatores orbitam o centro 100! Eleve 100 ao quadrado (10.000) e desconte o quadrado da distância — quanto dá?',
+        stepByStep: [
+          `${f1} é (100 − ${d}) e ${f2} é (100 + ${d}).`,
+          `Pela Diferença de Quadrados: 100² − ${d}² = 10000 − ${dSq}.`,
+          `10000 − ${dSq} = ${ans} em 2 segundos!`,
+        ],
+        distractors: [
+          {
+            value: 10000 - 2 * d,
+            trapDiagnosis: `Desconte o QUADRADO da distância (${d}² = ${dSq}), e não o dobro → 10000 − ${dSq} = ${ans}!`,
+          },
+          {
+            value: 10000 + dSq,
+            trapDiagnosis: `Na Diferença de Quadrados sempre SUBTRAÍMOS ${d}²: 10000 − ${dSq} = ${ans}!`,
+          },
+          {
+            value: ans - 10,
+            trapDiagnosis: `Quase! 10000 − ${dSq} fecha exatamente em ${ans}.`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t4_maquina_sup',
+    tier: 4,
+    lensId: 'amigos_do_10_falta',
+    synthesize: (rng) => {
+      const a = rngPick(rng, [3, 4, 5, 6, 7, 8, 9])
+      const x = rngPick(rng, [7, 8, 9, 11, 12, 13, 14, 15, 16, 18])
+      const b = rngPick(rng, [4, 5, 6, 7, 8, 9, 11, 13, 14, 17])
+      const isAdd = rng() < 0.35
+      const ax = a * x
+      const rhs = isAdd ? ax + b : ax - b
+
+      return {
+        id: `iso_arch_t4_maquina_${a}x_${isAdd ? 'p' : 'm'}${b}_${rhs}`,
+        archetypeId: 'arch_t4_maquina_sup',
+        lensId: 'amigos_do_10_falta',
+        tier: 4,
+        expression: isAdd ? `${a}x + ${b} = ${rhs} → x = ?` : `${a}x − ${b} = ${rhs} → x = ?`,
+        correctAnswer: x,
+        shortHint:
+          '💡 Máquina do Tempo Suprema: Use a operação inversa na ordem reversa para isolar o mistério x — qual número original entrou na máquina?',
+        stepByStep: isAdd
+          ? [
+              `O número x foi multiplicado por ${a} e ganhou +${b}, chegando em ${rhs}.`,
+              `1º Passo Inverso: retire os ${b} → ${rhs} − ${b} = ${ax}.`,
+              `2º Passo Inverso: divida por ${a} → ${ax} ÷ ${a} = ${x}!`,
+            ]
+          : [
+              `O número x foi multiplicado por ${a} e perdeu ${b}, chegando em ${rhs}.`,
+              `1º Passo Inverso: devolva os ${b} que saíram → ${rhs} + ${b} = ${ax}.`,
+              `2º Passo Inverso: divida por ${a} → ${ax} ÷ ${a} = ${x}!`,
+            ],
+        distractors: [
+          {
+            value: Math.max(1, Math.round((isAdd ? rhs + b : Math.abs(rhs - b)) / a)),
+            trapDiagnosis: isAdd
+              ? `Na Máquina do Tempo, o inverso de "+ ${b}" é "− ${b}": faça (${rhs} − ${b}) ÷ ${a} = ${x}!`
+              : `Na Máquina do Tempo, o inverso de "− ${b}" é "+ ${b}": faça (${rhs} + ${b}) ÷ ${a} = ${x}!`,
+          },
+          {
+            value: Math.max(2, x - 2),
+            trapDiagnosis: `Quase! ${isAdd ? `${rhs} − ${b}` : `${rhs} + ${b}`} vale ${ax}, e ${ax} ÷ ${a} = ${x}!`,
+          },
+          {
+            value: x + 2,
+            trapDiagnosis: `Dividindo ${ax} em ${a} partes iguais (${ax} ÷ ${a}), encontramos x = ${x}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t4_peso_alivio',
+    tier: 4,
+    lensId: 'regra_elevador',
+    synthesize: (rng) => {
+      const A = rngPick(rng, [3, 4, 5, 6, 7, 8, 9])
+      const B = rngPick(rng, [4, 5, 6, 7, 8])
+      const prod = A * B
+      const isNegativeStart = rng() < 0.65
+
+      if (isNegativeStart) {
+        const W = rngInt(rng, 10, Math.max(12, prod - 4))
+        const ans = prod - W
+        return {
+          id: `iso_arch_t4_peso_neg_${W}_${A}_${B}`,
+          archetypeId: 'arch_t4_peso_alivio',
+          lensId: 'regra_elevador',
+          tier: 4,
+          expression: `−${W} − (−${A}) × ${B} = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Peso & Alívio de Sinais: Tirar um peso negativo vira alívio positivo! Resolva primeiro a multiplicação e compare com a dívida inicial — quanto sobra?',
+          stepByStep: [
+            `Tirar um peso negativo −(−${A}) equivale a ganhar alívio +${A}.`,
+            `Multiplicando primeiro pela hierarquia: (+${A}) × ${B} = +${prod} de alívio.`,
+            `Juntando com o peso inicial: −${W} + ${prod} = ${ans}!`,
+          ],
+          distractors: [
+            {
+              value: W + prod,
+              trapDiagnosis: `O ${W} inicial é um peso negativo (−${W})! Quando entra o alívio +${prod}, abata a dívida de ${W} → sobram ${ans}.`,
+            },
+            {
+              value: Math.abs(W - A) * B,
+              trapDiagnosis: `Atenção à hierarquia na Trincheira: multiplique (+${A}) × ${B} = +${prod} antes de somar com −${W} → ${ans}!`,
+            },
+            {
+              value: ans + 10,
+              trapDiagnosis: `Quase! Fazendo ${prod} − ${W} chegamos exatamente ao saldo positivo ${ans}.`,
+            },
+          ],
+        }
+      }
+
+      const W = rngPick(rng, [15, 20, 24, 25, 30, 35, 40])
+      const ans = W + prod
+      return {
+        id: `iso_arch_t4_peso_pos_${W}_${A}_${B}`,
+        archetypeId: 'arch_t4_peso_alivio',
+        lensId: 'regra_elevador',
+        tier: 4,
+        expression: `${W} − (−${A}) × ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Peso & Alívio de Sinais: Cancelar uma dívida negativa equivale a somar um ganho! Calcule o produto e junte ao valor inicial — qual é o total?',
+        stepByStep: [
+          `Pela regra do Peso & Alívio, −(−${A}) × ${B} transforma-se em +(${A} × ${B}) = +${prod}.`,
+          `Somando ao saldo inicial: ${W} + ${prod} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: Math.max(1, Math.abs(W - prod)),
+            trapDiagnosis: `Tirar um negativo −(−${prod}) SOMA ao saldo em vez de subtrair: ${W} + ${prod} = ${ans}!`,
+          },
+          {
+            value: (W + A) * B,
+            trapDiagnosis: `Respeite a hierarquia: multiplique ${A} × ${B} = ${prod} primeiro, e depois some com ${W} → ${ans}!`,
+          },
+          {
+            value: ans - 10,
+            trapDiagnosis: `Somando o saldo ${W} com o alívio +${prod}, chegamos a ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t4_trincheira_sup',
+    tier: 4,
+    lensId: 'corta_no_meio_div',
+    synthesize: (rng) => {
+      const pairs: ReadonlyArray<[number, number, number, number]> = [
+        [9, 7, 8, 6],
+        [11, 5, 9, 8],
+        [12, 7, 9, 5],
+        [8, 9, 7, 6],
+        [11, 6, 8, 7],
+        [12, 6, 7, 8],
+        [9, 8, 11, 4],
+        [7, 9, 12, 5],
+        [8, 7, 9, 6],
+        [11, 7, 6, 8],
+      ]
+      const [d1, q1, d2, q2] = rngPick(rng, pairs)
+      const N1 = d1 * q1
+      const N2 = d2 * q2
+      const ans = q1 * q2
+
+      return {
+        id: `iso_arch_t4_trincheira_sup_${N1}_${N2}_${d2}_${d1}`,
+        archetypeId: 'arch_t4_trincheira_sup',
+        lensId: 'corta_no_meio_div',
+        tier: 4,
+        expression: `(${N1} × ${N2}) ÷ (${d2} × ${d1}) = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Corte Cruzado Supremo: Simplifique cada fator do primeiro parêntese pelo seu divisor exato no segundo antes de multiplicar — quanto dá?',
+        stepByStep: [
+          `Jamais multiplique ${N1} × ${N2} no braço! Simplifique os parceiros:`,
+          `${N1} ÷ ${d1} = ${q1}, e ${N2} ÷ ${d2} = ${q2}.`,
+          `Agora multiplique os quocientes limpos: ${q1} × ${q2} = ${ans}!`,
+        ],
+        distractors: [
+          {
+            value: q1 + q2,
+            trapDiagnosis: `${q1 + q2} é a soma (${q1} + ${q2})! Como os fatores estão multiplicando, fazemos ${q1} × ${q2} = ${ans}.`,
+          },
+          {
+            value: (q1 - 1) * q2,
+            trapDiagnosis: `Quase! ${N1} ÷ ${d1} = ${q1}, e ${q1} × ${q2} = ${ans}!`,
+          },
+          {
+            value: q1 * (q2 - 1),
+            trapDiagnosis: `${N2} ÷ ${d2} vale ${q2}, logo ${q1} × ${q2} = ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+  {
+    archetypeId: 'arch_t4_massinha_hack_3d',
+    tier: 4,
+    lensId: 'hack_japones',
+    synthesize: (rng) => {
+      if (rng() < 0.5) {
+        const B = rngPick(rng, [97, 98, 99, 197, 198, 199, 298, 299])
+        const roundB = Math.ceil(B / 100) * 100
+        const shift = roundB - B
+        const A = roundB + rngInt(rng, 25, 165)
+        const newA = A + shift
+        const ans = A - B
+        return {
+          id: `iso_arch_t4_hack3d_${A}_${B}`,
+          archetypeId: 'arch_t4_massinha_hack_3d',
+          lensId: 'hack_japones',
+          tier: 4,
+          expression: `${A} − ${B} = ?`,
+          correctAnswer: ans,
+          shortHint:
+            '💡 Hack Japonês na Centena: O subtraendo está colado em uma centena redonda! Some o mesmo ajuste nos dois lados — quanto resta?',
+          stepByStep: [
+            `O subtraendo ${B} precisa de apenas +${shift} para virar a centena redonda ${roundB}.`,
+            `Somamos +${shift} também no ${A} (que vira ${newA}).`,
+            `${newA} − ${roundB} = ${ans} instantaneamente!`,
+          ],
+          distractors: [
+            {
+              value: A - roundB,
+              trapDiagnosis: `Você arredondou ${B} para ${roundB} (+${shift}), mas esqueceu de somar +${shift} no ${A} → ${newA} − ${roundB} = ${ans}!`,
+            },
+            {
+              value: ans - 2 * shift,
+              trapDiagnosis: `Na subtração somamos +${shift} nos DOIS termos: ${newA} − ${roundB} = ${ans}!`,
+            },
+            {
+              value: ans + 10,
+              trapDiagnosis: `A unidade está perfeita! Confira as dezenas em ${newA} − ${roundB} = ${ans}.`,
+            },
+          ],
+        }
+      }
+
+      // 3-digit Massinha addition
+      const A = rngPick(rng, [197, 198, 199, 297, 298, 299, 398, 498])
+      const roundA = Math.ceil(A / 100) * 100
+      const shift = roundA - A
+      const B = rngInt(rng, 44, 175)
+      const remB = B - shift
+      const ans = A + B
+      return {
+        id: `iso_arch_t4_massinha3d_${A}_${B}`,
+        archetypeId: 'arch_t4_massinha_hack_3d',
+        lensId: 'massinha_soma',
+        tier: 4,
+        expression: `${A} + ${B} = ?`,
+        correctAnswer: ans,
+        shortHint:
+          '💡 Massinha Centenária: Empreste poucas unidades da segunda parcela para a primeira fechar centena exata — qual é a soma?',
+        stepByStep: [
+          `O ${A} está a apenas +${shift} da centena redonda ${roundA}.`,
+          `Tiramos ${shift} do ${B} (que vira ${remB}) e entregamos ao ${A} (que vira ${roundA}).`,
+          `${roundA} + ${remB} = ${ans} de cabeça!`,
+        ],
+        distractors: [
+          {
+            value: roundA + B,
+            trapDiagnosis: `Como o ${B} entregou ${shift} para o ${A} virar ${roundA}, o ${B} diminui para ${remB} → ${roundA} + ${remB} = ${ans}!`,
+          },
+          {
+            value: ans - 10,
+            trapDiagnosis: `Fechando a centena ${roundA} + ${remB}, chegamos a ${ans}!`,
+          },
+          {
+            value: ans + shift * 2,
+            trapDiagnosis: `Transfira apenas ${shift} de ${B} para ${A}: ${roundA} + ${remB} = ${ans}!`,
+          },
+        ],
+      }
+    },
+  },
+]
+
+function extractArchetypeFromChallengeId(id: string): string | null {
+  const match = /^iso_(arch_t\d+_[a-z0-9_]+?)_[0-9pms]/.exec(id)
+  if (match) return match[1]
+  return null
+}
+
+/**
+ * Synthesizes an infinite, non-repeating stream of isomorphic math problems
+ * using the 32 parametric generators + Stratified Archetype Cooldown + Session Deduplication.
+ */
+function selectOrSynthesizeChallenge(
+  options: GenerateChallengeOptions,
+  rng: () => number,
+  excludeSet: Set<string>
+): RawMathTemplate {
+  // Determine target tier(s)
+  const targetTier: ProblemTier =
+    options.miracleTier !== undefined
+      ? options.miracleTier
+      : options.mode === 'zen'
+        ? (rngPick(rng, [1, 2]) as ProblemTier)
+        : options.mode === 'master'
+          ? (rngPick(rng, [3, 4]) as ProblemTier)
+          : (options.level ?? 1) >= 4
+            ? (rngPick(rng, [2, 3]) as ProblemTier)
+            : (rngPick(rng, [1, 2]) as ProblemTier)
+
+  // Extract recent archetypes from both caller's excludeIds and internal ring
+  const recentArchetypes = new Set<string>(RECENT_ARCHETYPE_RING)
+  if (options.excludeIds && options.excludeIds.length > 0) {
+    for (const rawId of options.excludeIds.slice(-4)) {
+      const arch = extractArchetypeFromChallengeId(rawId)
+      if (arch) recentArchetypes.add(arch)
+    }
+  }
+
+  // Filter eligible parametric generators for targetTier
+  let eligibleSpecs = ISOMORPHIC_ARCHETYPE_GENERATORS.filter((g) => g.tier === targetTier)
+
+  if (options.preferredLensId) {
+    const byLens = eligibleSpecs.filter((g) => g.lensId === options.preferredLensId)
+    if (byLens.length > 0) eligibleSpecs = byLens
+  } else if (options.preferredOp) {
+    const byOp = eligibleSpecs.filter((g) => TETRIS_MATH_LENSES[g.lensId].op === options.preferredOp)
+    if (byOp.length > 0) eligibleSpecs = byOp
+  } else if (targetTier === 1 && options.interventionType === 'FILL_HOLE' && options.missingInRow !== undefined) {
+    // When missingInRow is specified in Tier 1, prioritize base-10 complement or subtraction/addition lenses
+    // while still rotating archetypes if base-10 was just used!
+    const resonantSpecs = eligibleSpecs.filter(
+      (g) =>
+        g.supportsMissingResonance ||
+        g.lensId === 'amigos_do_10_falta' ||
+        g.lensId === 'massinha_soma' ||
+        g.lensId === 'hack_japones' ||
+        g.lensId === 'regra_elevador'
+    )
+    if (resonantSpecs.length > 0) eligibleSpecs = resonantSpecs
+  } else if (
+    targetTier === 1 &&
+    options.interventionType === 'MORPH' &&
+    (options.targetPiece === 'I' || options.targetPiece === 'O') &&
+    rng() < 0.65
+  ) {
+    const areaSpecs = eligibleSpecs.filter(
+      (g) => g.lensId === 'relogio_5_dobra_meia' || g.lensId === 'dobro_do_dobro_248'
+    )
+    if (areaSpecs.length > 0) eligibleSpecs = areaSpecs
+  }
+
+  // Apply Stratified Archetype Cooldown (avoid repeating recent archetypes when alternatives exist)
+  const freshArchetypeSpecs = eligibleSpecs.filter((g) => !recentArchetypes.has(g.archetypeId))
+  const activeSpecs = freshArchetypeSpecs.length > 0 ? freshArchetypeSpecs : eligibleSpecs
+
+  // Bounded rejection sampling (MAX_SYNTHESIS_ATTEMPTS = 28)
+  const MAX_SYNTHESIS_ATTEMPTS = 28
+  let lastSynthesized: RawMathTemplate | null = null
+
+  for (let attempt = 0; attempt < MAX_SYNTHESIS_ATTEMPTS; attempt++) {
+    const spec = activeSpecs[(attempt + Math.floor(rng() * activeSpecs.length)) % activeSpecs.length]
+    if (!spec) break
+    const candidate = spec.synthesize(rng, options)
+    lastSynthesized = candidate
+
+    const seenInCaller =
+      excludeSet.has(candidate.id) || excludeSet.has(candidate.expression)
+    const seenInSession =
+      SESSION_SEEN_IDS.has(candidate.id) || SESSION_SEEN_EXPRESSIONS.has(candidate.expression)
+
+    if (!seenInCaller && !seenInSession) {
+      recordSeenChallenge(candidate.id, candidate.expression, spec.archetypeId)
+      return candidate
+    }
+    // If only seen in global session (e.g. caller passed custom excludeIds in a test), accept after attempt 16
+    if (!seenInCaller && attempt >= 16) {
+      recordSeenChallenge(candidate.id, candidate.expression, spec.archetypeId)
+      return candidate
+    }
+  }
+
+  if (lastSynthesized) {
+    recordSeenChallenge(
+      lastSynthesized.id,
+      lastSynthesized.expression,
+      lastSynthesized.archetypeId
+    )
+    return lastSynthesized
+  }
+
+  // Ultimate fallback to RAW_PROBLEM_BANK
+  const bankPool = RAW_PROBLEM_BANK.filter((p) => p.tier === targetTier && !excludeSet.has(p.id))
+  const fallback =
+    bankPool[Math.floor(rng() * bankPool.length)] ??
+    RAW_PROBLEM_BANK.find((p) => p.tier === targetTier) ??
+    RAW_PROBLEM_BANK[0]
+  recordSeenChallenge(fallback.id, fallback.expression, fallback.id)
+  return fallback
+}
+
 /**
  * Generates a dynamic, pedagogically grounded math challenge from the 4 operations
- * and 8 Repository Lenses, synchronized with the player's current board intervention
- * and chosen `miracleTier` (Graus I a IV — Master Plan V3).
+ * and 8 Repository Lenses, synchronized with the player's current board intervention,
+ * chosen `miracleTier` (Graus I a IV — Master Plan V3), and Infinite Isomorphic Synthesis (Master Plan V5).
  */
 export function generateMathChallenge(options: GenerateChallengeOptions): TetrisMathChallenge {
   const rng = options.rng ?? Math.random
   const excludeSet = new Set(options.excludeIds ?? [])
 
-  let candidates: ReadonlyArray<RawMathTemplate>
-
-  // When explicit MiraclePowerTier (1..4) is selected, match that exact ProblemTier!
-  if (options.miracleTier !== undefined) {
-    const exactTierPool = RAW_PROBLEM_BANK.filter((p) => p.tier === options.miracleTier)
-    candidates = exactTierPool.length > 0 ? exactTierPool : RAW_PROBLEM_BANK
-  } else {
-    const maxTier: ProblemTier =
-      options.mode === 'zen'
-        ? 2
-        : options.mode === 'master'
-          ? 4
-          : (options.level ?? 1) >= 4
-            ? 3
-            : 2
-    candidates = RAW_PROBLEM_BANK.filter((p) => p.tier <= maxTier)
-  }
-
-  // Filter by explicit preferredLensId or preferredOp if specified
-  if (options.preferredLensId) {
-    const byLens = candidates.filter((p) => p.lensId === options.preferredLensId)
-    if (byLens.length > 0) candidates = byLens
-  } else if (options.preferredOp) {
-    const byOp = candidates.filter((p) => TETRIS_MATH_LENSES[p.lensId].op === options.preferredOp)
-    if (byOp.length > 0) candidates = byOp
-  } else if (!options.miracleTier || options.miracleTier === 1) {
-    // Contextual pedagogical prioritization for Tier 1 quick interventions
-    if (options.interventionType === 'FILL_HOLE') {
-      if (options.missingInRow !== undefined) {
-        const resonant = candidates.filter(
-          (p) => p.missingBlockResonance === options.missingInRow && !excludeSet.has(p.id)
-        )
-        if (resonant.length > 0) {
-          candidates = resonant
-        } else {
-          const holeLenses = candidates.filter(
-            (p) =>
-              p.lensId === 'amigos_do_10_falta' ||
-              p.lensId === 'hack_japones' ||
-              p.lensId === 'massinha_soma'
-          )
-          if (holeLenses.length > 0) candidates = holeLenses
-        }
-      } else {
-        const holeLenses = candidates.filter(
-          (p) =>
-            p.lensId === 'amigos_do_10_falta' ||
-            p.lensId === 'hack_japones' ||
-            p.lensId === 'regra_elevador'
-        )
-        if (holeLenses.length > 0) candidates = holeLenses
-      }
-    } else if (
-      options.interventionType === 'MORPH' &&
-      (options.targetPiece === 'I' || options.targetPiece === 'O') &&
-      rng() < 0.65
-    ) {
-      const areaLenses = candidates.filter(
-        (p) => p.lensId === 'relogio_5_dobra_meia' || p.lensId === 'dobro_do_dobro_248'
-      )
-      if (areaLenses.length > 0) candidates = areaLenses
-    }
-  }
-
-  // Apply anti-repetition filter (`excludeIds` — Melhoria 02-C)
-  const nonExcluded = candidates.filter((p) => !excludeSet.has(p.id))
-  const pool = nonExcluded.length > 0 ? nonExcluded : candidates
-
-  const chosen = pool[Math.floor(rng() * pool.length)] ?? RAW_PROBLEM_BANK[0]
+  const chosen = selectOrSynthesizeChallenge(options, rng, excludeSet)
   const lensMeta = TETRIS_MATH_LENSES[chosen.lensId]
   const choices = buildSortedUniqueChoices(chosen.correctAnswer, chosen.distractors)
   const stepByStep = enrichStepsWithBoardGeometry(chosen.stepByStep, options)
@@ -2433,6 +4471,7 @@ export function generateMathChallenge(options: GenerateChallengeOptions): Tetris
     relatedLessonSlug: lensMeta.relatedLessonSlug,
     tier: chosen.tier,
     miracleTier: options.miracleTier ?? (chosen.tier as MiraclePowerTier),
+    archetypeId: chosen.archetypeId,
   }
 }
 
@@ -2443,44 +4482,63 @@ export function getAllMathLenses(): MathLensMetadata[] {
   return Object.values(TETRIS_MATH_LENSES)
 }
 
+function validateSingleZeroSpoilerItem(item: {
+  id: string
+  correctAnswer: number
+  shortHint: string
+}): string[] {
+  const itemViolations: string[] = []
+  const ans = String(item.correctAnswer)
+  const hint = item.shortHint.trim()
+
+  // 1. Check if shortHint ends with the correctAnswer
+  const endsWithAnsRegex = new RegExp(`(?:^|\\D)${ans}[!?.\\s]*$`)
+  if (endsWithAnsRegex.test(hint)) {
+    itemViolations.push(`[${item.id}] shortHint termina com a resposta (${ans}): "${hint}"`)
+  }
+
+  // 2. Check if shortHint contains spoiler patterns like `= ${ans}`, `→ ${ans}`, `é ${ans}`
+  const spoilerPatternRegex = new RegExp(
+    `(?:=|→|é|são|vira|dá|sobra|sobram)\\s*${ans}(?:\\b|!|$)`,
+    'i'
+  )
+  if (spoilerPatternRegex.test(hint)) {
+    itemViolations.push(`[${item.id}] shortHint contém padrão de spoiler para (${ans}): "${hint}"`)
+  }
+
+  // 3. Check if shortHint contains intermediate pre-computed spoilers like `(= 7)` or `→ 7 × 10 = ?`
+  if (/\(\s*=\s*\d+\s*\)/.test(hint) || /→\s*\d+\s*[+−×÷]\s*\d+\s*=\s*\?/.test(hint)) {
+    itemViolations.push(`[${item.id}] shortHint contém cálculo intermediário mastigado: "${hint}"`)
+  }
+
+  // 4. Ensure shortHint contains Socratic question mark '?'
+  if (!hint.includes('?')) {
+    itemViolations.push(`[${item.id}] shortHint deve conter '?' socrático: "${hint}"`)
+  }
+
+  return itemViolations
+}
+
 /**
- * Deterministic Zero-Spoiler Invariant Validator (`RT-10` & `RT-V3-02`).
- * Inspects 100% of items in `RAW_PROBLEM_BANK` and verifies that:
- * 1. No `shortHint` ends with the `correctAnswer` number.
- * 2. No `shortHint` contains spoiler patterns (`= ${correctAnswer}`, `→ ${correctAnswer}`, `é ${correctAnswer}`).
- * 3. No `shortHint` reveals pre-computed intermediate numbers like `(= 7)`, `(= 10)`, or `→ 20 + 5 = ?`.
- * 4. Every `shortHint` ends with a Socratic guiding question (`?` or `!`).
+ * Deterministic Zero-Spoiler Invariant Validator (`RT-10`, `RT-V3-02` & `RT-V5-03`).
+ * Inspects 100% of items in `RAW_PROBLEM_BANK` AND samples all 32 Isomorphic Archetype Generators
+ * across 200 dynamic draws to verify 0% spoiler leakage.
  */
 export function verifyZeroSpoilerProblemBank(): { valid: boolean; violations: string[] } {
   const violations: string[] = []
 
   for (const item of RAW_PROBLEM_BANK) {
-    const ans = String(item.correctAnswer)
-    const hint = item.shortHint.trim()
+    violations.push(...validateSingleZeroSpoilerItem(item))
+  }
 
-    // 1. Check if shortHint ends with the correctAnswer
-    const endsWithAnsRegex = new RegExp(`(?:^|\\D)${ans}[!?.\\s]*$`)
-    if (endsWithAnsRegex.test(hint)) {
-      violations.push(`[${item.id}] shortHint termina com a resposta (${ans}): "${hint}"`)
-    }
-
-    // 2. Check if shortHint contains spoiler patterns like `= ${ans}`, `→ ${ans}`, `é ${ans}`
-    const spoilerPatternRegex = new RegExp(
-      `(?:=|→|é|são|vira|dá|sobra|sobram)\\s*${ans}(?:\\b|!|$)`,
-      'i'
-    )
-    if (spoilerPatternRegex.test(hint)) {
-      violations.push(`[${item.id}] shortHint contém padrão de spoiler para (${ans}): "${hint}"`)
-    }
-
-    // 3. Check if shortHint contains intermediate pre-computed spoilers like `(= 7)` or `→ 7 × 10 = ?`
-    if (/\(\s*=\s*\d+\s*\)/.test(hint) || /→\s*\d+\s*[+−×÷]\s*\d+\s*=\s*\?/.test(hint)) {
-      violations.push(`[${item.id}] shortHint contém cálculo intermediário mastigado: "${hint}"`)
-    }
-
-    // 4. Ensure shortHint contains Socratic question mark '?'
-    if (!hint.includes('?')) {
-      violations.push(`[${item.id}] shortHint deve conter '?' socrático: "${hint}"`)
+  for (const spec of ISOMORPHIC_ARCHETYPE_GENERATORS) {
+    for (let i = 0; i < 6; i++) {
+      const sample = spec.synthesize(Math.random, {
+        mode: 'arcade',
+        interventionType: 'FILL_HOLE',
+        miracleTier: spec.tier as MiraclePowerTier,
+      })
+      violations.push(...validateSingleZeroSpoilerItem(sample))
     }
   }
 
@@ -2491,3 +4549,4 @@ export function verifyZeroSpoilerProblemBank(): { valid: boolean; violations: st
 }
 
 export const auditProblemBankZeroSpoilers = verifyZeroSpoilerProblemBank
+

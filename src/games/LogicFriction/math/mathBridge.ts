@@ -31,6 +31,22 @@ function stripHtml(html: string): string {
     .trim()
 }
 
+// ── Session Anti-Repetition Memory ──────────────────────────────────────────────
+const SEEN_FRICTION_EXPRESSIONS = new Set<string>()
+const SEEN_FRICTION_QUEUE: string[] = []
+const MAX_SEEN_FRICTION = 300
+
+function recordFrictionExpression(expr: string): void {
+  if (!SEEN_FRICTION_EXPRESSIONS.has(expr)) {
+    SEEN_FRICTION_EXPRESSIONS.add(expr)
+    SEEN_FRICTION_QUEUE.push(expr)
+    if (SEEN_FRICTION_QUEUE.length > MAX_SEEN_FRICTION) {
+      const oldest = SEEN_FRICTION_QUEUE.shift()
+      if (oldest) SEEN_FRICTION_EXPRESSIONS.delete(oldest)
+    }
+  }
+}
+
 // ── Main Generator ──────────────────────────────────────────────────────────────
 /**
  * Generates a standardized math problem for a given wave.
@@ -44,19 +60,29 @@ function stripHtml(html: string): string {
  */
 export function generateFrictionProblem(waveNumber: number): FrictionProblem {
   const isOdd = waveNumber % 2 !== 0
+  let fallback: FrictionProblem | null = null
 
-  if (isOdd) {
-    return generateFromDefense(waveNumber)
-  } else {
-    return generateFromAscension(waveNumber)
+  for (let attempt = 0; attempt < 36; attempt++) {
+    const candidate = isOdd
+      ? generateFromDefense(waveNumber)
+      : generateFromAscension(waveNumber)
+    fallback = candidate
+    if (!SEEN_FRICTION_EXPRESSIONS.has(candidate.expression)) {
+      recordFrictionExpression(candidate.expression)
+      return candidate
+    }
   }
+
+  const chosen = fallback ?? (isOdd ? generateFromDefense(waveNumber) : generateFromAscension(waveNumber))
+  recordFrictionExpression(chosen.expression)
+  return chosen
 }
 
 // ── Defense Adapter (Odd Waves) ─────────────────────────────────────────────────
 function generateFromDefense(wave: number): FrictionProblem {
   const problem = generateMathProblem(wave, 0)
   const expression = buildQuestionText(problem)
-  const options = generateOptions(problem.answer) // Returns 3 options
+  const options = generateOptions(problem.answer, problem, 4) // Uses diagnostic traps + returns 4 options
   const explanation = stripHtml(generateTip(problem))
 
   // Pad to exactly 4 answers
