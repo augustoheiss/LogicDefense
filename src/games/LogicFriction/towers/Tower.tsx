@@ -18,7 +18,7 @@
 // TEXT SAFETY: <Text> is rendered as a SIBLING to <RigidBody>,
 // never as a child. This prevents WebGL Context Lost.
 // ============================================================
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useEffect } from 'react'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
 import { Text, Billboard, Html } from '@react-three/drei'
@@ -34,7 +34,7 @@ import {
   BUFF_DAMAGE_MULT,
   BUFF_TOWER_AOE_RADIUS,
   BUFF_TOWER_AOE_MULT,
-  CORE_COLLIDER_SIZE,
+  CORE_UPGRADE_BASE_COST,
   ARENA_RADIUS,
   MATH_ZONE_POSITIONS,
   MATH_ZONE_SENSOR_RADIUS,
@@ -81,7 +81,6 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
   const cooldownRef = useRef(0)
   const beamVisualRef = useRef(0)
   const [sellConfirm, setSellConfirm] = useState(false)
-  const [relocateMode, setRelocateMode] = useState(false)
 
   // ── Ghost Mode: no RigidBody until player walks away ──
   const [isSolid, setIsSolid] = useState(false)
@@ -107,6 +106,11 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
     Number.isFinite(position[1]) ? position[1] : 0,
     Number.isFinite(position[2]) ? position[2] : 0,
   ]
+
+  // Re-enter Ghost Mode whenever the tower is relocated to a new [x, z] coordinate
+  useEffect(() => {
+    setIsSolid(false)
+  }, [safePos[0], safePos[2]])
 
   // ── Sell/Relocate costs ──
   const sellRefund = Math.floor(bp.cost * TOWER_SELL_REFUND)
@@ -392,6 +396,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
   // ── Store subscriptions for floating UI ──
   const selectedEntity = useGameStore(s => s.selectedEntity)
   const setSelectedEntity = useGameStore(s => s.setSelectedEntity)
+  const relocatingTowerId = useGameStore(s => s.relocatingTowerId)
   const isUpgradeMode = useGameStore(s => s.isUpgradeMode)
   const coreLevel = useGameStore(s => s.coreLevel)
   const gold = useGameStore(s => s.gold)
@@ -425,6 +430,9 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
   const canUpgrade = safeLevel < coreLevel
   const upgradeCost = bp.cost * safeLevel
   const canAfford = gold >= upgradeCost
+  const coreUpgradeCost = coreLevel * CORE_UPGRADE_BASE_COST
+  const canAffordCoreUpgrade = gold >= coreUpgradeCost
+  const isRelocatingThis = relocatingTowerId === id
 
   // ── Upgrade text content ──
   const upgradeLabel = canUpgrade
@@ -586,7 +594,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
 
       {/* Upgrade info (only in upgrade mode) */}
       {isUpgradeMode && (
-        <Billboard>
+        <Billboard onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
           <Text
             position={[0, TOWER_HEIGHT + 2, 0]}
             fontSize={0.6}
@@ -727,55 +735,87 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
               </>
             )}
 
+            {/* Direct Tower Upgrade or Base Level Unlock */}
+            {canUpgrade ? (
+              <button
+                data-testid="tower-upgrade-btn"
+                title={`Evoluir torre para Nível ${safeLevel + 1}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!canAfford) return
+                  useGameStore.getState().upgradeTower(id)
+                }}
+                style={{
+                  background: canAfford ? 'rgba(0,255,136,0.2)' : 'rgba(100,100,100,0.2)',
+                  border: `1px solid ${canAfford ? 'rgba(0,255,136,0.6)' : 'rgba(100,100,100,0.3)'}`,
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  color: canAfford ? '#00ff88' : '#888888',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: "'Courier New', monospace",
+                  cursor: canAfford ? 'pointer' : 'not-allowed',
+                  opacity: canAfford ? 1 : 0.6,
+                }}
+              >
+                ⬆️ Lv{safeLevel + 1} (-${upgradeCost})
+              </button>
+            ) : (
+              <button
+                data-testid="tower-upgrade-core-btn"
+                title={`Torre no limite da Base atual (Lv${coreLevel}). Clique para evoluir a Base Central para Lv${coreLevel + 1}!`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!canAffordCoreUpgrade) return
+                  useGameStore.getState().upgradeCore()
+                }}
+                style={{
+                  background: canAffordCoreUpgrade ? 'rgba(168,85,247,0.24)' : 'rgba(100,100,100,0.2)',
+                  border: `1px solid ${canAffordCoreUpgrade ? 'rgba(168,85,247,0.7)' : 'rgba(100,100,100,0.3)'}`,
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  color: canAffordCoreUpgrade ? '#d8b4fe' : '#888888',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: "'Courier New', monospace",
+                  cursor: canAffordCoreUpgrade ? 'pointer' : 'not-allowed',
+                  opacity: canAffordCoreUpgrade ? 1 : 0.6,
+                }}
+              >
+                🏰 Base Lv{coreLevel + 1} (-${coreUpgradeCost})
+              </button>
+            )}
+
             {/* Relocate */}
             <button
+              data-testid="tower-relocate-btn"
+              title="Ativar modo Mover: depois clique em qualquer ponto livre do mapa para reposicionar a torre"
               onClick={(e) => {
                 e.stopPropagation()
-                if (relocateMode) {
-                  setRelocateMode(false)
+                const store = useGameStore.getState()
+                if (store.relocatingTowerId === id) {
+                  store.setRelocatingTowerId(null)
                   return
                 }
                 if (gold < relocateCost) return
-                const store = useGameStore.getState()
-                const playerObj = scene.getObjectByName('player')
-                if (playerObj) {
-                  const wp = new THREE.Vector3()
-                  playerObj.getWorldPosition(wp)
-                  // Snap to 2-unit grid so it aligns cleanly with A* pathfinding cells
-                  const snappedX = Math.round(wp.x / 2) * 2
-                  const snappedZ = Math.round(wp.z / 2) * 2
-                  const distFromCenter = Math.hypot(snappedX, snappedZ)
-                  if (distFromCenter < CORE_COLLIDER_SIZE + 1.5 || distFromCenter > ARENA_RADIUS - 3) {
-                    return
-                  }
-                  const overlapsOtherTower = store.towers.some(
-                    t => t.id !== id && Math.hypot(t.x - snappedX, t.z - snappedZ) < 2.2
-                  )
-                  if (overlapsOtherTower) return
-
-                  setIsSolid(false) // Enter Ghost Mode until player walks away from new spot
-                  const success = store.relocateTower(id, snappedX, snappedZ)
-                  if (success) {
-                    setRelocateMode(false)
-                  }
-                }
+                store.setRelocatingTowerId(id)
               }}
               style={{
-                background: relocateMode
-                  ? 'rgba(0,200,255,0.3)'
+                background: isRelocatingThis
+                  ? 'rgba(0,212,255,0.35)'
                   : gold >= relocateCost ? 'rgba(0,200,255,0.15)' : 'rgba(100,100,100,0.2)',
-                border: `1px solid ${relocateMode ? 'rgba(0,200,255,0.7)' : gold >= relocateCost ? 'rgba(0,200,255,0.4)' : 'rgba(100,100,100,0.3)'}`,
+                border: `1px solid ${isRelocatingThis ? '#00d4ff' : gold >= relocateCost ? 'rgba(0,200,255,0.4)' : 'rgba(100,100,100,0.3)'}`,
                 borderRadius: '6px',
                 padding: '3px 8px',
-                color: gold >= relocateCost ? '#00ccff' : '#666666',
+                color: isRelocatingThis ? '#ffffff' : gold >= relocateCost ? '#00ccff' : '#666666',
                 fontSize: '11px',
                 fontWeight: 700,
                 fontFamily: "'Courier New', monospace",
-                cursor: gold >= relocateCost ? 'pointer' : 'not-allowed',
-                opacity: gold >= relocateCost ? 1 : 0.5,
+                cursor: gold >= relocateCost || isRelocatingThis ? 'pointer' : 'not-allowed',
+                opacity: gold >= relocateCost || isRelocatingThis ? 1 : 0.5,
               }}
             >
-              📍 Mover (-${relocateCost})
+              {isRelocatingThis ? '📍 Clique no Mapa (Cancelar)' : `📍 Mover (-$${relocateCost})`}
             </button>
 
             {/* Sell */}

@@ -326,8 +326,8 @@ export function CentralCore() {
         {visualStyle === '2.5D' ? (
           <>
             {/* Compact upgrade click target mesh (only raycastable in upgrade mode) */}
-            <mesh raycast={isUpgradeMode ? undefined : noRaycast}>
-              <sphereGeometry args={[CORE_SIZE * 0.95, 12, 12]} />
+            <mesh raycast={isUpgradeMode ? THREE.Mesh.prototype.raycast : noRaycast}>
+              <sphereGeometry args={[CORE_SIZE * 1.35, 16, 16]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
             {/* 4-Layer 2.5D Citadel of Archimedes */}
@@ -422,7 +422,11 @@ export function CentralCore() {
           depthTest={false} + renderOrder={15} for always-on-top readability.
           ═══════════════════════════════════════════ */}
       {isUpgradeMode && (
-        <Billboard>
+        <Billboard onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
+          <mesh position={[0, CORE_SIZE * 2.5 * levelScale - 0.45, 0]}>
+            <planeGeometry args={[7.2, 2.2]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
           <Text
             position={[0, CORE_SIZE * 2.5 * levelScale, 0]}
             fontSize={0.8}

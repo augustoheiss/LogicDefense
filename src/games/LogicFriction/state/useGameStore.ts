@@ -9,6 +9,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { GameStateSnapshot } from './leaderboard'
 import {
+  ARENA_RADIUS,
+  CORE_COLLIDER_SIZE,
   CORE_MAX_HP,
   CORE_UPGRADE_BASE_COST,
   PLAYER_MAX_HP,
@@ -152,6 +154,7 @@ export interface GameStore {
 
   // ── Contextual Selection ──
   selectedEntity: SelectedEntity | null
+  relocatingTowerId: string | null
 
   // ── MOBA Movement ──
   actionMode: ActionMode
@@ -198,6 +201,7 @@ export interface GameStore {
   upgradeTower: (id: string) => void
   setTowerPriority: (id: string, priority: TargetPriority) => void
   setTowerTypePriority: (towerType: string, priority: TargetPriority) => void
+  setRelocatingTowerId: (id: string | null) => void
   relocateTower: (id: string, newX: number, newZ: number) => boolean
   sellTower: (id: string) => void
 
@@ -291,6 +295,7 @@ const initialState = {
   mathZonePosition: 'N' as MathZoneDir,
   insideMathZone: false,
   selectedEntity: null as SelectedEntity | null,
+  relocatingTowerId: null as string | null,
   actionMode: 'MOVE' as ActionMode,
   moveTarget: null as MoveTarget | null,
   isMenuOpen: false,
@@ -571,7 +576,10 @@ export const useGameStore = create<GameStore>()(
 
   // ── Tower Selection ──
   setSelectedBlueprint: (type) => set({ selectedBlueprint: type }),
-  toggleUpgradeMode: () => set(s => ({ isUpgradeMode: !s.isUpgradeMode })),
+  toggleUpgradeMode: () => set(s => ({
+    isUpgradeMode: !s.isUpgradeMode,
+    relocatingTowerId: null,
+  })),
 
   // ── Tower Construction ──
   placeConstructionSite: (x, z) => {
@@ -671,6 +679,8 @@ export const useGameStore = create<GameStore>()(
     }))
   },
 
+  setRelocatingTowerId: (id) => set({ relocatingTowerId: id }),
+
   // ── Tower Relocate ──
   // Cost: max(floor(blueprint.cost * 0.25), 15)
   relocateTower: (id, newX, newZ) => {
@@ -684,13 +694,39 @@ export const useGameStore = create<GameStore>()(
     const cost = Math.max(Math.floor(bp.cost * TOWER_RELOCATE_COST), TOWER_RELOCATE_MIN)
     if (state.gold < cost) return false
 
+    // Snap destination to 2-unit grid so it aligns cleanly with A* pathfinding cells
+    const snappedX = Math.round(newX / 2) * 2
+    const snappedZ = Math.round(newZ / 2) * 2
+    if (!Number.isFinite(snappedX) || !Number.isFinite(snappedZ)) return false
+
+    // Prevent no-op charge if the player clicks the exact same grid cell
+    if (Math.hypot(tower.x - snappedX, tower.z - snappedZ) < 0.5) return false
+
+    // Validate Core collider clearance and Arena outer perimeter bounds
+    const distFromCenter = Math.hypot(snappedX, snappedZ)
+    if (distFromCenter < CORE_COLLIDER_SIZE + 1.5 || distFromCenter > ARENA_RADIUS - 3) {
+      return false
+    }
+
+    // Validate clearance from other towers and active construction sites
+    const overlapsOtherTower = state.towers.some(
+      t => t.id !== id && Math.hypot(t.x - snappedX, t.z - snappedZ) < 2.2
+    )
+    if (overlapsOtherTower) return false
+
+    const overlapsSite = state.constructionSites.some(
+      s => Math.hypot(s.x - snappedX, s.z - snappedZ) < 2.0
+    )
+    if (overlapsSite) return false
+
     const updatedTowers = state.towers.map(t =>
-      t.id === id ? { ...t, x: newX, z: newZ } : t
+      t.id === id ? { ...t, x: snappedX, z: snappedZ } : t
     )
     soundEngine.playPlaceSite()
     set({
       gold: state.gold - cost,
       towers: updatedTowers,
+      relocatingTowerId: null,
     })
     rebuildObstacles(updatedTowers)
     return true
@@ -712,6 +748,7 @@ export const useGameStore = create<GameStore>()(
       gold: state.gold + refund,
       towers: updatedTowers,
       selectedEntity: null,  // Deselect after selling
+      relocatingTowerId: null,
     })
     rebuildObstacles(updatedTowers)
   },
@@ -815,7 +852,10 @@ export const useGameStore = create<GameStore>()(
   // ── MOBA Movement ──
   setActionMode: (mode) => set({ actionMode: mode }),
   setMoveTarget: (target) => set({ moveTarget: target }),
-  setSelectedEntity: (entity) => set({ selectedEntity: entity }),
+  setSelectedEntity: (entity) => set(s => ({
+    selectedEntity: entity,
+    relocatingTowerId: entity && entity.id === s.relocatingTowerId ? s.relocatingTowerId : null,
+  })),
 
   // ── Settings ──
   toggleMenu: () => set(s => ({ isMenuOpen: !s.isMenuOpen })),

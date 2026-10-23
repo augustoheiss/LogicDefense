@@ -58,10 +58,20 @@ export function Arena() {
     e.stopPropagation()
 
     const state = useGameStore.getState()
-    state.setSelectedEntity(null)
     if (state.phase !== 'PLAYING' && state.phase !== 'WAVE_CLEAR') return
 
     const point = e.point
+
+    // ── RELOCATE TOWER MODE: Teleport selected tower to clicked floor coordinate ──
+    if (state.relocatingTowerId) {
+      const moved = state.relocateTower(state.relocatingTowerId, point.x, point.z)
+      if (moved) {
+        state.setSelectedEntity(null)
+      }
+      return
+    }
+
+    state.setSelectedEntity(null)
     const distFromCenter = Math.sqrt(point.x * point.x + point.z * point.z)
 
     // ── BUILD MODE: Place construction site ──

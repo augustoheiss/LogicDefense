@@ -5,7 +5,14 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../state/useGameStore'
 import type { ActionMode } from '../state/useGameStore'
-import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS, MATH_ZONE_POSITIONS } from '../config/constants'
+import {
+  TOWER_BLUEPRINTS,
+  TOWER_BLUEPRINT_KEYS,
+  MATH_ZONE_POSITIONS,
+  CORE_UPGRADE_BASE_COST,
+  TOWER_RELOCATE_COST,
+  TOWER_RELOCATE_MIN,
+} from '../config/constants'
 import type { MathZoneDir } from '../config/constants'
 import { getLeaderboard, saveToLeaderboard } from '../state/leaderboard'
 import type { LeaderboardEntry, GameStateSnapshot } from '../state/leaderboard'
@@ -348,19 +355,22 @@ function TowerSelector() {
   const gold = useGameStore(s => s.gold)
   const setSelectedBlueprint = useGameStore(s => s.setSelectedBlueprint)
   const toggleUpgradeMode = useGameStore(s => s.toggleUpgradeMode)
+  const upgradeCore = useGameStore(s => s.upgradeCore)
   const isMobile = useIsMobileViewport()
+  const coreUpgradeCost = coreLevel * CORE_UPGRADE_BASE_COST
+  const canAffordCore = gold >= coreUpgradeCost
 
   return (
     <div style={{
       display: 'flex',
       flexWrap: isMobile ? 'wrap' : 'nowrap',
       justifyContent: 'center',
-      gap: isMobile ? 5 : 8,
+      gap: isMobile ? 4 : 6,
       maxWidth: 'calc(100vw - 16px)',
       pointerEvents: 'auto',
-      background: 'rgba(4,4,14,0.95)',
-      borderRadius: 12,
-      padding: isMobile ? '5px 6px' : '6px 10px',
+      background: 'rgba(4,4,14,0.92)',
+      borderRadius: 10,
+      padding: isMobile ? '4px 6px' : '5px 8px',
       border: '1px solid rgba(255,255,255,0.08)',
       backdropFilter: 'blur(8px)',
     }}>
@@ -381,28 +391,29 @@ function TowerSelector() {
                 ? `${bp.color}30`
                 : 'rgba(0,0,0,0.6)',
               border: `2px solid ${isSelected ? bp.color : 'rgba(255,255,255,0.1)'}`,
-              borderRadius: isMobile ? 8 : 10,
-              padding: isMobile ? '5px 8px' : '10px 18px',
+              borderRadius: 8,
+              padding: isMobile ? '4px 7px' : '5px 10px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: isMobile ? 5 : 10,
+              gap: isMobile ? 4 : 7,
               transition: 'all 0.15s ease',
               opacity: canAfford ? 1 : 0.5,
+              whiteSpace: 'nowrap',
             }}
           >
-            <span style={{ fontSize: isMobile ? 16 : 28 }}>{bp.icon}</span>
+            <span style={{ fontSize: isMobile ? 15 : 18 }}>{bp.icon}</span>
             <div style={{ textAlign: 'left' }}>
               <div style={{
-                fontSize: isMobile ? 11 : 18,
+                fontSize: isMobile ? 10 : 12,
                 color: isSelected ? bp.color : '#94a3b8',
                 fontWeight: 800,
                 fontFamily: "'Courier New', monospace",
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                letterSpacing: '0.04em',
               }}>[{idx + 1}] {bp.label}</div>
               <div style={{
-                fontSize: isMobile ? 11 : 16,
+                fontSize: isMobile ? 10 : 12,
                 color: canAfford ? '#ffd700' : '#ff4444',
                 fontFamily: "'Courier New', monospace",
                 fontWeight: 700,
@@ -417,44 +428,89 @@ function TowerSelector() {
         <div style={{
           width: 1,
           background: 'rgba(255,255,255,0.1)',
-          margin: '0 4px',
+          margin: '0 2px',
         }} />
       )}
 
       {/* Upgrade mode toggle */}
       <button
+        data-testid="hud-toggle-upgrade-mode-btn"
         onClick={toggleUpgradeMode}
         style={{
           background: isUpgradeMode
             ? 'rgba(0,255,136,0.2)'
             : 'rgba(0,0,0,0.6)',
           border: `2px solid ${isUpgradeMode ? '#00ff88' : 'rgba(255,255,255,0.1)'}`,
-          borderRadius: isMobile ? 8 : 10,
-          padding: isMobile ? '5px 8px' : '10px 18px',
+          borderRadius: 8,
+          padding: isMobile ? '4px 7px' : '5px 10px',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          gap: isMobile ? 5 : 10,
+          gap: isMobile ? 4 : 7,
           transition: 'all 0.15s ease',
           animation: isUpgradeMode ? 'lf-cta-glow 1.5s ease infinite' : 'none',
+          whiteSpace: 'nowrap',
         }}
       >
-        <span style={{ fontSize: isMobile ? 16 : 28 }}>🛠️</span>
+        <span style={{ fontSize: isMobile ? 15 : 18 }}>🛠️</span>
         <div style={{ textAlign: 'left' }}>
           <div style={{
-            fontSize: isMobile ? 11 : 18,
+            fontSize: isMobile ? 10 : 12,
             color: isUpgradeMode ? '#00ff88' : '#94a3b8',
             fontWeight: 800,
             fontFamily: "'Courier New', monospace",
             textTransform: 'uppercase',
-            letterSpacing: '0.05em',
+            letterSpacing: '0.04em',
           }}>[U] UPGRADE</div>
           <div style={{
-            fontSize: isMobile ? 10 : 16,
-            color: '#64748b',
+            fontSize: isMobile ? 9 : 11,
+            color: isUpgradeMode ? '#00ff88' : '#64748b',
             fontFamily: "'Courier New', monospace",
             fontWeight: 700,
-          }}>BASE LV{coreLevel}</div>
+          }}>{isUpgradeMode ? 'ATIVO (CLIQUE)' : 'MODO TORRES'}</div>
+        </div>
+      </button>
+
+      {/* Direct Base Upgrade Button */}
+      <button
+        data-testid="hud-upgrade-core-btn"
+        title={`Evoluir Base Central para Nível ${coreLevel + 1} (libera upgrade de torres até Lv${coreLevel + 1})`}
+        onClick={() => {
+          if (!canAffordCore) return
+          upgradeCore()
+        }}
+        style={{
+          background: canAffordCore
+            ? 'rgba(168,85,247,0.22)'
+            : 'rgba(0,0,0,0.6)',
+          border: `2px solid ${canAffordCore ? '#a855f7' : 'rgba(255,255,255,0.1)'}`,
+          borderRadius: 8,
+          padding: isMobile ? '4px 7px' : '5px 10px',
+          cursor: canAffordCore ? 'pointer' : 'not-allowed',
+          display: 'flex',
+          alignItems: 'center',
+          gap: isMobile ? 4 : 7,
+          transition: 'all 0.15s ease',
+          opacity: canAffordCore ? 1 : 0.55,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <span style={{ fontSize: isMobile ? 15 : 18 }}>🏰</span>
+        <div style={{ textAlign: 'left' }}>
+          <div style={{
+            fontSize: isMobile ? 10 : 12,
+            color: canAffordCore ? '#d8b4fe' : '#94a3b8',
+            fontWeight: 800,
+            fontFamily: "'Courier New', monospace",
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+          }}>{`BASE LV${coreLevel} → LV${coreLevel + 1}`}</div>
+          <div style={{
+            fontSize: isMobile ? 10 : 12,
+            color: canAffordCore ? '#ffd700' : '#ff4444',
+            fontFamily: "'Courier New', monospace",
+            fontWeight: 700,
+          }}>${coreUpgradeCost}</div>
         </div>
       </button>
     </div>
@@ -502,6 +558,8 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
       } else if (e.code === 'KeyU') {
         store.toggleUpgradeMode()
         if (store.actionMode !== 'BUILD') store.setActionMode('BUILD')
+      } else if (e.code === 'Escape' && store.relocatingTowerId) {
+        store.setRelocatingTowerId(null)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -624,6 +682,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         width: isMobile ? 'calc(100vw - 16px)' : 'auto',
       }}>
         <ActionModeToggle />
+        <RelocateTowerBanner />
         <MathCompassBar />
         {actionMode === 'BUILD' && <TowerSelector />}
       </div>
@@ -699,10 +758,77 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
     </>
   )
 }
+// ── Relocate Tower Active Banner ────────────────────────────────────────────────
+function RelocateTowerBanner() {
+  const relocatingTowerId = useGameStore(s => s.relocatingTowerId)
+  const towers = useGameStore(s => s.towers)
+  const setRelocatingTowerId = useGameStore(s => s.setRelocatingTowerId)
+  const isMobile = useIsMobileViewport()
+
+  if (!relocatingTowerId) return null
+  const tower = towers.find(t => t.id === relocatingTowerId)
+  if (!tower) return null
+
+  const bp = TOWER_BLUEPRINTS[tower.type] ?? TOWER_BLUEPRINTS['RAPID']
+  const relocateCost = Math.max(Math.floor(bp.cost * TOWER_RELOCATE_COST), TOWER_RELOCATE_MIN)
+
+  return (
+    <div
+      data-testid="relocate-mode-banner"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: isMobile ? 6 : 12,
+        background: 'rgba(4,24,38,0.95)',
+        border: '2px solid #00d4ff',
+        borderRadius: 10,
+        padding: isMobile ? '6px 10px' : '8px 16px',
+        pointerEvents: 'auto',
+        boxShadow: '0 0 24px rgba(0,212,255,0.35)',
+        fontFamily: "'Courier New', monospace",
+        maxWidth: 'calc(100vw - 16px)',
+        boxSizing: 'border-box',
+      }}
+    >
+      <span style={{
+        fontSize: isMobile ? 11 : 13,
+        color: '#00d4ff',
+        fontWeight: 900,
+        letterSpacing: '0.04em',
+      }}>
+        {`📍 MOVER ${bp.label.toUpperCase()} (-$${relocateCost}): Clique em um local livre no mapa`}
+      </span>
+      <button
+        data-testid="relocate-cancel-btn"
+        onClick={() => setRelocatingTowerId(null)}
+        style={{
+          background: 'rgba(255,68,68,0.2)',
+          border: '1px solid rgba(255,68,68,0.6)',
+          borderRadius: 6,
+          padding: '4px 10px',
+          color: '#ff6b6b',
+          fontSize: isMobile ? 10 : 12,
+          fontWeight: 800,
+          fontFamily: "'Courier New', monospace",
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        ✕ Cancelar
+      </button>
+    </div>
+  )
+}
+
 // ── Action Mode Toggle (MOVE / BUILD) ───────────────────────────────────────────
 function ActionModeToggle() {
   const actionMode = useGameStore(s => s.actionMode)
   const setActionMode = useGameStore(s => s.setActionMode)
+  const coreLevel = useGameStore(s => s.coreLevel)
+  const gold = useGameStore(s => s.gold)
+  const upgradeCore = useGameStore(s => s.upgradeCore)
+  const coreUpgradeCost = coreLevel * CORE_UPGRADE_BASE_COST
+  const canAffordCore = gold >= coreUpgradeCost
 
   const modes: Array<{ key: ActionMode; icon: string; label: string; color: string }> = [
     { key: 'MOVE',  icon: '🚶', label: 'MOVER',     color: '#00ff88' },
@@ -752,6 +878,38 @@ function ActionModeToggle() {
           </button>
         )
       })}
+      {actionMode !== 'BUILD' && (
+        <button
+          data-testid="actionbar-upgrade-core-btn"
+          title={`Evoluir Base Central para Nível ${coreLevel + 1} ($${coreUpgradeCost})`}
+          onClick={() => {
+            if (!canAffordCore) return
+            upgradeCore()
+          }}
+          style={{
+            background: canAffordCore ? 'rgba(168,85,247,0.22)' : 'rgba(255,255,255,0.04)',
+            border: `2px solid ${canAffordCore ? '#a855f7' : 'rgba(255,255,255,0.1)'}`,
+            borderRadius: 8,
+            padding: '8px 14px',
+            cursor: canAffordCore ? 'pointer' : 'not-allowed',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 0.15s ease',
+            opacity: canAffordCore ? 1 : 0.55,
+          }}
+        >
+          <span style={{ fontSize: 18 }}>🏰</span>
+          <span style={{
+            fontSize: 13,
+            color: canAffordCore ? '#d8b4fe' : '#94a3b8',
+            fontWeight: 800,
+            fontFamily: "'Courier New', monospace",
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+          }}>{`BASE LV${coreLevel + 1} ($${coreUpgradeCost})`}</span>
+        </button>
+      )}
     </div>
   )
 }
