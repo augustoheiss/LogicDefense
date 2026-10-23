@@ -3,6 +3,7 @@ import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
   BuriedCavity,
+  ClearedBlockSnapshot,
   GridCell,
   GridMatrix,
   LineClearResult,
@@ -286,34 +287,54 @@ export function lockPieceToGrid(grid: GridMatrix, piece: ActivePiece): GridMatri
 export function clearCompletedLines(grid: GridMatrix): LineClearResult {
   const height = grid.length
   const width = grid[0]?.length ?? BOARD_WIDTH
-  const remainingRows: (GridCell | null)[][] = []
+  const remainingRows: Array<{ cells: (GridCell | null)[]; originalRow: number }> = []
   const clearedRows: number[] = []
+  const clearedCells: ClearedBlockSnapshot[] = []
 
   for (let r = 0; r < height; r++) {
     const row = grid[r]
     const isFull = row.every((cell) => cell !== null)
     if (isFull) {
       clearedRows.push(r)
+      for (let c = 0; c < width; c++) {
+        const cell = row[c]
+        if (cell) {
+          clearedCells.push({ row: r, col: c, cell: { ...cell } })
+        }
+      }
     } else {
-      remainingRows.push(row.map((cell) => (cell ? { ...cell } : null)))
+      remainingRows.push({
+        cells: row.map((cell) => (cell ? { ...cell } : null)),
+        originalRow: r,
+      })
     }
   }
 
   const clearedCount = clearedRows.length
   if (clearedCount === 0) {
     return {
-      grid: remainingRows,
+      grid: remainingRows.map((entry) => entry.cells),
       clearedCount: 0,
       clearedRows: [],
       isAllClear: false,
     }
   }
 
+  const preClearGrid = cloneGrid(grid)
   const emptyTopRows: (GridCell | null)[][] = Array.from({ length: clearedCount }, () =>
     Array.from({ length: width }, () => null)
   )
 
-  const finalGrid = [...emptyTopRows, ...remainingRows]
+  const rowDropDistances: Record<number, number> = {}
+  remainingRows.forEach((entry, idx) => {
+    const destRow = clearedCount + idx
+    const dropDist = destRow - entry.originalRow
+    if (dropDist > 0) {
+      rowDropDistances[entry.originalRow] = dropDist
+    }
+  })
+
+  const finalGrid = [...emptyTopRows, ...remainingRows.map((entry) => entry.cells)]
   const isAllClear = finalGrid.every((row) => row.every((cell) => cell === null))
 
   return {
@@ -321,6 +342,9 @@ export function clearCompletedLines(grid: GridMatrix): LineClearResult {
     clearedCount,
     clearedRows,
     isAllClear,
+    preClearGrid,
+    clearedCells,
+    rowDropDistances,
   }
 }
 

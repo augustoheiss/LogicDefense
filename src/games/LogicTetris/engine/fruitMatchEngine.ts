@@ -7,6 +7,7 @@ import {
   FruitCascadeOracleReport,
   FruitCluster,
   FruitCoord,
+  FruitFallingMotion,
   FruitKind,
   FruitPairPiece,
   FruitSwapMove,
@@ -362,11 +363,12 @@ export function computeFruitPairGhostY(grid: GridMatrix, pair: FruitPairPiece): 
  */
 export function applyColumnGravityToFruits(
   grid: GridMatrix
-): { grid: GridMatrix; movedCount: number } {
+): { grid: GridMatrix; movedCount: number; fallingMotions: FruitFallingMotion[] } {
   const height = grid.length || BOARD_HEIGHT
   const width = grid[0]?.length ?? BOARD_WIDTH
   const nextGrid = cloneGrid(grid)
   let movedCount = 0
+  const fallingMotions: FruitFallingMotion[] = []
 
   for (let col = 0; col < width; col++) {
     let writeRow = height - 1
@@ -389,6 +391,13 @@ export function applyColumnGravityToFruits(
         nextGrid[writeRow][col] = normalizedCell
         nextGrid[readRow][col] = null
         movedCount += 1
+        fallingMotions.push({
+          col,
+          fromRow: readRow,
+          toRow: writeRow,
+          cell: normalizedCell,
+          isNewSpawn: false,
+        })
       } else {
         nextGrid[writeRow][col] = normalizedCell
       }
@@ -396,7 +405,7 @@ export function applyColumnGravityToFruits(
     }
   }
 
-  return { grid: nextGrid, movedCount }
+  return { grid: nextGrid, movedCount, fallingMotions }
 }
 
 const ORTHOGONAL_DIRS: ReadonlyArray<readonly [number, number]> = [
@@ -585,6 +594,7 @@ export function resolveFruitCascades(grid: GridMatrix): CascadeResolutionResult 
       break
     }
 
+    const prePopGrid = cloneGrid(currentGrid)
     const poppedKeySet = new Set<string>()
     const poppedCells: Array<{ row: number; col: number; kind: FruitKind; color: string }> = []
 
@@ -607,6 +617,7 @@ export function resolveFruitCascades(grid: GridMatrix): CascadeResolutionResult 
       }
     }
 
+    const postPopGrid = cloneGrid(currentGrid)
     const totalPoppedInWave = poppedCells.length
     const mathResonanceFormula = buildWaveMathResonanceFormula(
       clusters,
@@ -616,6 +627,9 @@ export function resolveFruitCascades(grid: GridMatrix): CascadeResolutionResult 
     const waveScore =
       totalPoppedInWave * 60 * step * (clusters.length > 1 ? 2 : 1)
 
+    const gravityRes = applyColumnGravityToFruits(currentGrid)
+    currentGrid = gravityRes.grid
+
     waves.push({
       waveIndex: step,
       clusters,
@@ -623,12 +637,14 @@ export function resolveFruitCascades(grid: GridMatrix): CascadeResolutionResult 
       totalPoppedInWave,
       mathResonanceFormula,
       waveScore,
+      prePopGrid,
+      postPopGrid,
+      fallingMotions: gravityRes.fallingMotions,
+      postGravityGrid: cloneGrid(currentGrid),
     })
 
     totalPoppedBlocks += totalPoppedInWave
     totalScoreEarned += waveScore
-
-    currentGrid = applyColumnGravityToFruits(currentGrid).grid
   }
 
   const isAllClear = totalPoppedBlocks > 0 && isGridCompletelyEmpty(currentGrid)
@@ -738,10 +754,16 @@ function breakAccidentalFruitClusters10x10(grid: GridMatrix): GridMatrix {
 export function applyFruitGravityAndRefill10x10(
   grid: GridMatrix,
   rng: () => number = Math.random
-): { grid: GridMatrix; movedCount: number; spawnedCount: number } {
+): {
+  grid: GridMatrix
+  movedCount: number
+  spawnedCount: number
+  fallingMotions: FruitFallingMotion[]
+} {
   const nextGrid = createEmptyGrid(BOARD_HEIGHT, BOARD_WIDTH)
   let movedCount = 0
   let spawnedCount = 0
+  const fallingMotions: FruitFallingMotion[] = []
 
   for (let col = 0; col < FRUIT_GRID_COLS; col++) {
     let writeRow = FRUIT_GRID_ROWS - 1
@@ -751,7 +773,7 @@ export function applyFruitGravityAndRefill10x10(
 
       const kind = inferFruitKindFromCell(cell)
       const meta = FRUIT_CATALOG[kind]
-      nextGrid[writeRow][col] = {
+      const normalizedCell: GridCell = {
         ...cell,
         fruitKind: kind,
         color: cell.color || meta.color,
@@ -759,13 +781,22 @@ export function applyFruitGravityAndRefill10x10(
         borderColor: cell.borderColor || meta.borderColor,
         symbol: cell.symbol || meta.symbol,
       }
+      nextGrid[writeRow][col] = normalizedCell
       if (writeRow !== readRow) {
         movedCount += 1
+        fallingMotions.push({
+          col,
+          fromRow: readRow,
+          toRow: writeRow,
+          cell: normalizedCell,
+          isNewSpawn: false,
+        })
       }
       writeRow -= 1
     }
 
     // Reposição pelo topo: preenche as células vazias no topo da coluna (writeRow..0)
+    const emptyCountInCol = writeRow + 1
     while (writeRow >= 0) {
       const randomBaseIdx = Math.floor(rng() * PLAYABLE_FRUITS.length)
       let chosenKind = PLAYABLE_FRUITS[randomBaseIdx] ?? 'APPLE_RUBY'
@@ -783,13 +814,21 @@ export function applyFruitGravityAndRefill10x10(
         chosenKind = PLAYABLE_FRUITS[(randomBaseIdx + 1) % PLAYABLE_FRUITS.length]
       }
 
-      nextGrid[writeRow][col] = createFruitGridCell(chosenKind)
+      const spawnedCell = createFruitGridCell(chosenKind)
+      nextGrid[writeRow][col] = spawnedCell
+      fallingMotions.push({
+        col,
+        fromRow: writeRow - emptyCountInCol,
+        toRow: writeRow,
+        cell: spawnedCell,
+        isNewSpawn: true,
+      })
       spawnedCount += 1
       writeRow -= 1
     }
   }
 
-  return { grid: nextGrid, movedCount, spawnedCount }
+  return { grid: nextGrid, movedCount, spawnedCount, fallingMotions }
 }
 
 /**
@@ -1005,6 +1044,7 @@ export function resolveFruitCascades10x10WithRefill(
       break
     }
 
+    const prePopGrid = cloneGrid(currentGrid)
     const poppedKeySet = new Set<string>()
     const poppedCells: Array<{ row: number; col: number; kind: FruitKind; color: string }> = []
 
@@ -1032,6 +1072,7 @@ export function resolveFruitCascades10x10WithRefill(
       break
     }
 
+    const postPopGrid = cloneGrid(currentGrid)
     const totalPoppedInWave = poppedCells.length
     const mathResonanceFormula = buildWaveMathResonanceFormula(
       clusters,
@@ -1041,6 +1082,10 @@ export function resolveFruitCascades10x10WithRefill(
     const waveScore =
       totalPoppedInWave * 65 * step * (clusters.length > 1 ? 2 : 1)
 
+    // Frutas acima descem e novas frutas entram pelo topo da Arena 10×10!
+    const gravityRes = applyFruitGravityAndRefill10x10(currentGrid, rng)
+    currentGrid = gravityRes.grid
+
     waves.push({
       waveIndex: step,
       clusters,
@@ -1048,17 +1093,28 @@ export function resolveFruitCascades10x10WithRefill(
       totalPoppedInWave,
       mathResonanceFormula,
       waveScore,
+      prePopGrid,
+      postPopGrid,
+      fallingMotions: gravityRes.fallingMotions,
+      postGravityGrid: cloneGrid(currentGrid),
     })
 
     totalPoppedBlocks += totalPoppedInWave
     totalScoreEarned += waveScore
-
-    // Frutas acima descem e novas frutas entram pelo topo da Arena 10×10!
-    currentGrid = applyFruitGravityAndRefill10x10(currentGrid, rng).grid
   }
 
   // Após todas as cascatas, estabiliza a Arena 10×10 com 0 auto-pops pendentes e >= 4 trocas válidas
   const stabilized = ensureMinimumValidSwaps(currentGrid, 4, rng)
+  if (waves.length > 0) {
+    const lastWave = waves[waves.length - 1]
+    lastWave.postGravityGrid = cloneGrid(stabilized.grid)
+    if (lastWave.fallingMotions) {
+      lastWave.fallingMotions = lastWave.fallingMotions.map((m) => ({
+        ...m,
+        cell: stabilized.grid[m.toRow]?.[m.col] ?? m.cell,
+      }))
+    }
+  }
 
   return {
     grid: stabilized.grid,
@@ -1503,6 +1559,7 @@ export function magnetizeSingleFruitColor(
     }
   }
 
+  const prePopGrid = cloneGrid(workingGrid)
   const meta = FRUIT_CATALOG[effectiveKind]
   const poppedCells: Array<{ row: number; col: number; kind: FruitKind; color: string }> = []
   for (const pos of matchingCells) {
@@ -1516,6 +1573,7 @@ export function magnetizeSingleFruitColor(
     workingGrid[pos.row][pos.col] = null
   }
 
+  const postPopGrid = cloneGrid(workingGrid)
   const n = poppedCells.length
   const magnetWave: CascadeWave = {
     waveIndex: 1,
@@ -1530,11 +1588,25 @@ export function magnetizeSingleFruitColor(
     totalPoppedInWave: n,
     mathResonanceFormula: `${n} × 1 = ${n} (Imã Magnético ${meta.namePt}!)`,
     waveScore: n * 75,
+    prePopGrid,
+    postPopGrid,
   }
 
   if (is10x10) {
-    workingGrid = applyFruitGravityAndRefill10x10(workingGrid).grid
+    const gravityRes = applyFruitGravityAndRefill10x10(workingGrid)
+    workingGrid = gravityRes.grid
+    magnetWave.fallingMotions = gravityRes.fallingMotions
+    magnetWave.postGravityGrid = cloneGrid(workingGrid)
     const secondary = resolveFruitCascades10x10WithRefill(workingGrid)
+    if (secondary.waves.length === 0) {
+      magnetWave.postGravityGrid = cloneGrid(secondary.grid)
+      if (magnetWave.fallingMotions) {
+        magnetWave.fallingMotions = magnetWave.fallingMotions.map((m) => ({
+          ...m,
+          cell: secondary.grid[m.toRow]?.[m.col] ?? m.cell,
+        }))
+      }
+    }
     const shiftedWaves: CascadeWave[] = secondary.waves.map((w) => {
       const nextIdx = w.waveIndex + 1
       return {
@@ -1642,6 +1714,7 @@ export function purifyTopTwoFruitColors(grid: GridMatrix): CascadeResolutionResu
     }
   }
 
+  const prePopGrid = cloneGrid(workingGrid)
   const clusters: FruitCluster[] = []
   const poppedCells: Array<{ row: number; col: number; kind: FruitKind; color: string }> = []
 
@@ -1664,6 +1737,7 @@ export function purifyTopTwoFruitColors(grid: GridMatrix): CascadeResolutionResu
     }
   }
 
+  const postPopGrid = cloneGrid(workingGrid)
   const totalInFirstWave = poppedCells.length
   const formula =
     clusters.length >= 2
@@ -1677,11 +1751,25 @@ export function purifyTopTwoFruitColors(grid: GridMatrix): CascadeResolutionResu
     totalPoppedInWave: totalInFirstWave,
     mathResonanceFormula: formula,
     waveScore: totalInFirstWave * 90,
+    prePopGrid,
+    postPopGrid,
   }
 
   if (is10x10) {
-    workingGrid = applyFruitGravityAndRefill10x10(workingGrid).grid
+    const gravityRes = applyFruitGravityAndRefill10x10(workingGrid)
+    workingGrid = gravityRes.grid
+    phoenixWave.fallingMotions = gravityRes.fallingMotions
+    phoenixWave.postGravityGrid = cloneGrid(workingGrid)
     const secondary = resolveFruitCascades10x10WithRefill(workingGrid)
+    if (secondary.waves.length === 0) {
+      phoenixWave.postGravityGrid = cloneGrid(secondary.grid)
+      if (phoenixWave.fallingMotions) {
+        phoenixWave.fallingMotions = phoenixWave.fallingMotions.map((m) => ({
+          ...m,
+          cell: secondary.grid[m.toRow]?.[m.col] ?? m.cell,
+        }))
+      }
+    }
     const shiftedWaves: CascadeWave[] = secondary.waves.map((w) => {
       const nextIdx = w.waveIndex + 1
       return {

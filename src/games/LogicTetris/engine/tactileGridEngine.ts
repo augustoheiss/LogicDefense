@@ -9,6 +9,7 @@ import { cloneGrid, createEmptyGrid } from './gridEngine'
 import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
+  ClearedBlockSnapshot,
   GoldenCrossroad,
   GridCell,
   GridMatrix,
@@ -235,15 +236,31 @@ export function clearTactileRowsAndCols(grid: GridMatrix): TactileClearResult {
     }
   }
 
+  const preClearGrid = cloneGrid(nextGrid)
+  const clearedCells: ClearedBlockSnapshot[] = []
+  const seenClearedKeys = new Set<string>()
+
   // 3. Clear all completed horizontal rows and vertical columns without gravity
   for (const r of clearedRows) {
     for (let c = TACTILE_COL_START; c <= TACTILE_COL_END; c++) {
+      const key = `${r},${c}`
+      const cell = nextGrid[r]?.[c]
+      if (cell && !seenClearedKeys.has(key)) {
+        seenClearedKeys.add(key)
+        clearedCells.push({ row: r, col: c, cell: { ...cell } })
+      }
       nextGrid[r][c] = null
     }
   }
 
   for (const c of clearedCols) {
     for (let r = TACTILE_ROW_START; r <= TACTILE_ROW_END; r++) {
+      const key = `${r},${c}`
+      const cell = preClearGrid[r]?.[c]
+      if (cell && !seenClearedKeys.has(key)) {
+        seenClearedKeys.add(key)
+        clearedCells.push({ row: r, col: c, cell: { ...cell } })
+      }
       nextGrid[r][c] = null
     }
   }
@@ -282,6 +299,8 @@ export function clearTactileRowsAndCols(grid: GridMatrix): TactileClearResult {
     mathResonanceFormula,
     scoreEarned,
     streakDelta,
+    preClearGrid,
+    clearedCells,
   }
 }
 

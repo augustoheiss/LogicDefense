@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import {
   ActivePiece,
+  BoardAnimationChoreography,
   BoardTopologyReport,
   CascadeWave,
+  CascadeWaveTiming,
   DopamineTier,
   FloatingFeedback,
   FruitCascadeOracleReport,
@@ -11,6 +13,7 @@ import {
   GameMode,
   GamePhase,
   GridMatrix,
+  HardDropTrailSnapshot,
   LogicTetrisPersistentStats,
   MiraclePowerTier,
   PieceType,
@@ -41,6 +44,7 @@ import {
   createSevenBag,
   createSpawnPiece,
   getPieceDefinition,
+  getPieceOccupiedCells,
 } from '../engine/tetrominoes'
 import {
   createSpawnFruitPair,
@@ -196,6 +200,71 @@ function computeUnifiedOracles(grid: GridMatrix): {
   }
 }
 
+function getTimeNowMs(): number {
+  return Date.now()
+}
+
+function buildFruitCascadeChoreography(
+  waves: CascadeWave[],
+  options?: {
+    kind?: 'FRUIT_SWAP_CASCADE' | 'FRUIT_MAGNET_CASCADE'
+    preSwapGrid?: GridMatrix
+    swapFrom?: FruitCoord
+    swapTo?: FruitCoord
+    swapFromCell?: GridMatrix[number][number]
+    swapToCell?: GridMatrix[number][number]
+  }
+): { choreography: BoardAnimationChoreography; waveDelaySeconds: number[] } {
+  const startedAtMs = getTimeNowMs()
+  const hasSwap = Boolean(options?.swapFrom && options?.swapTo)
+  const swapDurationMs = hasSwap ? 170 : 0
+  let cursorMs = swapDurationMs
+  const waveTimings: CascadeWaveTiming[] = []
+  const waveDelaySeconds: number[] = []
+
+  for (let i = 0; i < waves.length; i++) {
+    const wave = waves[i]
+    const speedFactor = Math.max(0.76, Math.pow(0.9, i))
+    const shatterDur = Math.round(265 * speedFactor)
+    const gravityDur = Math.round(315 * speedFactor)
+    const shatterStartMs = cursorMs
+    const shatterEndMs = shatterStartMs + shatterDur
+    const gravityStartMs = shatterEndMs
+    const gravityEndMs = gravityStartMs + gravityDur
+    cursorMs = gravityEndMs
+
+    waveTimings.push({
+      waveIndex: wave.waveIndex,
+      shatterStartMs,
+      shatterEndMs,
+      gravityStartMs,
+      gravityEndMs,
+    })
+    waveDelaySeconds.push(Number((shatterStartMs / 1000).toFixed(3)))
+  }
+
+  const totalDurationMs = Math.max(cursorMs, swapDurationMs + 320)
+
+  return {
+    choreography: {
+      id: `anim_fruit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      kind: options?.kind ?? 'FRUIT_SWAP_CASCADE',
+      style: 'FRUIT_MATCH',
+      startedAtMs,
+      totalDurationMs,
+      preSwapGrid: options?.preSwapGrid,
+      swapFrom: options?.swapFrom,
+      swapTo: options?.swapTo,
+      swapFromCell: options?.swapFromCell ?? null,
+      swapToCell: options?.swapToCell ?? null,
+      swapDurationMs,
+      waves,
+      waveTimings,
+    },
+    waveDelaySeconds,
+  }
+}
+
 export interface LogicTetrisStoreState {
   phase: GamePhase
   mode: GameMode
@@ -271,6 +340,14 @@ export interface LogicTetrisStoreState {
   lastMathResonanceFormula: string | null
   lastMiracleToast: string | null
   selectedMiracleTier: MiraclePowerTier
+
+  // Phase 05 (V4) — 60fps Board Choreography & Hard-Drop Trail State:
+  activeBoardAnimation: BoardAnimationChoreography | null
+  lastHardDropTrail: HardDropTrailSnapshot | null
+  pendingAutoStyleShift: {
+    targetStyle: SubGameStyle
+    remainingMs: number
+  } | null
 
   // Actions:
   setMode: (mode: GameMode) => void
@@ -463,6 +540,9 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       score: nextScore,
       comboGraceDropsLeft: 3, // Renews rhythm grace window without ever resetting combo!
       lastMiracleToast: toastTitle,
+      activeBoardAnimation: null,
+      lastHardDropTrail: null,
+      pendingAutoStyleShift: null,
       floatingFeedbacks: [
         ...state.floatingFeedbacks.slice(-5),
         createFeedbackItem(toastTitle, toastSub, 'purple'),
@@ -547,6 +627,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         lockDelayMs: 0,
         lockResetCount: 0,
         isSoftDropping: false,
+        pendingAutoStyleShift: null,
         stats: updatedStats,
       })
       return
@@ -574,6 +655,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       lockDelayMs: 0,
       lockResetCount: 0,
       isSoftDropping: false,
+      pendingAutoStyleShift: null,
       stats: updatedStats,
     })
   }
@@ -585,10 +667,39 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     const state = get()
     if (state.phase !== 'PLAYING') return
 
+    const lockedCoords = getPieceOccupiedCells(state.activePiece).filter(
+      (c) => c.row >= 0 && c.row < 20 && c.col >= 0 && c.col < 10
+    )
+
     const lockedGrid = lockPieceToGrid(state.grid, state.activePiece)
     const clearResult = clearCompletedLines(lockedGrid)
     const nextGrid = clearResult.grid
     const cleared = clearResult.clearedCount
+
+    const boardAnimation: BoardAnimationChoreography =
+      cleared > 0
+        ? {
+            id: `anim_classic_clear_${Date.now()}_${state.lastEventCounter}`,
+            kind: 'CLASSIC_LINE_CLEAR',
+            style: 'TETRIS_CLASSIC',
+            startedAtMs: getTimeNowMs(),
+            totalDurationMs: 450,
+            laserDurationMs: 205,
+            gravityCollapseDurationMs: 245,
+            preClearGrid: clearResult.preClearGrid,
+            clearedCells: clearResult.clearedCells,
+            clearedRows: clearResult.clearedRows,
+            rowDropDistances: clearResult.rowDropDistances,
+            lockedCells: lockedCoords,
+          }
+        : {
+            id: `anim_classic_lock_${Date.now()}_${state.lastEventCounter}`,
+            kind: 'CLASSIC_PIECE_LOCK',
+            style: 'TETRIS_CLASSIC',
+            startedAtMs: getTimeNowMs(),
+            totalDurationMs: 210,
+            lockedCells: lockedCoords,
+          }
 
     const nextLines = state.lines + cleared
     const nextLevel = Math.floor(nextLines / 10) + 1
@@ -692,10 +803,16 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           lastClearedCols: [],
           lastMathResonanceFormula: resonanceFormula,
           styleShiftProgress: nextShiftProgress,
+          activeBoardAnimation: boardAnimation,
         }
       )
       return
     }
+
+    const shouldAutoShift =
+      cleared > 0 &&
+      state.styleRotationMode === 'SIMULTANEOUS' &&
+      nextShiftProgress >= STYLE_SHIFT_TARGET
 
     set({
       grid: nextGrid,
@@ -719,20 +836,16 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       lastClearedCols: [],
       lastMathResonanceFormula: resonanceFormula,
       styleShiftProgress: nextShiftProgress,
+      activeBoardAnimation: boardAnimation,
+      pendingAutoStyleShift: shouldAutoShift
+        ? { targetStyle: 'FRUIT_MATCH', remainingMs: 460 }
+        : state.pendingAutoStyleShift,
       lastEventCounter: state.lastEventCounter + 1,
       gravityAccumulatorMs: 0,
       lockDelayMs: 0,
       lockResetCount: 0,
       stats: updatedStats,
     })
-
-    if (
-      cleared > 0 &&
-      state.styleRotationMode === 'SIMULTANEOUS' &&
-      nextShiftProgress >= STYLE_SHIFT_TARGET
-    ) {
-      performStyleShift('FRUIT_MATCH', { isAutoCycle: true })
-    }
   }
 
   /**
@@ -743,6 +856,9 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     if (state.phase !== 'PLAYING') return false
     if (Date.now() < state.postModalInputGuardUntil) return false
 
+    const swapFromCell = state.grid[from.row]?.[from.col] ?? null
+    const swapToCell = state.grid[to.row]?.[to.col] ?? null
+
     const swapRes = swapAdjacentFruitsAndResolve(state.grid, from, to)
     if (!swapRes.validSwap) {
       soundEngine.playElasticBounce()
@@ -750,7 +866,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         selectedFruitCell: null,
         fruitCursor: to,
         lastSwappedCells: [from, to],
-        invalidSwapBounceUntil: Date.now() + 360,
+        invalidSwapBounceUntil: Date.now() + 380,
         floatingFeedbacks: [
           ...state.floatingFeedbacks.slice(-5),
           createFeedbackItem(
@@ -786,6 +902,18 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     const chargeGain = wavesCleared * 25
     const nextLogicCharge = Math.min(100, state.logicCharge + chargeGain)
 
+    const { choreography, waveDelaySeconds } = buildFruitCascadeChoreography(
+      swapRes.waves,
+      {
+        kind: 'FRUIT_SWAP_CASCADE',
+        preSwapGrid: state.grid,
+        swapFrom: from,
+        swapTo: to,
+        swapFromCell,
+        swapToCell,
+      }
+    )
+
     const oracles = computeUnifiedOracles(nextGrid)
     const nextFeedbacks = [...state.floatingFeedbacks].slice(-5)
     soundEngine.playSequenceDopamine(
@@ -793,6 +921,12 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       wavesCleared,
       'FRUIT_MATCH'
     )
+    soundEngine.playCascadeWaveTimeline(
+      waveDelaySeconds,
+      Math.max(1, nextCombo),
+      'FRUIT_MATCH'
+    )
+
     const lastWave = swapRes.waves[swapRes.waves.length - 1]
     const resonanceFormula =
       lastWave?.mathResonanceFormula ??
@@ -825,6 +959,9 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     savePersistentStats(updatedStats)
 
     const nextShiftProgress = state.styleShiftProgress + 1
+    const shouldAutoShift =
+      state.styleRotationMode === 'SIMULTANEOUS' &&
+      nextShiftProgress >= STYLE_SHIFT_TARGET
 
     set({
       grid: nextGrid,
@@ -848,6 +985,13 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       lastCascadeWaves: swapRes.waves,
       lastMathResonanceFormula: resonanceFormula,
       styleShiftProgress: nextShiftProgress,
+      activeBoardAnimation: choreography,
+      pendingAutoStyleShift: shouldAutoShift
+        ? {
+            targetStyle: 'TACTILE_GRID',
+            remainingMs: Math.min(1500, choreography.totalDurationMs + 90),
+          }
+        : state.pendingAutoStyleShift,
       floatingFeedbacks: nextFeedbacks,
       lastEventCounter: state.lastEventCounter + 1,
       gravityAccumulatorMs: 0,
@@ -855,13 +999,6 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       lockResetCount: 0,
       stats: updatedStats,
     })
-
-    if (
-      state.styleRotationMode === 'SIMULTANEOUS' &&
-      nextShiftProgress >= STYLE_SHIFT_TARGET
-    ) {
-      performStyleShift('TACTILE_GRID', { isAutoCycle: true })
-    }
 
     return true
   }
@@ -935,6 +1072,9 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
     lastMathResonanceFormula: null,
     lastMiracleToast: null,
     selectedMiracleTier: 1,
+    activeBoardAnimation: null,
+    lastHardDropTrail: null,
+    pendingAutoStyleShift: null,
 
     setMiraclePowerTier: (tier: MiraclePowerTier) => {
       const state = get()
@@ -1048,6 +1188,9 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         lastClearedCols: [],
         lastMathResonanceFormula: null,
         lastMiracleToast: null,
+        activeBoardAnimation: null,
+        lastHardDropTrail: null,
+        pendingAutoStyleShift: null,
         activeChallenge: null,
         eliminatedChoiceValues: [],
         lastWrongDiagnosis: null,
@@ -1106,6 +1249,9 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         isSoftDropping: false,
         isStyleTransitioning: false,
         styleTransitionRemainingMs: 0,
+        activeBoardAnimation: null,
+        lastHardDropTrail: null,
+        pendingAutoStyleShift: null,
       })
     },
 
@@ -1222,6 +1368,21 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
 
       soundEngine.playHardDrop()
       const clearedCount = res.clearResult.totalLinesAndCols
+
+      const boardAnimation: BoardAnimationChoreography = {
+        id: `anim_tactile_${Date.now()}_${state.lastEventCounter}`,
+        kind: 'TACTILE_PLACE_AND_CLEAR',
+        style: 'TACTILE_GRID',
+        startedAtMs: getTimeNowMs(),
+        totalDurationMs: clearedCount > 0 ? 490 : 240,
+        placedCells: res.placedCells,
+        preClearGrid: res.clearResult.preClearGrid,
+        clearedCells: res.clearResult.clearedCells,
+        clearedRows: res.clearResult.clearedRows,
+        clearedCols: res.clearResult.clearedCols,
+        isCrossClear: res.clearResult.isCrossClear,
+      }
+
       const nextLines = state.lines + clearedCount
       const nextLevel = Math.floor(nextLines / 10) + 1
 
@@ -1332,10 +1493,16 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             lastClearedCols: res.clearResult.clearedCols,
             lastMathResonanceFormula: resonanceFormula,
             styleShiftProgress: nextShiftProgress,
+            activeBoardAnimation: boardAnimation,
           }
         )
         return true
       }
+
+      const shouldAutoShift =
+        clearedCount > 0 &&
+        state.styleRotationMode === 'SIMULTANEOUS' &&
+        nextShiftProgress >= STYLE_SHIFT_TARGET
 
       set({
         grid: res.grid,
@@ -1360,17 +1527,13 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
         lastClearedCols: res.clearResult.clearedCols,
         lastMathResonanceFormula: resonanceFormula,
         styleShiftProgress: nextShiftProgress,
+        activeBoardAnimation: boardAnimation,
+        pendingAutoStyleShift: shouldAutoShift
+          ? { targetStyle: 'TETRIS_CLASSIC', remainingMs: 520 }
+          : state.pendingAutoStyleShift,
         lastEventCounter: state.lastEventCounter + 1,
         stats: updatedStats,
       })
-
-      if (
-        clearedCount > 0 &&
-        state.styleRotationMode === 'SIMULTANEOUS' &&
-        nextShiftProgress >= STYLE_SHIFT_TARGET
-      ) {
-        performStyleShift('TETRIS_CLASSIC', { isAutoCycle: true })
-      }
 
       return true
     },
@@ -1635,12 +1798,29 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
       soundEngine.playHardDrop()
       const ghostY = computeGhostY(state.grid, state.activePiece)
       const dropDistance = Math.max(0, ghostY - state.activePiece.y)
+      const pieceDef = getPieceDefinition(state.activePiece.type)
+      const ghostPiece: ActivePiece = {
+        ...state.activePiece,
+        y: ghostY,
+      }
+      const ghostOccupied = getPieceOccupiedCells(ghostPiece).filter(
+        (c) => c.row >= 0 && c.row < 20 && c.col >= 0 && c.col < 10
+      )
+      const hardDropTrail: HardDropTrailSnapshot = {
+        id: `hd_${Date.now()}_${state.lastEventCounter}`,
+        startedAtMs: getTimeNowMs(),
+        durationMs: 320,
+        fromY: state.activePiece.y,
+        toY: ghostY,
+        cells: ghostOccupied,
+        color: pieceDef.color,
+        glowColor: pieceDef.glowColor,
+        symbol: pieceDef.symbol,
+      }
 
       set({
-        activePiece: {
-          ...state.activePiece,
-          y: ghostY,
-        },
+        activePiece: ghostPiece,
+        lastHardDropTrail: hardDropTrail,
         score: state.score + dropDistance * 2,
       })
 
@@ -1733,6 +1913,27 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           isStyleTransitioning: nextRem > 0,
         })
         return
+      }
+
+      // 1b. Handle deferred auto-style shift after 4th combo choreography finishes playing
+      if (state.pendingAutoStyleShift) {
+        if (state.phase !== 'PLAYING' || state.styleRotationMode !== 'SIMULTANEOUS') {
+          set({ pendingAutoStyleShift: null })
+        } else {
+          const nextRem = state.pendingAutoStyleShift.remainingMs - dtMs
+          if (nextRem <= 0) {
+            const target = state.pendingAutoStyleShift.targetStyle
+            set({ pendingAutoStyleShift: null })
+            performStyleShift(target, { isAutoCycle: true })
+            return
+          }
+          set({
+            pendingAutoStyleShift: {
+              ...state.pendingAutoStyleShift,
+              remainingMs: nextRem,
+            },
+          })
+        }
       }
 
       // 2. Style #2 (`FRUIT_MATCH` 10×10 Swap) & Style #3 (`TACTILE_GRID` 10×10) have zero falling piece timer!
@@ -2227,6 +2428,20 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             magResult.waves[magResult.waves.length - 1]?.mathResonanceFormula ??
             'Imã Magnético de Frutas!'
 
+          const magChoreo =
+            magResult.waves.length > 0
+              ? buildFruitCascadeChoreography(magResult.waves, {
+                  kind: 'FRUIT_MAGNET_CASCADE',
+                })
+              : null
+          if (magChoreo) {
+            soundEngine.playCascadeWaveTimeline(
+              magChoreo.waveDelaySeconds,
+              effectiveCombo,
+              'FRUIT_MATCH'
+            )
+          }
+
           const logEntry: SolvedChallengeLog = {
             challenge,
             solvedAt: Date.now(),
@@ -2261,6 +2476,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             lastCascadeWaves: magResult.waves,
             lastMathResonanceFormula: formula,
             lastMiracleToast: `🧲 Imã (${miracleSpec.titlePt}): ${formula}${shieldBonusSuffix}`,
+            activeBoardAnimation: magChoreo ? magChoreo.choreography : state.activeBoardAnimation,
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
@@ -2289,6 +2505,20 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           const sealRes = sealTactileRowOrColCavities(state.grid, undefined, maxToSeal)
           const sealedCount = sealRes.sealedCoordinates.length
           const clearedCount = sealRes.clearResult.totalLinesAndCols
+          const tactileSealAnim: BoardAnimationChoreography = {
+            id: `anim_tactile_seal_${Date.now()}_${state.lastEventCounter}`,
+            kind: 'TACTILE_PLACE_AND_CLEAR',
+            style: 'TACTILE_GRID',
+            startedAtMs: getTimeNowMs(),
+            totalDurationMs: clearedCount > 0 ? 490 : 250,
+            placedCells: sealRes.sealedCoordinates,
+            preClearGrid: sealRes.clearResult.preClearGrid,
+            clearedCells: sealRes.clearResult.clearedCells,
+            clearedRows: sealRes.clearResult.clearedRows,
+            clearedCols: sealRes.clearResult.clearedCols,
+            isCrossClear: sealRes.clearResult.isCrossClear,
+          }
+
           const effectiveCombo = Math.max(
             nextCombo,
             Math.max(0, state.combo) + Math.max(1, sealRes.clearResult.streakDelta)
@@ -2342,6 +2572,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             lastSealedCoords: sealRes.sealedCoordinates,
             lastMathResonanceFormula: formula,
             lastMiracleToast: `⚖️ ${sealedCount} Casas Seladas (${miracleSpec.titlePt})${shieldBonusSuffix}!`,
+            activeBoardAnimation: tactileSealAnim,
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
@@ -2373,6 +2604,31 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           if (cleared > 0) {
             soundEngine.playLineClear(cleared, nextCombo)
           }
+          const classicSealAnim: BoardAnimationChoreography =
+            cleared > 0
+              ? {
+                  id: `anim_classic_seal_${Date.now()}_${state.lastEventCounter}`,
+                  kind: 'CLASSIC_LINE_CLEAR',
+                  style: 'TETRIS_CLASSIC',
+                  startedAtMs: getTimeNowMs(),
+                  totalDurationMs: 450,
+                  laserDurationMs: 205,
+                  gravityCollapseDurationMs: 245,
+                  preClearGrid: sealResult.lineClearResult.preClearGrid,
+                  clearedCells: sealResult.lineClearResult.clearedCells,
+                  clearedRows: sealResult.lineClearResult.clearedRows,
+                  rowDropDistances: sealResult.lineClearResult.rowDropDistances,
+                  lockedCells: sealResult.sealedCoordinates,
+                }
+              : {
+                  id: `anim_classic_seal_lock_${Date.now()}_${state.lastEventCounter}`,
+                  kind: 'CLASSIC_PIECE_LOCK',
+                  style: 'TETRIS_CLASSIC',
+                  startedAtMs: getTimeNowMs(),
+                  totalDurationMs: 220,
+                  lockedCells: sealResult.sealedCoordinates,
+                }
+
           const nextLines = state.lines + cleared
           const nextLevel = Math.floor(nextLines / 10) + 1
           const clearScore = computeLineClearBaseScore(cleared) * state.level
@@ -2424,6 +2680,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             topology: oracles.topology,
             fruitOracle: oracles.fruitOracle,
             tactileTopology: oracles.tactileTopology,
+            activeBoardAnimation: classicSealAnim,
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,
@@ -2579,6 +2836,19 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
           const oracles = computeUnifiedOracles(purFruit.grid)
           const formula =
             purFruit.waves[0]?.mathResonanceFormula ?? 'Fênix Purificadora de Frutas!'
+          const purChoreo =
+            purFruit.waves.length > 0
+              ? buildFruitCascadeChoreography(purFruit.waves, {
+                  kind: 'FRUIT_MAGNET_CASCADE',
+                })
+              : null
+          if (purChoreo) {
+            soundEngine.playCascadeWaveTimeline(
+              purChoreo.waveDelaySeconds,
+              nextCombo,
+              'FRUIT_MATCH'
+            )
+          }
           const logEntry: SolvedChallengeLog = {
             challenge,
             solvedAt: Date.now(),
@@ -2607,6 +2877,7 @@ export const useLogicTetrisStore = create<LogicTetrisStoreState>((set, get) => {
             lastCascadeWaves: purFruit.waves,
             lastMathResonanceFormula: formula,
             lastMiracleToast: '🔥 FÊNIX 142857! Cachos Purificados!',
+            activeBoardAnimation: purChoreo ? purChoreo.choreography : state.activeBoardAnimation,
             activeChallenge: null,
             eliminatedChoiceValues: [],
             lastWrongDiagnosis: null,

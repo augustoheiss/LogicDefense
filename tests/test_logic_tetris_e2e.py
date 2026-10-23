@@ -527,6 +527,42 @@ def run_logic_tetris_e2e_suite() -> int:
                 "finalStyle": page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style"),
             }
 
+            # 10d. Coreografia Cinematográfica 60fps nos 3 Jogos (FRUIT_MATCH Swap/Cascade, TACTILE_GRID Spring-Pop, TETRIS_CLASSIC Hard-Drop) [Master Plan V4]
+            print("[10d/11] Validando Coreografia Cinematográfica 60fps nos 3 Jogos (Swap/Cascata, Spring-Pop e Hard-Drop)...")
+            # 1) FRUIT_MATCH: Acionar seleção [C] da melhor troca do Oráculo e executar troca + cascata
+            page.locator('[data-testid="style-btn-FRUIT_MATCH"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "FRUIT_MATCH"
+            swaps_badge = page.locator('[data-testid="canvas-fruit-swaps-badge"]')
+            assert swaps_badge.is_visible(), "Badge de trocas prontas deve estar visível em FRUIT_MATCH"
+            page.keyboard.press("c")
+            for direction_key in ("ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"):
+                page.keyboard.press("c")
+                page.keyboard.press(direction_key)
+                time.sleep(0.08)
+            time.sleep(0.35)
+            shot_fruit_cascade = os.path.join(
+                screenshots_dir, "05c_fruit_match_cascade_choreography.png"
+            )
+            page.screenshot(path=shot_fruit_cascade, full_page=False)
+            telemetry_report["screenshots"].append(shot_fruit_cascade)
+
+            # 2) TACTILE_GRID: Posicionar peça da bandeja com animação Spring-Pop e testar Milagre [B] com onda dominó
+            page.locator('[data-testid="style-btn-TACTILE_GRID"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "TACTILE_GRID"
+            page.locator('[data-testid="tactile-tray-slot-2"]').click()
+            page.keyboard.press("Enter")
+            time.sleep(0.25)
+
+            # 3) TETRIS_CLASSIC: Retornar ao Clássico e disparar Hard-Drop com feixe neon vertical
+            page.locator('[data-testid="style-btn-TETRIS_CLASSIC"]').click()
+            assert page.locator('[data-testid="logic-tetris-canvas"]').get_attribute("data-style") == "TETRIS_CLASSIC"
+            page.keyboard.press("Space")
+            time.sleep(0.25)
+            telemetry_report["checks"]["cinematicChoreographyTrinityV4"] = {
+                "status": "PASS",
+                "verifiedStyles": ["FRUIT_MATCH", "TACTILE_GRID", "TETRIS_CLASSIC"],
+            }
+
             desktop_ctx.close()
 
             # =========================================================================

@@ -163,11 +163,20 @@ export interface GridCell {
 
 export type GridMatrix = (GridCell | null)[][]
 
+export interface ClearedBlockSnapshot {
+  row: number
+  col: number
+  cell: GridCell
+}
+
 export interface LineClearResult {
   grid: GridMatrix
   clearedCount: number
   clearedRows: number[]
   isAllClear: boolean
+  preClearGrid?: GridMatrix
+  clearedCells?: ClearedBlockSnapshot[]
+  rowDropDistances?: Record<number, number>
 }
 
 export interface SealCavitiesResult {
@@ -182,6 +191,14 @@ export interface FruitCluster {
   hasWildcardStar: boolean   // true se incluiu pelo menos 1 bloco STAR_PRISM (✦)
 }
 
+export interface FruitFallingMotion {
+  col: number
+  fromRow: number            // >= 0 para fruta sobrevivente que desce; < 0 (-1, -2...) para fruta nova vinda do topo
+  toRow: number              // 0..9 linha de destino após a gravidade
+  cell: GridCell
+  isNewSpawn: boolean
+}
+
 export interface CascadeWave {
   waveIndex: number          // 1, 2, 3... até MAX_CASCADE_STEPS (16)
   clusters: FruitCluster[]
@@ -189,6 +206,10 @@ export interface CascadeWave {
   totalPoppedInWave: number
   mathResonanceFormula: string // Melhoria 02-A: Ex: "4 × 1 = 4 (Quarteto Maçã Rubi)" ou "(3 + 4) × 2 = 14 (Cascata Dupla ×2!)"
   waveScore: number
+  prePopGrid?: GridMatrix
+  postPopGrid?: GridMatrix
+  fallingMotions?: FruitFallingMotion[]
+  postGravityGrid?: GridMatrix
 }
 
 export interface CascadeResolutionResult {
@@ -230,6 +251,66 @@ export interface TactileClearResult {
   mathResonanceFormula: string // Melhoria 03-A: Ex: "10 (Linha) + 10 (Coluna) − 1 (Cruzamento) = 19 Blocos!"
   scoreEarned: number
   streakDelta: number        // Melhoria 03-B: +1 por linha/coluna +1 extra se isCrossClear
+  preClearGrid?: GridMatrix
+  clearedCells?: ClearedBlockSnapshot[]
+}
+
+export interface HardDropTrailSnapshot {
+  id: string
+  startedAtMs: number
+  durationMs: number
+  fromY: number
+  toY: number
+  cells: Array<{ row: number; col: number }>
+  color: string
+  glowColor: string
+  symbol: string
+}
+
+export interface CascadeWaveTiming {
+  waveIndex: number
+  shatterStartMs: number
+  shatterEndMs: number
+  gravityStartMs: number
+  gravityEndMs: number
+}
+
+export interface BoardAnimationChoreography {
+  id: string
+  style: SubGameStyle
+  kind:
+    | 'FRUIT_SWAP_CASCADE'
+    | 'FRUIT_MAGNET_CASCADE'
+    | 'CLASSIC_LINE_CLEAR'
+    | 'CLASSIC_PIECE_LOCK'
+    | 'TACTILE_PLACE_AND_CLEAR'
+  startedAtMs: number
+  totalDurationMs: number
+  // FRUIT_MATCH choreography payload:
+  preSwapGrid?: GridMatrix
+  swapFrom?: FruitCoord
+  swapTo?: FruitCoord
+  swapFromCell?: GridCell | null
+  swapToCell?: GridCell | null
+  swapCellFrom?: GridCell
+  swapCellTo?: GridCell
+  swapDurationMs?: number
+  waves?: CascadeWave[]
+  waveTimings?: CascadeWaveTiming[]
+  // TETRIS_CLASSIC choreography payload:
+  preClearGrid?: GridMatrix
+  lockedCells?: Array<{ row: number; col: number }>
+  clearedRows?: number[]
+  clearedCols?: number[]
+  clearedCells?: ClearedBlockSnapshot[]
+  rowDropDistances?: Record<number, number>
+  laserDurationMs?: number
+  gravityCollapseDurationMs?: number
+  // TACTILE_GRID choreography payload:
+  placedCells?: Array<{ row: number; col: number }>
+  placePopDurationMs?: number
+  dominoClearDurationMs?: number
+  isCrossClear?: boolean
 }
 
 export interface TactilePlacementResult {

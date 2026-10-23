@@ -44,6 +44,63 @@ interface CanvasParticle {
   shape: 'square' | 'diamond' | 'spark'
 }
 
+interface CanvasBlockShard {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  w: number
+  h: number
+  rotation: number
+  vRot: number
+  color: string
+  borderColor: string
+  glowColor: string
+  symbol?: string
+  emoji?: string
+  alpha: number
+  decay: number
+}
+
+interface CanvasShockwaveRing {
+  x: number
+  y: number
+  radius: number
+  maxRadius: number
+  color: string
+  lineWidth: number
+  alpha: number
+}
+
+interface CanvasFloatingCallout {
+  x: number
+  y: number
+  vy: number
+  text: string
+  subtext?: string
+  color: string
+  borderColor: string
+  scale: number
+  alpha: number
+  decay: number
+}
+
+interface BlockRenderTransform {
+  offsetX?: number
+  offsetY?: number
+  scaleX?: number
+  scaleY?: number
+  alpha?: number
+  flashIntensity?: number
+  fractureProgress?: number
+  rotationRad?: number
+}
+
+const MAX_CANVAS_PARTICLES = 180
+const MAX_CANVAS_SHARDS = 160
+const MAX_CANVAS_SHOCKWAVES = 28
+const MAX_CANVAS_CALLOUTS = 24
+
 export interface TetrisCanvasProps {
   className?: string
   /** Optional click callback on a buried cavity cell to trigger [B] Tapar Buraco directly */
@@ -118,14 +175,81 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
 }
 
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+function easeOutBack(t: number): number {
+  const c1 = 1.70158
+  const c3 = c1 + 1
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
+}
+
+function drawBlockFractureCracks(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  cellSize: number,
+  fractureProgress: number
+): void {
+  if (fractureProgress <= 0.02) return
+  const p = Math.min(1, fractureProgress)
+  const cx = x + cellSize * 0.5
+  const cy = y + cellSize * 0.5
+  const reach = cellSize * 0.44 * p
+
+  context.save()
+  context.strokeStyle = '#ffffff'
+  context.shadowColor = '#fef08a'
+  context.shadowBlur = 8
+  context.lineWidth = Math.max(1.5, 2.6 * p)
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+
+  // 4 jagged diagonal fracture branches radiating from center
+  const branches: ReadonlyArray<Array<[number, number]>> = [
+    [
+      [-0.38, -0.25],
+      [-0.65, -0.62],
+      [-0.95, -0.88],
+    ],
+    [
+      [0.34, -0.28],
+      [0.58, -0.68],
+      [0.92, -0.85],
+    ],
+    [
+      [-0.32, 0.36],
+      [-0.68, 0.55],
+      [-0.9, 0.92],
+    ],
+    [
+      [0.36, 0.3],
+      [0.62, 0.68],
+      [0.92, 0.88],
+    ],
+  ]
+
+  for (const branch of branches) {
+    context.beginPath()
+    context.moveTo(cx, cy)
+    for (const [bx, by] of branch) {
+      context.lineTo(cx + bx * reach, cy + by * reach)
+    }
+    context.stroke()
+  }
+  context.restore()
+}
+
 /**
- * Neon Genesis Polymorphic 3-in-1 2D Canvas Renderer for Logic Tetris (V2 Proportional Stage Edition).
+ * Neon Genesis Polymorphic 3-in-1 2D Canvas Renderer for Logic Tetris (V4 Cinematic Choreography Edition).
  *
- * - `TETRIS_CLASSIC`: Palco `20×10` vertical com blocos de `34px`.
- * - `FRUIT_MATCH`: Arena `10×10` cheia com 100 frutas de `50px`, troca de frutas adjacentes (clique ou arraste),
- *   cascatas com reposição pelo topo e dica Socrática do Oráculo.
+ * - `TETRIS_CLASSIC`: Palco `20×10` vertical com blocos de `34px`, interpolação suave 60fps, feixe de Hard-Drop,
+ *   laser de limpeza horizontal, estilhaços físicos 2D e colapso gravitacional da pilha superior.
+ * - `FRUIT_MATCH`: Arena `10×10` cheia com 100 frutas de `50px`, deslizamento físico de troca, trincamento e
+ *   quebra visível dos blocos em estilhaços deixando espaço vazio, queda física por gravidade e ondas automáticas sequenciais!
  * - `TACTILE_GRID`: Arena `10×10` inteira sem cortes (`rows 0..9, cols 0..9`) com blocos de `50px`,
- *   suporte a Macro-Blocos (`Cubo 3×3` de 9 quadrados, `Esquadro 3×3`, `Viga 1×5`, `Placa 2×3`) e brilho preditivo H×V.
+ *   animação spring-pop de encaixe, conexão energética 10/10 e quebra em onda dominó com choque duplo H×V.
  */
 export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
   className = '',
@@ -133,6 +257,16 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const particlesRef = useRef<CanvasParticle[]>([])
+  const shardsRef = useRef<CanvasBlockShard[]>([])
+  const shockwavesRef = useRef<CanvasShockwaveRing[]>([])
+  const calloutsRef = useRef<CanvasFloatingCallout[]>([])
+  const triggeredEventsSetRef = useRef<Set<string>>(new Set())
+  const pieceVisualRef = useRef<{
+    x: number
+    y: number
+    type: string
+    lastUpdateMs: number
+  }>({ x: 3, y: 0, type: 'I', lastUpdateMs: 0 })
   const lastProcessedEventRef = useRef<number>(0)
   const lastProcessedShiftRef = useRef<number>(0)
   const lastMorphedPieceStateRef = useRef<string>('')
@@ -163,16 +297,107 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
     let animationFrameId: number | null = null
     let isUnmounted = false
 
+    const pushBoundedParticle = (p: CanvasParticle) => {
+      if (particlesRef.current.length >= MAX_CANVAS_PARTICLES) {
+        particlesRef.current.shift()
+      }
+      particlesRef.current.push(p)
+    }
+
+    const pushBoundedShard = (s: CanvasBlockShard) => {
+      if (shardsRef.current.length >= MAX_CANVAS_SHARDS) {
+        shardsRef.current.shift()
+      }
+      shardsRef.current.push(s)
+    }
+
+    const pushBoundedShockwave = (ring: CanvasShockwaveRing) => {
+      if (shockwavesRef.current.length >= MAX_CANVAS_SHOCKWAVES) {
+        shockwavesRef.current.shift()
+      }
+      shockwavesRef.current.push(ring)
+    }
+
+    const pushBoundedCallout = (callout: CanvasFloatingCallout) => {
+      if (calloutsRef.current.length >= MAX_CANVAS_CALLOUTS) {
+        calloutsRef.current.shift()
+      }
+      calloutsRef.current.push(callout)
+    }
+
+    /**
+     * Spawns 4 physical rotating 2D block fragments (`CanvasBlockShard`) + sparkles
+     * when a fruit or block breaks apart on the board!
+     */
+    const spawnBlockShatterShards = (
+      col: number,
+      row: number,
+      cellSize: number,
+      color: string,
+      borderColor: string,
+      glowColor: string,
+      symbol?: string,
+      emoji?: string
+    ) => {
+      const cx = LEFT_GUTTER + col * cellSize + cellSize * 0.5
+      const cy = TOP_RULER + row * cellSize + cellSize * 0.5
+      const shardSize = Math.max(9, cellSize * 0.34)
+      const quadrants: ReadonlyArray<[number, number]> = [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ]
+
+      quadrants.forEach(([qx, qy], idx) => {
+        const vx = qx * (1.5 + Math.random() * 2.4) + (Math.random() - 0.5) * 0.8
+        const vy = qy * 1.3 - (1.8 + Math.random() * 2.2)
+        pushBoundedShard({
+          x: cx + qx * (cellSize * 0.18),
+          y: cy + qy * (cellSize * 0.18),
+          vx,
+          vy,
+          w: shardSize,
+          h: shardSize * (0.78 + (idx % 2) * 0.22),
+          rotation: (idx * Math.PI) / 4,
+          vRot: qx * (0.09 + Math.random() * 0.12),
+          color,
+          borderColor,
+          glowColor,
+          symbol: idx === 0 ? symbol : undefined,
+          emoji: idx === 1 ? emoji : undefined,
+          alpha: 1,
+          decay: 0.022 + Math.random() * 0.01,
+        })
+      })
+
+      for (let i = 0; i < 5; i++) {
+        const angle = (Math.PI * 2 * i) / 5 + Math.random() * 0.4
+        const speed = 1.4 + Math.random() * 3.0
+        pushBoundedParticle({
+          x: cx,
+          y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 0.8,
+          size: 3.0 + Math.random() * 3.2,
+          color: i % 2 === 0 ? '#fef08a' : borderColor,
+          alpha: 1,
+          decay: 0.022 + Math.random() * 0.012,
+          shape: i % 2 === 0 ? 'spark' : 'diamond',
+        })
+      }
+    }
+
     const spawnRowClearParticles = (rows: number[], cellSize: number) => {
       const palette = ['#22d3ee', '#fbbf24', '#34d399', '#a855f7', '#fef08a']
       for (const row of rows) {
         const yCenter = TOP_RULER + row * cellSize + cellSize * 0.5
         for (let col = 0; col < BOARD_WIDTH; col++) {
           const xCenter = LEFT_GUTTER + col * cellSize + cellSize * 0.5
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < 3; i++) {
             const angle = Math.random() * Math.PI * 2
             const speed = 0.9 + Math.random() * 3.5
-            particlesRef.current.push({
+            pushBoundedParticle({
               x: xCenter + (Math.random() - 0.5) * 14,
               y: yCenter + (Math.random() - 0.5) * 10,
               vx: Math.cos(angle) * speed,
@@ -194,10 +419,10 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         const xCenter = LEFT_GUTTER + col * cellSize + cellSize * 0.5
         for (let row = TACTILE_ROW_START; row <= TACTILE_ROW_END; row++) {
           const yCenter = TOP_RULER + row * cellSize + cellSize * 0.5
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < 3; i++) {
             const angle = Math.random() * Math.PI * 2
             const speed = 0.9 + Math.random() * 3.2
-            particlesRef.current.push({
+            pushBoundedParticle({
               x: xCenter + (Math.random() - 0.5) * 10,
               y: yCenter + (Math.random() - 0.5) * 14,
               vx: Math.cos(angle) * speed,
@@ -218,18 +443,18 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         for (const popped of wave.poppedCells) {
           const xCenter = LEFT_GUTTER + popped.col * cellSize + cellSize * 0.5
           const yCenter = TOP_RULER + popped.row * cellSize + cellSize * 0.5
-          for (let i = 0; i < 7; i++) {
-            const angle = (Math.PI * 2 * i) / 7 + Math.random() * 0.35
-            const speed = 1.2 + Math.random() * 3.2
-            particlesRef.current.push({
+          for (let i = 0; i < 4; i++) {
+            const angle = (Math.PI * 2 * i) / 4 + Math.random() * 0.35
+            const speed = 1.2 + Math.random() * 3.0
+            pushBoundedParticle({
               x: xCenter,
               y: yCenter,
               vx: Math.cos(angle) * speed,
               vy: Math.sin(angle) * speed - 0.6,
-              size: 3.2 + Math.random() * 3.8,
-              color: i % 3 === 0 ? '#fef08a' : popped.color,
+              size: 3.0 + Math.random() * 3.4,
+              color: i % 2 === 0 ? '#fef08a' : popped.color,
               alpha: 1,
-              decay: 0.017 + Math.random() * 0.014,
+              decay: 0.019 + Math.random() * 0.014,
               shape: i % 2 === 0 ? 'spark' : 'diamond',
             })
           }
@@ -243,13 +468,13 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       purgedCount: number
     ) => {
       const palette = ['#fbbf24', '#a855f7', '#22d3ee', '#34d399', '#f43f5e', '#fef08a']
-      const burstCount = Math.min(75, Math.max(24, purgedCount * 2))
+      const burstCount = Math.min(65, Math.max(24, purgedCount * 2))
       for (let i = 0; i < burstCount; i++) {
         const x = LEFT_GUTTER + Math.random() * boardW
         const y = TOP_RULER + Math.random() * boardH
         const angle = Math.random() * Math.PI * 2
         const speed = 1.2 + Math.random() * 3.8
-        particlesRef.current.push({
+        pushBoundedParticle({
           x,
           y,
           vx: Math.cos(angle) * speed,
@@ -268,10 +493,10 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       for (let col = 1; col < BOARD_WIDTH; col += 2) {
         const xCenter = LEFT_GUTTER + col * cellSize + cellSize * 0.5
         const yCenter = TOP_RULER + 42
-        for (let i = 0; i < 10; i++) {
-          const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.2
+        for (let i = 0; i < 8; i++) {
+          const angle = (Math.PI * 2 * i) / 8 + Math.random() * 0.2
           const speed = 1.4 + Math.random() * 3.4
-          particlesRef.current.push({
+          pushBoundedParticle({
             x: xCenter,
             y: yCenter,
             vx: Math.cos(angle) * speed,
@@ -293,10 +518,10 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       for (const { row, col } of coords) {
         const xCenter = LEFT_GUTTER + col * cellSize + cellSize * 0.5
         const yCenter = TOP_RULER + row * cellSize + cellSize * 0.5
-        for (let i = 0; i < 14; i++) {
-          const angle = (Math.PI * 2 * i) / 14 + Math.random() * 0.25
+        for (let i = 0; i < 10; i++) {
+          const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.25
           const speed = 1.0 + Math.random() * 2.8
-          particlesRef.current.push({
+          pushBoundedParticle({
             x: xCenter,
             y: yCenter,
             vx: Math.cos(angle) * speed,
@@ -317,10 +542,10 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       for (const { row, col } of cells) {
         const xCenter = LEFT_GUTTER + col * cellSize + cellSize * 0.5
         const yCenter = TOP_RULER + row * cellSize + cellSize * 0.5
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 5; i++) {
           const angle = Math.random() * Math.PI * 2
           const speed = 0.9 + Math.random() * 2.4
-          particlesRef.current.push({
+          pushBoundedParticle({
             x: xCenter,
             y: yCenter,
             vx: Math.cos(angle) * speed,
@@ -345,17 +570,40 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       isMorphed?: boolean,
       isSelected?: boolean,
       offsetX: number = 0,
-      offsetY: number = 0
+      offsetY: number = 0,
+      transform?: BlockRenderTransform
     ) => {
       const meta = FRUIT_CATALOG[fruitKind] ?? FRUIT_CATALOG.APPLE_RUBY
-      const x = LEFT_GUTTER + col * cellSize + offsetX
-      const y = TOP_RULER + row * cellSize + offsetY
+      const baseX = LEFT_GUTTER + col * cellSize + (transform?.offsetX ?? offsetX)
+      const baseY = TOP_RULER + row * cellSize + (transform?.offsetY ?? offsetY)
+      const scaleX = transform?.scaleX ?? 1
+      const scaleY = transform?.scaleY ?? 1
+      const alpha = transform?.alpha ?? 1
+      const flashIntensity = transform?.flashIntensity ?? 0
+      const fractureProgress = transform?.fractureProgress ?? 0
+      const rotationRad = transform?.rotationRad ?? 0
+
       const pad = isSelected ? 1.5 : 3
       const w = cellSize - pad * 2
       const h = cellSize - pad * 2
       const isStar = fruitKind === 'STAR_PRISM'
 
       context.save()
+      if (alpha < 0.999) {
+        context.globalAlpha = Math.max(0, alpha)
+      }
+
+      let x = baseX
+      let y = baseY
+      if (scaleX !== 1 || scaleY !== 1 || rotationRad !== 0) {
+        context.translate(baseX + cellSize * 0.5, baseY + cellSize * 0.5)
+        if (rotationRad !== 0) {
+          context.rotate(rotationRad)
+        }
+        context.scale(scaleX, scaleY)
+        x = -cellSize * 0.5
+        y = -cellSize * 0.5
+      }
 
       const shimmer = 0.8 + 0.2 * Math.sin(pulsePhase * 4.5 + col + row)
       const grad = context.createRadialGradient(
@@ -370,18 +618,23 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       grad.addColorStop(0.58, meta.color)
       grad.addColorStop(1, '#0f172a')
 
-      drawRoundedRectPath(context, x + pad, y + pad, w, h, Math.max(7, cellSize * 0.22))
+      const cornerRadius = Math.max(7, cellSize * 0.22)
+      drawRoundedRectPath(context, x + pad, y + pad, w, h, cornerRadius)
       context.fillStyle = grad
       context.shadowColor = isSelected ? '#fef08a' : meta.glowColor
       context.shadowBlur = isSelected ? 16 : isStar ? 14 * shimmer : 8
       context.fill()
 
-      context.strokeStyle = isSelected
-        ? '#fef08a'
-        : isStar
-          ? '#fef08a'
-          : meta.borderColor
-      context.lineWidth = isSelected ? 2.8 : isStar || isMorphed ? 2.0 : 1.4
+      context.strokeStyle =
+        flashIntensity > 0.25
+          ? '#ffffff'
+          : isSelected
+            ? '#fef08a'
+            : isStar
+              ? '#fef08a'
+              : meta.borderColor
+      context.lineWidth =
+        flashIntensity > 0.25 ? 3.2 : isSelected ? 2.8 : isStar || isMorphed ? 2.0 : 1.4
       context.stroke()
 
       // Glossy top-left highlight orb
@@ -416,6 +669,16 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         y + cellSize - symFontPx * 0.7
       )
 
+      if (flashIntensity > 0.02) {
+        drawRoundedRectPath(context, x + pad, y + pad, w, h, cornerRadius)
+        context.fillStyle = `rgba(255, 255, 255, ${Math.min(0.82, flashIntensity * 0.8)})`
+        context.fill()
+      }
+
+      if (fractureProgress > 0.02) {
+        drawBlockFractureCracks(context, x, y, cellSize, fractureProgress)
+      }
+
       context.restore()
     }
 
@@ -429,7 +692,8 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       cellSize: number,
       isSelectedFruit: boolean = false,
       offsetX: number = 0,
-      offsetY: number = 0
+      offsetY: number = 0,
+      transform?: BlockRenderTransform
     ) => {
       if (cell.fruitKind || currentStyle === 'FRUIT_MATCH') {
         const inferredKind = cell.fruitKind ?? inferFruitKindFromCell(cell)
@@ -443,20 +707,44 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
           cell.isMorphedBlock,
           isSelectedFruit,
           offsetX,
-          offsetY
+          offsetY,
+          transform
         )
         return
       }
 
-      const x = LEFT_GUTTER + col * cellSize + offsetX
-      const y = TOP_RULER + row * cellSize + offsetY
+      const baseX = LEFT_GUTTER + col * cellSize + (transform?.offsetX ?? offsetX)
+      const baseY = TOP_RULER + row * cellSize + (transform?.offsetY ?? offsetY)
+      const scaleX = transform?.scaleX ?? 1
+      const scaleY = transform?.scaleY ?? 1
+      const alpha = transform?.alpha ?? 1
+      const flashIntensity = transform?.flashIntensity ?? 0
+      const fractureProgress = transform?.fractureProgress ?? 0
+      const rotationRad = transform?.rotationRad ?? 0
+
       const pad = cellSize >= 46 ? 2.2 : 1.5
       const w = cellSize - pad * 2
       const h = cellSize - pad * 2
 
       context.save()
+      if (alpha < 0.999) {
+        context.globalAlpha = Math.max(0, alpha)
+      }
+
+      let x = baseX
+      let y = baseY
+      if (scaleX !== 1 || scaleY !== 1 || rotationRad !== 0) {
+        context.translate(baseX + cellSize * 0.5, baseY + cellSize * 0.5)
+        if (rotationRad !== 0) {
+          context.rotate(rotationRad)
+        }
+        context.scale(scaleX, scaleY)
+        x = -cellSize * 0.5
+        y = -cellSize * 0.5
+      }
 
       const isGoldenCrystal = cell.type === 'SEALED_GOLD' || Boolean(cell.isSealedHole)
+      const cornerRadius = cellSize >= 46 ? 6 : 3
 
       if (isGoldenCrystal) {
         const shimmer = 0.78 + 0.22 * Math.sin(pulsePhase * 4 + col + row)
@@ -468,7 +756,7 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         context.fillStyle = grad
         context.shadowColor = `rgba(251, 191, 36, ${0.55 * shimmer})`
         context.shadowBlur = 10
-        drawRoundedRectPath(context, x + pad, y + pad, w, h, cellSize >= 46 ? 6 : 3)
+        drawRoundedRectPath(context, x + pad, y + pad, w, h, cornerRadius)
         context.fill()
 
         context.strokeStyle = '#fef9c3'
@@ -486,7 +774,7 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         context.lineWidth = 1.1
         context.stroke()
       } else {
-        drawRoundedRectPath(context, x + pad, y + pad, w, h, cellSize >= 46 ? 6 : 3)
+        drawRoundedRectPath(context, x + pad, y + pad, w, h, cornerRadius)
         context.fillStyle = cell.color
         context.fill()
 
@@ -505,8 +793,8 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         )
 
         // Outer neon border
-        context.strokeStyle = cell.borderColor ?? '#e2e8f0'
-        context.lineWidth = cell.isMorphedBlock ? 1.8 : 1.3
+        context.strokeStyle = flashIntensity > 0.25 ? '#ffffff' : (cell.borderColor ?? '#e2e8f0')
+        context.lineWidth = flashIntensity > 0.25 ? 2.6 : cell.isMorphedBlock ? 1.8 : 1.3
         context.stroke()
 
         if (cell.isMorphedBlock) {
@@ -525,6 +813,16 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
       context.textAlign = 'center'
       context.textBaseline = 'middle'
       context.fillText(cell.symbol || '■', x + cellSize * 0.5, y + cellSize * 0.5 + 0.5)
+
+      if (flashIntensity > 0.02) {
+        drawRoundedRectPath(context, x + pad, y + pad, w, h, cornerRadius)
+        context.fillStyle = `rgba(255, 255, 255, ${Math.min(0.82, flashIntensity * 0.8)})`
+        context.fill()
+      }
+
+      if (fractureProgress > 0.02) {
+        drawBlockFractureCracks(context, x, y, cellSize, fractureProgress)
+      }
 
       context.restore()
     }
@@ -563,7 +861,14 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         lastSealedCoords,
         lockDelayMs,
         selectedMiracleTier,
+        activeBoardAnimation,
+        lastHardDropTrail,
       } = state
+
+      const wallNowMs = Date.now()
+      if (triggeredEventsSetRef.current.size > 240) {
+        triggeredEventsSetRef.current.clear()
+      }
 
       const metrics = getStageViewportMetrics(currentStyle)
       const cellSize = metrics.cellSizePx
@@ -920,7 +1225,7 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         }
       }
 
-      // 6. Draw Active Board Cells (with cascading fruit rain animation when transitioning into FRUIT_MATCH)
+      // 6. Draw Active Board Cells + Multi-Wave Cinematic Choreographies (Fruit Swap/Break/Fall, Line Clear Collapse, Tactile Domino Shatter)
       const isEnteringFruit =
         isStyleTransitioning &&
         styleTransitionRemainingMs > 0 &&
@@ -932,55 +1237,732 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
               Math.min(1, 1 - styleTransitionRemainingMs / STYLE_TRANSITION_DURATION_MS)
             )
           : 1
-      const isInvalidBounceActive = Date.now() < invalidSwapBounceUntil
+      const isInvalidBounceActive = wallNowMs < invalidSwapBounceUntil
 
-      for (let row = 0; row < activeRows; row++) {
-        const rowCells = grid[row]
-        if (!rowCells) continue
-        for (let col = 0; col < activeCols; col++) {
-          const cell = rowCells[col]
-          if (!cell) continue
+      const activeAnim =
+        !isEnteringFruit &&
+        activeBoardAnimation !== null &&
+        activeBoardAnimation.style === currentStyle &&
+        wallNowMs >= activeBoardAnimation.startedAtMs &&
+        wallNowMs - activeBoardAnimation.startedAtMs < activeBoardAnimation.totalDurationMs
+          ? activeBoardAnimation
+          : null
+      const animElapsedMs = activeAnim ? wallNowMs - activeAnim.startedAtMs : 0
 
-          const isSelectedFruit =
-            currentStyle === 'FRUIT_MATCH' &&
-            selectedFruitCell !== null &&
-            selectedFruitCell.row === row &&
-            selectedFruitCell.col === col
+      // Clip board well so falling top-refill fruits (fromRow < 0) enter cleanly from the top border without overlapping Top Ruler
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(LEFT_GUTTER, TOP_RULER, boardPixelWidth, boardPixelHeight)
+      ctx.clip()
 
-          let offsetX = 0
-          let offsetY = 0
+      if (
+        activeAnim &&
+        (activeAnim.kind === 'FRUIT_SWAP_CASCADE' ||
+          activeAnim.kind === 'FRUIT_MAGNET_CASCADE') &&
+        activeAnim.waves &&
+        activeAnim.waveTimings &&
+        activeAnim.waves.length > 0 &&
+        activeAnim.waveTimings.length > 0
+      ) {
+        const swapDur = activeAnim.swapDurationMs ?? 0
 
-          if (isEnteringFruit) {
-            const cellDelay = (col * 0.04 + (activeRows - 1 - row) * 0.03) * 0.45
-            const localT = Math.max(
-              0,
-              Math.min(1, (transitionProgress - cellDelay) / (1 - cellDelay))
-            )
-            offsetY = -(1 - easeOutCubic(localT)) * (boardPixelHeight * 0.45)
-          } else if (
-            isInvalidBounceActive &&
-            lastSwappedCells &&
-            ((lastSwappedCells[0].row === row && lastSwappedCells[0].col === col) ||
-              (lastSwappedCells[1].row === row && lastSwappedCells[1].col === col))
-          ) {
-            const shake = Math.sin(nowMs * 0.045) * 6
-            offsetX = shake
+        if (
+          activeAnim.kind === 'FRUIT_SWAP_CASCADE' &&
+          swapDur > 0 &&
+          animElapsedMs < swapDur &&
+          activeAnim.preSwapGrid &&
+          activeAnim.swapFrom &&
+          activeAnim.swapTo
+        ) {
+          // PHASE 6A-1: Physical Fruit Swap Slide (170ms) before Wave 1 breaks!
+          const swapT = easeInOutCubic(Math.max(0, Math.min(1, animElapsedMs / swapDur)))
+          const fromCoord = activeAnim.swapFrom
+          const toCoord = activeAnim.swapTo
+
+          for (let row = 0; row < activeRows; row++) {
+            const rowCells = activeAnim.preSwapGrid[row]
+            if (!rowCells) continue
+            for (let col = 0; col < activeCols; col++) {
+              const cell = rowCells[col]
+              if (!cell) continue
+
+              let offsetX = 0
+              let offsetY = 0
+              let scale = 1
+              let flash = 0
+
+              if (row === fromCoord.row && col === fromCoord.col) {
+                offsetX = (toCoord.col - fromCoord.col) * cellSize * swapT
+                offsetY = (toCoord.row - fromCoord.row) * cellSize * swapT
+                scale = 1 + 0.16 * Math.sin(swapT * Math.PI)
+                flash = 0.35 * Math.sin(swapT * Math.PI)
+              } else if (row === toCoord.row && col === toCoord.col) {
+                offsetX = (fromCoord.col - toCoord.col) * cellSize * swapT
+                offsetY = (fromCoord.row - toCoord.row) * cellSize * swapT
+                scale = 1 - 0.08 * Math.sin(swapT * Math.PI)
+                flash = 0.25 * Math.sin(swapT * Math.PI)
+              }
+
+              drawGridBlock(
+                ctx,
+                col,
+                row,
+                cell,
+                pulsePhase,
+                currentStyle,
+                cellSize,
+                false,
+                offsetX,
+                offsetY,
+                { scaleX: scale, scaleY: scale, flashIntensity: flash }
+              )
+            }
+          }
+        } else {
+          // PHASE 6A-2: Sequential Multi-Wave Cascade (Swell/Crack/Break -> Empty Space -> Gravity Fall -> Auto Wave 2+)
+          let activeWaveIdx = activeAnim.waveTimings.findIndex(
+            (wt) => animElapsedMs >= wt.shatterStartMs && animElapsedMs < wt.gravityEndMs
+          )
+          if (activeWaveIdx === -1) {
+            activeWaveIdx = activeAnim.waveTimings.length - 1
           }
 
-          drawGridBlock(
-            ctx,
-            col,
-            row,
-            cell,
-            pulsePhase,
-            currentStyle,
-            cellSize,
-            isSelectedFruit,
-            offsetX,
-            offsetY
+          const wave = activeAnim.waves[activeWaveIdx]
+          const timing = activeAnim.waveTimings[activeWaveIdx]
+
+          if (wave && timing) {
+            const isShatterSubphase = animElapsedMs < timing.gravityStartMs
+
+            if (isShatterSubphase) {
+              // Sub-stage: Matched 3+ fruits swell, crack, and shatter into 4 flying 2D shards leaving visible EMPTY SPACE!
+              const shatterSpan = Math.max(1, timing.gravityStartMs - timing.shatterStartMs)
+              const shatterT = Math.max(
+                0,
+                Math.min(1, (animElapsedMs - timing.shatterStartMs) / shatterSpan)
+              )
+
+              const poppedSet = new Set(
+                wave.poppedCells.map((p) => `${p.row},${p.col}`)
+              )
+              const waveGrid = wave.prePopGrid ?? grid
+
+              // Trigger physical 2D shard explosion once when the cracks reach critical fracture (shatterT >= 0.54)
+              const shatterEventKey = `${activeAnim.id}_w${activeWaveIdx}_shatter`
+              if (
+                shatterT >= 0.54 &&
+                !triggeredEventsSetRef.current.has(shatterEventKey)
+              ) {
+                triggeredEventsSetRef.current.add(shatterEventKey)
+
+                let sumX = 0
+                let sumY = 0
+                for (const p of wave.poppedCells) {
+                  const fruitDef = FRUIT_CATALOG[p.kind]
+                  spawnBlockShatterShards(
+                    p.col,
+                    p.row,
+                    cellSize,
+                    fruitDef.color,
+                    fruitDef.borderColor,
+                    fruitDef.glowColor,
+                    fruitDef.symbol,
+                    fruitDef.emoji
+                  )
+                  sumX += LEFT_GUTTER + p.col * cellSize + cellSize * 0.5
+                  sumY += TOP_RULER + p.row * cellSize + cellSize * 0.5
+                }
+
+                if (wave.poppedCells.length > 0) {
+                  const cx = sumX / wave.poppedCells.length
+                  const cy = sumY / wave.poppedCells.length
+                  pushBoundedShockwave({
+                    x: cx,
+                    y: cy,
+                    radius: cellSize * 0.35,
+                    maxRadius: cellSize * (1.7 + Math.min(2.2, wave.poppedCells.length * 0.2)),
+                    color: activeWaveIdx > 0 ? '#fbbf24' : '#38bdf8',
+                    alpha: 0.95,
+                    lineWidth: activeWaveIdx > 0 ? 3.4 : 2.6,
+                  })
+                  pushBoundedCallout({
+                    x: Math.max(
+                      LEFT_GUTTER + 85,
+                      Math.min(LEFT_GUTTER + boardPixelWidth - 85, cx)
+                    ),
+                    y: Math.max(TOP_RULER + 28, cy - 10),
+                    vy: -1.15,
+                    text:
+                      activeWaveIdx === 0
+                        ? `💥 QUEBROU ${wave.poppedCells.length}!`
+                        : `⚡ COMBO AUTOMÁTICO ×${activeWaveIdx + 1}! (+${wave.poppedCells.length})`,
+                    color: activeWaveIdx === 0 ? '#fef08a' : '#67e8f9',
+                    borderColor: activeWaveIdx === 0 ? '#f59e0b' : '#a855f7',
+                    alpha: 1,
+                    scale: activeWaveIdx > 0 ? 1.12 : 1.0,
+                    decay: 0.018,
+                  })
+                }
+              }
+
+              for (let row = 0; row < activeRows; row++) {
+                const rowCells = waveGrid[row]
+                if (!rowCells) continue
+                for (let col = 0; col < activeCols; col++) {
+                  const cell = rowCells[col]
+                  if (!cell) continue
+
+                  const isPopping = poppedSet.has(`${row},${col}`)
+                  if (!isPopping) {
+                    drawGridBlock(
+                      ctx,
+                      col,
+                      row,
+                      cell,
+                      pulsePhase,
+                      currentStyle,
+                      cellSize,
+                      false
+                    )
+                    continue
+                  }
+
+                  if (shatterT < 0.58) {
+                    // Swelling + shaking + cracking before breaking apart
+                    const localCrackT = shatterT / 0.58
+                    const swell = 1 + 0.24 * Math.sin(localCrackT * Math.PI * 0.85)
+                    const jitterX = Math.sin(localCrackT * 42 + col) * 3.5
+                    const jitterY = Math.cos(localCrackT * 38 + row) * 2.5
+
+                    drawGridBlock(
+                      ctx,
+                      col,
+                      row,
+                      cell,
+                      pulsePhase,
+                      currentStyle,
+                      cellSize,
+                      false,
+                      jitterX,
+                      jitterY,
+                      {
+                        scaleX: swell,
+                        scaleY: swell,
+                        flashIntensity: localCrackT * 0.9,
+                        fractureProgress: Math.min(1, localCrackT * 1.15),
+                      }
+                    )
+                  } else {
+                    // 0.58 <= shatterT <= 1.0: Block has shattered into shards! Draw visible empty socket flash
+                    const emptyFade = 1 - (shatterT - 0.58) / 0.42
+                    const sx = LEFT_GUTTER + col * cellSize
+                    const sy = TOP_RULER + row * cellSize
+                    ctx.save()
+                    ctx.strokeStyle = `rgba(254, 240, 138, ${0.55 * emptyFade})`
+                    ctx.lineWidth = 1.8
+                    ctx.setLineDash([4, 3])
+                    drawRoundedRectPath(ctx, sx + 6, sy + 6, cellSize - 12, cellSize - 12, 8)
+                    ctx.stroke()
+                    ctx.restore()
+                  }
+                }
+              }
+            } else {
+              // Sub-stage: Surviving fruits physically fall down into the empty spaces + new fruits drop from top!
+              const fallSpan = Math.max(1, timing.gravityEndMs - timing.gravityStartMs)
+              const fallT = Math.max(
+                0,
+                Math.min(1, (animElapsedMs - timing.gravityStartMs) / fallSpan)
+              )
+
+              const postGravGrid = wave.postGravityGrid ?? grid
+              const motions = wave.fallingMotions ?? []
+              const movingTargets = new Map<string, (typeof motions)[number]>()
+              for (const m of motions) {
+                movingTargets.set(`${m.toRow},${m.col}`, m)
+              }
+
+              for (let row = 0; row < activeRows; row++) {
+                const rowCells = postGravGrid[row]
+                if (!rowCells) continue
+                for (let col = 0; col < activeCols; col++) {
+                  const cell = rowCells[col]
+                  if (!cell) continue
+
+                  const motion = movingTargets.get(`${row},${col}`)
+                  if (!motion) {
+                    drawGridBlock(
+                      ctx,
+                      col,
+                      row,
+                      cell,
+                      pulsePhase,
+                      currentStyle,
+                      cellSize,
+                      false
+                    )
+                    continue
+                  }
+
+                  // Stagger upper rows & newly spawned top fruits slightly so lower fruits start falling first
+                  const stagger = Math.min(
+                    0.24,
+                    (activeRows - 1 - motion.toRow) * 0.018 +
+                      (motion.isNewSpawn ? 0.06 : 0)
+                  )
+                  const localFallT = Math.max(
+                    0,
+                    Math.min(1, (fallT - stagger) / Math.max(0.15, 1 - stagger))
+                  )
+
+                  let offsetY = 0
+                  let scaleX = 1
+                  let scaleY = 1
+                  let flash = 0
+
+                  if (localFallT < 0.82) {
+                    // Accelerated gravity fall from fromRow -> toRow
+                    const dropNorm = localFallT / 0.82
+                    const accelT = dropNorm * dropNorm * (2.1 - 1.1 * dropNorm)
+                    const currentRowPos =
+                      motion.fromRow + (motion.toRow - motion.fromRow) * accelT
+                    offsetY = (currentRowPos - motion.toRow) * cellSize
+                    scaleX = 0.94
+                    scaleY = 1.07
+                  } else {
+                    // Landing impact bounce & squash-and-stretch!
+                    const bounceNorm = (localFallT - 0.82) / 0.18
+                    const squash = Math.sin(bounceNorm * Math.PI) * 0.15
+                    offsetY = -Math.sin(bounceNorm * Math.PI) * 3.5
+                    scaleX = 1 + squash
+                    scaleY = 1 - squash
+                    flash = Math.sin(bounceNorm * Math.PI) * 0.22
+                  }
+
+                  drawGridBlock(
+                    ctx,
+                    col,
+                    row,
+                    cell,
+                    pulsePhase,
+                    currentStyle,
+                    cellSize,
+                    false,
+                    0,
+                    offsetY,
+                    { scaleX, scaleY, flashIntensity: flash }
+                  )
+                }
+              }
+            }
+          }
+        }
+      } else if (
+        activeAnim &&
+        activeAnim.kind === 'CLASSIC_LINE_CLEAR' &&
+        activeAnim.preClearGrid &&
+        activeAnim.clearedRows &&
+        activeAnim.clearedRows.length > 0
+      ) {
+        // PHASE 6B: TETRIS_CLASSIC Line-Clear Laser Sweep + Shatter + Upper-Stack Gravity Collapse!
+        const laserSplitMs = 205
+        const clearedRowSet = new Set(activeAnim.clearedRows)
+
+        if (animElapsedMs < laserSplitMs) {
+          // Sub-stage B1 (0..205ms): Horizontal Laser Sweep & Block Cracking/Shatter
+          const laserT = Math.max(0, Math.min(1, animElapsedMs / laserSplitMs))
+          const preGrid = activeAnim.preClearGrid
+
+          for (let row = 0; row < activeRows; row++) {
+            const rowCells = preGrid[row]
+            if (!rowCells) continue
+            const isRowClearing = clearedRowSet.has(row)
+
+            for (let col = 0; col < activeCols; col++) {
+              const cell = rowCells[col]
+              if (!cell) continue
+
+              if (!isRowClearing) {
+                drawGridBlock(
+                  ctx,
+                  col,
+                  row,
+                  cell,
+                  pulsePhase,
+                  currentStyle,
+                  cellSize,
+                  false
+                )
+                continue
+              }
+
+              const colReachT = Math.max(
+                0,
+                Math.min(1, laserT * 1.35 - (col / activeCols) * 0.35)
+              )
+              const cellEventKey = `${activeAnim.id}_r${row}_c${col}`
+
+              if (colReachT >= 0.65 && !triggeredEventsSetRef.current.has(cellEventKey)) {
+                triggeredEventsSetRef.current.add(cellEventKey)
+                spawnBlockShatterShards(
+                  col,
+                  row,
+                  cellSize,
+                  cell.color,
+                  cell.borderColor ?? '#fef08a',
+                  cell.glowColor,
+                  cell.symbol
+                )
+              }
+
+              if (colReachT < 0.68) {
+                const crackNorm = colReachT / 0.68
+                const swell = 1 + 0.18 * crackNorm
+                drawGridBlock(
+                  ctx,
+                  col,
+                  row,
+                  cell,
+                  pulsePhase,
+                  currentStyle,
+                  cellSize,
+                  false,
+                  0,
+                  0,
+                  {
+                    scaleX: swell,
+                    scaleY: swell,
+                    flashIntensity: crackNorm * 0.92,
+                    fractureProgress: crackNorm,
+                  }
+                )
+              }
+            }
+          }
+
+          // Draw horizontal neon laser beam across each cleared row
+          ctx.save()
+          for (const cRow of activeAnim.clearedRows) {
+            const beamY = TOP_RULER + cRow * cellSize + cellSize * 0.5
+            const beamW = boardPixelWidth * Math.min(1, laserT * 1.25)
+            const beamGrad = ctx.createLinearGradient(
+              LEFT_GUTTER,
+              beamY,
+              LEFT_GUTTER + beamW,
+              beamY
+            )
+            beamGrad.addColorStop(0, 'rgba(34, 211, 238, 0.15)')
+            beamGrad.addColorStop(0.7, 'rgba(254, 240, 138, 0.85)')
+            beamGrad.addColorStop(1, '#ffffff')
+
+            ctx.fillStyle = beamGrad
+            ctx.shadowColor = '#22d3ee'
+            ctx.shadowBlur = 14
+            ctx.fillRect(LEFT_GUTTER, beamY - 4, beamW, 8)
+          }
+          ctx.restore()
+        } else {
+          // Sub-stage B2 (205..450ms): Surviving upper stack physically falls down into cleared rows!
+          const fallT = Math.max(
+            0,
+            Math.min(
+              1,
+              (animElapsedMs - laserSplitMs) /
+                Math.max(1, activeAnim.totalDurationMs - laserSplitMs)
+            )
           )
+          const preGrid = activeAnim.preClearGrid
+          const dropDistances = activeAnim.rowDropDistances ?? {}
+
+          for (let origRow = 0; origRow < activeRows; origRow++) {
+            if (clearedRowSet.has(origRow)) continue
+            const rowCells = preGrid[origRow]
+            if (!rowCells) continue
+
+            const dropRows = dropDistances[origRow] ?? 0
+            const destRow = origRow + dropRows
+
+            for (let col = 0; col < activeCols; col++) {
+              const cell = rowCells[col]
+              if (!cell) continue
+
+              let offsetY = 0
+              let scaleX = 1
+              let scaleY = 1
+
+              if (dropRows > 0) {
+                if (fallT < 0.8) {
+                  const dropNorm = fallT / 0.8
+                  const accel = dropNorm * dropNorm * (2.1 - 1.1 * dropNorm)
+                  offsetY = (origRow - destRow) * cellSize * (1 - accel)
+                  scaleX = 0.96
+                  scaleY = 1.05
+                } else {
+                  const bounceNorm = (fallT - 0.8) / 0.2
+                  const squash = Math.sin(bounceNorm * Math.PI) * 0.12
+                  offsetY = -Math.sin(bounceNorm * Math.PI) * 2.5
+                  scaleX = 1 + squash
+                  scaleY = 1 - squash
+                }
+              }
+
+              drawGridBlock(
+                ctx,
+                col,
+                destRow,
+                cell,
+                pulsePhase,
+                currentStyle,
+                cellSize,
+                false,
+                0,
+                offsetY,
+                { scaleX, scaleY }
+              )
+            }
+          }
+        }
+      } else if (
+        activeAnim &&
+        activeAnim.kind === 'TACTILE_PLACE_AND_CLEAR' &&
+        activeAnim.preClearGrid &&
+        ((activeAnim.clearedRows?.length ?? 0) > 0 ||
+          (activeAnim.clearedCols?.length ?? 0) > 0)
+      ) {
+        // PHASE 6C: TACTILE_GRID Spring-Pop Placement + 10/10 Energy Connection + Sequential Domino Shatter!
+        const preGrid = activeAnim.preClearGrid
+        const placedSet = new Set(
+          (activeAnim.placedCells ?? []).map((c) => `${c.row},${c.col}`)
+        )
+        const clearedRowSet = new Set(activeAnim.clearedRows ?? [])
+        const clearedColSet = new Set(activeAnim.clearedCols ?? [])
+
+        // Spawn Golden Crossroad dual shockwave once if simultaneous H×V clear!
+        const crossroadKey = `${activeAnim.id}_crossroad`
+        if (
+          activeAnim.isCrossClear &&
+          !triggeredEventsSetRef.current.has(crossroadKey)
+        ) {
+          triggeredEventsSetRef.current.add(crossroadKey)
+          const cRow = activeAnim.clearedRows?.[0] ?? 4
+          const cCol = activeAnim.clearedCols?.[0] ?? 4
+          const cx = LEFT_GUTTER + cCol * cellSize + cellSize * 0.5
+          const cy = TOP_RULER + cRow * cellSize + cellSize * 0.5
+          pushBoundedShockwave({
+            x: cx,
+            y: cy,
+            radius: cellSize * 0.3,
+            maxRadius: cellSize * 4.5,
+            color: '#fbbf24',
+            alpha: 1,
+            lineWidth: 3.8,
+          })
+          pushBoundedCallout({
+            x: Math.max(
+              LEFT_GUTTER + 95,
+              Math.min(LEFT_GUTTER + boardPixelWidth - 95, cx)
+            ),
+            y: Math.max(TOP_RULER + 30, cy - 12),
+            vy: -1.1,
+            text: '✚ CRUZAMENTO DOURADO 10×10!',
+            color: '#fef08a',
+            borderColor: '#f59e0b',
+            alpha: 1,
+            scale: 1.15,
+            decay: 0.017,
+          })
+        }
+
+        // Draw 10/10 energy connection beam behind completing rows/cols
+        ctx.save()
+        const beamAlpha = Math.max(0, 1 - animElapsedMs / activeAnim.totalDurationMs) * 0.36
+        ctx.fillStyle = activeAnim.isCrossClear
+          ? `rgba(251, 191, 36, ${beamAlpha})`
+          : `rgba(16, 185, 129, ${beamAlpha})`
+        for (const r of clearedRowSet) {
+          ctx.fillRect(LEFT_GUTTER, TOP_RULER + r * cellSize, boardPixelWidth, cellSize)
+        }
+        for (const c of clearedColSet) {
+          ctx.fillRect(LEFT_GUTTER + c * cellSize, TOP_RULER, cellSize, boardPixelHeight)
+        }
+        ctx.restore()
+
+        for (let row = 0; row < activeRows; row++) {
+          const rowCells = preGrid[row]
+          if (!rowCells) continue
+          for (let col = 0; col < activeCols; col++) {
+            const cell = rowCells[col]
+            if (!cell) continue
+
+            const isClearingCell = clearedRowSet.has(row) || clearedColSet.has(col)
+            const isPlacedCell = placedSet.has(`${row},${col}`)
+
+            if (!isClearingCell) {
+              let scale = 1
+              if (isPlacedCell && animElapsedMs < 200) {
+                scale = easeOutBack(Math.min(1, animElapsedMs / 200))
+              }
+              drawGridBlock(
+                ctx,
+                col,
+                row,
+                cell,
+                pulsePhase,
+                currentStyle,
+                cellSize,
+                false,
+                0,
+                0,
+                { scaleX: scale, scaleY: scale }
+              )
+              continue
+            }
+
+            // Domino wave delay across the 10 cells of the row/col
+            const dominoIdx = clearedRowSet.has(row) ? col : row
+            const dominoStartMs = 95 + dominoIdx * 24
+            const dominoCrackSpanMs = 115
+            const localDominoT = Math.max(
+              0,
+              Math.min(1, (animElapsedMs - dominoStartMs) / dominoCrackSpanMs)
+            )
+
+            const shardKey = `${activeAnim.id}_tactile_${row}_${col}`
+            if (localDominoT >= 0.72 && !triggeredEventsSetRef.current.has(shardKey)) {
+              triggeredEventsSetRef.current.add(shardKey)
+              spawnBlockShatterShards(
+                col,
+                row,
+                cellSize,
+                cell.color,
+                cell.borderColor ?? '#34d399',
+                cell.glowColor,
+                cell.symbol
+              )
+            }
+
+            if (localDominoT < 0.75) {
+              const crackNorm = localDominoT / 0.75
+              const popScale =
+                isPlacedCell && animElapsedMs < 110
+                  ? easeOutBack(Math.min(1, animElapsedMs / 110))
+                  : 1 + 0.18 * crackNorm
+
+              drawGridBlock(
+                ctx,
+                col,
+                row,
+                cell,
+                pulsePhase,
+                currentStyle,
+                cellSize,
+                false,
+                0,
+                0,
+                {
+                  scaleX: popScale,
+                  scaleY: popScale,
+                  flashIntensity: 0.25 + crackNorm * 0.75,
+                  fractureProgress: crackNorm,
+                }
+              )
+            }
+          }
+        }
+      } else {
+        // Default Board Render + Placement Spring-Pop (`TACTILE_PLACE_AND_CLEAR` without clear) + Piece Lock Squish (`CLASSIC_PIECE_LOCK`) + Invalid Swap Slide-and-Return
+        const lockedSet = new Set(
+          activeAnim?.kind === 'CLASSIC_PIECE_LOCK' && activeAnim.lockedCells
+            ? activeAnim.lockedCells.map((c) => `${c.row},${c.col}`)
+            : []
+        )
+        const placedSet = new Set(
+          activeAnim?.kind === 'TACTILE_PLACE_AND_CLEAR' && activeAnim.placedCells
+            ? activeAnim.placedCells.map((c) => `${c.row},${c.col}`)
+            : []
+        )
+
+        for (let row = 0; row < activeRows; row++) {
+          const rowCells = grid[row]
+          if (!rowCells) continue
+          for (let col = 0; col < activeCols; col++) {
+            const cell = rowCells[col]
+            if (!cell) continue
+
+            const isSelectedFruit =
+              currentStyle === 'FRUIT_MATCH' &&
+              selectedFruitCell !== null &&
+              selectedFruitCell.row === row &&
+              selectedFruitCell.col === col
+
+            let offsetX = 0
+            let offsetY = 0
+            let scaleX = 1
+            let scaleY = 1
+            let flashIntensity = 0
+
+            if (isEnteringFruit) {
+              const cellDelay = (col * 0.04 + (activeRows - 1 - row) * 0.03) * 0.45
+              const localT = Math.max(
+                0,
+                Math.min(1, (transitionProgress - cellDelay) / (1 - cellDelay))
+              )
+              offsetY = -(1 - easeOutCubic(localT)) * (boardPixelHeight * 0.45)
+            } else if (isInvalidBounceActive && lastSwappedCells) {
+              // Bidirectional slide-and-return elastic bounce on invalid fruit swap!
+              const [cA, cB] = lastSwappedCells
+              const remMs = Math.max(0, invalidSwapBounceUntil - wallNowMs)
+              const bounceT = Math.max(0, Math.min(1, (360 - remMs) / 360))
+              const slideRatio = Math.sin(bounceT * Math.PI) * 0.72
+
+              if (cA.row === row && cA.col === col) {
+                offsetX = (cB.col - cA.col) * cellSize * slideRatio
+                offsetY = (cB.row - cA.row) * cellSize * slideRatio
+                flashIntensity = Math.sin(bounceT * Math.PI) * 0.45
+              } else if (cB.row === row && cB.col === col) {
+                offsetX = (cA.col - cB.col) * cellSize * slideRatio
+                offsetY = (cA.row - cB.row) * cellSize * slideRatio
+                flashIntensity = Math.sin(bounceT * Math.PI) * 0.45
+              }
+            } else if (activeAnim && lockedSet.has(`${row},${col}`)) {
+              // Classic Tetromino Lock landing squish
+              const lockT = Math.max(
+                0,
+                Math.min(1, animElapsedMs / activeAnim.totalDurationMs)
+              )
+              const squish = Math.sin(lockT * Math.PI) * 0.16
+              scaleX = 1 + squish
+              scaleY = 1 - squish
+              flashIntensity = (1 - lockT) * 0.45
+            } else if (activeAnim && placedSet.has(`${row},${col}`)) {
+              // Tactile Polyomino Placement spring-pop
+              const placeT = Math.max(
+                0,
+                Math.min(1, animElapsedMs / activeAnim.totalDurationMs)
+              )
+              const popScale = 0.55 + 0.45 * easeOutBack(placeT)
+              scaleX = popScale
+              scaleY = popScale
+              flashIntensity = (1 - placeT) * 0.5
+            }
+
+            drawGridBlock(
+              ctx,
+              col,
+              row,
+              cell,
+              pulsePhase,
+              currentStyle,
+              cellSize,
+              isSelectedFruit,
+              offsetX,
+              offsetY,
+              { scaleX, scaleY, flashIntensity }
+            )
+          }
         }
       }
+
+      ctx.restore()
 
       // 7. Draw Target Reticles: Buried Cavities (`TETRIS_CLASSIC`), Golden Crossroads (`TACTILE_GRID`), or Best Swap Hint (`FRUIT_MATCH`)
       if (currentStyle === 'FRUIT_MATCH') {
@@ -1271,9 +2253,97 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
             ctx.restore()
           }
         } else {
-          // Style #1 (`TETRIS_CLASSIC`) Ghost Piece & Active Tetromino
+          // Style #1 (`TETRIS_CLASSIC`) Hard-Drop Neon Beam, Ghost Piece & Smooth 60fps Active Tetromino
+          if (
+            lastHardDropTrail &&
+            wallNowMs >= lastHardDropTrail.startedAtMs &&
+            wallNowMs - lastHardDropTrail.startedAtMs < lastHardDropTrail.durationMs
+          ) {
+            const trailElapsed = wallNowMs - lastHardDropTrail.startedAtMs
+            const trailFade = Math.max(
+              0,
+              1 - trailElapsed / Math.max(1, lastHardDropTrail.durationMs)
+            )
+            const trailEventKey = `hd_${lastHardDropTrail.id}`
+            const trailCols = Array.from(
+              new Set(lastHardDropTrail.cells.map((c) => c.col))
+            )
+
+            if (!triggeredEventsSetRef.current.has(trailEventKey)) {
+              triggeredEventsSetRef.current.add(trailEventKey)
+              const avgCol =
+                trailCols.reduce((acc, c) => acc + c, 0) /
+                Math.max(1, trailCols.length)
+              pushBoundedShockwave({
+                x: LEFT_GUTTER + avgCol * cellSize + cellSize * 0.5,
+                y:
+                  TOP_RULER +
+                  Math.min(activeRows - 1, lastHardDropTrail.toY + 1) * cellSize,
+                radius: cellSize * 0.3,
+                maxRadius: cellSize * 2.1,
+                color: lastHardDropTrail.color,
+                alpha: 0.9,
+                lineWidth: 2.8,
+              })
+            }
+
+            ctx.save()
+            for (const cCol of trailCols) {
+              const beamX = LEFT_GUTTER + cCol * cellSize + 3
+              const beamTopY =
+                TOP_RULER + Math.max(0, lastHardDropTrail.fromY) * cellSize
+              const beamBottomY =
+                TOP_RULER +
+                Math.min(activeRows, lastHardDropTrail.toY + 2) * cellSize
+              const beamH = Math.max(cellSize, beamBottomY - beamTopY)
+
+              const vGrad = ctx.createLinearGradient(
+                beamX,
+                beamTopY,
+                beamX,
+                beamTopY + beamH
+              )
+              vGrad.addColorStop(0, 'rgba(255, 255, 255, 0)')
+              vGrad.addColorStop(0.55, `${lastHardDropTrail.glowColor}`)
+              vGrad.addColorStop(1, `rgba(254, 240, 138, ${0.65 * trailFade})`)
+
+              ctx.globalAlpha = trailFade * 0.72
+              ctx.fillStyle = vGrad
+              ctx.fillRect(beamX, beamTopY, cellSize - 6, beamH)
+
+              // Vertical speed line
+              ctx.strokeStyle = '#ffffff'
+              ctx.lineWidth = 1.6
+              ctx.beginPath()
+              ctx.moveTo(beamX + (cellSize - 6) * 0.5, beamTopY + 6)
+              ctx.lineTo(beamX + (cellSize - 6) * 0.5, beamTopY + beamH - 4)
+              ctx.stroke()
+            }
+            ctx.restore()
+          }
+
           const def = getPieceDefinition(activePiece.type)
           const ghostY = computeGhostY(grid, activePiece)
+
+          // Smooth 60fps visual interpolation of activePiece (lateral glide & gravity slide)
+          const pv = pieceVisualRef.current
+          const dtMs = Math.min(50, Math.max(1, nowMs - (pv.lastUpdateMs || nowMs)))
+          pv.lastUpdateMs = nowMs
+          if (
+            pv.type !== activePiece.type ||
+            activePiece.y < pv.y - 0.5 ||
+            Math.abs(activePiece.x - pv.x) > 4
+          ) {
+            pv.x = activePiece.x
+            pv.y = activePiece.y
+            pv.type = activePiece.type
+          } else {
+            const lerpFactor = 1 - Math.exp(-dtMs * 0.032)
+            pv.x += (activePiece.x - pv.x) * lerpFactor
+            pv.y += (activePiece.y - pv.y) * lerpFactor
+          }
+          const smoothOffsetX = (pv.x - activePiece.x) * cellSize
+          const smoothOffsetY = (pv.y - activePiece.y) * cellSize
 
           if (ghostY > activePiece.y) {
             const ghostCells = getPieceOccupiedCells({
@@ -1323,12 +2393,15 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
               },
               pulsePhase,
               'TETRIS_CLASSIC',
-              cellSize
+              cellSize,
+              false,
+              smoothOffsetX,
+              smoothOffsetY
             )
 
             if (isGraceActive || isBulletTime) {
-              const x = LEFT_GUTTER + col * cellSize
-              const y = TOP_RULER + row * cellSize
+              const x = LEFT_GUTTER + col * cellSize + smoothOffsetX
+              const y = TOP_RULER + row * cellSize + smoothOffsetY
               ctx.save()
               ctx.strokeStyle = isBulletTime ? '#fbbf24' : '#67e8f9'
               ctx.lineWidth = 2.2
@@ -1510,7 +2583,76 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         ctx.restore()
       }
 
-      // 11. Update and Render 60fps Canvas Particles
+      // 11. Update and Render 60fps Shockwaves, 2D Block Shards, Particles & Floating Callouts
+      if (shockwavesRef.current.length > 0) {
+        const survivingRings: CanvasShockwaveRing[] = []
+        ctx.save()
+        for (const ring of shockwavesRef.current) {
+          ring.radius += (ring.maxRadius - ring.radius) * 0.14 + 1.6
+          ring.alpha -= 0.036
+
+          if (ring.alpha > 0.02 && ring.radius < ring.maxRadius) {
+            survivingRings.push(ring)
+            ctx.globalAlpha = Math.max(0, ring.alpha)
+            ctx.strokeStyle = ring.color
+            ctx.lineWidth = ring.lineWidth
+            ctx.shadowColor = ring.color
+            ctx.shadowBlur = 12
+            ctx.beginPath()
+            ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2)
+            ctx.stroke()
+          }
+        }
+        ctx.restore()
+        shockwavesRef.current = survivingRings
+      }
+
+      if (shardsRef.current.length > 0) {
+        const survivingShards: CanvasBlockShard[] = []
+        ctx.save()
+        for (const s of shardsRef.current) {
+          s.x += s.vx
+          s.y += s.vy
+          s.vy += 0.24 // physical gravity acceleration
+          s.rotation += s.vRot
+          s.alpha -= s.decay
+
+          if (s.alpha > 0.03) {
+            survivingShards.push(s)
+            ctx.save()
+            ctx.globalAlpha = Math.max(0, s.alpha)
+            ctx.translate(s.x, s.y)
+            ctx.rotate(s.rotation)
+
+            ctx.fillStyle = s.color
+            ctx.strokeStyle = s.borderColor
+            ctx.lineWidth = 1.5
+            ctx.shadowColor = s.glowColor
+            ctx.shadowBlur = 8
+
+            drawRoundedRectPath(ctx, -s.w * 0.5, -s.h * 0.5, s.w, s.h, 3.5)
+            ctx.fill()
+            ctx.stroke()
+
+            // Specular highlight strip on the flying fragment
+            ctx.shadowBlur = 0
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.34)'
+            ctx.fillRect(-s.w * 0.36, -s.h * 0.36, s.w * 0.72, Math.max(2, s.h * 0.22))
+
+            if (s.emoji || s.symbol) {
+              ctx.fillStyle = '#ffffff'
+              ctx.font = 'bold 9px "JetBrains Mono", monospace'
+              ctx.textAlign = 'center'
+              ctx.textBaseline = 'middle'
+              ctx.fillText(s.emoji ?? s.symbol ?? '', 0, 0.5)
+            }
+            ctx.restore()
+          }
+        }
+        ctx.restore()
+        shardsRef.current = survivingShards
+      }
+
       if (particlesRef.current.length > 0) {
         const surviving: CanvasParticle[] = []
         ctx.save()
@@ -1546,6 +2688,46 @@ export const TetrisCanvas: React.FC<TetrisCanvasProps> = ({
         }
         ctx.restore()
         particlesRef.current = surviving
+      }
+
+      if (calloutsRef.current.length > 0) {
+        const survivingCallouts: CanvasFloatingCallout[] = []
+        ctx.save()
+        for (const c of calloutsRef.current) {
+          c.y += c.vy
+          c.alpha -= c.decay
+
+          if (c.alpha > 0.03) {
+            survivingCallouts.push(c)
+            ctx.save()
+            ctx.globalAlpha = Math.max(0, Math.min(1, c.alpha * 1.15))
+            ctx.translate(c.x, c.y)
+            ctx.scale(c.scale, c.scale)
+
+            ctx.font = 'bold 11.5px "JetBrains Mono", monospace'
+            const textW = ctx.measureText(c.text).width
+            const pillW = textW + 18
+            const pillH = 22
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)'
+            ctx.strokeStyle = c.borderColor
+            ctx.lineWidth = 1.6
+            ctx.shadowColor = c.borderColor
+            ctx.shadowBlur = 10
+            drawRoundedRectPath(ctx, -pillW * 0.5, -pillH * 0.5, pillW, pillH, 8)
+            ctx.fill()
+            ctx.stroke()
+
+            ctx.shadowBlur = 0
+            ctx.fillStyle = c.color
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(c.text, 0, 0.5)
+            ctx.restore()
+          }
+        }
+        ctx.restore()
+        calloutsRef.current = survivingCallouts
       }
 
       if (!isUnmounted) {

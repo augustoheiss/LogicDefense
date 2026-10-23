@@ -757,6 +757,59 @@ class LogicTetrisSoundEngine {
   }
 
   /**
+   * Synchronizes multi-wave cascade audio with the visual `BoardAnimationChoreography` timeline!
+   * Schedules rising crystalline shatter & gravity chimes at each wave's exact `shatterStartMs`
+   * so automatic chain reactions (`Onda 2, Onda 3...`) have unmistakable auditory impact.
+   */
+  public playCascadeWaveTimeline(
+    waveDelaySeconds: number[],
+    startCombo: number = 1,
+    style: SubGameStyle = 'FRUIT_MATCH'
+  ): void {
+    if (this.muted || waveDelaySeconds.length <= 1) return
+    const pitchBias = style === 'FRUIT_MATCH' ? 2.5 : 0
+
+    // Wave 0 is already covered by the primary playSequenceDopamine call; schedule Wave 1..N
+    for (let w = 1; w < waveDelaySeconds.length; w++) {
+      const baseDelay = Math.max(0, waveDelaySeconds[w])
+      const waveStreak = Math.max(1, startCombo + w)
+      const scaleStartIdx = Math.min(
+        PENTATONIC_LYDIAN_SCALE_HZ.length - 4,
+        10 + ((waveStreak + w * 2) % 12)
+      )
+
+      // 3-note crystalline pop burst at wave shatter start + 1 ascending bell at wave gravity land
+      for (let n = 0; n < 3; n++) {
+        const freq = Number(
+          (PENTATONIC_LYDIAN_SCALE_HZ[scaleStartIdx + n] + pitchBias).toFixed(2)
+        )
+        this.scheduleNote({
+          freq,
+          type: n === 2 ? 'triangle' : 'sine',
+          durationSec: 0.19,
+          delaySec: baseDelay + n * 0.038,
+          gain: 0.074,
+        })
+      }
+
+      const bellFreq = Number(
+        (
+          PENTATONIC_LYDIAN_SCALE_HZ[
+            Math.min(PENTATONIC_LYDIAN_SCALE_HZ.length - 1, scaleStartIdx + 3)
+          ] + pitchBias
+        ).toFixed(2)
+      )
+      this.scheduleNote({
+        freq: bellFreq,
+        type: 'triangle',
+        durationSec: 0.25,
+        delaySec: baseDelay + 0.24,
+        gain: 0.068,
+      })
+    }
+  }
+
+  /**
    * Distinct sonic fanfare when shifting between the 3 styles of the Block Trinity
    * (`TETRIS_CLASSIC`, `FRUIT_MATCH`, `TACTILE_GRID`).
    */
