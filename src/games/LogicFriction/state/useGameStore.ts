@@ -31,7 +31,7 @@ import {
   CORE_LIGHTNING_TARGETS,
   CORE_LIGHTNING_BASE_DMG,
 } from '../config/constants'
-import type { MathZoneDir } from '../config/constants'
+import type { MathZoneDir, TargetPriority } from '../config/constants'
 import { generateFrictionProblem, type FrictionProblem } from '../math/mathBridge'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
 import { rebuildObstacles, resetGrid } from '../enemies/pathfindingGrid'
@@ -40,7 +40,7 @@ import { soundEngine } from '../audio/soundEngine'
 // ── Types ───────────────────────────────────────────────────────────────────────
 export type GamePhase = 'MENU' | 'PLAYING' | 'WAVE_CLEAR' | 'GAME_OVER'
 export type ActionMode = 'MOVE' | 'BUILD'
-export type TargetPriority = 'FIRST' | 'STRONGEST'
+export type { TargetPriority }
 
 /** MOBA-style move target: static point or dynamic entity chase */
 export type MoveTarget =
@@ -197,6 +197,7 @@ export interface GameStore {
   fundTower: (siteId: string) => void
   upgradeTower: (id: string) => void
   setTowerPriority: (id: string, priority: TargetPriority) => void
+  setTowerTypePriority: (towerType: string, priority: TargetPriority) => void
   relocateTower: (id: string, newX: number, newZ: number) => boolean
   sellTower: (id: string) => void
 
@@ -615,7 +616,7 @@ export const useGameStore = create<GameStore>()(
       z: safeZ,
       type: safeType,
       level: 1, // STRICT: always integer 1
-      targetPriority: 'FIRST',
+      targetPriority: bp.defaultPriority ?? 'FIRST',
     }
     const updatedTowers = [...state.towers, tower]
     soundEngine.playFundTower()
@@ -658,6 +659,14 @@ export const useGameStore = create<GameStore>()(
     set(s => ({
       towers: s.towers.map(t =>
         t.id === id ? { ...t, targetPriority: priority } : t
+      ),
+    }))
+  },
+
+  setTowerTypePriority: (towerType, priority) => {
+    set(s => ({
+      towers: s.towers.map(t =>
+        t.type === towerType ? { ...t, targetPriority: priority } : t
       ),
     }))
   },

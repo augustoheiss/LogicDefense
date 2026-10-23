@@ -23,9 +23,11 @@ import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
 import { Text, Billboard, Html } from '@react-three/drei'
 import * as THREE from 'three'
-import { enemyRegistry } from '../enemies/EnemyRegistry'
+import { enemyRegistry, getEffectiveFocusHeat, recordTowerTargetLock } from '../enemies/EnemyRegistry'
 import {
   TOWER_BLUEPRINTS,
+  TARGET_PRIORITY_META,
+  TARGET_PRIORITY_ORDER,
   TOWER_SIZE,
   TOWER_HEIGHT,
   BUFF_COOLDOWN_MULT,
@@ -87,6 +89,11 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
 
   // ── NaN-proof blueprint resolution ──
   const bp = TOWER_BLUEPRINTS[type] ?? TOWER_BLUEPRINTS['RAPID']
+  const safePriority: TargetPriority =
+    targetPriority && TARGET_PRIORITY_META[targetPriority]
+      ? targetPriority
+      : (bp.defaultPriority ?? 'FIRST')
+  const priorityMeta = TARGET_PRIORITY_META[safePriority]
 
   // ── NaN-proof level ──
   const safeLevel = Number.isFinite(level) && level >= 1 ? level : 1
@@ -173,6 +180,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
         // ── AoE Tower (SLOW): damage + slow ALL enemies in range ──
         let hitAny = false
         enemyRegistry.forEach((entry) => {
+          if (entry.hp <= 0) return
           const dx = entry.x - tx
           const dz = entry.z - tz
           const distSq = dx * dx + dz * dz
@@ -204,40 +212,70 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
           })
         }
       } else {
-        // ── Single-target Tower: find target based on priority ──
+        // ── Single-target Tower: find target based on 5-mode priority & focus heat deconfliction ──
         let targetId: string | null = null
-        let bestScore = targetPriority === 'FIRST' ? Infinity : -1
+        let bestScore = -Infinity
+        const nowMs = performance.now()
+        const isGlobalSniper = type === 'SNIPER' || baseRange >= ARENA_RADIUS
 
         enemyRegistry.forEach((entry, enemyId) => {
+          if (entry.hp <= 0) return
           const dx = entry.x - tx
           const dz = entry.z - tz
-          const distSq = dx * dx + dz * dz
-          if (distSq > rangeSq) return
+          const distToTowerSq = dx * dx + dz * dz
+          if (distToTowerSq > rangeSq) return
 
-          if (targetPriority === 'FIRST') {
-            // FIRST: enemy closest to core (smallest dist-to-origin)
-            const distToCoreSq = entry.x * entry.x + entry.z * entry.z
-            if (distToCoreSq < bestScore) {
-              bestScore = distToCoreSq
-              targetId = enemyId
+          const distToCoreSq = entry.x * entry.x + entry.z * entry.z
+          const distToCore = Math.sqrt(distToCoreSq)
+          const heat = getEffectiveFocusHeat(entry, nowMs)
+          const bossBonus = entry.isBoss ? 1 : 0
+
+          let score = 0
+          switch (safePriority) {
+            case 'SPREAD': {
+              // SPREAD (Dispersar): Strongly penalizes enemies already targeted recently by other towers
+              // so N Snipers automatically lock onto N distinct living targets across the arena.
+              score = -10000 * heat + 500 * bossBonus + (60 - distToCore) + entry.hp * 0.05
+              break
             }
-          } else {
-            // STRONGEST: enemy with highest real HP in EnemyRegistry (bosses prioritized, core proximity tiebreaker)
-            const distToCoreSq = entry.x * entry.x + entry.z * entry.z
-            const score = entry.hp + (entry.isBoss ? 100000 : 0) + 1 / (distToCoreSq + 1)
-            if (score > bestScore) {
-              bestScore = score
-              targetId = enemyId
+            case 'FIRST': {
+              // FIRST (Primeiro): Enemy closest to core, with soft deconfliction tiebreaker for global towers
+              const deconflictPenalty = isGlobalSniper ? 18 * heat : 0
+              score = -distToCoreSq - deconflictPenalty
+              break
             }
+            case 'STRONGEST': {
+              // STRONGEST (Forte): Highest real HP + Boss priority, with equal-HP deconfliction
+              score = entry.hp + bossBonus * 100000 - 45 * heat + 1 / (distToCore + 1)
+              break
+            }
+            case 'CLOSEST': {
+              // CLOSEST (Próximo): Closest to THIS specific tower's position (sector partitioning)
+              score = -distToTowerSq - 12 * heat
+              break
+            }
+            case 'LAST': {
+              // LAST (Último): Furthest from Central Core (perimeter culling of newly spawned enemies)
+              score = distToCoreSq - 25 * heat
+              break
+            }
+          }
+
+          if (score > bestScore) {
+            bestScore = score
+            targetId = enemyId
           }
         })
 
         // ── Fire! ──
         if (targetId) {
           const target = enemyRegistry.get(targetId)
-          if (target) {
+          if (target && target.hp > 0) {
             const targetX = target.x
             const targetZ = target.z
+            // Synchronously record target lock heat BEFORE applying damage so subsequent towers
+            // in the same useFrame pass immediately deconflict against surviving targets.
+            recordTowerTargetLock(target, nowMs, bp.focusWeight ?? 1.0)
             target.takeDamage(effectiveDamage)
 
             // Divine Buff Overdrive: all single-target towers also deal AoE splash damage around the primary target!
@@ -245,7 +283,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
               const splashRadiusSq = BUFF_TOWER_AOE_RADIUS * BUFF_TOWER_AOE_RADIUS
               const splashDamage = effectiveDamage * BUFF_TOWER_AOE_MULT
               enemyRegistry.forEach((other, otherId) => {
-                if (otherId === targetId) return
+                if (otherId === targetId || other.hp <= 0) return
                 const sdx = other.x - targetX
                 const sdz = other.z - targetZ
                 if (sdx * sdx + sdz * sdz <= splashRadiusSq) {
@@ -397,11 +435,20 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
     : '#ff4444'
 
   const isSelected = selectedEntity?.id === id
+  const sameTypeCount = useGameStore(s =>
+    isSelected ? s.towers.reduce((acc, t) => acc + (t.type === type ? 1 : 0), 0) : 0
+  )
 
   // ── Tower Management Actions ──
   const handlePriorityToggle = () => {
-    const newPriority: TargetPriority = targetPriority === 'FIRST' ? 'STRONGEST' : 'FIRST'
+    const currentIndex = TARGET_PRIORITY_ORDER.indexOf(safePriority)
+    const nextIndex = (currentIndex + 1) % TARGET_PRIORITY_ORDER.length
+    const newPriority = TARGET_PRIORITY_ORDER[nextIndex]
     useGameStore.getState().setTowerPriority(id, newPriority)
+  }
+
+  const handleApplyPriorityToAllSameType = () => {
+    useGameStore.getState().setTowerTypePriority(type, safePriority)
   }
 
   const handleSell = () => {
@@ -621,6 +668,9 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
           style={{ pointerEvents: 'auto' }}
         >
           <div
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             style={{
               fontFamily: "'Courier New', monospace",
               display: 'flex',
@@ -633,23 +683,49 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
               whiteSpace: 'nowrap',
             }}
           >
-            {/* Target Priority Toggle */}
-            <button
-              onClick={(e) => { e.stopPropagation(); handlePriorityToggle() }}
-              style={{
-                background: 'rgba(168,85,247,0.2)',
-                border: '1px solid rgba(168,85,247,0.5)',
-                borderRadius: '6px',
-                padding: '3px 8px',
-                color: '#a855f7',
-                fontSize: '11px',
-                fontWeight: 700,
-                fontFamily: "'Courier New', monospace",
-                cursor: 'pointer',
-              }}
-            >
-              🎯 {targetPriority === 'FIRST' ? 'Primeiro' : 'Forte'}
-            </button>
+            {/* Target Priority Toggle (Single-Target Towers only) */}
+            {!bp.isAoE && (
+              <>
+                <button
+                  data-testid="tower-priority-cycle"
+                  title={`${priorityMeta.label}: ${priorityMeta.description}`}
+                  onClick={(e) => { e.stopPropagation(); handlePriorityToggle() }}
+                  style={{
+                    background: priorityMeta.bg,
+                    border: `1px solid ${priorityMeta.border}`,
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    color: priorityMeta.color,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    fontFamily: "'Courier New', monospace",
+                    cursor: 'pointer',
+                  }}
+                >
+                  {priorityMeta.icon} {priorityMeta.shortLabel}
+                </button>
+                {sameTypeCount >= 2 && (
+                  <button
+                    data-testid="tower-priority-apply-all"
+                    title={`Aplicar "${priorityMeta.shortLabel}" a todas as ${sameTypeCount} torres ${bp.label}`}
+                    onClick={(e) => { e.stopPropagation(); handleApplyPriorityToAllSameType() }}
+                    style={{
+                      background: 'rgba(56,189,248,0.16)',
+                      border: '1px solid rgba(56,189,248,0.45)',
+                      borderRadius: '6px',
+                      padding: '3px 7px',
+                      color: '#7dd3fc',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      fontFamily: "'Courier New', monospace",
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📡 Todas ({sameTypeCount})
+                  </button>
+                )}
+              </>
+            )}
 
             {/* Relocate */}
             <button

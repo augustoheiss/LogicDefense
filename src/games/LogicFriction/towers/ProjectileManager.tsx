@@ -33,7 +33,16 @@ export interface ProjectileEvent {
 type ProjectileListener = (event: ProjectileEvent) => void
 const listeners: Set<ProjectileListener> = new Set()
 
+const devProjectileLog: Array<ProjectileEvent & { timestamp: number }> = []
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__LF_PROJ_LOG__ = devProjectileLog
+}
+
 export function emitProjectile(event: ProjectileEvent): void {
+  if (import.meta.env.DEV) {
+    devProjectileLog.push({ ...event, timestamp: performance.now() })
+    if (devProjectileLog.length > 100) devProjectileLog.shift()
+  }
   soundEngine.playTowerFire(event.type)
   listeners.forEach(fn => fn(event))
 }

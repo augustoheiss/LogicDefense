@@ -317,6 +317,8 @@ export function Enemy({
       isBoss,
       speedMultiplier: 1.0,
       slowExpiry: 0,
+      focusHeat: 0,
+      lastTargetedAt: 0,
       takeDamage: (amount: number) => {
         if (!aliveRef.current) return
         hpRef.current -= amount
@@ -326,6 +328,9 @@ export function Enemy({
         }
         if (hpRef.current <= 0) {
           aliveRef.current = false
+          // Synchronously prune dead enemy from registry so subsequent towers
+          // in the same useFrame pass never target or overkill a corpse.
+          enemyRegistry.delete(id)
           emitEnemyDeathBurst(lastPosRef.current.x, lastPosRef.current.z, burstColor, isBoss)
           if (isBoss && onBossDeath) {
             onBossDeath(id, lastPosRef.current.x, lastPosRef.current.z)
@@ -356,6 +361,7 @@ export function Enemy({
     const failsafeTimer = setTimeout(() => {
       if (!aliveRef.current) return // already dead, nothing to do
       aliveRef.current = false
+      enemyRegistry.delete(id)
       if (isBoss && onBossDeath) {
         onBossDeath(id, lastPosRef.current.x, lastPosRef.current.z)
       } else if (onDeath) {
@@ -497,6 +503,7 @@ export function Enemy({
         rb.setLinvel({ x: 0, y: 0, z: 0 }, true)
         takeCoreDamage(contactDamage)
         aliveRef.current = false
+        enemyRegistry.delete(id)
         emitEnemyDeathBurst(pos.x, pos.z, burstColor, isBoss)
         if (isBoss && onBossDeath) {
           onBossDeath(id, pos.x, pos.z)
