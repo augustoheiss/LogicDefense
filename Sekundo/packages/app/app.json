@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.heisslab.assistentemoeda",
-      "versionCode": 28,
+      "versionCode": 29,
       "adaptiveIcon": {
         "backgroundColor": "#12151C",
         "foregroundImage": "./assets/images/app-icon.png"
@@ -74,8 +74,8 @@
       "policy": "appVersion"
     },
     "updates": {
-      "enabled": false,
-      "checkAutomatically": "NEVER",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/444742d2-f4df-4a57-a412-98ede4bd6e1d"
     }

@@ -57,17 +57,21 @@ const TILE_HEADERS = {
   Referer: 'https://heisslab.com/',
 };
 
-type TileProviderId = 'osm' | 'hot' | 'topo';
+type TileProviderId = 'hot' | 'osm_de' | 'arcgis' | 'topo';
 
 function buildTileUrl(provider: TileProviderId, z: number, tx: number, ty: number): string {
   const sub = ['a', 'b', 'c'][(tx + ty) % 3];
-  if (provider === 'hot') {
-    return `https://${sub}.tile.openstreetmap.fr/hot/${z}/${tx}/${ty}.png`;
+  if (provider === 'osm_de') {
+    return `https://tile.openstreetmap.de/${z}/${tx}/${ty}.png`;
+  }
+  if (provider === 'arcgis') {
+    // ArcGIS REST tile order is /{z}/{y}/{x}
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${ty}/${tx}`;
   }
   if (provider === 'topo') {
     return `https://${sub}.tile.opentopomap.org/${z}/${tx}/${ty}.png`;
   }
-  return `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`;
+  return `https://${sub}.tile.openstreetmap.fr/hot/${z}/${tx}/${ty}.png`;
 }
 
 const PROPERTY_LABELS: Record<string, string> = {
@@ -120,7 +124,7 @@ export function TerritoryNativeMap(props: TerritoryLeafletMapProps) {
     setCameraState(next);
   }, []);
 
-  const [tileProvider, setTileProvider] = useState<TileProviderId>('osm');
+  const [tileProvider, setTileProvider] = useState<TileProviderId>('hot');
   const [failedOsmCount, setFailedOsmCount] = useState<number>(0);
   const [activePinPopupKey, setActivePinPopupKey] = useState<string | null>(null);
   const [activeQuadraPopupKey, setActiveQuadraPopupKey] = useState<string | null>(null);
@@ -660,7 +664,13 @@ export function TerritoryNativeMap(props: TerritoryLeafletMapProps) {
 
   const cycleTileProvider = useCallback(() => {
     setTileProvider((prev) =>
-      prev === 'osm' ? 'hot' : prev === 'hot' ? 'topo' : 'osm'
+      prev === 'hot'
+        ? 'arcgis'
+        : prev === 'arcgis'
+        ? 'osm_de'
+        : prev === 'osm_de'
+        ? 'topo'
+        : 'hot'
     );
   }, []);
 
@@ -683,7 +693,7 @@ export function TerritoryNativeMap(props: TerritoryLeafletMapProps) {
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           {visibleTiles.map((t) => {
             const effectiveProvider =
-              tileProvider === 'osm' && failedOsmCount > 4 ? 'hot' : tileProvider;
+              tileProvider === 'hot' && failedOsmCount > 4 ? 'arcgis' : tileProvider;
             const uri = buildTileUrl(effectiveProvider, t.z, t.tx, t.ty);
             return (
               <Image
@@ -698,7 +708,7 @@ export function TerritoryNativeMap(props: TerritoryLeafletMapProps) {
                 }}
                 resizeMode="cover"
                 onError={() => {
-                  if (tileProvider === 'osm') {
+                  if (tileProvider === 'hot') {
                     setFailedOsmCount((c) => c + 1);
                   }
                 }}
@@ -1232,10 +1242,12 @@ export function TerritoryNativeMap(props: TerritoryLeafletMapProps) {
           style={[styles.zoomBtn, { paddingHorizontal: 8, width: 'auto' }]}
         >
           <Text style={styles.layerBtnText}>
-            {tileProvider === 'osm'
-              ? '🗺️ OSM'
-              : tileProvider === 'hot'
+            {tileProvider === 'hot'
               ? '🗺️ Nitidez'
+              : tileProvider === 'arcgis'
+              ? '🗺️ Ruas HD'
+              : tileProvider === 'osm_de'
+              ? '🗺️ Clássico'
               : '⛰️ Relevo'}
           </Text>
         </Pressable>
