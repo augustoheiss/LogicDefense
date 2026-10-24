@@ -23,6 +23,7 @@ import {
   formatRouteDuration,
 } from '@sekundo/core';
 import type { LatLngTuple, MapPin, MapQuadra, TerritoryLeafletMapProps } from './mapTypes';
+import { TerritoryNativeMap } from './TerritoryNativeMap';
 
 type LeafletNS = typeof Leaflet;
 
@@ -78,7 +79,25 @@ function openExternalUrlSafe(url: string) {
   }
 }
 
+function shouldUseNativeMobileMapRenderer(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (window.location?.search?.includes('nativeMap=1')) return true;
+    if (window.localStorage?.getItem('sekundo_native_map') === '1') return true;
+  } catch {
+    // Ignore storage access errors
+  }
+  return false;
+}
+
 export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
+  if (shouldUseNativeMobileMapRenderer()) {
+    return <TerritoryNativeMap {...props} />;
+  }
+  return <TerritoryLeafletDomMap {...props} />;
+}
+
+function TerritoryLeafletDomMap(props: TerritoryLeafletMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const LRef = useRef<LeafletNS | null>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);

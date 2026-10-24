@@ -97,11 +97,7 @@ export async function cacheBoundingBoxTiles(
     const bottomRight = latLngToTileXY(minLat, maxLng, z);
     for (let x = topLeft.x; x <= bottomRight.x; x++) {
       for (let y = topLeft.y; y <= bottomRight.y; y++) {
-        const sub = ['a', 'b', 'c'][(x + y) % 3];
-        const url =
-          Platform.OS === 'web'
-            ? `https://tile.openstreetmap.org/${z}/${x}/${y}.png`
-            : `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`;
+        const url = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
         urls.push(url);
         if (urls.length >= MAX_TILES_PER_BATCH) break;
       }

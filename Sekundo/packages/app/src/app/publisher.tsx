@@ -492,7 +492,7 @@ export default function PublisherModeScreen() {
             <Text style={[styles.backBtnText, daylightMode && styles.textDaylight]}>← Prancheta</Text>
           </Pressable>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' }}>
             <Pressable
               onPress={toggleWalkMode}
               style={[styles.backBtn, daylightMode && styles.btnDaylight]}
@@ -580,7 +580,7 @@ export default function PublisherModeScreen() {
         {/* Big Progress & Assignment Banner */}
         <View style={styles.progressBanner}>
           <View style={styles.progressTextRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' }}>
               <Text style={[styles.territoryTitle, daylightMode && styles.textDaylight]}>
                 📱 Território {effectiveTerritory}
               </Text>
@@ -925,7 +925,7 @@ export default function PublisherModeScreen() {
               style={[styles.quadraCard, daylightMode && styles.quadraCardDaylight]}
             >
               <View style={styles.quadraHeader}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 200 }}>
                   <Text style={[styles.quadraTitle, daylightMode && styles.textDaylight]}>
                     {quadra.label}
                   </Text>
@@ -933,7 +933,7 @@ export default function PublisherModeScreen() {
                     {formatQuadraPerimeterDescription(quadra.perimeterStreets)}
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' }}>
                   <Pressable
                     testID={`field-quadra-gmaps-${quadra.key}`}
                     onPress={() =>
@@ -1152,6 +1152,9 @@ export default function PublisherModeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
     backgroundColor: '#0D1117',
   },
   containerDaylight: {
@@ -1164,6 +1167,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
+    width: '100%',
+    maxWidth: '100%',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 12,
@@ -1268,6 +1273,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   territoryTitle: {
     color: '#F8FAFC',
@@ -1370,7 +1377,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   quadraTitle: {
     color: '#F8FAFC',
@@ -1417,6 +1425,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   streetName: {
     color: '#FFB800',

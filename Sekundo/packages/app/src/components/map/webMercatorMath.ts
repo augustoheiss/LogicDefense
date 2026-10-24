@@ -63,7 +63,7 @@ export function clampZoom(zoom: number): number {
 export function latLngToWorldPx(lat: number, lng: number, zoom: number): WorldPoint {
   const safeLat = clampLat(lat);
   const safeLng = normalizeLng(lng);
-  const safeZoom = clampZoom(zoom);
+  const safeZoom = Number.isFinite(zoom) ? Math.max(0, Math.min(MAX_ZOOM, zoom)) : 15;
   const worldSize = TILE_SIZE * Math.pow(2, safeZoom);
 
   const x = ((safeLng + 180) / 360) * worldSize;
@@ -78,7 +78,7 @@ export function latLngToWorldPx(lat: number, lng: number, zoom: number): WorldPo
  * Unprojects Web Mercator world pixel coordinates (x, y) back to WGS84 (lat, lng).
  */
 export function worldPxToLatLng(x: number, y: number, zoom: number): { lat: number; lng: number } {
-  const safeZoom = clampZoom(zoom);
+  const safeZoom = Number.isFinite(zoom) ? Math.max(0, Math.min(MAX_ZOOM, zoom)) : 15;
   const worldSize = TILE_SIZE * Math.pow(2, safeZoom);
 
   const lng = normalizeLng((x / worldSize) * 360 - 180);
