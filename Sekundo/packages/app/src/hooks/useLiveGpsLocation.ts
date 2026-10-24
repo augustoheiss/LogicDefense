@@ -69,7 +69,7 @@ export function useLiveGpsLocation(initialEnabled = false) {
     }
 
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setGpsError('Geolocalização não suportada neste navegador/dispositivo.');
+      setGpsError('Toque em "📍 Definir Minha Posição no Mapa" e toque no mapa para marcar seu ponto de partida.');
       return;
     }
 
