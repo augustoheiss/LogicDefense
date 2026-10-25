@@ -23,8 +23,9 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import type { FlatSkeletonEntry } from '@sekundo/core';
+import { formatShareAddressLocationText, type FlatSkeletonEntry } from '@sekundo/core';
 import { openExternalGoogleMaps } from '../../hooks/useLiveGpsLocation';
+import { shareLocationPayload } from '../../storage/omniStorageBridge';
 
 interface AddressEditModalProps {
   visible: boolean;
@@ -182,7 +183,48 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>✏️ Editar Informações do Endereço</Text>
-              <Text style={styles.modalSubtitle}>Código: {item.key} • Território: {territoryNumber || 'Geral'}</Text>
+              <Text style={styles.modalSubtitle}>Código: {item.key} • Território: {territoryNumber || 'Geral'}{locality ? ` (${locality})` : ''}</Text>
+            </View>
+            <Pressable
+              testID="address-modal-share-whatsapp-btn"
+              onPress={() => {
+                const payload = formatShareAddressLocationText(
+                  {
+                    ...item,
+                    label: label || item.label,
+                    meta: {
+                      ...rawMeta,
+                      territory_number: territoryNumber,
+                      locality,
+                      line,
+                      line2,
+                      city,
+                      state,
+                      postalcode,
+                      lat: lat ? Number(lat) : rawMeta.lat,
+                      lng: lng ? Number(lng) : rawMeta.lng,
+                      notes,
+                    },
+                  },
+                  city
+                );
+                shareLocationPayload(payload, 'whatsapp');
+              }}
+              style={{
+                backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                borderWidth: 1,
+                borderColor: '#22C55E',
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                marginRight: 8,
+              }}
+            >
+              <Text style={{ color: '#4ADE80', fontSize: 11, fontWeight: '800' }}>
+                📲 Compartilhar Local
+              </Text>
+            </Pressable>
+            <View>
             </View>
             <Pressable onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeBtnText}>✕</Text>
@@ -192,7 +234,32 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
           <ScrollView style={styles.scrollForm} contentContainerStyle={styles.formContent}>
             {/* 1. Endereço Completo */}
             <View style={styles.section}>
-              <Text style={styles.sectionHeader}>📍 LOCALIZAÇÃO & ENDEREÇO</Text>
+              <Text style={styles.sectionHeader}>📍 TERRITÓRIO, LOCALIZAÇÃO & ENDEREÇO</Text>
+
+              <View style={styles.row}>
+                <View style={[styles.col, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.inputLabel}>Nº do Território</Text>
+                  <TextInput
+                    testID="address-edit-territory-number-input"
+                    style={styles.input}
+                    value={territoryNumber}
+                    onChangeText={setTerritoryNumber}
+                    placeholder="Ex: 01, 02..."
+                    placeholderTextColor="#6F7E94"
+                  />
+                </View>
+                <View style={[styles.col, { flex: 2 }]}>
+                  <Text style={styles.inputLabel}>Nome do Território / Localidade</Text>
+                  <TextInput
+                    testID="address-edit-locality-input"
+                    style={styles.input}
+                    value={locality}
+                    onChangeText={setLocality}
+                    placeholder="Ex: Centro Norte, Vila Nova..."
+                    placeholderTextColor="#6F7E94"
+                  />
+                </View>
+              </View>
 
               <Text style={styles.inputLabel}>Rótulo / Título de Exibição</Text>
               <TextInput

@@ -42,6 +42,11 @@ import {
   buildWalkingSequenceRoute,
   formatRouteDistance,
   formatRouteDuration,
+  resolveTerritoryNameFromNodes,
+  updateSingleNodeInCleanRegistry,
+  buildTerritoryModelCsvText,
+  formatShareAddressLocationText,
+  formatShareTerritoryOrQuadraLocationsText,
 } from '@sekundo/core';
 import type {
   FlatSkeletonEntry,
@@ -51,9 +56,20 @@ import type {
   WalkingSequenceRoute,
 } from '@sekundo/core';
 import { DeltaSyncModal } from '../components/territory/DeltaSyncModal';
+import { AddressEditModal } from '../components/territory/AddressEditModal';
+import {
+  TerritoryManageModal,
+  type TerritoryManageTab,
+} from '../components/territory/TerritoryManageModal';
 import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
 import type { MapPin } from '../components/map/mapTypes';
-import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
+import {
+  loadSavedTerritoryRegistry,
+  persistTerritoryRegistryMutation,
+  exportUpdatedTerritoryModelCsvFromStorage,
+  triggerCsvFileDownloadOrCopy,
+  shareLocationPayload,
+} from '../storage/omniStorageBridge';
 import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
 
 function extractNumericHouseNumber(numStr?: string): number | null {
@@ -104,8 +120,6 @@ export default function PublisherModeScreen() {
   const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-s13';
   const {
     flatRegistry: rawRegistry,
-    updateNode,
-    updateNodes,
     saveSkeleton,
     loading,
   } = useSkeleton(eventId);
@@ -119,27 +133,26 @@ export default function PublisherModeScreen() {
   }, [rawRegistry]);
 
   const flatRegistry = useMemo<FlatSkeletonEntry[]>(() => {
-    const partitioned = selectEnginePartitionNodes(rawRegistry || [], 'territory_logistics');
-    if (partitioned.length > 0) return partitioned;
     const savedPartitioned = selectEnginePartitionNodes(
       savedTerritoryRegistry,
       'territory_logistics'
     );
     if (savedPartitioned.length > 0) return savedPartitioned;
+    const partitioned = selectEnginePartitionNodes(rawRegistry || [], 'territory_logistics');
+    if (partitioned.length > 0) return partitioned;
     return buildTerritoriosS13HistoricalRegistry();
   }, [rawRegistry, savedTerritoryRegistry]);
-
-  const resolveRawKey = (cleanKey: string): string => {
-    if (rawRegistry && rawRegistry.some((n) => n.key === `T::${cleanKey}`)) {
-      return `T::${cleanKey}`;
-    }
-    return cleanKey;
-  };
 
   const [daylightMode, setDaylightMode] = useState<boolean>(false);
   const [walkMode, setWalkMode] = useState<'sequential' | 'sidewalk'>('sidewalk');
   const [editingAssignee, setEditingAssignee] = useState<boolean>(false);
   const [assigneeDraft, setAssigneeDraft] = useState<string>('');
+  const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
+  const [manageModalOpen, setManageModalOpen] = useState<boolean>(false);
+  const [manageModalTab, setManageModalTab] = useState<TerritoryManageTab>('edit');
+  const [manageTargetGroupKey, setManageTargetGroupKey] = useState<string | undefined>(undefined);
+  const [manageTargetGroupLabel, setManageTargetGroupLabel] = useState<string | undefined>(undefined);
+  const [actionToast, setActionToast] = useState<string | null>(null);
 
   // Field Map states: Quadras <-> Pontos (preserving camera zoom!), walking direction, GPS & route
   const [fieldMapMode, setFieldMapMode] = useState<'quadras' | 'pins'>('quadras');
@@ -210,6 +223,100 @@ export default function PublisherModeScreen() {
   const [fitRequest, setFitRequest] = useState<number>(0);
   const [showDeltaModal, setShowDeltaModal] = useState<boolean>(false);
 
+  const showToast = (msg: string) => {
+    setActionToast(msg);
+    setTimeout(() => setActionToast(null), 3500);
+  };
+
+  const commitTerritoryNodes = async (
+    nextCleanTerritoryNodes: FlatSkeletonEntry[],
+    metaInfo?: { activeTerritoryNumber?: string; message?: string }
+  ) => {
+    setSavedTerritoryRegistry(nextCleanTerritoryNodes);
+    await persistTerritoryRegistryMutation({
+      eventId,
+      cleanTerritoryNodes: nextCleanTerritoryNodes,
+      rawRegistry: rawRegistry || [],
+      saveSkeletonFn: saveSkeleton,
+    });
+    if (metaInfo?.activeTerritoryNumber) {
+      setActiveTerritory(metaInfo.activeTerritoryNumber);
+    }
+    if (metaInfo?.message) {
+      showToast(metaInfo.message);
+    }
+  };
+
+  const openTerritoryManager = (
+    tab: TerritoryManageTab,
+    groupKey?: string,
+    groupLabel?: string
+  ) => {
+    setManageModalTab(tab);
+    setManageTargetGroupKey(groupKey);
+    setManageTargetGroupLabel(groupLabel);
+    setManageModalOpen(true);
+  };
+
+  const effectiveTerritoryName = useMemo(
+    () => resolveTerritoryNameFromNodes(flatRegistry, effectiveTerritory),
+    [flatRegistry, effectiveTerritory]
+  );
+
+  const handleExportUpdatedCsv = async () => {
+    const csvText = buildTerritoryModelCsvText(flatRegistry);
+    const filename = `Sekundo_Territorios_Modelo_S13_${new Date().toISOString().slice(0, 10)}.csv`;
+    const res = await triggerCsvFileDownloadOrCopy(csvText, filename);
+    if (res === 'downloaded') {
+      showToast(`✅ Planilha CSV exportada (${filename})!`);
+    } else {
+      showToast('📋 CSV atualizado copiado para a área de transferência!');
+    }
+  };
+
+  const handleQuickShareTerritory = async () => {
+    const items = flatRegistry.filter((n) => resolveTerritoryNumber(n) === effectiveTerritory && n.type !== 'header');
+    const payload = formatShareTerritoryOrQuadraLocationsText({
+      territoryNumber: effectiveTerritory,
+      territoryName: effectiveTerritoryName,
+      items,
+      city: defaultCity,
+    });
+    const res = await shareLocationPayload(payload, 'whatsapp');
+    if (res === 'copied') {
+      showToast(`📋 Localizações do Território ${effectiveTerritory} copiadas!`);
+    }
+  };
+
+  const handleQuickShareQuadra = async (quadraKey: string, quadraLabel: string) => {
+    const items = flatRegistry.filter(
+      (n) =>
+        n.type !== 'header' &&
+        (pathKey.equals(n.key, quadraKey) || pathKey.isDescendant(n.key, quadraKey))
+    );
+    const payload = formatShareTerritoryOrQuadraLocationsText({
+      territoryNumber: effectiveTerritory,
+      territoryName: effectiveTerritoryName,
+      quadraLabel,
+      items,
+      city: defaultCity,
+    });
+    const res = await shareLocationPayload(payload, 'whatsapp');
+    if (res === 'copied') {
+      showToast(`📋 Localizações de "${quadraLabel}" copiadas!`);
+    }
+  };
+
+  const handleQuickShareUnit = async (unitKey: string) => {
+    const target = flatRegistry.find((n) => pathKey.equals(n.key, unitKey));
+    if (!target) return;
+    const payload = formatShareAddressLocationText(target);
+    const res = await shareLocationPayload(payload, 'whatsapp');
+    if (res === 'copied') {
+      showToast(`📋 Endereço "${target.label}" copiado!`);
+    }
+  };
+
   const territoryQuadras = useMemo(
     () => allQuadras.filter((q) => q.territoryNumber === effectiveTerritory),
     [allQuadras, effectiveTerritory]
@@ -245,24 +352,23 @@ export default function PublisherModeScreen() {
   const handleSaveAssignee = async () => {
     const today = new Date().toISOString().slice(0, 10);
     const trimmed = assigneeDraft.trim();
-    const targetUnits = territoryQuadras
-      .flatMap((q) => q.streets.flatMap((s) => s.units))
-      .map((u) => flatRegistry.find((n) => pathKey.equals(n.key, u.key)))
-      .filter((n): n is FlatSkeletonEntry => Boolean(n));
+    const targetKeys = new Set(
+      territoryQuadras.flatMap((q) => q.streets.flatMap((s) => s.units.map((u) => u.key)))
+    );
 
-    if (targetUnits.length > 0) {
-      await updateNodes(
-        targetUnits.map((n) => ({
-          key: resolveRawKey(n.key),
-          updates: {
-            meta: {
-              ...(n.meta || {}),
-              workerName: trimmed || undefined,
-              assignedAt: trimmed ? (n.meta as any)?.assignedAt || today : undefined,
-            },
+    if (targetKeys.size > 0) {
+      const nextClean = flatRegistry.map((n) => {
+        if (!targetKeys.has(n.key) && resolveTerritoryNumber(n) !== effectiveTerritory) return n;
+        return {
+          ...n,
+          meta: {
+            ...(n.meta || {}),
+            workerName: trimmed || undefined,
+            assignedAt: trimmed ? (n.meta as any)?.assignedAt || today : undefined,
           },
-        }))
-      );
+        };
+      });
+      await commitTerritoryNodes(nextClean);
     }
     setEditingAssignee(false);
   };
@@ -346,27 +452,26 @@ export default function PublisherModeScreen() {
     if (!target) return;
     const meta = (target.meta || {}) as Record<string, any>;
     const nextWorked: 0 | 1 = Number(meta.worked) === 1 ? 0 : 1;
-    await updateNode(resolveRawKey(target.key), {
+    const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, target.key, {
       value: nextWorked === 1 ? (meta.workerName || 'Trabalhado') : '',
       meta: buildWorkedMeta(meta, nextWorked),
     });
+    await commitTerritoryNodes(nextClean);
   };
 
   const handleToggleQuadra = async (quadra: QuadraSummary) => {
     const nextWorked: 0 | 1 = quadra.isCompleted ? 0 : 1;
     const now = new Date();
-    const patches = quadra.streets
-      .flatMap((s) => s.units)
-      .map((u) => flatRegistry.find((n) => pathKey.equals(n.key, u.key)))
-      .filter((n): n is FlatSkeletonEntry => Boolean(n))
-      .map((n) => ({
-        key: resolveRawKey(n.key),
-        updates: {
-          value: nextWorked === 1 ? ((n.meta as any)?.workerName || 'Trabalhado') : '',
-          meta: buildWorkedMeta(n.meta, nextWorked, now),
-        },
-      }));
-    await updateNodes(patches);
+    const unitKeySet = new Set(quadra.streets.flatMap((s) => s.units.map((u) => u.key)));
+    const nextClean = flatRegistry.map((n) => {
+      if (!unitKeySet.has(n.key)) return n;
+      return {
+        ...n,
+        value: nextWorked === 1 ? ((n.meta as any)?.workerName || 'Trabalhado') : '',
+        meta: buildWorkedMeta(n.meta, nextWorked, now),
+      };
+    });
+    await commitTerritoryNodes(nextClean);
   };
 
   const resolveOperatorOrigin = async (): Promise<{ lat: number; lng: number } | null> => {
@@ -540,50 +645,122 @@ export default function PublisherModeScreen() {
         </View>
 
         {/* Territory Selector Chips */}
-        {territoryList.length > 1 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.territoryRow}
-          >
-            {territoryList.map((tNum) => {
-              const active = tNum === effectiveTerritory;
-              return (
-                <Pressable
-                  key={tNum}
-                  testID={`publisher-territory-chip-${tNum}`}
-                  onPress={() => {
-                    setActiveTerritory(tNum);
-                    setFitRequest((n) => n + 1);
-                  }}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.territoryRow}
+        >
+          {territoryList.map((tNum) => {
+            const active = tNum === effectiveTerritory;
+            const tName = resolveTerritoryNameFromNodes(flatRegistry, tNum);
+            return (
+              <Pressable
+                key={tNum}
+                testID={`publisher-territory-chip-${tNum}`}
+                onPress={() => {
+                  setActiveTerritory(tNum);
+                  setFitRequest((n) => n + 1);
+                }}
+                style={[
+                  styles.territoryChip,
+                  daylightMode && styles.btnDaylight,
+                  active && styles.territoryChipActive,
+                ]}
+              >
+                <Text
                   style={[
-                    styles.territoryChip,
-                    daylightMode && styles.btnDaylight,
-                    active && styles.territoryChipActive,
+                    styles.territoryChipText,
+                    daylightMode && styles.textDaylight,
+                    active && styles.territoryChipTextActive,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.territoryChipText,
-                      daylightMode && styles.textDaylight,
-                      active && styles.territoryChipTextActive,
-                    ]}
-                  >
-                    Território {tNum}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : null}
+                  Território {tNum}{tName ? ` • ${tName}` : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Pressable
+            testID="publisher-add-territory-chip"
+            onPress={() => openTerritoryManager('new_territory')}
+            style={[
+              styles.territoryChip,
+              {
+                backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                borderColor: 'rgba(16, 185, 129, 0.45)',
+              },
+            ]}
+          >
+            <Text style={[styles.territoryChipText, { color: '#34D399' }]}>
+              ➕ Novo Território
+            </Text>
+          </Pressable>
+        </ScrollView>
 
         {/* Big Progress & Assignment Banner */}
         <View style={styles.progressBanner}>
           <View style={styles.progressTextRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' }}>
               <Text style={[styles.territoryTitle, daylightMode && styles.textDaylight]}>
-                📱 Território {effectiveTerritory}
+                📱 Território {effectiveTerritory}{effectiveTerritoryName ? ` — ${effectiveTerritoryName}` : ''}
               </Text>
+              <Pressable
+                testID="publisher-edit-territory-btn"
+                onPress={() => openTerritoryManager('edit')}
+                style={[
+                  styles.gmapsHeaderChip,
+                  {
+                    backgroundColor: 'rgba(255, 184, 0, 0.16)',
+                    borderColor: 'rgba(255, 184, 0, 0.45)',
+                  },
+                ]}
+              >
+                <Text style={[styles.gmapsHeaderChipText, { color: '#FFB800' }]}>
+                  ✏️ Nome / Nº
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="publisher-add-address-btn"
+                onPress={() =>
+                  openTerritoryManager(
+                    'new_address',
+                    territoryQuadras[0]?.key,
+                    territoryQuadras[0]?.label
+                  )
+                }
+                style={[
+                  styles.gmapsHeaderChip,
+                  {
+                    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                    borderColor: 'rgba(16, 185, 129, 0.45)',
+                  },
+                ]}
+              >
+                <Text style={[styles.gmapsHeaderChipText, { color: '#34D399' }]}>
+                  🏠 + Endereço
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="publisher-share-territory-btn"
+                onPress={handleQuickShareTerritory}
+                style={[
+                  styles.gmapsHeaderChip,
+                  {
+                    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+                    borderColor: '#10B981',
+                  },
+                ]}
+              >
+                <Text style={[styles.gmapsHeaderChipText, { color: '#34D399' }]}>
+                  📲 Compartilhar
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="publisher-export-csv-btn"
+                onPress={handleExportUpdatedCsv}
+                style={styles.gmapsHeaderChip}
+              >
+                <Text style={styles.gmapsHeaderChipText}>📤 Exportar CSV</Text>
+              </Pressable>
               <Pressable
                 onPress={() => {
                   setAssigneeDraft(assignmentInfo.workerName);
@@ -622,6 +799,24 @@ export default function PublisherModeScreen() {
               {stats.worked}/{stats.total} casas ({stats.percent}%)
             </Text>
           </View>
+
+          {actionToast ? (
+            <View
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                borderColor: 'rgba(16, 185, 129, 0.45)',
+                borderWidth: 1,
+                borderRadius: 8,
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                marginTop: 6,
+              }}
+            >
+              <Text style={{ color: '#34D399', fontSize: 12, fontWeight: '700' }}>
+                {actionToast}
+              </Text>
+            </View>
+          ) : null}
 
           {editingAssignee ? (
             <View style={styles.assigneeEditRow}>
@@ -935,6 +1130,51 @@ export default function PublisherModeScreen() {
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 1, maxWidth: '100%' }}>
                   <Pressable
+                    testID={`field-quadra-edit-${quadra.key}`}
+                    onPress={() => openTerritoryManager('edit', quadra.key, quadra.label)}
+                    style={[
+                      styles.gmapsHeaderChip,
+                      {
+                        backgroundColor: 'rgba(255, 184, 0, 0.14)',
+                        borderColor: 'rgba(255, 184, 0, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.gmapsHeaderChipText, { color: '#FFB800' }]}>
+                      ✏️ Nome/Nº
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`field-quadra-add-address-${quadra.key}`}
+                    onPress={() => openTerritoryManager('new_address', quadra.key, quadra.label)}
+                    style={[
+                      styles.gmapsHeaderChip,
+                      {
+                        backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                        borderColor: 'rgba(16, 185, 129, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.gmapsHeaderChipText, { color: '#34D399' }]}>
+                      ➕ Endereço
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`field-quadra-share-${quadra.key}`}
+                    onPress={() => handleQuickShareQuadra(quadra.key, quadra.label)}
+                    style={[
+                      styles.gmapsHeaderChip,
+                      {
+                        backgroundColor: 'rgba(16, 185, 129, 0.22)',
+                        borderColor: '#10B981',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.gmapsHeaderChipText, { color: '#34D399' }]}>
+                      📲 Compartilhar
+                    </Text>
+                  </Pressable>
+                  <Pressable
                     testID={`field-quadra-gmaps-${quadra.key}`}
                     onPress={() =>
                       openExternalGoogleMaps({
@@ -1091,6 +1331,38 @@ export default function PublisherModeScreen() {
                               >
                                 <Text style={styles.fieldUnitMiniBtnText}>🗺️ Maps</Text>
                               </Pressable>
+                              <Pressable
+                                testID={`field-unit-share-${unit.key}`}
+                                onPress={() => handleQuickShareUnit(unit.key)}
+                                style={[
+                                  styles.fieldUnitMiniBtn,
+                                  {
+                                    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                                    borderColor: 'rgba(16, 185, 129, 0.45)',
+                                  },
+                                ]}
+                                accessibilityLabel={`Compartilhar localização de Nº ${unit.numberOrComplement || 'S/N'}`}
+                              >
+                                <Text style={[styles.fieldUnitMiniBtnText, { color: '#34D399' }]}>
+                                  📲 Local
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                testID={`field-unit-edit-${unit.key}`}
+                                onPress={() => {
+                                  const found = flatRegistry.find((n) => pathKey.equals(n.key, unit.key));
+                                  if (found) setEditingAddressItem(found);
+                                }}
+                                style={[
+                                  styles.fieldUnitMiniBtn,
+                                  { borderColor: 'rgba(255, 184, 0, 0.45)' },
+                                ]}
+                                accessibilityLabel={`Editar endereço Nº ${unit.numberOrComplement || 'S/N'}`}
+                              >
+                                <Text style={[styles.fieldUnitMiniBtnText, { color: '#FFB800' }]}>
+                                  ✏️
+                                </Text>
+                              </Pressable>
                               {unit.lat !== undefined && unit.lng !== undefined ? (
                                 <Pressable
                                   testID={`field-unit-route-${unit.key}`}
@@ -1127,14 +1399,60 @@ export default function PublisherModeScreen() {
         </ScrollView>
       )}
 
-      {/* Sticky Bottom Action Bar: 1-Tap Return Territory Delta */}
-      <View style={[styles.bottomBar, daylightMode && styles.headerDaylight]}>
-        <Pressable onPress={() => setShowDeltaModal(true)} style={styles.returnBtn}>
+      {/* Sticky Bottom Action Bar: Share / Export CSV / Delta Sync */}
+      <View style={[styles.bottomBar, daylightMode && styles.headerDaylight, { flexDirection: 'row', gap: 8, flexWrap: 'wrap' }]}>
+        <Pressable
+          testID="publisher-bottom-share-btn"
+          onPress={handleQuickShareTerritory}
+          style={[
+            styles.returnBtn,
+            {
+              flex: 1,
+              minWidth: 160,
+              backgroundColor: 'rgba(16, 185, 129, 0.2)',
+              borderColor: '#10B981',
+            },
+          ]}
+        >
+          <Text style={[styles.returnBtnText, { color: '#34D399' }]}>
+            📲 Compartilhar Território (WhatsApp / Maps)
+          </Text>
+        </Pressable>
+        <Pressable
+          testID="publisher-bottom-delta-btn"
+          onPress={() => setShowDeltaModal(true)}
+          style={[styles.returnBtn, { flex: 1, minWidth: 180 }]}
+        >
           <Text style={styles.returnBtnText}>
-            📤 Devolver Território / Enviar Atualizações (Delta)
+            🔄 Sincronizar Progresso em Equipe (Delta)
           </Text>
         </Pressable>
       </View>
+
+      <AddressEditModal
+        visible={Boolean(editingAddressItem)}
+        item={editingAddressItem}
+        onClose={() => setEditingAddressItem(null)}
+        onSave={async (key, updates) => {
+          const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
+          await commitTerritoryNodes(nextClean);
+          if (updates.meta?.territory_number) {
+            setActiveTerritory(String(updates.meta.territory_number));
+          }
+          showToast('✅ Endereço salvo na memória!');
+        }}
+      />
+
+      <TerritoryManageModal
+        visible={manageModalOpen}
+        initialTab={manageModalTab}
+        targetTerritoryNumber={effectiveTerritory}
+        targetGroupKey={manageTargetGroupKey}
+        targetGroupLabel={manageTargetGroupLabel}
+        cleanNodes={flatRegistry}
+        onClose={() => setManageModalOpen(false)}
+        onCommitNodes={commitTerritoryNodes}
+      />
 
       <DeltaSyncModal
         visible={showDeltaModal}
@@ -1142,7 +1460,7 @@ export default function PublisherModeScreen() {
         flatRegistry={flatRegistry}
         onClose={() => setShowDeltaModal(false)}
         onSyncApplied={async (updated) => {
-          await saveSkeleton(updated);
+          await commitTerritoryNodes(updated);
         }}
       />
     </SafeAreaView>

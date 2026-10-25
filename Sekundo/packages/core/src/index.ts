@@ -688,3 +688,26 @@ export type {
   SekundoOmniStateBundle,
   ExportOmniCsvOptions,
 } from './csv/omniCsvBundle';
+
+// In-App Territory CRUD, Partition Reconciliation & Zero-Bureaucracy Location Sharing Engine
+export {
+  resolveTerritoryNameFromNodes,
+  extractTerritorySummaries,
+  renameOrRenumberTerritory,
+  createTerritoryOrQuadra,
+  createAddressInTerritory,
+  updateSingleNodeInCleanRegistry,
+  deleteTerritoryOrQuadra,
+  mergeTerritoryPartitionIntoRawRegistry,
+  buildTerritoryModelCsvText,
+  formatShareAddressLocationText,
+  formatShareTerritoryOrQuadraLocationsText,
+} from './territory/territoryCrudEngine';
+export type {
+  TerritoryIdentitySummary,
+  RenameOrRenumberTerritoryPatch,
+  CreateTerritoryOrQuadraInput,
+  CreateAddressInTerritoryInput,
+  ShareFormattedPayload,
+} from './territory/territoryCrudEngine';
+

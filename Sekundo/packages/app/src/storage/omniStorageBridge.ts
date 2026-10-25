@@ -15,7 +15,7 @@
  *    + all other Engines present in the CSV simultaneously.
  */
 
-import { Platform } from 'react-native';
+import { Platform, Share, Linking } from 'react-native';
 import {
   DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
   DEFAULT_COIN_LEDGER_ROWS,
@@ -36,12 +36,15 @@ import {
   deriveActiveEnginesFromOmniBundle,
   getActiveEngines,
   eventContainer,
+  mergeTerritoryPartitionIntoRawRegistry,
+  buildTerritoryModelCsvText,
   type SekundoOmniStateBundle,
   type OmniEventBundleItem,
   type OmniCoinLedgerRowItem,
   type ParticipantProfile,
   type FlatSkeletonEntry,
   type EngineId,
+  type ShareFormattedPayload,
 } from '@sekundo/core';
 import { loadDB, saveDB, type CoinTable, type TableRow } from '@sekundo/coin-engine';
 import * as localStore from './localStorage';
@@ -49,6 +52,7 @@ import * as localStore from './localStorage';
 export const PRIVILEGE_DIRECTORY_STORAGE_KEY = 'sekundo:privilege_directory_v1';
 export const SCHEDULE_HUB_REGISTRY_STORAGE_KEY = 'sekundo:schedule_hub_registry_v1';
 export const TERRITORY_HUB_REGISTRY_STORAGE_KEY = 'sekundo:territory_hub_registry_v1';
+export const TERRITORY_HUB_REGISTRY_BACKUP_KEY = 'sekundo:territory_hub_registry_backup_v1';
 export const LOADED_OMNI_BUNDLE_STORAGE_KEY = 'sekundo:loaded_schedule_bundle_v1';
 export const HOJE_MANIFEST_STORAGE_KEY = 'sekundo_app_manifest_v1';
 
@@ -135,6 +139,210 @@ export async function saveTerritoryRegistry(registry: FlatSkeletonEntry[]): Prom
   const serialized = JSON.stringify(registry);
   writeWebLocalStorage(TERRITORY_HUB_REGISTRY_STORAGE_KEY, serialized);
   await localStore.storage.setItem(TERRITORY_HUB_REGISTRY_STORAGE_KEY, serialized);
+}
+
+/**
+ * Atomically persists in-app territory mutations to BOTH `sekundo:territory_hub_registry_v1`
+ * and the active event's skeleton (`sekundo_skeleton_${eventId}`), eliminating split-brain storage
+ * and ensuring immediate visibility across Checklist, Prancheta, Map, and CSV Export.
+ */
+export async function persistTerritoryRegistryMutation(params: {
+  eventId?: string;
+  cleanTerritoryNodes: FlatSkeletonEntry[];
+  rawRegistry?: FlatSkeletonEntry[];
+  saveSkeletonFn?: (nodes: FlatSkeletonEntry[]) => Promise<void>;
+  allowEmpty?: boolean;
+}): Promise<{
+  cleanTerritoryNodes: FlatSkeletonEntry[];
+  mergedRawRegistry: FlatSkeletonEntry[];
+}> {
+  const { eventId, cleanTerritoryNodes, rawRegistry, saveSkeletonFn, allowEmpty } = params;
+  if (!allowEmpty && (!Array.isArray(cleanTerritoryNodes) || cleanTerritoryNodes.length === 0)) {
+    return {
+      cleanTerritoryNodes: [],
+      mergedRawRegistry: rawRegistry || [],
+    };
+  }
+
+  // 1. Save rollback backup snapshot before mutating
+  try {
+    const previous = await loadSavedTerritoryRegistry();
+    if (previous && previous.length > 0) {
+      const prevStr = JSON.stringify(previous);
+      writeWebLocalStorage(TERRITORY_HUB_REGISTRY_BACKUP_KEY, prevStr);
+      await localStore.storage.setItem(TERRITORY_HUB_REGISTRY_BACKUP_KEY, prevStr);
+    }
+  } catch {
+    // ignore backup failure
+  }
+
+  // 2. Persist clean territory snapshot to `sekundo:territory_hub_registry_v1`
+  await saveTerritoryRegistry(cleanTerritoryNodes);
+
+  // 3. Reconcile into `rawRegistry` and persist to `sekundo_skeleton_${eventId}`
+  let baseRaw = rawRegistry || [];
+  if (baseRaw.length === 0 && eventId) {
+    try {
+      const loaded = await localStore.loadSkeleton(eventId);
+      if (loaded && loaded.length > 0) baseRaw = loaded;
+    } catch {
+      // ignore
+    }
+  }
+
+  const mergedRawRegistry = mergeTerritoryPartitionIntoRawRegistry(
+    baseRaw,
+    cleanTerritoryNodes
+  );
+
+  if (saveSkeletonFn) {
+    await saveSkeletonFn(mergedRawRegistry);
+  } else if (eventId) {
+    await localStore.saveSkeleton(eventId, mergedRawRegistry);
+  }
+
+  return {
+    cleanTerritoryNodes,
+    mergedRawRegistry,
+  };
+}
+
+/**
+ * Exports the updated territory model CSV directly from the latest in-memory or persisted nodes.
+ */
+export async function exportUpdatedTerritoryModelCsvFromStorage(
+  currentCleanNodes?: FlatSkeletonEntry[],
+  mode: 'flat_s13' | 'omni_single' | 'omni_full' = 'flat_s13'
+): Promise<{ csvText: string; filename: string }> {
+  const nodes =
+    currentCleanNodes && currentCleanNodes.length > 0
+      ? currentCleanNodes
+      : (await loadSavedTerritoryRegistry()) || buildTerritoriosS13HistoricalRegistry();
+
+  if (nodes.length > 0) {
+    await saveTerritoryRegistry(nodes);
+  }
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (mode === 'flat_s13') {
+    return {
+      csvText: buildTerritoryModelCsvText(nodes),
+      filename: `modelo_territorios_${stamp}.csv`,
+    };
+  }
+  if (mode === 'omni_single') {
+    const csvText = await exportSingleEngineOmniCsvFromStorage('territory_logistics');
+    return {
+      csvText,
+      filename: `planilha_territory_logistics_${stamp}.csv`,
+    };
+  }
+  const csvText = await exportFullSiteOmniCsvFromStorage({ territoryRegistry: nodes });
+  return {
+    csvText,
+    filename: `sekundo_omni_geral_${stamp}.csv`,
+  };
+}
+
+/**
+ * Triggers an immediate file download in Web browsers or copies to clipboard / shares on Mobile.
+ */
+export async function triggerCsvFileDownloadOrCopy(
+  csvText: string,
+  filename: string
+): Promise<'downloaded' | 'copied'> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(csvText);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    try {
+      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return 'downloaded';
+    } catch {
+      return 'copied';
+    }
+  }
+
+  try {
+    await Share.share({
+      title: filename,
+      message: csvText,
+    });
+    return 'downloaded';
+  } catch {
+    return 'copied';
+  }
+}
+
+/**
+ * Zero-bureaucracy location sharing for an address, quadra, or territory.
+ * Supports opening WhatsApp directly, using the native OS/Web share sheet, or copying to clipboard.
+ */
+export async function shareLocationPayload(
+  payload: ShareFormattedPayload,
+  mode: 'whatsapp' | 'native' | 'copy' = 'whatsapp'
+): Promise<'shared' | 'copied'> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(payload.text);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (mode === 'copy') {
+    return 'copied';
+  }
+
+  if (mode === 'native') {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && typeof (navigator as any).share === 'function') {
+      try {
+        await (navigator as any).share({
+          title: payload.title,
+          text: payload.text,
+        });
+        return 'shared';
+      } catch {
+        // fallback to WhatsApp
+      }
+    } else if (Platform.OS !== 'web') {
+      try {
+        await Share.share({
+          title: payload.title,
+          message: payload.text,
+        });
+        return 'shared';
+      } catch {
+        return 'copied';
+      }
+    }
+  }
+
+  // Default: open WhatsApp with the pre-formatted text and Google Maps links
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.open === 'function') {
+    window.open(payload.whatsappUrl, '_blank', 'noopener,noreferrer');
+    return 'shared';
+  }
+
+  try {
+    await Linking.openURL(payload.whatsappUrl);
+    return 'shared';
+  } catch {
+    return 'copied';
+  }
 }
 
 /**

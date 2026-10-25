@@ -40,6 +40,10 @@ import {
   buildWalkingSequenceRoute,
   formatRouteDistance,
   formatRouteDuration,
+  resolveTerritoryNameFromNodes,
+  updateSingleNodeInCleanRegistry,
+  formatShareAddressLocationText,
+  formatShareTerritoryOrQuadraLocationsText,
 } from '@sekundo/core';
 import type {
   FlatSkeletonEntry,
@@ -49,8 +53,18 @@ import type {
 } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { TerritoryAccordionHeader } from '../components/territory/TerritoryAccordionHeader';
+import {
+  TerritoryManageModal,
+  type TerritoryManageTab,
+} from '../components/territory/TerritoryManageModal';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
-import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
+import {
+  loadSavedTerritoryRegistry,
+  persistTerritoryRegistryMutation,
+  exportUpdatedTerritoryModelCsvFromStorage,
+  triggerCsvFileDownloadOrCopy,
+  shareLocationPayload,
+} from '../storage/omniStorageBridge';
 import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
 import type { MapPin } from '../components/map/mapTypes';
 import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
@@ -81,7 +95,7 @@ export default function TerritoryChecklistScreen() {
     return events.find((e) => (e.config.activeEngines || []).includes('territory_logistics')) || events[0];
   }, [events, rawEventId]);
   const eventId = event?.config.id || rawEventId;
-  const { flatRegistry: rawFlatRegistry, updateNode, updateNodes, loading } = useSkeleton(eventId);
+  const { flatRegistry: rawFlatRegistry, saveSkeleton, loading } = useSkeleton(eventId);
   const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[]>([]);
   useEffect(() => {
     loadSavedTerritoryRegistry()
@@ -93,19 +107,12 @@ export default function TerritoryChecklistScreen() {
 
   const fallbackRegistry = useMemo(() => buildTerritoriosS13HistoricalRegistry(), []);
   const flatRegistry = useMemo(() => {
-    const partitioned = selectEnginePartitionNodes(rawFlatRegistry || [], 'territory_logistics');
-    if (partitioned.length > 0) return partitioned;
     const savedPartitioned = selectEnginePartitionNodes(savedTerritoryRegistry, 'territory_logistics');
     if (savedPartitioned.length > 0) return savedPartitioned;
+    const partitioned = selectEnginePartitionNodes(rawFlatRegistry || [], 'territory_logistics');
+    if (partitioned.length > 0) return partitioned;
     return fallbackRegistry;
   }, [rawFlatRegistry, savedTerritoryRegistry, fallbackRegistry]);
-
-  const resolveRawKey = (cleanKey: string): string => {
-    if (rawFlatRegistry && rawFlatRegistry.some((n) => n.key === `T::${cleanKey}`)) {
-      return `T::${cleanKey}`;
-    }
-    return cleanKey;
-  };
 
   // Accordion state: everything collapsed by default. Keys: `T:<territory>` / `G:<groupKey>`.
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
@@ -118,6 +125,51 @@ export default function TerritoryChecklistScreen() {
   const [activeNoteKey, setActiveNoteKey] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<string>('');
   const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
+
+  // In-App Territory CRUD & CSV Export Modal State
+  const [manageModalOpen, setManageModalOpen] = useState<boolean>(false);
+  const [manageModalTab, setManageModalTab] = useState<TerritoryManageTab>('edit');
+  const [manageTargetTerritory, setManageTargetTerritory] = useState<string | undefined>(undefined);
+  const [manageTargetGroupKey, setManageTargetGroupKey] = useState<string | undefined>(undefined);
+  const [manageTargetGroupLabel, setManageTargetGroupLabel] = useState<string | undefined>(undefined);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+
+  const openTerritoryManager = (
+    tab: TerritoryManageTab,
+    targetTerr?: string,
+    groupKey?: string,
+    groupLabel?: string
+  ) => {
+    setManageModalTab(tab);
+    setManageTargetTerritory(targetTerr || focusTerritory || undefined);
+    setManageTargetGroupKey(groupKey);
+    setManageTargetGroupLabel(groupLabel);
+    setManageModalOpen(true);
+  };
+
+  const commitTerritoryNodes = async (
+    nextCleanNodes: FlatSkeletonEntry[],
+    metaInfo?: { activeTerritoryNumber?: string; message?: string }
+  ) => {
+    setSavedTerritoryRegistry(nextCleanNodes);
+    await persistTerritoryRegistryMutation({
+      eventId,
+      cleanTerritoryNodes: nextCleanNodes,
+      rawRegistry: rawFlatRegistry,
+      saveSkeletonFn: saveSkeleton,
+    });
+    if (metaInfo?.activeTerritoryNumber) {
+      setExpandedKeys((prev) => {
+        const next = new Set(prev);
+        next.add(`T:${metaInfo.activeTerritoryNumber}`);
+        return next;
+      });
+    }
+    if (metaInfo?.message) {
+      setActionToast(metaInfo.message);
+      setTimeout(() => setActionToast(null), 4000);
+    }
+  };
 
   // Embedded Territory Map (Modo Campo inline inside Checklist) + Live GPS & In-Map Routing
   const [inlineMapTerritory, setInlineMapTerritory] = useState<string | null>(null);
@@ -518,29 +570,29 @@ export default function TerritoryChecklistScreen() {
     const meta = (target.meta || {}) as Record<string, any>;
     const nextWorked = Number(meta.worked) === 1 ? 0 : 1;
 
-    await updateNode(resolveRawKey(targetKey), {
+    const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, targetKey, {
       value: nextWorked === 1 ? (meta.workerName || 'Trabalhado') : '',
       meta: buildWorkedMeta(meta, nextWorked),
     });
+    await commitTerritoryNodes(nextClean);
   };
 
   // Batch toggle all items in a quadra — one atomic write, no lost updates.
   const handleToggleQuadra = async (group: ChecklistGroup) => {
     const targetStatus: 0 | 1 = group.isAllWorked ? 0 : 1;
     const now = new Date();
+    const targetKeySet = new Set(group.items.map((i) => pathKey.normalizeKey(i.key)));
 
-    await updateNodes(
-      group.items.map((item) => {
-        const meta = (item.meta || {}) as Record<string, any>;
-        return {
-          key: resolveRawKey(item.key),
-          updates: {
-            value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
-            meta: buildWorkedMeta(meta, targetStatus, now),
-          },
-        };
-      })
-    );
+    const nextClean = flatRegistry.map((node) => {
+      if (!targetKeySet.has(pathKey.normalizeKey(node.key))) return node;
+      const meta = (node.meta || {}) as Record<string, any>;
+      return {
+        ...node,
+        value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
+        meta: buildWorkedMeta(meta, targetStatus, now),
+      };
+    });
+    await commitTerritoryNodes(nextClean);
   };
 
   // Batch toggle all items in an entire territory section — one atomic write.
@@ -555,19 +607,18 @@ export default function TerritoryChecklistScreen() {
     const isAllDone = section.total > 0 && section.worked === section.total;
     const targetStatus: 0 | 1 = isAllDone ? 0 : 1;
     const now = new Date();
+    const targetKeySet = new Set(allItems.map((i) => pathKey.normalizeKey(i.key)));
 
-    await updateNodes(
-      allItems.map((item) => {
-        const meta = (item.meta || {}) as Record<string, any>;
-        return {
-          key: resolveRawKey(item.key),
-          updates: {
-            value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
-            meta: buildWorkedMeta(meta, targetStatus, now),
-          },
-        };
-      })
-    );
+    const nextClean = flatRegistry.map((node) => {
+      if (!targetKeySet.has(pathKey.normalizeKey(node.key))) return node;
+      const meta = (node.meta || {}) as Record<string, any>;
+      return {
+        ...node,
+        value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
+        meta: buildWorkedMeta(meta, targetStatus, now),
+      };
+    });
+    await commitTerritoryNodes(nextClean);
   };
 
   // Note editor handlers
@@ -583,12 +634,13 @@ export default function TerritoryChecklistScreen() {
     if (!target) return;
     const meta = (target.meta || {}) as Record<string, any>;
 
-    await updateNode(resolveRawKey(activeNoteKey), {
+    const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, activeNoteKey, {
       meta: {
         ...meta,
         notes: noteDraft.trim(),
       },
     });
+    await commitTerritoryNodes(nextClean, { message: '📝 Observação salva na memória!' });
     setActiveNoteKey(null);
   };
 
@@ -607,6 +659,62 @@ export default function TerritoryChecklistScreen() {
         <View style={styles.headerTopRow}>
           <MultiEngineSwitcherBar activeRoute="territory-checklist" eventId={eventId} />
           <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Pressable
+              testID="checklist-new-territory-btn"
+              onPress={() => openTerritoryManager('new_territory')}
+              style={[
+                styles.mapLinkBtn,
+                { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.16)' },
+              ]}
+              accessibilityLabel="Adicionar Novo Território"
+            >
+              <Text style={[styles.mapLinkBtnText, { color: '#34D399' }]}>➕ Novo Território</Text>
+            </Pressable>
+            <Pressable
+              testID="checklist-edit-territory-btn"
+              onPress={() => openTerritoryManager('edit')}
+              style={[
+                styles.mapLinkBtn,
+                { borderColor: '#FFB800', backgroundColor: 'rgba(255, 184, 0, 0.16)' },
+              ]}
+              accessibilityLabel="Alterar Nome e Número de Território"
+            >
+              <Text style={[styles.mapLinkBtnText, { color: '#FFB800' }]}>✏️ Nome / Nº</Text>
+            </Pressable>
+            <Pressable
+              testID="checklist-export-csv-btn"
+              onPress={async () => {
+                const { csvText, filename } = await exportUpdatedTerritoryModelCsvFromStorage(
+                  flatRegistry,
+                  'flat_s13'
+                );
+                const res = await triggerCsvFileDownloadOrCopy(csvText, filename);
+                setActionToast(
+                  res === 'downloaded'
+                    ? `📥 Novo modelo "${filename}" exportado com as alterações!`
+                    : `📋 Novo modelo "${filename}" copiado!`
+                );
+                setTimeout(() => setActionToast(null), 4000);
+              }}
+              style={[
+                styles.mapLinkBtn,
+                { borderColor: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.16)' },
+              ]}
+              accessibilityLabel="Exportar Novo Modelo CSV Atualizado"
+            >
+              <Text style={[styles.mapLinkBtnText, { color: '#38BDF8' }]}>📤 Exportar CSV</Text>
+            </Pressable>
+            <Pressable
+              testID="checklist-share-btn"
+              onPress={() => openTerritoryManager('share_export')}
+              style={[
+                styles.mapLinkBtn,
+                { borderColor: '#22C55E', backgroundColor: 'rgba(34, 197, 94, 0.16)' },
+              ]}
+              accessibilityLabel="Compartilhar Localizações sem Burocracia"
+            >
+              <Text style={[styles.mapLinkBtnText, { color: '#4ADE80' }]}>📲 Compartilhar</Text>
+            </Pressable>
             <Pressable
               onPress={() => setShowFiltersPanel((prev) => !prev)}
               style={[
@@ -663,6 +771,22 @@ export default function TerritoryChecklistScreen() {
             </Pressable>
           </View>
         </View>
+
+        {actionToast ? (
+          <View
+            testID="checklist-action-toast"
+            style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.18)',
+              borderWidth: 1,
+              borderColor: '#10B981',
+              borderRadius: 8,
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+            }}
+          >
+            <Text style={{ color: '#34D399', fontSize: 12, fontWeight: '800' }}>{actionToast}</Text>
+          </View>
+        ) : null}
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.title}>📋 {territorySections.length} Territórios</Text>
@@ -1096,6 +1220,7 @@ export default function TerritoryChecklistScreen() {
             {!single ? (
               <TerritoryAccordionHeader
                 territory={section.territory}
+                territoryName={resolveTerritoryNameFromNodes(flatRegistry, section.territory)}
                 groupCount={section.groups.length}
                 worked={section.worked}
                 total={section.total}
@@ -1103,6 +1228,24 @@ export default function TerritoryChecklistScreen() {
                 daysSinceCompleted={section.daysSinceCompleted}
                 mapOpen={isMapOpenForSection}
                 onToggle={() => toggleExpanded(`T:${section.territory}`)}
+                onEditTerritory={() => openTerritoryManager('edit', section.territory)}
+                onAddAddress={() =>
+                  openTerritoryManager(
+                    'new_address',
+                    section.territory,
+                    section.groups[0]?.groupKey,
+                    section.groups[0]?.groupLabel
+                  )
+                }
+                onShareTerritory={() => {
+                  const payload = formatShareTerritoryOrQuadraLocationsText({
+                    territoryNumber: section.territory,
+                    territoryName: resolveTerritoryNameFromNodes(flatRegistry, section.territory),
+                    items: section.groups.flatMap((g) => g.items),
+                    city: sectionCity,
+                  });
+                  shareLocationPayload(payload, 'whatsapp');
+                }}
                 onToggleMap={() => toggleInlineMapForTerritory(section.territory)}
                 onOpenGoogleMaps={() => {
                   const q0 = sectionQuadras[0];
@@ -1149,6 +1292,75 @@ export default function TerritoryChecklistScreen() {
                   <Text style={styles.groupTitle} numberOfLines={groupOpen ? undefined : 1}>{group.groupLabel}</Text>
                 </Pressable>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Pressable
+                    testID={`checklist-group-edit-${group.groupKey}`}
+                    onPress={() =>
+                      openTerritoryManager(
+                        'edit',
+                        section.territory,
+                        group.groupKey,
+                        group.groupLabel
+                      )
+                    }
+                    style={[
+                      styles.inlineGmapsChip,
+                      {
+                        backgroundColor: 'rgba(255, 184, 0, 0.16)',
+                        borderColor: 'rgba(255, 184, 0, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.inlineGmapsChipText, { color: '#FFB800', fontWeight: '800' }]}>
+                      ✏️ Nome/Nº
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`checklist-group-add-addr-${group.groupKey}`}
+                    onPress={() =>
+                      openTerritoryManager(
+                        'new_address',
+                        section.territory,
+                        group.groupKey,
+                        group.groupLabel
+                      )
+                    }
+                    style={[
+                      styles.inlineGmapsChip,
+                      {
+                        backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                        borderColor: 'rgba(16, 185, 129, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.inlineGmapsChipText, { color: '#34D399', fontWeight: '800' }]}>
+                      ➕ Endereço
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`checklist-group-share-${group.groupKey}`}
+                    onPress={() => {
+                      const payload = formatShareTerritoryOrQuadraLocationsText({
+                        territoryNumber: section.territory,
+                        territoryName: resolveTerritoryNameFromNodes(flatRegistry, section.territory),
+                        quadraKey: group.groupKey,
+                        quadraLabel: group.groupLabel,
+                        items: group.items,
+                        city: String(firstGroupMeta.city || firstGroupMeta.cidade || sectionCity),
+                      });
+                      shareLocationPayload(payload, 'whatsapp');
+                    }}
+                    style={[
+                      styles.inlineGmapsChip,
+                      {
+                        backgroundColor: 'rgba(34, 197, 94, 0.16)',
+                        borderColor: 'rgba(34, 197, 94, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.inlineGmapsChipText, { color: '#4ADE80', fontWeight: '800' }]}>
+                      📲 Compartilhar
+                    </Text>
+                  </Pressable>
                   <Pressable
                     testID={`checklist-group-map-btn-${group.groupKey}`}
                     onPress={() => toggleInlineMapForTerritory(section.territory)}
@@ -1485,6 +1697,28 @@ export default function TerritoryChecklistScreen() {
                               </Text>
                             </Pressable>
                           ) : null}
+
+                          <Pressable
+                            testID={`checklist-item-share-${item.key}`}
+                            onPress={() => {
+                              const payload = formatShareAddressLocationText(
+                                item,
+                                city || sectionCity
+                              );
+                              shareLocationPayload(payload, 'whatsapp');
+                            }}
+                            style={[
+                              styles.inlineGmapsChip,
+                              {
+                                backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                                borderColor: 'rgba(34, 197, 94, 0.45)',
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.inlineGmapsChipText, { color: '#4ADE80' }]}>
+                              📲 Compartilhar Local
+                            </Text>
+                          </Pressable>
                         </View>
                       </View>
 
@@ -1552,8 +1786,24 @@ export default function TerritoryChecklistScreen() {
         item={editingAddressItem}
         onClose={() => setEditingAddressItem(null)}
         onSave={async (key, updates) => {
-          await updateNode(resolveRawKey(key), updates);
+          const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
+          await commitTerritoryNodes(nextClean, {
+            activeTerritoryNumber: updates.meta?.territory_number || undefined,
+            message: '✓ Endereço atualizado e salvo na memória!',
+          });
         }}
+      />
+
+      {/* In-App Territory CRUD, Share & CSV Export Modal */}
+      <TerritoryManageModal
+        visible={manageModalOpen}
+        initialTab={manageModalTab}
+        targetTerritoryNumber={manageTargetTerritory}
+        targetGroupKey={manageTargetGroupKey}
+        targetGroupLabel={manageTargetGroupLabel}
+        cleanNodes={flatRegistry}
+        onClose={() => setManageModalOpen(false)}
+        onCommitNodes={commitTerritoryNodes}
       />
 
       {/* Note Editor Modal */}

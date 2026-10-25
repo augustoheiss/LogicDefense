@@ -237,9 +237,9 @@ export function DeltaSyncModal({
           {/* Header */}
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>🔄 Sincronização Assíncrona (Modo 1 • HLC v2)</Text>
+              <Text style={styles.title}>🔄 Juntar Marcações de Campo entre Celulares (Delta Sync)</Text>
               <Text style={styles.subtitle}>
-                100% Local-First • Dispositivo: {deviceId} • {opsExportCount} operações rastreadas
+                Sem servidor na nuvem • Seu aparelho: {deviceId} • {opsExportCount} casas/alterações registradas
               </Text>
             </View>
             <Pressable onPress={onClose} style={styles.closeBtn}>
@@ -249,11 +249,12 @@ export function DeltaSyncModal({
 
           {/* Education Callout */}
           <View style={styles.callout}>
-            <Text style={styles.calloutTitle}>💡 COMO FUNCIONA O MODO 1 (100% SOBERANO):</Text>
+            <Text style={styles.calloutTitle}>💡 PARA QUE SERVE ESTA TELA (EM LINGUAGEM SIMPLES):</Text>
             <Text style={styles.calloutText}>
-              1. Cada marcação, desmarcação (0/1), nota ou desenho de quadra guarda o carimbo exato (HLC) da edição.{'\n'}
-              2. Você pode exportar como texto ou arquivo <Text style={{ color: '#FFB800', fontWeight: '700' }}>.sekundo</Text> (com criptografia AES-256-GCM opcional).{'\n'}
-              3. Ao importar, o Sekundo concilia atributo por atributo sem sobrescrever edições mais recentes!
+              • Como o Sekundo funciona 100% no seu aparelho (sem internet/servidor), quando um colega sai no campo e marca casas como <Text style={{ color: '#34D399', fontWeight: '700' }}>✓ Feito</Text> no celular dele, essas marcações ficam só no aparelho dele.{'\n'}
+              • <Text style={{ color: '#FFB800', fontWeight: '700' }}>Passo 1 (No celular do colega):</Text> Ele clica em "Copiar Código" ou "Baixar .sekundo" e manda para você no WhatsApp.{'\n'}
+              • <Text style={{ color: '#38BDF8', fontWeight: '700' }}>Passo 2 (No seu aparelho):</Text> Você abre a aba "Receber Marcações do Colega", cola o código e o aplicativo junta automaticamente todas as casas trabalhadas sem apagar o que você já fez!{'\n'}
+              • <Text style={{ color: '#A7F3D0', fontWeight: '700' }}>Dica:</Text> Se você quer apenas mandar o endereço ou link do Google Maps para alguém visitar, use o botão verde <Text style={{ color: '#4ADE80', fontWeight: '700' }}>📲 Compartilhar</Text> direto no território ou endereço!
             </Text>
           </View>
 
@@ -268,7 +269,7 @@ export function DeltaSyncModal({
               style={[styles.tabBtn, tab === 'export' && styles.tabBtnActive]}
             >
               <Text style={[styles.tabBtnText, tab === 'export' && styles.tabBtnTextActive]}>
-                📤 Exportar Minhas Mudanças
+                📤 1. Enviar Minhas Marcações
               </Text>
             </Pressable>
             <Pressable
@@ -280,7 +281,7 @@ export function DeltaSyncModal({
               style={[styles.tabBtn, tab === 'import' && styles.tabBtnActive]}
             >
               <Text style={[styles.tabBtnText, tab === 'import' && styles.tabBtnTextActive]}>
-                📥 Importar Mudanças do Colega
+                📥 2. Receber Marcações do Colega
               </Text>
             </Pressable>
           </View>

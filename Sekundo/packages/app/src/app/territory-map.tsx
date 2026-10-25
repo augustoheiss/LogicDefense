@@ -55,6 +55,11 @@ import {
   buildWalkingSequenceRoute,
   formatRouteDistance,
   formatRouteDuration,
+  resolveTerritoryNameFromNodes,
+  updateSingleNodeInCleanRegistry,
+  buildTerritoryModelCsvText,
+  formatShareAddressLocationText,
+  formatShareTerritoryOrQuadraLocationsText,
 } from '@sekundo/core';
 import type {
   FlatSkeletonEntry,
@@ -66,6 +71,10 @@ import type {
   WalkingSequenceRoute,
 } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
+import {
+  TerritoryManageModal,
+  type TerritoryManageTab,
+} from '../components/territory/TerritoryManageModal';
 import {
   PinStyleModal,
   PIN_SHAPES,
@@ -86,7 +95,12 @@ import {
   buildSymbologyLegend,
   type MapSymbologyConfig,
 } from '../components/territory/mapSymbologyEngine';
-import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
+import {
+  loadSavedTerritoryRegistry,
+  persistTerritoryRegistryMutation,
+  triggerCsvFileDownloadOrCopy,
+  shareLocationPayload,
+} from '../storage/omniStorageBridge';
 import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
 
 const BUFFER_OPTIONS_METERS = [-5, 0, 3, 6, 10, 20, 40];
@@ -176,10 +190,10 @@ export default function TerritoryMapScreen() {
   }, [rawRegistry]);
 
   const flatRegistry = useMemo<FlatSkeletonEntry[]>(() => {
-    const partitioned = selectEnginePartitionNodes(rawRegistry || [], 'territory_logistics');
-    if (partitioned.length > 0) return partitioned;
     const savedPartitioned = selectEnginePartitionNodes(savedTerritoryRegistry, 'territory_logistics');
     if (savedPartitioned.length > 0) return savedPartitioned;
+    const partitioned = selectEnginePartitionNodes(rawRegistry || [], 'territory_logistics');
+    if (partitioned.length > 0) return partitioned;
     return buildTerritoriosS13HistoricalRegistry();
   }, [rawRegistry, savedTerritoryRegistry]);
 
@@ -188,6 +202,11 @@ export default function TerritoryMapScreen() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPinKey, setSelectedPinKey] = useState<string | null>(null);
   const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
+  const [manageModalOpen, setManageModalOpen] = useState<boolean>(false);
+  const [manageModalTab, setManageModalTab] = useState<TerritoryManageTab>('edit');
+  const [manageTargetGroupKey, setManageTargetGroupKey] = useState<string | undefined>(undefined);
+  const [manageTargetGroupLabel, setManageTargetGroupLabel] = useState<string | undefined>(undefined);
+  const [actionToast, setActionToast] = useState<string | null>(null);
   const [showRecencyModal, setShowRecencyModal] = useState<boolean>(false);
   const [recencySortMode, setRecencySortMode] = useState<TerritoryRecencySort>('priority_oldest_first');
   const [mapViewMode, setMapViewMode] = useState<'quadras' | 'pins'>('quadras');
@@ -585,32 +604,109 @@ export default function TerritoryMapScreen() {
     return allPins.find((p) => p.key === selectedPinKey) || null;
   }, [allPins, selectedPinKey]);
 
+  const showToast = (msg: string) => {
+    setActionToast(msg);
+    setTimeout(() => setActionToast(null), 3500);
+  };
+
+  const commitTerritoryNodes = async (
+    nextCleanTerritoryNodes: FlatSkeletonEntry[],
+    metaInfo?: { activeTerritoryNumber?: string; message?: string }
+  ) => {
+    setSavedTerritoryRegistry(nextCleanTerritoryNodes);
+    await persistTerritoryRegistryMutation({
+      eventId,
+      cleanTerritoryNodes: nextCleanTerritoryNodes,
+      rawRegistry: rawRegistry || [],
+      saveSkeletonFn: saveSkeleton,
+    });
+    if (metaInfo?.activeTerritoryNumber && selectedTerritory !== 'all') {
+      setSelectedTerritory(metaInfo.activeTerritoryNumber);
+    }
+    if (metaInfo?.message) {
+      showToast(metaInfo.message);
+    }
+  };
+
+  const openTerritoryManager = (
+    tab: TerritoryManageTab,
+    groupKey?: string,
+    groupLabel?: string
+  ) => {
+    setManageModalTab(tab);
+    setManageTargetGroupKey(groupKey);
+    setManageTargetGroupLabel(groupLabel);
+    setManageModalOpen(true);
+  };
+
+  const handleExportUpdatedCsv = async () => {
+    const csvText = buildTerritoryModelCsvText(flatRegistry);
+    const filename = `Sekundo_Territorios_Modelo_S13_${new Date().toISOString().slice(0, 10)}.csv`;
+    const res = await triggerCsvFileDownloadOrCopy(csvText, filename);
+    if (res === 'downloaded') {
+      showToast(`✅ Planilha CSV exportada (${filename})!`);
+    } else {
+      showToast('📋 CSV atualizado copiado para a área de transferência!');
+    }
+  };
+
+  const handleQuickShareQuadra = async (quadra: QuadraSummary) => {
+    const items = flatRegistry.filter(
+      (n) =>
+        n.type !== 'header' &&
+        (pathKey.equals(n.key, quadra.key) || pathKey.isDescendant(n.key, quadra.key))
+    );
+    const payload = formatShareTerritoryOrQuadraLocationsText({
+      territoryNumber: quadra.territoryNumber,
+      territoryName: resolveTerritoryNameFromNodes(flatRegistry, quadra.territoryNumber),
+      quadraLabel: quadra.label,
+      items,
+      city: cityList[0],
+    });
+    const res = await shareLocationPayload(payload, 'whatsapp');
+    if (res === 'copied') {
+      showToast(`📋 Localizações de "${quadra.label}" copiadas!`);
+    }
+  };
+
+  const handleQuickSharePin = async (pinKey: string) => {
+    const target = flatRegistry.find((n) => pathKey.equals(n.key, pinKey));
+    if (!target) return;
+    const payload = formatShareAddressLocationText(target);
+    const res = await shareLocationPayload(payload, 'whatsapp');
+    if (res === 'copied') {
+      showToast(`📋 Endereço "${target.label}" copiado!`);
+    }
+  };
+
   // Toggle work status directly
   const handleToggleWork = async (targetKey: string) => {
     const target = flatRegistry.find((n) => pathKey.equals(n.key, targetKey));
     if (!target) return;
     const meta = (target.meta || {}) as Record<string, any>;
-    const nextWorked = Number(meta.worked) === 1 ? 0 : 1;
+    const nextWorked: 0 | 1 = Number(meta.worked) === 1 ? 0 : 1;
 
-    await updateNode(targetKey, {
+    const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, targetKey, {
       value: nextWorked === 1 ? 'Trabalhado' : '',
       meta: buildWorkedMeta(meta, nextWorked),
     });
+    await commitTerritoryNodes(nextClean);
   };
 
   // Bulk toggle an entire Quadra (all address numbers) — one atomic write.
   const handleBulkToggleQuadra = async (quadra: QuadraSummary, markWorked: boolean) => {
     const now = new Date();
     const status: 0 | 1 = markWorked ? 1 : 0;
-    const patches = quadra.streets
-      .flatMap((s) => s.units)
-      .map((unit) => flatRegistry.find((n) => pathKey.equals(n.key, unit.key)))
-      .filter((n): n is FlatSkeletonEntry => Boolean(n))
-      .map((n) => ({
-        key: n.key,
-        updates: { value: markWorked ? 'Trabalhado' : '', meta: buildWorkedMeta(n.meta, status, now) },
-      }));
-    await updateNodes(patches);
+    const unitKeySet = new Set(quadra.streets.flatMap((s) => s.units.map((u) => u.key)));
+    const nextClean = flatRegistry.map((n) => {
+      if (!unitKeySet.has(n.key)) return n;
+      return {
+        ...n,
+        value: markWorked ? 'Trabalhado' : '',
+        meta: buildWorkedMeta(n.meta, status, now),
+      };
+    });
+    await commitTerritoryNodes(nextClean);
   };
 
   // Open address or directions in Google Maps (universal helper)
@@ -866,7 +962,7 @@ export default function TerritoryMapScreen() {
       return node;
     });
 
-    await saveSkeleton(updated);
+    await commitTerritoryNodes(updated);
   };
 
   // Helper: upserts the quadra header node in flatRegistry so even auto-grouped quadras
@@ -883,9 +979,27 @@ export default function TerritoryMapScreen() {
       metaUpdatedAt: new Date().toISOString(),
     };
     const nextMeta = patchFn(baseMeta);
-    await upsertNode(quadraKey, 'header', existing?.label || qInfo?.label || `Quadra ${quadraKey}`, {
-      meta: nextMeta,
-    });
+    let nextClean: FlatSkeletonEntry[];
+    if (existing) {
+      nextClean = flatRegistry.map((n) =>
+        pathKey.equals(n.key, quadraKey)
+          ? { ...n, meta: nextMeta }
+          : n
+      );
+    } else {
+      nextClean = [
+        ...flatRegistry,
+        {
+          key: quadraKey,
+          type: 'header',
+          label: qInfo?.label || `Quadra ${quadraKey}`,
+          value: '',
+          email: '',
+          meta: nextMeta,
+        },
+      ];
+    }
+    await commitTerritoryNodes(nextClean);
   };
 
   // Quadra Manual Customization Handlers
@@ -1140,7 +1254,7 @@ export default function TerritoryMapScreen() {
   };
 
   const handleDeltaSyncApplied = async (updatedRegistry: FlatSkeletonEntry[]) => {
-    await saveSkeleton(updatedRegistry);
+    await commitTerritoryNodes(updatedRegistry);
   };
 
   const cadTools = useMemo<CadToolDefinition[]>(() => {
@@ -1556,6 +1670,83 @@ export default function TerritoryMapScreen() {
         ),
       },
       {
+        id: 'manage',
+        icon: '🗂️',
+        label: 'Gerenciar Territórios, Endereços, Compartilhar & Exportar CSV',
+        shortcut: 'E',
+        accentColor: '#10B981',
+        description:
+          'Altere o nome ou número dos territórios, crie novos territórios ou endereços direto no app (salvo na memória), compartilhe links de localização (WhatsApp / Google Maps) sem burocracia ou exporte a nova planilha CSV atualizada.',
+        confirmLabel: '🗂️ Abrir Gerenciador de Territórios & CSV',
+        onConfirm: () => {
+          openTerritoryManager('edit');
+        },
+        renderCustomControls: (closePopover) => (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            <Pressable
+              testID="cad-manage-edit-territory"
+              onPress={() => {
+                closePopover();
+                openTerritoryManager('edit');
+              }}
+              style={[
+                styles.mergeTerritoryBtn,
+                { marginTop: 0, borderColor: '#FFB800', backgroundColor: 'rgba(255, 184, 0, 0.14)' },
+              ]}
+            >
+              <Text style={[styles.mergeTerritoryBtnText, { color: '#FFB800' }]}>
+                ✏️ Mudar Nome / Nº do Território
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="cad-manage-new-territory"
+              onPress={() => {
+                closePopover();
+                openTerritoryManager('new_territory');
+              }}
+              style={[
+                styles.mergeTerritoryBtn,
+                { marginTop: 0, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.14)' },
+              ]}
+            >
+              <Text style={[styles.mergeTerritoryBtnText, { color: '#34D399' }]}>
+                ➕ Criar Novo Território
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="cad-manage-new-address"
+              onPress={() => {
+                closePopover();
+                openTerritoryManager('new_address');
+              }}
+              style={[
+                styles.mergeTerritoryBtn,
+                { marginTop: 0, borderColor: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.14)' },
+              ]}
+            >
+              <Text style={[styles.mergeTerritoryBtnText, { color: '#38BDF8' }]}>
+                🏠 + Adicionar Endereço
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="cad-manage-share"
+              onPress={() => {
+                closePopover();
+                openTerritoryManager('share_export');
+              }}
+              style={[
+                styles.mergeTerritoryBtn,
+                { marginTop: 0, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.22)' },
+              ]}
+            >
+              <Text style={[styles.mergeTerritoryBtnText, { color: '#34D399' }]}>
+                📲 Compartilhar Localização / 📤 Exportar CSV
+              </Text>
+            </Pressable>
+          </View>
+        ),
+      },
+      {
         id: 'recency',
         icon: '📊',
         label: 'Painel de Recência e Prioridade',
@@ -1571,15 +1762,38 @@ export default function TerritoryMapScreen() {
       {
         id: 'sync',
         icon: '🔄',
-        label: 'Sincronização Soberana (Delta Sync)',
+        label: 'Sincronizar Progresso em Equipe (Delta Sync)',
         shortcut: 'D',
         accentColor: '#3B82F6',
         description:
-          'Permite exportar ou mesclar pacotes criptografados de progresso de campo (CRDT / HLC) sem depender de servidores centrais.',
-        confirmLabel: '🔄 Abrir Console Delta Sync',
+          'PARA QUE SERVE: Use apenas quando 2 ou mais pessoas trabalharam no mesmo território em celulares separados e você quer juntar as casas marcadas ("Trabalhado") sem perder o que cada um marcou.\n💡 Quer só mandar o endereço/mapa no WhatsApp ou baixar a planilha CSV? Use o botão verde "📲 Compartilhar / 📤 Exportar CSV" abaixo!',
+        confirmLabel: '🔄 Juntar Progresso de 2 Celulares (Delta Sync)',
         onConfirm: () => {
           setShowDeltaSyncModal(true);
         },
+        renderCustomControls: (closePopover) => (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            <Pressable
+              testID="cad-sync-quick-share-btn"
+              onPress={() => {
+                closePopover();
+                openTerritoryManager('share_export');
+              }}
+              style={[
+                styles.mergeTerritoryBtn,
+                {
+                  marginTop: 0,
+                  borderColor: '#10B981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                },
+              ]}
+            >
+              <Text style={[styles.mergeTerritoryBtnText, { color: '#34D399' }]}>
+                📲 Só quero compartilhar localização (WhatsApp / Maps) ou baixar CSV
+              </Text>
+            </Pressable>
+          </View>
+        ),
       },
       {
         id: 'operator',
@@ -1673,9 +1887,42 @@ export default function TerritoryMapScreen() {
                 {stats.percent}% ({stats.worked}/{stats.total})
               </Text>
             </View>
+            <Pressable
+              testID="map-quick-manage-btn"
+              onPress={() => openTerritoryManager('edit')}
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                borderColor: 'rgba(16, 185, 129, 0.5)',
+                borderWidth: 1,
+                borderRadius: 7,
+                paddingVertical: 5,
+                paddingHorizontal: 8,
+                marginLeft: 4,
+              }}
+              accessibilityLabel="Gerenciar territórios, endereços, compartilhar ou exportar CSV"
+            >
+              <Text style={{ color: '#34D399', fontSize: 11, fontWeight: '800' }}>
+                ✏️ Territórios / 📤 CSV
+              </Text>
+            </Pressable>
           </View>
         }
       />
+      {actionToast ? (
+        <View
+          style={{
+            backgroundColor: 'rgba(16, 185, 129, 0.18)',
+            borderColor: '#10B981',
+            borderWidth: 1,
+            paddingVertical: 6,
+            paddingHorizontal: 14,
+          }}
+        >
+          <Text style={{ color: '#34D399', fontSize: 12, fontWeight: '700' }}>
+            {actionToast}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Main Workspace (Map + Responsive Drawer/BottomSheet) */}
       <View style={styles.workspace}>
@@ -2127,7 +2374,7 @@ export default function TerritoryMapScreen() {
 
             <ScrollView style={styles.drawerContent} contentContainerStyle={{ gap: 14 }}>
               {/* Quick Navigation & Route Bar for Selected Quadra */}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                 <Pressable
                   testID="quadra-drawer-gmaps-btn"
                   onPress={() =>
@@ -2142,7 +2389,7 @@ export default function TerritoryMapScreen() {
                       mode: 'directions',
                     })
                   }
-                  style={[styles.gpsNavBtn, { flex: 1 }]}
+                  style={[styles.gpsNavBtn, { flex: 1, minWidth: 140 }]}
                 >
                   <Text style={styles.gpsNavBtnText}>🗺️ Google Maps / Rota</Text>
                 </Pressable>
@@ -2154,6 +2401,7 @@ export default function TerritoryMapScreen() {
                     styles.gpsNavBtn,
                     {
                       flex: 1,
+                      minWidth: 140,
                       backgroundColor: 'rgba(16, 185, 129, 0.14)',
                       borderColor: 'rgba(16, 185, 129, 0.45)',
                     },
@@ -2161,6 +2409,65 @@ export default function TerritoryMapScreen() {
                 >
                   <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
                     {routingBusy ? '⏳ Calculando...' : '🧭 Rota pelas Ruas da Quadra'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Zero-Bureaucracy Share & Edit Territory/Quadra Bar */}
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                <Pressable
+                  testID="quadra-drawer-share-btn"
+                  onPress={() => handleQuickShareQuadra(selectedQuadra)}
+                  style={[
+                    styles.gpsNavBtn,
+                    {
+                      flex: 1,
+                      minWidth: 140,
+                      backgroundColor: 'rgba(16, 185, 129, 0.22)',
+                      borderColor: '#10B981',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
+                    📲 Compartilhar Localizações
+                  </Text>
+                </Pressable>
+                <Pressable
+                  testID="quadra-drawer-edit-btn"
+                  onPress={() =>
+                    openTerritoryManager('edit', selectedQuadra.key, selectedQuadra.label)
+                  }
+                  style={[
+                    styles.gpsNavBtn,
+                    {
+                      flex: 1,
+                      minWidth: 120,
+                      backgroundColor: 'rgba(255, 184, 0, 0.14)',
+                      borderColor: 'rgba(255, 184, 0, 0.45)',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gpsNavBtnText, { color: '#FFB800' }]}>
+                    ✏️ Mudar Nome / Nº
+                  </Text>
+                </Pressable>
+                <Pressable
+                  testID="quadra-drawer-add-address-btn"
+                  onPress={() =>
+                    openTerritoryManager('new_address', selectedQuadra.key, selectedQuadra.label)
+                  }
+                  style={[
+                    styles.gpsNavBtn,
+                    {
+                      flex: 1,
+                      minWidth: 120,
+                      backgroundColor: 'rgba(56, 189, 248, 0.14)',
+                      borderColor: 'rgba(56, 189, 248, 0.45)',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gpsNavBtnText, { color: '#38BDF8' }]}>
+                    🏠 + Endereço
                   </Text>
                 </Pressable>
               </View>
@@ -2658,6 +2965,23 @@ export default function TerritoryMapScreen() {
                   <Text style={styles.gpsNavBtnText}>🗺️ Abrir no Google Maps / Traçar Rota</Text>
                 </Pressable>
 
+                {/* Share Location without bureaucracy */}
+                <Pressable
+                  testID="pin-drawer-share-btn"
+                  onPress={() => handleQuickSharePin(selectedPin.key)}
+                  style={[
+                    styles.gpsNavBtn,
+                    {
+                      backgroundColor: 'rgba(16, 185, 129, 0.22)',
+                      borderColor: '#10B981',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gpsNavBtnText, { color: '#34D399' }]}>
+                    📲 Compartilhar Localização (WhatsApp / Maps)
+                  </Text>
+                </Pressable>
+
                 {/* Trace Route Inside Our Map (Single or Multi-Stop Queue) */}
                 {selectedPin.lat !== null && selectedPin.lng !== null ? (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -2745,8 +3069,22 @@ export default function TerritoryMapScreen() {
         item={editingAddressItem}
         onClose={() => setEditingAddressItem(null)}
         onSave={async (key, updates) => {
-          await updateNode(key, updates);
+          const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
+          await commitTerritoryNodes(nextClean);
+          showToast('✅ Endereço salvo na memória!');
         }}
+      />
+
+      {/* Territory & Address Manager Modal (Edit Name/Number, Create Territory, Add Address, Share & Export CSV) */}
+      <TerritoryManageModal
+        visible={manageModalOpen}
+        initialTab={manageModalTab}
+        targetTerritoryNumber={selectedTerritory !== 'all' ? selectedTerritory : territoryList[0]}
+        targetGroupKey={manageTargetGroupKey}
+        targetGroupLabel={manageTargetGroupLabel}
+        cleanNodes={flatRegistry}
+        onClose={() => setManageModalOpen(false)}
+        onCommitNodes={commitTerritoryNodes}
       />
 
       {/* Territory Recency & Priority Modal */}

@@ -2,7 +2,8 @@
  * Component: TerritoryAccordionHeader
  *
  * Collapsible section header used by the field checklist to group units by territory.
- * Shows territory id, group count, recency badge, quick batch/publisher actions,
+ * Shows territory id, territory name, group count, recency badge, quick batch/publisher actions,
+ * in-app edit (`✏️ Nome/Nº`), add address (`➕`), zero-bureaucracy share (`📲`),
  * and a compact progress bar so a collapsed list answers "how much is left?" at a glance.
  */
 
@@ -11,6 +12,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface Props {
   territory: string;
+  territoryName?: string;
   groupCount: number;
   worked: number;
   total: number;
@@ -22,10 +24,14 @@ interface Props {
   onOpenPublisher?: () => void;
   onToggleMap?: () => void;
   onOpenGoogleMaps?: () => void;
+  onEditTerritory?: () => void;
+  onAddAddress?: () => void;
+  onShareTerritory?: () => void;
 }
 
 export function TerritoryAccordionHeader({
   territory,
+  territoryName,
   groupCount,
   worked,
   total,
@@ -37,6 +43,9 @@ export function TerritoryAccordionHeader({
   onOpenPublisher,
   onToggleMap,
   onOpenGoogleMaps,
+  onEditTerritory,
+  onAddAddress,
+  onShareTerritory,
 }: Props) {
   const percent = total > 0 ? Math.round((worked / total) * 100) : 0;
   const done = total > 0 && worked === total;
@@ -48,12 +57,15 @@ export function TerritoryAccordionHeader({
         style={styles.mainClickArea}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={`Território ${territory}, ${worked} de ${total} concluídas`}
+        accessibilityLabel={`Território ${territory}${territoryName ? ` ${territoryName}` : ''}, ${worked} de ${total} concluídas`}
       >
         <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
         <View style={styles.body}>
           <View style={styles.topRow}>
-            <Text style={styles.badge}>{territory}</Text>
+            <Text style={styles.badge}>
+              Território {territory}
+              {territoryName ? ` — ${territoryName}` : ''}
+            </Text>
             <Text style={styles.meta}>
               {groupCount} {groupCount === 1 ? 'quadra' : 'quadras'} • {worked}/{total} ({percent}%)
             </Text>
@@ -75,6 +87,39 @@ export function TerritoryAccordionHeader({
       </Pressable>
 
       <View style={styles.actions}>
+        {onEditTerritory ? (
+          <Pressable
+            testID={`checklist-territory-edit-btn-${territory}`}
+            onPress={onEditTerritory}
+            style={styles.editBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar nome e número do território ${territory}`}
+          >
+            <Text style={styles.editBtnText}>✏️ Nome/Nº</Text>
+          </Pressable>
+        ) : null}
+        {onAddAddress ? (
+          <Pressable
+            testID={`checklist-territory-add-btn-${territory}`}
+            onPress={onAddAddress}
+            style={styles.editBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Adicionar endereço no território ${territory}`}
+          >
+            <Text style={styles.editBtnText}>➕ Endereço</Text>
+          </Pressable>
+        ) : null}
+        {onShareTerritory ? (
+          <Pressable
+            testID={`checklist-territory-share-btn-${territory}`}
+            onPress={onShareTerritory}
+            style={styles.shareBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Compartilhar localizações do território ${territory}`}
+          >
+            <Text style={styles.shareBtnText}>📲 Compartilhar</Text>
+          </Pressable>
+        ) : null}
         {onToggleMap ? (
           <Pressable
             testID={`checklist-territory-map-btn-${territory}`}
@@ -207,7 +252,34 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
+  },
+  editBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 184, 0, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 184, 0, 0.45)',
+  },
+  editBtnText: {
+    color: '#FFB800',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  shareBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+    backgroundColor: 'rgba(34, 197, 94, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.45)',
+  },
+  shareBtnText: {
+    color: '#4ADE80',
+    fontSize: 11,
+    fontWeight: '800',
   },
   pubBtn: {
     paddingVertical: 6,
