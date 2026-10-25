@@ -1,10 +1,11 @@
 /**
- * sw.js — Service Worker do CV Maker (Cache Offline & Fontes Locais)
- * =================================================================
- * Garante disponibilidade 100% offline para renderização tipográfica sem Font Metric Shift.
+ * sw.js — Service Worker do Portal Heiss-Lab & CV Maker (Cache Offline & Fontes Locais)
+ * =====================================================================================
+ * Garante disponibilidade offline para renderização tipográfica sem Font Metric Shift
+ * e preserva o roteamento específico de páginas pré-renderizadas (SSG Shells).
  */
 
-const CACHE_NAME = 'cv-maker-offline-v3'
+const CACHE_NAME = 'heisslab-offline-v4'
 
 const STATIC_ASSETS = [
   '/',
@@ -68,7 +69,7 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-// Interceptação: Cache First para fontes e Stale-While-Revalidate para outros ativos
+// Interceptação: Cache First para fontes e Network First para documentos e ativos
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
@@ -94,7 +95,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 2. Outros recursos: Network First com fallback para Cache
+  // 2. Outros recursos e documentos: Network First com fallback para Cache específico da rota
   event.respondWith(
     fetch(event.request).then((response) => {
       if (response && response.status === 200 && event.request.method === 'GET') {
@@ -120,6 +121,8 @@ self.addEventListener('fetch', (event) => {
             Response.error()
           )
         }
+        const routeShell = await caches.match(`${url.pathname.replace(/\/$/, '')}/index.html`)
+        if (routeShell) return routeShell
         return caches.match('/index.html')
       }
       return Response.error()

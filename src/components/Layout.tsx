@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
+import { RouteSeoHead } from './RouteSeoHead'
 import '../styles/portal.css'
 
 const NAV_LINKS = [
@@ -9,7 +10,7 @@ const NAV_LINKS = [
     label: 'Laboratório',
     icon: '🔬',
     children: [
-      { to: '/laboratorio/cv-maker',       label: 'CV Maker 2.0',            icon: '📄', desc: '5 Arquétipos YAML & Super Dashboard', isExternal: false },
+      { to: '/laboratorio/cv-maker',       label: 'CV Maker 3.0',            icon: '📄', desc: '5 Arquétipos YAML & Super Dashboard', isExternal: false },
       { to: '/laboratorio/assistente-moeda', label: 'Assistente Moeda',        icon: '💰', desc: 'Gestão Financeira & Relatórios',      isExternal: true },
       { to: '/laboratorio/ocorrencias',    label: 'Gerador de Ocorrências',  icon: '📋', desc: 'Preenchimento inteligente de PDFs',   isExternal: false },
       { to: '/laboratorio/api-port',       label: 'Porta USB — API Port',    icon: '🔌', desc: 'Leitor dinâmico de contratos OpenAPI',isExternal: false },
@@ -23,6 +24,7 @@ const NAV_LINKS = [
 export function Layout() {
   return (
     <div className="portal-root">
+      <RouteSeoHead />
       {/* ── Navbar ── */}
       <nav className="navbar">
         <NavLink to="/" className="navbar__logo" end>

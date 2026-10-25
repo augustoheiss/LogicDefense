@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -10,6 +12,8 @@ interface LessonContentProps {
 }
 
 export function LessonContent({ item }: LessonContentProps) {
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null)
+
   // ── Empty state ────────────────────────────────────────────────────────────
   if (!item) {
     return (
@@ -95,6 +99,15 @@ export function LessonContent({ item }: LessonContentProps) {
   }
   const icon = SUBJECT_ICONS[lesson.subject] ?? '📄'
   const cleanContent = cleanRichContent(lesson.richContent)
+  const shareUrl = `https://heisslab.com.br/repositorio/${lesson.slug}`
+
+  function handleCopyShareLink() {
+    if (!lesson) return
+    navigator.clipboard?.writeText(shareUrl).then(() => {
+      setCopiedSlug(lesson.slug)
+      setTimeout(() => setCopiedSlug(null), 2500)
+    })
+  }
 
   return (
     <div className="lesson-content">
@@ -108,7 +121,7 @@ export function LessonContent({ item }: LessonContentProps) {
         <h1 className="lesson-content__title">{lesson.title}</h1>
         <p className="lesson-content__desc">{lesson.description}</p>
 
-        <div className="lesson-content__meta">
+        <div className="lesson-content__meta" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
           <span className="lesson-content__meta-item">🎓 {lesson.grade}</span>
           <span className="lesson-content__meta-item">📄 {lesson.pages} páginas</span>
           {lesson.available && (
@@ -116,6 +129,30 @@ export function LessonContent({ item }: LessonContentProps) {
               ✅ PDF disponível
             </span>
           )}
+          <Link
+            to={`/repositorio/${lesson.slug}`}
+            className="lesson-content__meta-item"
+            style={{ color: 'var(--accent, #38bdf8)', textDecoration: 'none', fontWeight: 600 }}
+            title="Abrir URL exclusiva desta aula (com preview próprio para compartilhamento)"
+          >
+            ↗ Página Exclusiva da Aula
+          </Link>
+          <button
+            type="button"
+            onClick={handleCopyShareLink}
+            style={{
+              background: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              color: '#38bdf8',
+              borderRadius: 6,
+              padding: '4px 10px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {copiedSlug === lesson.slug ? '✅ Link copiado!' : '🔗 Copiar Link com Preview'}
+          </button>
         </div>
       </header>
 
@@ -135,9 +172,9 @@ export function LessonContent({ item }: LessonContentProps) {
           <span className="lesson-cta__eyebrow">📥 Material Imprimível</span>
           <h2 className="lesson-cta__title">Gostou desta aula?</h2>
           <p className="lesson-cta__desc">
-            Baixe o material original em PDF para imprimir ou usar com seus alunos.
+            Baixe o material original em PDF para imprimir ou compartilhe o link direto desta aula.
           </p>
-          <div className="lesson-cta__actions">
+          <div className="lesson-cta__actions" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             <a
               href={lesson.pdfPath}
               download
@@ -147,6 +184,9 @@ export function LessonContent({ item }: LessonContentProps) {
             >
               ⬇ Baixar PDF Completo
             </a>
+            <Link to={`/repositorio/${lesson.slug}`} className="btn-outline">
+              ↗ Link Direto (/repositorio/{lesson.slug})
+            </Link>
           </div>
         </div>
       )}

@@ -1,0 +1,44 @@
+# Heiss-Lab · Matemática Soberana, Jogos Cognitivos & Ferramentas Local-First
+
+> Portal educacional aberto e laboratório de Inteligência Artificial criado pelo Prof. Augusto Heiss (https://heisslab.com.br). Reúne 5 jogos matemáticos interativos no navegador, 5 ferramentas SaaS soberanas (Local-First) e 18 apostilas didáticas em LaTeX/PDF com 40 vídeos educativos.
+
+## Páginas Principais (Hubs)
+- [Página Inicial](https://heisslab.com.br/): Portal Heiss-Lab & Logic Defense — Matemática Soberana, Filosofia e IA.
+- [Menu de Jogos Cognitivos](https://heisslab.com.br/jogos): Suíte de 5 jogos matemáticos gratuitos no navegador (Zero Game Over).
+- [Laboratório de IA & Ferramentas](https://heisslab.com.br/laboratorio): Ferramentas SaaS Local-First e vídeos de pesquisa.
+- [Repositório Didático Aberto](https://heisslab.com.br/repositorio): 18 apostilas em LaTeX/PDF e 40 vídeos organizados em 9 trilhas temáticas.
+- [Sobre o Heiss-Lab](https://heisslab.com.br/sobre): Manifesto pedagógico e arquitetural do Prof. Augusto Heiss.
+
+## Ferramentas SaaS do Laboratório
+- [CV Maker 3.0 · Compilador Universal de Currículos em YAML e PDF com IA](https://heisslab.com.br/laboratorio/cv-maker): Crie currículos de alta densidade com 5 arquétipos em YAML, fórmula X-Y-Z do Google, editor visual Canvas livre, temas executivos e exportação PDF/HTML perfeita.
+- [Sekundo · Planejador Local-First de Finanças, Rotinas, Mapas e PDFs](https://heisslab.com.br/laboratorio/sekundo): Planejador agnóstico e 100% Local-First com chaves hierárquicas infinitas, sincronização P2P WebRTC efêmera, mapas interativos e preenchimento inteligente de PDFs.
+- [Assistente Moeda · Gestão Financeira Diária e Relatórios Local-First](https://heisslab.com.br/laboratorio/assistente-moeda): Controle receitas diárias, acompanhe médias automáticas (diária, semanal e mensal), simule cenários e exporte relatórios prontos para o WhatsApp 100% no seu dispositivo.
+- [Gerador de Ocorrências Escolares em PDF com IA (Zero Dados Retidos)](https://heisslab.com.br/laboratorio/ocorrencias): Faça upload do formulário escolar em PDF, redija ou formalize o relato pedagógico e preencha o documento oficial com precisão milimétrica. Zero dados armazenados.
+- [Porta USB Universal (API Port) · Interface Dinâmica OpenAPI](https://heisslab.com.br/laboratorio/api-port): Conecte sistemas legados sem interface gráfica. Carregue qualquer contrato OpenAPI/Swagger e gere formulários validados, tabelas e exportação HAR automaticamente.
+
+## Jogos Educativos no Navegador
+- [Logic Defense · Tower Defense de Cálculo Mental](https://heisslab.com.br/jogos/logic-defense): Defenda o Museu dos Números contra invasores resolvendo contas em tempo real. Construa torres, gerencie energia e gire a Roleta SPIN Esfera no navegador.
+- [Logic Ascension · RPG Roguelike de Ordem das Operações (PEMDAS)](https://heisslab.com.br/jogos/logic-ascension): Explore masmorras com Névoa de Guerra, escolha entre Buff ou Sacrifício e derrote monstros gerados pelo Oráculo Matemático resolvendo PEMDAS em combate.
+- [Logic Invaders · Arcade Shooter de Cálculo Mental Reflexivo](https://heisslab.com.br/jogos/logic-invaders): Naves alienígenas descem carregando equações e sua munição são os números. Atire a resposta certa ou veja o inimigo acelerar com Feedback Elástico (Zero Game Over).
+- [Logic Friction · Arena 3D WebGL de Aritmética e Física Real](https://heisslab.com.br/jogos/logic-friction): Arena 3D com física Rapier e Three.js no navegador. Movimentação WASD, combate corpo-a-corpo, construção de torres e equações 3D para desbloquear buffs divinos.
+- [Logic Tetris (Genesis Edition) · Puzzle Base-10 e Protocolo Fênix 142857](https://heisslab.com.br/jogos/logic-tetris): Onde a Matemática salva sua vida na Matriz 10x20. Use atalhos visuais Heiss-Lab para metamorfosear peças [M], selar buracos [B] e ativar o Protocolo Fênix 142857.
+
+## Apostilas e Aulas do Repositório Didático (LaTeX & PDF)
+- [O Segredo da Balança: A Filosofia do Sinal de Igual · Aula e PDF](https://heisslab.com.br/repositorio/equacao-balanca): Esqueça tudo o que você acha que sabe sobre o sinal de igual (=). Descubra como a álgebra funciona usando o princípio inquebrável da balança perfeita!
+- [A Balança da Vida: A Máquina do Tempo das Equações · Aula e PDF](https://heisslab.com.br/repositorio/equacoes-maquina-do-tempo): Aprenda a resolver equações mais complexas usando o conceito de viagem no tempo. Desfaça as ações matemáticas passo a passo para isolar o X.
+- [Operações Aritméticas com Frações: A Construção da Balança · Aula e PDF](https://heisslab.com.br/repositorio/fracoes-operacoes): Entenda a essência dos raciocínios matemáticos impressos nas funções e nas partes das coisas. Fazer contas com razões e proporções nunca foi tão fascinante.
+- [O Infinito na Palma da Mão: O Segredo das Dízimas Periódicas · Aula e PDF](https://heisslab.com.br/repositorio/dizima): Você já parou para pensar por que algumas frações representam números decimais infinitos, que não acabam nunca?  Qual é a função desse tipo de número na ma...
+- [O Universo em 100 Partes: A Mágica da Porcentagem · Aula e PDF](https://heisslab.com.br/repositorio/magica-porcentagem): Aprenda a comparar as grandezas do universo dividindo-as em 100 partes iguais. Domine os três caminhos mentais para calcular porcentagens rapidamente.
+- [O Segredo dos Números: Por Que o Mundo é Dividido Assim? · Aula e PDF](https://heisslab.com.br/repositorio/segredo-divisores): Descubra por que medimos o tempo em 60 minutos, o círculo em 360 graus e usamos a base 10 para quase tudo. Uma investigação sobre o superpoder matemático d...
+- [Recuperação: Matemática Elegante e Cálculo Mental · Aula e PDF](https://heisslab.com.br/repositorio/matematica-elegante-recuperacao): Não faça contas enormes! Use a fatoração, a simplificação e a lógica para resolver esses 20 desafios rápidos de cálculo mental.
+- [Super Lista 1: Dobrar, Meiar e Propriedade Distributiva · Aula e PDF](https://heisslab.com.br/repositorio/aritmetica-elegante-01): Primeira bateria de exercícios práticos de cálculo mental. Domine as técnicas de dobrar e meiar, além da fatoração básica.
+- [Super Lista 2: Diferença de Quadrados e Divisão Simplificada · Aula e PDF](https://heisslab.com.br/repositorio/aritmetica-elegante-02): Segunda bateria de exercícios práticos. Explore o poder das potências, a clássica diferença de quadrados e simplifique divisões complexas.
+- [Avançado 1: O Poder da Diferença de Quadrados e Fator Comum · Aula e PDF](https://heisslab.com.br/repositorio/diferenca-quadrados-fator-comum): Eleve o nível do cálculo mental com expressões envolvendo fatoração avançada e produtos notáveis aplicados na prática.
+- [Avançado 2: Quadrados Perfeitos e Ajustes Finos · Aula e PDF](https://heisslab.com.br/repositorio/quadrados-perfeitos-ajustes): Desafios finais de simplificação algébrica e aritmética usando trinômio quadrado perfeito, fatoração por agrupamento e ajustes decimais.
+- [A Regra de Ouro: Proporção Direta e o Equilíbrio · Aula e PDF](https://heisslab.com.br/repositorio/regra-de-ouro-1): A regra de três não é sobre achar o X, é sobre o Equilíbrio do Universo. Explore frações equivalentes e proporções diretas.
+- [A Regra de Ouro – Aula 2: A Engrenagem do Tempo · Aula e PDF](https://heisslab.com.br/repositorio/regra-de-ouro-2): A regra de três inversa é a matemática do trabalho em equipe: quando dividimos o peso de um problema, multiplicamos nosso tempo livre.
+- [A Matemática dos Sinais: O Peso e o Alívio · Aula e PDF](https://heisslab.com.br/repositorio/matematica-sinais-peso-alivio): As operações com números inteiros não são só regrinhas decoradas; elas descrevem a vida real: nossos ganhos, dívidas, quedas e superações.
+- [As 3 Regras de Ouro dos Números Negativos · Aula e PDF](https://heisslab.com.br/repositorio/regras-de-ouro-negativos): Transforme a confusão dos sinais em clareza lógica usando as analogias do elevador, do dinheiro e a prova irrefutável do perdão de dívidas.
+- [Expressões Numéricas: A Trincheira de Defesa do Cérebro · Aula e PDF](https://heisslab.com.br/repositorio/expressoes-numericas-trincheira): A ordem das operações não é para complicar, é a sintaxe da comunicação. Combata a atrofia cognitiva e religue as sinapses do seu córtex pré-frontal.
+- [A Magia do Cálculo Mental: 40 Desafios de Multiplicação · Aula e PDF](https://heisslab.com.br/repositorio/magia-calculo-mental-multiplicacao): Abandone as contas armadas! Aprenda 8 estratégias poderosas para multiplicar de cabeça usando o dobro, a metade e a aproximação.
+- [Lista de Exercícios: Os Desafios da Multiplicação · Aula e PDF](https://heisslab.com.br/repositorio/desafios-multiplicacao-exercicios): Cinco missões práticas organizadas por grupos, linhas e combinações para você treinar a lógica invisível da multiplicação.

@@ -1,4 +1,56 @@
+# Heiss-Lab (heisslab.com.br) — Search, Social Preview & AI Engine Optimization Policy
 User-agent: *
 Allow: /
 
-Sitemap: https://www.heisslab.com.br/sitemap.xml
+# Search Engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Social Graph Preview Crawlers (WhatsApp, LinkedIn, Facebook, X, Telegram, Discord)
+User-agent: WhatsApp
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Facebot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+# AI Search & Citation Crawlers (AEO Foundations)
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://heisslab.com.br/sitemap.xml

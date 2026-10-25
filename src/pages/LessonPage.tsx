@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, Link, Navigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
@@ -19,10 +20,20 @@ function getIcon(subject: string): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 export function LessonPage() {
   const { slug } = useParams<{ slug: string }>()
+  const [copied, setCopied] = useState(false)
   const lesson = lessonPlans.find((p) => p.slug === slug)
 
   // 404 — redirect back to the repository index
   if (!lesson) return <Navigate to="/repositorio" replace />
+
+  const shareUrl = `https://heisslab.com.br/repositorio/${lesson.slug}`
+
+  function handleCopyLink() {
+    navigator.clipboard?.writeText(shareUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
 
   return (
     <div className="lesson-page">
@@ -46,7 +57,7 @@ export function LessonPage() {
         <h1 className="lesson-page__title">{lesson.title}</h1>
         <p className="lesson-page__desc">{lesson.description}</p>
 
-        <div className="lesson-page__meta">
+        <div className="lesson-page__meta" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
           <span className="lesson-page__meta-item">
             🎓 {lesson.grade}
           </span>
@@ -58,6 +69,22 @@ export function LessonPage() {
               ✅ PDF disponível
             </span>
           )}
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            style={{
+              background: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              color: '#38bdf8',
+              borderRadius: 6,
+              padding: '4px 10px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {copied ? '✅ Link copiado!' : '🔗 Compartilhar Aula'}
+          </button>
         </div>
       </header>
 
@@ -95,7 +122,7 @@ export function LessonPage() {
             </a>
           ) : (
             <a
-              href="mailto:augustoheiss@gmail.com?subject=Interesse no PDF: ${lesson.title}"
+              href={`mailto:augustoheiss@gmail.com?subject=Interesse no PDF: ${encodeURIComponent(lesson.title)}`}
               className="btn-outline"
             >
               ✉ Avise-me quando estiver pronto

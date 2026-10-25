@@ -1,124 +1,213 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <!-- Página Inicial -->
   <url>
-    <loc>https://www.heisslab.com.br/</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>daily</changefreq>
+    <loc>https://heisslab.com.br/</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
-
-  <!-- Ferramentas SaaS do Laboratório -->
   <url>
-    <loc>https://www.heisslab.com.br/laboratorio/cv-maker</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/jogos</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/cv-maker</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/jogos/logic-defense</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/jogos/logic-ascension</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/jogos/logic-invaders</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/jogos/logic-friction</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/jogos/logic-tetris</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/laboratorio/assistente-moeda/</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/laboratorio</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/laboratorio/assistente-moeda</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/laboratorio/cv-maker</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/laboratorio/ocorrencias</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.heisslab.com.br/laboratorio/api-port</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.heisslab.com.br/laboratorio/sekundo/</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.heisslab.com.br/laboratorio/sekundo</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.heisslab.com.br/laboratorio</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/laboratorio/sekundo</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <!-- Jogos Educacionais -->
-  <url>
-    <loc>https://www.heisslab.com.br/jogos</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/jogos/logic-defense</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.heisslab.com.br/jogos/logic-ascension</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.heisslab.com.br/jogos/logic-invaders</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.heisslab.com.br/jogos/logic-friction</loc>
-    <lastmod>2026-08-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-
-  <!-- Repositório & Institucional -->
-  <url>
-    <loc>https://www.heisslab.com.br/repositorio</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/laboratorio/assistente-moeda</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/laboratorio/ocorrencias</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/sobre</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/laboratorio/api-port</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/sobre</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/privacidade</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/privacidade</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://www.heisslab.com.br/termos</loc>
-    <lastmod>2026-08-30</lastmod>
+    <loc>https://heisslab.com.br/termos</loc>
+    <lastmod>2026-10-25</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/equacao-balanca</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/equacoes-maquina-do-tempo</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/fracoes-operacoes</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/dizima</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/magica-porcentagem</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/segredo-divisores</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/matematica-elegante-recuperacao</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/aritmetica-elegante-01</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/aritmetica-elegante-02</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/diferenca-quadrados-fator-comum</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/quadrados-perfeitos-ajustes</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/regra-de-ouro-1</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/regra-de-ouro-2</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/matematica-sinais-peso-alivio</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/regras-de-ouro-negativos</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/expressoes-numericas-trincheira</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/magia-calculo-mental-multiplicacao</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://heisslab.com.br/repositorio/desafios-multiplicacao-exercicios</loc>
+    <lastmod>2026-10-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
 </urlset>

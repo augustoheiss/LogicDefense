@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { GamesMenu } from './pages/GamesMenu'
@@ -17,6 +17,7 @@ import { OcorrenciasPage } from './pages/OcorrenciasPage'
 import { ApiPortPage } from './pages/ApiPortPage'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfUse from './pages/TermsOfUse'
+import { NotFoundPage } from './pages/NotFoundPage'
 import './styles/game.css'
 
 export default function App() {
@@ -28,9 +29,9 @@ export default function App() {
           <Route path="/"                          element={<Home />} />
           <Route path="/jogos"                     element={<GamesMenu />} />
           <Route path="/jogos/logic-defense"       element={<LogicDefensePage />} />
-          <Route path="/jogos/logic-ascension"    element={<LogicAscensionPage />} />
-          <Route path="/jogos/logic-invaders"     element={<LogicInvadersLanding />} />
-          <Route path="/jogos/logic-friction"    element={<LogicFrictionPage />} />
+          <Route path="/jogos/logic-ascension"     element={<LogicAscensionPage />} />
+          <Route path="/jogos/logic-invaders"      element={<LogicInvadersLanding />} />
+          <Route path="/jogos/logic-friction"      element={<LogicFrictionPage />} />
           <Route
             path="/jogos/logic-tetris"
             element={
@@ -42,15 +43,15 @@ export default function App() {
           <Route path="/laboratorio"               element={<LabPage />} />
           <Route path="/cv-maker"                  element={<CVMaker />} />
           <Route path="/laboratorio/cv-maker"      element={<CVMaker />} />
-          <Route path="/laboratorio/ocorrencias" element={<OcorrenciasPage />} />
-          <Route path="/laboratorio/api-port" element={<ApiPortPage />} />
+          <Route path="/laboratorio/ocorrencias"   element={<OcorrenciasPage />} />
+          <Route path="/laboratorio/api-port"      element={<ApiPortPage />} />
           <Route path="/repositorio"               element={<MaterialsPage />} />
-          {/* Dynamic lesson reading page — /repositorio/vieses-dos-numeros etc. */}
+          {/* Dynamic lesson reading page — /repositorio/equacao-balanca etc. */}
           <Route path="/repositorio/:slug"         element={<LessonPage />} />
           <Route path="/sobre"                     element={<SobrePage />} />
           <Route path="/privacidade"               element={<PrivacyPolicy />} />
           <Route path="/termos"                    element={<TermsOfUse />} />
-          <Route path="*"                          element={<Navigate to="/" replace />} />
+          <Route path="*"                          element={<NotFoundPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

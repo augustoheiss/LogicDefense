@@ -54,9 +54,15 @@ console.log('📋 Copying Sekundo web build to public assets...');
 copyRecursiveSync(path.join(sekundoAppDir, 'dist'), targetSekundoPublicDir);
 
 // -----------------------------------------------------------------------------
-// 3. Build main Vite App
+// 3. Ensure Open Graph Preview Cards (1200x630) & Page Icons exist in public/
 // -----------------------------------------------------------------------------
-console.log('⚡ Building main LogicDefense portal...');
+console.log('🎨 Ensuring Open Graph preview cards and route icons...');
+execSync('node scripts/generate-og-assets.mjs', { cwd: rootDir, stdio: 'inherit' });
+
+// -----------------------------------------------------------------------------
+// 4. Build main Vite App + Materialize Route SEO Shells & Sitemap
+// -----------------------------------------------------------------------------
+console.log('⚡ Building main LogicDefense portal & per-route SEO shells...');
 execSync('npm run build:vite', { cwd: rootDir, stdio: 'inherit' });
 
 console.log('✅ Full build completed successfully!');
