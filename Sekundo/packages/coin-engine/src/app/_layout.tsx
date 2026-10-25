@@ -65,9 +65,6 @@ function RootNavigator() {
     if (auth.user && auth.mode === 'authenticated' && inAuthGroup && !isExplicitAuthPage) {
       // Authenticated user lingering in auth flow → send to main app
       router.replace('/coin');
-    } else if (!auth.user && inAppGroup && auth.mode !== 'guest') {
-      // Unauthenticated non-guest in the app group (e.g. deep link) → gate via welcome
-      router.replace('/coin/login');
     }
   }, [auth.user, auth.mode, auth.isLoading, segments]);
 

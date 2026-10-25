@@ -97,6 +97,11 @@ export const API = {
         peerId ? `&peer_id=${encodeURIComponent(peerId)}` : ''
       }`,
   },
+
+  // Zero-Knowledge Scoped Capability Blobs (v3)
+  share: {
+    blob: (id: string) => `${SEKUNDO_API_URL}/signal/share/blob/${encodeURIComponent(id)}`,
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

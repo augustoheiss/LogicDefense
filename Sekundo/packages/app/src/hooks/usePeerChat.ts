@@ -149,9 +149,9 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
       const iceServers = rawStun
         ? rawStun
             .split(',')
-            .map((u) => u.trim())
+            .map((u: string) => u.trim())
             .filter(Boolean)
-            .map((urls) => ({ urls }))
+            .map((urls: string) => ({ urls }))
         : [];
       const pc = new RTCPeerConnection({
         iceServers,

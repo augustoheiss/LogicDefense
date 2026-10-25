@@ -307,31 +307,30 @@ export async function shareLocationPayload(
     return 'copied';
   }
 
-  if (mode === 'native') {
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && typeof (navigator as any).share === 'function') {
-      try {
-        await (navigator as any).share({
-          title: payload.title,
-          text: payload.text,
-        });
-        return 'shared';
-      } catch {
-        // fallback to WhatsApp
-      }
-    } else if (Platform.OS !== 'web') {
-      try {
-        await Share.share({
-          title: payload.title,
-          message: payload.text,
-        });
-        return 'shared';
-      } catch {
-        return 'copied';
-      }
+  // Try native share sheet first (Web Share API or RN Share) before falling back to wa.me (SEC-07)
+  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && typeof (navigator as any).share === 'function') {
+    try {
+      await (navigator as any).share({
+        title: payload.title,
+        text: payload.text,
+      });
+      return 'shared';
+    } catch {
+      if (mode === 'native') return 'copied';
+    }
+  } else if (Platform.OS !== 'web') {
+    try {
+      await Share.share({
+        title: payload.title,
+        message: payload.text,
+      });
+      return 'shared';
+    } catch {
+      if (mode === 'native') return 'copied';
     }
   }
 
-  // Default: open WhatsApp with the pre-formatted text and Google Maps links
+  // Fallback: open WhatsApp with the pre-formatted text and Google Maps links
   if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.open === 'function') {
     window.open(payload.whatsappUrl, '_blank', 'noopener,noreferrer');
     return 'shared';

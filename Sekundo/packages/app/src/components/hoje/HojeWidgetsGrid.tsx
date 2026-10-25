@@ -7,7 +7,7 @@ export interface HojeWidgetsGridProps {
   summary: HojeCockpitSummary;
   showWidget: (id: string) => boolean;
   onRunOutput: (kind: 'pdf' | 'whatsapp' | 'csv' | 'yaml', template?: string) => void;
-  onOpenStudioPreset: (preset: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s') => void;
+  onOpenStudioPreset: (preset: 'fichas-4up' | 'territorios-multiciclo') => void;
 }
 
 export function HojeWidgetsGrid({
@@ -89,7 +89,7 @@ export function HojeWidgetsGrid({
                     style={styles.actionPill}
                     onPress={() =>
                       onOpenStudioPreset(
-                        d.template.includes('territorio') || d.template.includes('s13')
+                        d.template.includes('territorio') || d.template.includes('multiciclo')
                           ? 'territorios-multiciclo'
                           : 'fichas-4up'
                       )

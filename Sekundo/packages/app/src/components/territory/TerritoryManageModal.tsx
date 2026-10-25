@@ -113,6 +113,10 @@ export function TerritoryManageModal({
 
   // --- Tab 4: Share & Export State ---
   const [shareOnlyPending, setShareOnlyPending] = useState(false);
+  const [shareIncludeNotes, setShareIncludeNotes] = useState(false);
+  const [selectedShareTerritories, setSelectedShareTerritories] = useState<string[]>([
+    effectiveTargetTerritory,
+  ]);
   const [copiedShare, setCopiedShare] = useState(false);
 
   // Sync fields when modal opens or target changes
@@ -367,21 +371,51 @@ export function TerritoryManageModal({
     }
   };
 
-  // Share preview for the selected territory
+  // Share preview for the selected territories (supports multi-territory selection)
   const sharePayload = useMemo(() => {
-    const tNum = selectedEditTerritory || effectiveTargetTerritory;
-    const tNodes = cleanNodes.filter((n) => resolveTerritoryNumber(n) === tNum);
-    return formatShareTerritoryOrQuadraLocationsText({
-      territoryNumber: tNum,
-      territoryName: editTerritoryName || resolveTerritoryNameFromNodes(cleanNodes, tNum),
-      quadraKey: editScope === 'quadra' && targetGroupKey ? targetGroupKey : undefined,
-      quadraLabel: editScope === 'quadra' && targetGroupLabel ? targetGroupLabel : undefined,
-      items: tNodes.length > 0 ? tNodes : cleanNodes,
-      city: editCity,
-      onlyPending: shareOnlyPending,
+    const activeTerrs =
+      selectedShareTerritories.length > 0
+        ? selectedShareTerritories
+        : [selectedEditTerritory || effectiveTargetTerritory];
+
+    if (activeTerrs.length === 1) {
+      const tNum = activeTerrs[0];
+      const tNodes = cleanNodes.filter((n) => resolveTerritoryNumber(n) === tNum);
+      return formatShareTerritoryOrQuadraLocationsText({
+        territoryNumber: tNum,
+        territoryName: editTerritoryName || resolveTerritoryNameFromNodes(cleanNodes, tNum),
+        quadraKey: editScope === 'quadra' && targetGroupKey ? targetGroupKey : undefined,
+        quadraLabel: editScope === 'quadra' && targetGroupLabel ? targetGroupLabel : undefined,
+        items: tNodes.length > 0 ? tNodes : cleanNodes,
+        city: editCity,
+        onlyPending: shareOnlyPending,
+        includeNotes: shareIncludeNotes,
+      });
+    }
+
+    const payloads = activeTerrs.map((tNum) => {
+      const tNodes = cleanNodes.filter((n) => resolveTerritoryNumber(n) === tNum);
+      return formatShareTerritoryOrQuadraLocationsText({
+        territoryNumber: tNum,
+        territoryName: resolveTerritoryNameFromNodes(cleanNodes, tNum),
+        items: tNodes,
+        city: editCity,
+        onlyPending: shareOnlyPending,
+        includeNotes: shareIncludeNotes,
+      });
     });
+
+    const combinedText = payloads.map((p) => p.text).join('\n\n────────────────────\n\n');
+    const combinedTitle = `Territórios ${activeTerrs.join(', ')}`;
+    return {
+      title: combinedTitle,
+      text: combinedText,
+      mapsUrl: payloads[0]?.mapsUrl || '',
+      whatsappUrl: `https://wa.me/?text=${encodeURIComponent(combinedText)}`,
+    };
   }, [
     cleanNodes,
+    selectedShareTerritories,
     selectedEditTerritory,
     effectiveTargetTerritory,
     editTerritoryName,
@@ -390,6 +424,7 @@ export function TerritoryManageModal({
     targetGroupLabel,
     editCity,
     shareOnlyPending,
+    shareIncludeNotes,
   ]);
 
   if (!visible) return null;
@@ -961,17 +996,28 @@ export function TerritoryManageModal({
                     contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
                   >
                     {summaries.map((s) => {
-                      const isSelected = s.territoryNumber === selectedEditTerritory;
+                      const isSelected = selectedShareTerritories.includes(s.territoryNumber);
                       return (
                         <Pressable
                           key={s.territoryNumber}
-                          onPress={() => handleSelectTerritoryToEdit(s.territoryNumber)}
+                          testID={`share-select-territory-${s.territoryNumber}`}
+                          onPress={() => {
+                            handleSelectTerritoryToEdit(s.territoryNumber);
+                            setSelectedShareTerritories((prev) => {
+                              if (prev.includes(s.territoryNumber)) {
+                                return prev.length > 1
+                                  ? prev.filter((item) => item !== s.territoryNumber)
+                                  : prev;
+                              }
+                              return [...prev, s.territoryNumber];
+                            });
+                          }}
                           style={[styles.terrChip, isSelected && styles.terrChipActive]}
                         >
                           <Text
                             style={[styles.terrChipText, isSelected && styles.terrChipTextActive]}
                           >
-                            Território {s.territoryNumber}
+                            {isSelected ? '✓ ' : ''}Território {s.territoryNumber}
                             {s.territoryName ? ` • ${s.territoryName}` : ''}
                           </Text>
                         </Pressable>
@@ -1004,6 +1050,20 @@ export function TerritoryManageModal({
                         ]}
                       >
                         ⬜ Apenas Pendentes
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID="share-include-notes-toggle"
+                      onPress={() => setShareIncludeNotes((prev) => !prev)}
+                      style={[styles.scopeBtn, shareIncludeNotes && styles.scopeBtnActive]}
+                    >
+                      <Text
+                        style={[
+                          styles.scopeBtnText,
+                          shareIncludeNotes && styles.scopeBtnTextActive,
+                        ]}
+                      >
+                        {shareIncludeNotes ? '✓ Com Observações' : '🔒 Sem Observações'}
                       </Text>
                     </Pressable>
                   </View>
@@ -1070,7 +1130,7 @@ export function TerritoryManageModal({
                       style={styles.primaryBtn}
                     >
                       <Text style={styles.primaryBtnText}>
-                        📥 Baixar Novo Modelo CSV de Territórios (Excel / Planilha S-13)
+                        📥 Baixar Novo Modelo CSV de Territórios (Excel / Registro de Territórios)
                       </Text>
                     </Pressable>
 

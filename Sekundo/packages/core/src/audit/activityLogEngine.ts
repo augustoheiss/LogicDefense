@@ -21,6 +21,7 @@
 import { compareHLC, createHLC, packHLC, unpackHLC } from '../sync/hlc';
 import type { SpreadsheetAccessRole } from '../auth/privilegeAccessGuard';
 import { neutralizeCsvFormula } from '../csv/omniCsvBundle';
+import { signPacket, verifyPacket, derivePublicKeyFromSeed } from '../share/signedPacket';
 
 export type ActivityActionType =
   | 'IDENTITY_CONFIRMED'
@@ -58,6 +59,10 @@ export interface ActivityLogEntry {
   afterValue?: string;
   prevHash: string;
   entryHash: string;
+  /** Optional Ed25519 signature over canonical entry fields (SEC-09) */
+  sig?: string;
+  /** Optional Ed25519 public key (base64url, 32 bytes) */
+  verifyPub?: string;
 }
 
 export interface CreateActivityLogInput {
@@ -75,6 +80,8 @@ export interface CreateActivityLogInput {
   summary: string;
   beforeValue?: unknown;
   afterValue?: unknown;
+  /** Optional Ed25519 signSeed to cryptographically sign the entry (SEC-09) */
+  signSeed?: string;
 }
 
 export const ACTIVITY_ACTION_LABELS: Record<
@@ -265,10 +272,75 @@ export function createActivityLogEntry(
   };
 
   const entryHash = computeAuditHash(serializeCanonicalEntryFields(baseEntry, prevHash));
-  return {
+  const created: ActivityLogEntry = {
     ...baseEntry,
     entryHash,
   };
+  if (input.signSeed) {
+    return signActivityLogEntry(created, input.signSeed);
+  }
+  return created;
+}
+
+/**
+ * Cryptographically signs an `ActivityLogEntry` with an Ed25519 `signSeed` (`SEC-09`).
+ */
+export function signActivityLogEntry(
+  entry: ActivityLogEntry,
+  signSeed: string
+): ActivityLogEntry {
+  const verifyPub = derivePublicKeyFromSeed(signSeed);
+  const sigPayload = {
+    logId: entry.logId,
+    eventId: entry.eventId,
+    timestamp: entry.timestamp,
+    actorId: entry.actorId,
+    actorName: entry.actorName,
+    actorRole: entry.actorRole,
+    actionType: entry.actionType,
+    targetSheet: entry.targetSheet || '',
+    targetNodeKey: entry.targetNodeKey || '',
+    summary: entry.summary,
+    beforeValue: entry.beforeValue ?? '',
+    afterValue: entry.afterValue ?? '',
+    verifyPub,
+  };
+  const sig = signPacket(sigPayload, signSeed);
+  return {
+    ...entry,
+    verifyPub,
+    sig,
+  };
+}
+
+/**
+ * Verifies an `ActivityLogEntry`'s Ed25519 signature (`SEC-09`).
+ */
+export function verifyActivityLogEntrySignature(
+  entry: ActivityLogEntry,
+  expectedVerifyPub?: string
+): boolean {
+  const pub = (expectedVerifyPub || entry.verifyPub || '').trim();
+  if (!pub || !entry.sig) return false;
+  if (expectedVerifyPub && entry.verifyPub && entry.verifyPub !== expectedVerifyPub) {
+    return false;
+  }
+  const sigPayload = {
+    logId: entry.logId,
+    eventId: entry.eventId,
+    timestamp: entry.timestamp,
+    actorId: entry.actorId,
+    actorName: entry.actorName,
+    actorRole: entry.actorRole,
+    actionType: entry.actionType,
+    targetSheet: entry.targetSheet || '',
+    targetNodeKey: entry.targetNodeKey || '',
+    summary: entry.summary,
+    beforeValue: entry.beforeValue ?? '',
+    afterValue: entry.afterValue ?? '',
+    verifyPub: pub,
+  };
+  return verifyPacket(sigPayload, entry.sig, pub);
 }
 
 /**

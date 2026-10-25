@@ -5,7 +5,7 @@
  * 1. Renaming and renumbering territories and quadras in cascade (`renameOrRenumberTerritory`).
  * 2. Creating new territories, quadras, and addresses directly in-app (`createTerritoryOrQuadra`, `createAddressInTerritory`).
  * 3. Reconciling clean territory nodes with multi-engine partitioned raw registries (`mergeTerritoryPartitionIntoRawRegistry`).
- * 4. Exporting updated territory models to human-editable S-13 CSV (`buildTerritoryModelCsvText`).
+ * 4. Exporting updated territory models to human-editable Territory Ledger CSV (`buildTerritoryModelCsvText`).
  * 5. Zero-bureaucracy location sharing for individual addresses, quadras, and whole territories (`formatShareAddressLocationText`, `formatShareTerritoryOrQuadraLocationsText`).
  */
 
@@ -528,7 +528,7 @@ export function createAddressInTerritory(
     existingTerritoryName ||
     String(firstSiblingMeta.neighborhood || firstSiblingMeta.line2 || '');
 
-  // If the matching root node was a standalone single-node territory (e.g., S-13 seed "01"),
+  // If the matching root node was a standalone single-node territory (e.g., territory seed "01"),
   // convert/ensure a proper header + child structure or attach child under "01"
   if (!hasGroupHeader) {
     nextNodes.push({
@@ -725,7 +725,7 @@ function escapeCsvCell(val: unknown): string {
 }
 
 /**
- * Exports the current in-memory territory nodes as a clean, human-editable S-13 CSV model
+ * Exports the current in-memory territory nodes as a clean, human-editable Territory Ledger CSV model
  * that can be opened directly in Excel/Google Sheets or re-imported into Sekundo.
  */
 export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntry[]): string {
@@ -834,7 +834,8 @@ export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntr
  */
 export function formatShareAddressLocationText(
   item: FlatSkeletonEntry,
-  fallbackCity?: string
+  fallbackCity?: string,
+  options?: { includeNotes?: boolean }
 ): ShareFormattedPayload {
   const meta = (item.meta || {}) as Record<string, any>;
   const territoryNumber = resolveTerritoryNumber(item);
@@ -846,7 +847,7 @@ export function formatShareAddressLocationText(
   const city = String(meta.city || meta.cidade || fallbackCity || '').trim();
   const state = String(meta.state || meta.uf || '').trim();
   const postalcode = String(meta.postalcode || meta.cep || '').trim();
-  const notes = String(meta.notes || meta.observacoes || '').trim();
+  const notes = options?.includeNotes ? String(meta.notes || meta.observacoes || '').trim() : '';
   const coords = parseLatLng(meta);
 
   const mapsUrl = buildGoogleMapsDirectionsUrl({
@@ -907,6 +908,7 @@ export function formatShareTerritoryOrQuadraLocationsText(params: {
   items: FlatSkeletonEntry[];
   city?: string;
   onlyPending?: boolean;
+  includeNotes?: boolean;
 }): ShareFormattedPayload {
   const tNum = normalizeTerritoryId(params.territoryNumber);
   const tName =
@@ -990,7 +992,12 @@ export function formatShareTerritoryOrQuadraLocationsText(params: {
       line: addrLine,
       city: String(m.city || m.cidade || resolvedCity),
     });
-    lines.push(`${idx + 1}. ${statusIcon} ${addrLine} — ${pinUrl}`);
+    const noteStr =
+      params.includeNotes === true
+        ? String(m.notes || m.obs || m.observacao || '').trim()
+        : '';
+    const noteSuffix = noteStr ? ` (Obs: ${noteStr})` : '';
+    lines.push(`${idx + 1}. ${statusIcon} ${addrLine}${noteSuffix} — ${pinUrl}`);
   });
 
   if (displayItems.length > maxListed) {

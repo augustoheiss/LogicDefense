@@ -1,6 +1,6 @@
 /**
  * Local Auth & License Key Service — Assistente Moeda Mobile
- * Zero Supabase dependency — local storage + license key management.
+ * Local-First storage + license key management (Turso/Gateway optional).
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';

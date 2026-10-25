@@ -136,7 +136,7 @@ function AIChatMain({ onBack }: { onBack: () => void }) {
     setInput('');
     setIsLoading(true);
 
-    // Convert tables and transactions to Supabase/stateless-friendly schema representation
+    // Convert tables and transactions to stateless-friendly schema representation
     const tablesPayload = (db.tables || []).map((t, idx) => ({
       id: t.id,
       name: t.name,
@@ -248,7 +248,7 @@ function AIChatMain({ onBack }: { onBack: () => void }) {
 
         setMessages([...newMessages, createMessage('assistant', responseText)]);
 
-        // Asynchronously deduct tokens from Supabase balance
+        // Asynchronously deduct tokens from local/license balance
         if (result.tokensUsed && result.tokensUsed > 0) {
           db.deductTokens(result.tokensUsed).catch((err) => {
             console.error("Token deduction failed:", err);

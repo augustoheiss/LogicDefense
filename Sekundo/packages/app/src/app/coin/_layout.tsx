@@ -2,7 +2,7 @@
  * Coin Engine Layout (`/coin/*`) — Assistente Moeda inside Sekundo
  *
  * Mounts the full Assistente Moeda sovereign provider stack:
- * - `<AuthProvider>` (Supabase Auth, Guest Mode, License Keys `am_pro_*`)
+ * - `<AuthProvider>` (Local-First Guest Mode & License Keys `am_pro_*`)
  * - `<SubscriptionProvider>` (RevenueCat In-App Purchases & Token Credits)
  * - `<CoinDBProvider>` (Local-First `coin_assistant_db`, Undo/Redo, Time Machine, Turso SSE Sync)
  *
@@ -41,7 +41,7 @@ const NAV_ITEMS = [
   { name: 'transactions', route: '/coin/transactions', title: 'Lançamentos', emoji: '📋', subtitle: 'Planilha Local' },
   { name: 'metrics',      route: '/coin/metrics',      title: 'Métricas',    emoji: '📊', subtitle: 'Setores & Índices' },
   { name: 'charts',       route: '/coin/charts',       title: 'Gráficos',    emoji: '📈', subtitle: 'Evolução & Pizza' },
-  { name: 'settings',     route: '/coin/settings',     title: 'Ajustes',     emoji: '⚙️', subtitle: 'API, Turso & Conta' },
+  { name: 'settings',     route: '/coin/settings',     title: 'Ajustes',     emoji: '⚙️', subtitle: 'API, Turso & Backup' },
 ] as const;
 
 function CoinEngineShell() {
@@ -98,13 +98,6 @@ function CoinEngineShell() {
               onPress={() => router.push('/coin/chat' as any)}
             >
               <Text style={styles.quickSubBtnText}>💬 Consultor IA</Text>
-            </Pressable>
-            <Pressable
-              testID="coin-quick-login"
-              style={styles.quickSubBtn}
-              onPress={() => router.push('/coin/login' as any)}
-            >
-              <Text style={styles.quickSubBtnText}>🔐 Conta</Text>
             </Pressable>
           </View>
         </View>

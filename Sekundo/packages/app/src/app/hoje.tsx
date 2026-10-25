@@ -103,7 +103,7 @@ export default function HojeCockpitScreen() {
     try {
       const isTerritorios =
         template?.toLowerCase().includes('territorio') ||
-        template?.toLowerCase().includes('s13');
+        template?.toLowerCase().includes('multiciclo');
       const targetReg = isTerritorios
         ? buildTerritoriosS13HistoricalRegistry()
         : buildProgramacaoReuniaoRegistry();

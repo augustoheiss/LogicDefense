@@ -7,53 +7,38 @@ Um ecossistema **100% Local-First, Serverless e de Profundidade Infinita** para 
 
 ---
 
-## 🎯 Links Rápidos para os Diagramas Interativos (PR Lens & ELI5)
-
-Os diagramas abaixo foram gerados e validados com **PR Lens (`@coldtea/pr-lens-cli`)** e **ELI5**, contendo visões de arquitetura em camadas, fluxos de dados animados passo a passo, payloads tipados e *walkthrough* guiado (basta abrir o link e apertar **Play ▶**):
-
-| Diagrama Interativo | Público-Alvo & Escopo | Link do Canvas Interativo (Web) | SVG Animado (Embed) |
-| :--- | :--- | :--- | :--- |
-| 🟢 **1. Sekundo ELI5 — Como o App Funciona** | **Iniciantes / Visão Rápida (ELI5):** Constrói o sistema uma peça por vez (de 2 caixas até o quadro completo em 8 passos simples). | [**👉 Abrir Canvas ELI5 Interativo (`prlens.dev/c/eCmwH2hfLDnWd38S3jgTKQ`)**](https://prlens.dev/c/eCmwH2hfLDnWd38S3jgTKQ) | [Ver SVG Animado](https://prlens.dev/c/eCmwH2hfLDnWd38S3jgTKQ.svg) |
-| 🏛️ **2. Sekundo — Arquitetura Completa e Fluxos de Dados** | **Engenharia & Arquitetura (Master Plan C4):** Mapeia as 5 raias do monorepo, 15 módulos, 10 Engines, Estúdio PDF em `mm`, Coin Engine e 3 sequências com payloads. | [**👉 Abrir Canvas de Arquitetura Completa (`prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA`)**](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) | [Ver SVG Animado](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA.svg) |
-
----
-
-## 🧒 1. Explicação ELI5 ("Explain Like I'm Five" — Passo a Passo)
+## 🎯 Visão Geral Interativa (ELI5 — Passo a Passo)
 
 > **Resumo em uma frase:** *"Sekundo organiza escalas, mapas e PDFs no app."*
 
-[![Sekundo ELI5 — Como o App Funciona](https://prlens.dev/c/eCmwH2hfLDnWd38S3jgTKQ.svg)](https://prlens.dev/c/eCmwH2hfLDnWd38S3jgTKQ)
+Para quem nunca viu o código antes, o Sekundo cresce em **5 passos visuais simples**:
 
-Para quem nunca viu o código antes, o Sekundo cresce em **5 passos visuais simples** (disponíveis no [Canvas ELI5 Interativo](https://prlens.dev/c/eCmwH2hfLDnWd38S3jgTKQ) e nos SVGs locais abaixo):
-
-1. **[Passo 1 — Você e a Agenda](.pr-lens/sekundo-eli5-como-o-app-funciona/you-and-the-schedule-light-2f98b5885a66dfe22845d4b3cd4ed4ab.svg):** Tudo começa quando você abre o Sekundo no navegador ou no celular (`ScheduleHubScreen`), sem precisar criar conta em nenhum servidor na nuvem.
-2. **[Passo 2 — As 4 Bancadas do Sekundo](.pr-lens/sekundo-eli5-como-o-app-funciona/what-sekundo-does-light-a1a9da36bfe6e83f53f0684b44a3db2b.svg):** Na mesma estação de comando (estilo AutoCAD sem rolagem vertical), moram quatro bancadas principais:
+1. **Passo 1 — Você e a Agenda:** Tudo começa quando você abre o Sekundo no navegador ou no celular (`ScheduleHubScreen`), sem precisar criar conta em nenhum servidor na nuvem.
+2. **Passo 2 — As 4 Bancadas do Sekundo:** Na mesma estação de comando (estilo AutoCAD sem rolagem vertical), moram quatro bancadas principais:
    - 📅 **Monta a programação** (`packages/app/src/app/schedule-hub.tsx`) — Escalas semanais, grupos, trocas e avisos de WhatsApp.
    - 🗺️ **Mapeia territórios** (`packages/app/src/app/territory-map.tsx`) — Quadras em 2D, checklist de campo, GPS ao vivo e rotas a pé.
    - 🖋️ **Desenha documentos** (`packages/app/src/app/studio.tsx`) — Estúdio visual em milímetros (`mm`) que transforma YAML e dados em folhas PDF prontas para impressão.
    - 🪙 **Simula finanças** (`packages/app/src/app/coin/index.tsx`) — Assistente Moeda com múltiplas abas financeiras, 8 setores, metas FIRE, frotas e imóveis.
-3. **[Passo 3 — Leitura CSV e Escala Justa](.pr-lens/sekundo-eli5-como-o-app-funciona/plus-csv-and-rotation-light-86b7772b24fa794986921bf1058ae0b6.svg):** Você solta **1 único arquivo CSV Geral** (`importOmniCsvBundle`). O cérebro local lê cada linha, separa linhas defeituosas em quarentena sem travar o resto e chama o sorteador justo (`autoAssignScheduleRegistry`), que cruza a **Matriz de Privilégios** com a fila FIFO para escalar quem tem a competência certa e descansou há mais tempo.
-4. **[Passo 4 — Cofre Local Sem Servidor](.pr-lens/sekundo-eli5-como-o-app-funciona/plus-local-vault-light-c22abd80fa6b5469c48e8a4c68e6d242.svg):** Todo o trabalho fica guardado no cofre do seu próprio aparelho (`localStorage`, `AsyncStorage` e `IndexedDB`) protegido por relógio lógico híbrido (`HLC`). Zero banco de dados centralizado na nuvem.
-5. **[Passo 5 — O Quadro Completo + Saídas Prontas](.pr-lens/sekundo-eli5-como-o-app-funciona/the-whole-thing-light-5dcc12415e4de35044bec9d1096abaf3.svg) & [Fluxo de Dados ELI5](.pr-lens/sekundo-eli5-como-o-app-funciona/main-sequence-flow-light-b72b003441992acd0a3c85f683974338.svg):** Com um clique (`writeUnifiedOutput`), a escala pronta vira fichas PDF 4-Up (`S-89`), cartões e históricos de território (`S-13`), textos formatados para WhatsApp e links criptografados com senha (`AES-256-GCM`).
+3. **Passo 3 — Leitura CSV e Escala Justa:** Você solta **1 único arquivo CSV Geral** (`importOmniCsvBundle`). O cérebro local lê cada linha, separa linhas defeituosas em quarentena sem travar o resto e chama o sorteador justo (`autoAssignScheduleRegistry`), que cruza a **Matriz de Privilégios** com a fila FIFO para escalar quem tem a competência certa e descansou há mais tempo.
+4. **Passo 4 — Cofre Local Sem Servidor:** Todo o trabalho fica guardado no cofre do seu próprio aparelho (`localStorage`, `AsyncStorage` e `IndexedDB`) protegido por relógio lógico híbrido (`HLC`). Zero banco de dados centralizado na nuvem.
+5. **Passo 5 — O Quadro Completo + Saídas Prontas:** Com um clique (`writeUnifiedOutput`), a escala pronta vira fichas PDF 4-Up (`Fichas 4-Up`), cartões e históricos de território (`Registro de Territórios`), textos formatados para WhatsApp e links de capacidade criptografados (`AES-256-GCM` + `Ed25519`).
    - **Em números:** `1` planilha CSV entra → `10` motores trabalham no aparelho → `0` bancos de dados obrigatórios na nuvem.
 
 ---
 
 ## 🏛️ 2. Masterclass Arquitetural & Diagrama Completo do Sistema
 
-[![Sekundo — Arquitetura Completa e Fluxos de Dados](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA.svg)](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA)
+### 2.1 Índice de Subsistemas e Fluxos de Dados
 
-### 2.1 Índice de Visões e Diagramas do Projeto (`PR Lens`)
-
-| Visão / Lente | Descrição Técnica | Arquivo SVG Local (`.pr-lens/`) | Canvas Online |
-| :--- | :--- | :--- | :--- |
-| **Visão Geral do Monorepo (`architecture`)** | Mapa completo das 5 raias (`@sekundo/app`, `@sekundo/core`, `Doc & Geo CAD`, `@sekundo/coin-engine` e `Local Vault & P2P`). | [`monorepo-overview-light.svg`](.pr-lens/sekundo-arquitetura-completa-e-fluxos-de-dados/monorepo-overview-light-3b0e9248ec5f3bd1f2b327842e59540a.svg) | [Abrir no Canvas](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) |
-| **Subsistema 1: Core Brain & 10 Engines (`architecture`)** | Como o CSV Geral hidrata a árvore `PathKey` infinita, valida as 10 Engines e executa a rotação FIFO com `👑 Selo Admin`. | [`core-brain-and-engines-light.svg`](.pr-lens/sekundo-arquitetura-completa-e-fluxos-de-dados/core-brain-and-engines-light-4f54d7597c28e5112abc792eb34daef0.svg) | [Abrir no Canvas](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) |
-| **Subsistema 2: Estúdio YAML ⇄ PDF & Geo CAD (`architecture`)** | Compilador documental em milímetros (`DisplayList`), ingestão PDF em 5 estágios e polígonos/rotas de quadras. | [`doc-studio-and-geo-cad-light.svg`](.pr-lens/sekundo-arquitetura-completa-e-fluxos-de-dados/doc-studio-and-geo-cad-light-92970b5a2d33a27c3bbab48787b55c57.svg) | [Abrir no Canvas](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) |
-| **Subsistema 3: Cofre Local & Sync Zero-Knowledge (`architecture`)** | Persistência local, relógio lógico HLC, envelopes `AES-256-GCM` e relay WebRTC stateless em FastAPI. | [`zero-knowledge-sync-and-vault-light.svg`](.pr-lens/sekundo-arquitetura-completa-e-fluxos-de-dados/zero-knowledge-sync-and-vault-light-cfc66259f4001f0119bb10a0c41cf783.svg) | [Abrir no Canvas](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) |
-| **Sequência 1: CSV Geral & Rotação FIFO (`data-flow`)** | Pipeline de importação multi-aba, quarentena de linhas e auto-designação por descanso FIFO. | [`flow-view-omni-csv-light.svg`](.pr-lens/sekundo-arquitetura-completa-e-fluxos-de-dados/flow-view-omni-csv-light-9f1223803f7cd814b950fccc0d5923f0.svg) | [Abrir no Canvas](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) |
-| **Sequência 2: Compilador YAML ⇄ PDF (`data-flow`)** | Decomposição de PDF bruto em 5 estágios, resolução `solveLayout` em `mm` e pintura `pdf-lib`. | [`flow-view-yaml-pdf-light.svg`](.pr-lens/sekundo-arquitetura-completa-e-fluxos-de-dados/flow-view-yaml-pdf-light-572a7ead98d3c0baa414a4a2a6106753.svg) | [Abrir no Canvas](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) |
-| **Sequência 3: Colaboração 1:N HLC & WebRTC (`data-flow`)** | Verificação de `👑 Selo Admin`, empacotamento `SEKUNDO_COLLAB_V2` e handshake SDP efêmero (5 min TTL). | [`flow-view-p2p-sync-light.svg`](.pr-lens/sekundo-arquitetura-completa-e-fluxos-de-dados/flow-view-p2p-sync-light-09652d5a16e3b4f91752f9b5fd427c6f.svg) | [Abrir no Canvas](https://prlens.dev/c/ByCqQSxXMhsEbxmYVs12vA) |
+| Visão / Subsistema | Descrição Técnica |
+| :--- | :--- |
+| **Visão Geral do Monorepo (`architecture`)** | Mapa completo das 5 raias (`@sekundo/app`, `@sekundo/core`, `Doc & Geo CAD`, `@sekundo/coin-engine` e `Local Vault & P2P`). |
+| **Subsistema 1: Core Brain & 10 Engines (`architecture`)** | Como o CSV Geral hidrata a árvore `PathKey` infinita, valida as 10 Engines e executa a rotação FIFO com `👑 Selo Admin`. |
+| **Subsistema 2: Estúdio YAML ⇄ PDF & Geo CAD (`architecture`)** | Compilador documental em milímetros (`DisplayList`), ingestão PDF em 5 estágios e polígonos/rotas de quadras. |
+| **Subsistema 3: Cofre Local & Sync Zero-Knowledge (`architecture`)** | Persistência local, relógio lógico HLC, envelopes `AES-256-GCM`, Capability URLs v3 e relay stateless em FastAPI. |
+| **Sequência 1: CSV Geral & Rotação FIFO (`data-flow`)** | Pipeline de importação multi-aba, quarentena de linhas e auto-designação por descanso FIFO. |
+| **Sequência 2: Compilador YAML ⇄ PDF (`data-flow`)** | Decomposição de PDF bruto em 5 estágios, resolução `solveLayout` em `mm` e pintura `pdf-lib`. |
+| **Sequência 3: Colaboração 1:N HLC & Capability Links (`data-flow`)** | Verificação de `👑 Selo Admin` / assinatura `Ed25519`, empacotamento `SEKUNDO_COLLAB_V2` e escopos `SEKUNDO_CAP_v3`. |
 
 ---
 
@@ -157,7 +142,7 @@ O registro central (`packages/core/src/engines/registry.ts`) permite que um mesm
 
 | # | Engine ID | Módulo (`packages/core/src/engines/`) | Rota / Bancada no App | Responsabilidade e Regras de Domínio |
 | :--- | :--- | :--- | :--- | :--- |
-| 1 | `territory_logistics` | `territoryEngine.ts` | `/territory-map`, `/territory-checklist` | Gestão de territórios, quadras, cálculo de recência (territórios não trabalhados há mais tempo), cobertura percentual e geração de cartões/S-13. |
+| 1 | `territory_logistics` | `territoryEngine.ts` | `/territory-map`, `/territory-checklist` | Gestão de territórios, quadras, cálculo de recência (territórios não trabalhados há mais tempo), cobertura percentual e geração de cartões e registros de territórios. |
 | 2 | `roster_assignments` | `rosterEngine.ts` | `/schedule-hub`, `/roster-swap` | Escalas de reuniões/turnos, detecção de choque de horário, matriz de privilégios, rotação FIFO, bitmask de disponibilidade e livro-razão de trocas. |
 | 3 | `study_synthesis` | `studySynthesisEngine.ts` | `/skeleton-editor`, `/publisher` | Síntese colaborativa de pesquisa, tópicos estruturados, referências cruzadas e notas hierárquicas. |
 | 4 | `generic_wbs` | `genericWbsEngine.ts` | `/skeleton-editor`, `/hoje` | Estrutura Analítica de Projetos (WBS) infinita com rollup automático de progresso de nós filhos para pais. |
@@ -179,7 +164,7 @@ Inspirado em **Typst, PostScript e Skia**, o subsistema documental (`packages/co
   - *Stage 2 (Text Items):* Extrai blocos tipográficos e fontes.
   - *Stage 3 (Vector Paths):* Extrai linhas e caixas vetoriais.
   - *Stage 4 (Grid Detection):* Detecta tabelas colineares e sintetiza automaticamente um documento `.sdoc.yaml` editável.
-- **Templates Nativos Prontos (`builtinTemplates.ts`):** Inclui imposição **4-Up de designações (`S-89`)**, **Registro Multi-Ciclo de Territórios (`S-13`)**, **Fichas 4-Up** e **Mail Merge AcroForm**.
+- **Templates Nativos Prontos (`builtinTemplates.ts`):** Inclui imposição **4-Up de designações (`Fichas 4-Up`)**, **Registro Multi-Ciclo de Territórios (`Registro de Territórios`)** e **Mail Merge AcroForm**.
 
 ```mermaid
 flowchart LR
@@ -298,7 +283,7 @@ Sekundo/
 │   │       ├── events/                    # Container de eventos e motor de Auto-Rollover temporal
 │   │       ├── geo/                       # Polígonos de quadras, Convex Hull, simbologia e rotas GPS/offline
 │   │       ├── outputs/                   # Escritores unificados (PDF, WhatsApp, CSV, YAML)
-│   │       ├── pdf/                       # AcroForm Filler, gerador S-13/S-89 4-Up, WinAnsi e Template Matcher
+│   │       ├── pdf/                       # AcroForm Filler, gerador Fichas 4-Up e Registro de Territórios, WinAnsi e Template Matcher
 │   │       ├── roster/                    # Matriz de Privilégios, Rotação FIFO, Bitmask e Swap Ledger
 │   │       ├── schedule/                  # Parser de programação, formatador WhatsApp e gerador ICS
 │   │       ├── skeleton/                  # PathKey infinito, árvore Skeleton e fila serial

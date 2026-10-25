@@ -1,14 +1,14 @@
 /**
  * useSync Hook — Assistente Moeda
  *
- * Manages sync state between local storage and Supabase:
+ * Manages sync state between local storage and optional Turso/gateway sync:
  *   - Tracks sync status (idle, syncing, success, error)
  *   - Provides manual sync trigger
  *   - Auto-syncs on app foreground (when authenticated + sync enabled)
  */
 
 import { useState, useCallback } from 'react';
-import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
+import { fullSync, pushToCloud, pullFromCloud } from '../storage/localSync';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

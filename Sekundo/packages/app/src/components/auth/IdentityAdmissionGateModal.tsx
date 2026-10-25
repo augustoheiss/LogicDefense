@@ -145,7 +145,7 @@ export function IdentityAdmissionGateModal({
                 style={styles.input}
                 value={unlockPin}
                 onChangeText={setUnlockPin}
-                placeholder="Ex: 1001"
+                placeholder="Digite seu PIN de 4 dígitos"
                 placeholderTextColor="#64748B"
                 secureTextEntry
                 keyboardType="default"
@@ -194,12 +194,12 @@ export function IdentityAdmissionGateModal({
 
               <View style={styles.policyNotice}>
                 <Text style={styles.policyNoticeTitle}>
-                  🔐 Verificação Única de Primeiro Acesso
+                  🔐 Identificação Local na Sessão
                 </Text>
                 <Text style={styles.policyNoticeText}>
-                  • Confirme seu <Text style={{ fontWeight: '700', color: '#F8FAFC' }}>Nome Completo, Grupo e PIN</Text> cadastrados na Lista de Privilégios.{'\n'}
-                  • Pessoas fora da Lista de Privilégios (ou sem privilégio ativo) <Text style={{ color: '#FCA5A5', fontWeight: '700' }}>não podem visualizar a planilha</Text>.{'\n'}
-                  • Apenas quem possui o <Text style={{ color: '#FFB800', fontWeight: '700' }}>👑 Selo Admin</Text> pode editar ou exportar; os demais entram em <Text style={{ color: '#38BDF8', fontWeight: '700' }}>👁️ Somente Consulta</Text>.{'\n'}
+                  • Confirme seu <Text style={{ fontWeight: '700', color: '#F8FAFC' }}>Nome Completo, Grupo e PIN</Text> cadastrados na Lista de Privilégios desta sessão.{'\n'}
+                  • Para links instantâneos sem cadastro, peça ao coordenador para usar o botão <Text style={{ color: '#38BDF8', fontWeight: '700' }}>🔗 Compartilhar Escopo</Text>.{'\n'}
+                  • Quem possui o <Text style={{ color: '#FFB800', fontWeight: '700' }}>👑 Selo Admin</Text> habilita os controles locais de edição; os demais entram em <Text style={{ color: '#38BDF8', fontWeight: '700' }}>👁️ Somente Consulta</Text>.{'\n'}
                   • Após confirmar uma vez, este aparelho lembrará de você até que você clique em <Text style={{ fontWeight: '700', color: '#F8FAFC' }}>🚪 Sair (Logout)</Text>.
                 </Text>
               </View>
@@ -214,7 +214,7 @@ export function IdentityAdmissionGateModal({
                   setFullName(v);
                   setErrorMsg(null);
                 }}
-                placeholder="Ex: Participante 01"
+                placeholder="Digite seu nome completo cadastrado"
                 placeholderTextColor="#64748B"
                 autoCapitalize="words"
               />
@@ -252,7 +252,7 @@ export function IdentityAdmissionGateModal({
                   setPin(v);
                   setErrorMsg(null);
                 }}
-                placeholder="PIN individual de 4 dígitos (Ex: 1001)"
+                placeholder="PIN individual definido pela coordenação"
                 placeholderTextColor="#64748B"
                 secureTextEntry
               />

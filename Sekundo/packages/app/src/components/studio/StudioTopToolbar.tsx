@@ -5,7 +5,7 @@ import { PresenceBadges } from '../sync/PresenceBadges';
 export interface StudioTopToolbarProps {
   onBack: () => void;
   onSelectPreset: (
-    preset: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s' | 'auto'
+    preset: 'fichas-4up' | 'territorios-multiciclo' | 'auto'
   ) => void;
   onPickPdf: (mode: 'overlay' | 'rebuild') => void;
   onWebFileSelected: (bytes: Uint8Array, fileName: string, mode: 'overlay' | 'rebuild') => void;
@@ -98,7 +98,7 @@ export function StudioTopToolbar({
         <Text style={styles.title}>🖋️ Estúdio YAML ⇄ PDF</Text>
 
         <TouchableOpacity
-          testID="preset-s89-btn"
+          testID="preset-fichas-4up-btn"
           style={styles.presetBtn}
           onPress={() => onSelectPreset('fichas-4up')}
         >
@@ -106,7 +106,7 @@ export function StudioTopToolbar({
         </TouchableOpacity>
 
         <TouchableOpacity
-          testID="preset-s13-btn"
+          testID="preset-territorios-btn"
           style={styles.presetBtn}
           onPress={() => onSelectPreset('territorios-multiciclo')}
         >

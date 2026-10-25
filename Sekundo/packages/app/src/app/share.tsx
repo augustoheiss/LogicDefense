@@ -107,12 +107,17 @@ export default function ShareEvent() {
     const adminSealHolders = privilegeRoster.filter(
       (p) => hasActivePrivileges(p) && Boolean(p.hasAdminSeal)
     );
+    const hasDefaultAdminPins = adminSealHolders.some((p) => {
+      const pin = (p.accessPin || '').trim();
+      return !pin || /^10\d{2}$/.test(pin);
+    });
     const blockedCount = total - authorizedViewers;
     return {
       total,
       authorizedViewers,
       adminCount: adminSealHolders.length,
-      adminNames: adminSealHolders.map((p) => `${p.name} (PIN: ${p.accessPin || '1001'})`),
+      adminNames: adminSealHolders.map((p) => p.name),
+      hasDefaultAdminPins,
       blockedCount,
     };
   }, [privilegeRoster]);
@@ -133,6 +138,13 @@ export default function ShareEvent() {
 
   const handleGenerateLink = async () => {
     if (!passphrase.trim()) return;
+    if (governanceStats.hasDefaultAdminPins) {
+      alert(
+        'Por segurança, altere os PINs padrão (1001..1099) dos portadores do 👑 Selo Admin antes de gerar o link compartilhado.'
+      );
+      setShowPrivilegeModal(true);
+      return;
+    }
     setGenerating(true);
     setCopied(false);
     try {
@@ -231,11 +243,11 @@ export default function ShareEvent() {
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Editor</Text>
+            <Text style={styles.backBtnText}>← Voltar</Text>
           </Pressable>
-          <Text style={styles.title}>Secure Event Sharing</Text>
+          <Text style={styles.title}>Compartilhamento Seguro</Text>
           <Text style={styles.subtitle}>
-            Event: {event.config.name}
+            Evento: {event.config.name}
           </Text>
         </View>
 

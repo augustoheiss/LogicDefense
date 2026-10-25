@@ -65,6 +65,7 @@ export default function Dashboard() {
     DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
   );
   const [privilegeModalOpen, setPrivilegeModalOpen] = useState(false);
+  const [simpleMode, setSimpleMode] = useState(false);
   const [statusToast, setStatusToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,10 +138,22 @@ export default function Dashboard() {
             source={require('../../assets/images/app-icon.png')}
             style={styles.brandIcon}
           />
-          <Text style={styles.logo}>Sekundo</Text>
-          <View style={styles.cadModePill}>
-            <Text style={styles.cadModePillText}>CAD</Text>
-          </View>
+          <Text
+            style={styles.logo}
+            accessibilityRole="header"
+            {...(Platform.OS === 'web' ? ({ 'aria-level': 1 } as any) : {})}
+          >
+            Sekundo
+          </Text>
+          <Pressable
+            testID="home-toggle-simple-mode-btn"
+            accessibilityRole="button"
+            accessibilityLabel={simpleMode ? 'Alternar para Modo Avançado CAD' : 'Alternar para Modo Simples'}
+            onPress={() => setSimpleMode((prev) => !prev)}
+            style={styles.cadModePill}
+          >
+            <Text style={styles.cadModePillText}>{simpleMode ? 'SIMPLES' : 'CAD'}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.topRibbonActions}>
@@ -229,6 +242,83 @@ export default function Dashboard() {
       {statusToast && (
         <View style={styles.toastBanner}>
           <Text style={styles.toastBannerText}>{statusToast}</Text>
+        </View>
+      )}
+
+      {simpleMode && (
+        <View
+          testID="home-simple-mode-bar"
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            backgroundColor: '#0F172A',
+            borderBottomWidth: 1,
+            borderBottomColor: '#1E293B',
+          }}
+        >
+          <Pressable
+            testID="simple-card-schedule"
+            onPress={() => router.push('/schedule-hub' as any)}
+            style={{
+              flex: 1,
+              minWidth: 110,
+              minHeight: 48,
+              borderRadius: 10,
+              backgroundColor: 'rgba(56, 189, 248, 0.14)',
+              borderWidth: 1,
+              borderColor: '#38BDF8',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 8,
+            }}
+          >
+            <Text style={{ color: '#E0F2FE', fontWeight: '800', fontSize: 13 }}>📅 Escala</Text>
+          </Pressable>
+          <Pressable
+            testID="simple-card-territories"
+            onPress={() => router.push('/territory-checklist' as any)}
+            style={{
+              flex: 1,
+              minWidth: 110,
+              minHeight: 48,
+              borderRadius: 10,
+              backgroundColor: 'rgba(16, 185, 129, 0.14)',
+              borderWidth: 1,
+              borderColor: '#10B981',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 8,
+            }}
+          >
+            <Text style={{ color: '#D1FAE5', fontWeight: '800', fontSize: 13 }}>🗺️ Territórios</Text>
+          </Pressable>
+          <Pressable
+            testID="simple-card-share"
+            onPress={() =>
+              router.push(
+                activeSelectedEvent
+                  ? (`/share?id=${encodeURIComponent(activeSelectedEvent.config.id)}` as any)
+                  : ('/schedule-hub' as any)
+              )
+            }
+            style={{
+              flex: 1,
+              minWidth: 110,
+              minHeight: 48,
+              borderRadius: 10,
+              backgroundColor: 'rgba(245, 158, 11, 0.14)',
+              borderWidth: 1,
+              borderColor: '#F59E0B',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 8,
+            }}
+          >
+            <Text style={{ color: '#FEF3C7', fontWeight: '800', fontSize: 13 }}>🔗 Compartilhar</Text>
+          </Pressable>
         </View>
       )}
 

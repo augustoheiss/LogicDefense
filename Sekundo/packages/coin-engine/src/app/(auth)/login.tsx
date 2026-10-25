@@ -1,7 +1,7 @@
 /**
  * Login Screen — Assistente Moeda
  *
- * Premium email + password authentication via Supabase Auth.
+ * Optional email + password authentication via FastAPI Gateway / Turso.
  * Features:
  *   - Reanimated entrance animations (header fade, form spring-up)
  *   - Animated input focus state (purple border glow)

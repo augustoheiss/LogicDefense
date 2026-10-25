@@ -13,7 +13,7 @@ import { buildAIScenarioContext } from '../core/aiContextBuilder';
 import { buildLocalAnalysisContext } from '../core/localAiAnalystSynthesizer';
 import { formatCurrencyFull } from '../core/formatCurrency';
 import type { TableRow, TableGoals, TableMetrics } from '../core/types';
-import { supabase } from '../lib/supabase';
+
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

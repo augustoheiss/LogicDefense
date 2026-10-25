@@ -3,7 +3,7 @@
  *
  * Unified data access layer that:
  *   1. Loads/saves data from AsyncStorage (local-first)
- *   2. Optionally syncs with Supabase (when authenticated + sync enabled)
+ *   2. Optionally syncs with Turso/Gateway (when authenticated + sync enabled)
  *   3. Exposes CRUD operations for tables and rows
  *   4. Computes derived metrics via the pure metricsEngine
  *
@@ -46,8 +46,7 @@ import type {
   SectorSimulationParams,
 } from '../core/types';
 import { useAuthContext } from './useAuth';
-import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
-import { supabase } from '@coin/lib/supabase';
+import { fullSync, pushToCloud, pullFromCloud } from '../storage/localSync';
 import { mergeRows } from '../utils/csvEngine';
 import { ensureApiKeyForTable } from '../services/exportService';
 import {
@@ -163,7 +162,7 @@ export interface CoinDBState {
   migrateLocalToCloud: () => Promise<{ success: boolean; error?: string }>;
   /** Manually clear local AsyncStorage database cache */
   clearLocalState: () => Promise<void>;
-  /** Deduct user tokens from Supabase user_settings */
+  /** Deduct user tokens from local/license balance */
   deductTokens: (amount: number) => Promise<void>;
 
   // ── Global Command Dispatcher & Undo/Redo Engine ─────
@@ -1242,28 +1241,13 @@ function useCoinDBInternal(): CoinDBState {
   const deductTokens = useCallback(async (amount: number) => {
     if (auth.mode === 'authenticated' && auth.user) {
       try {
-        const { data, error } = await supabase
-          .from('user_settings')
-          .select('token_balance')
-          .eq('id', auth.user.id)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        const currentBalance = data?.token_balance ? Number(data.token_balance) : 0;
-        const newBalance = Math.max(0, currentBalance - amount);
-
-        const { error: updateError } = await supabase
-          .from('user_settings')
-          .update({ token_balance: newBalance })
-          .eq('id', auth.user.id);
-
-        if (updateError) throw updateError;
+        await auth.refreshProfile();
       } catch (err) {
-        console.error('Failed to deduct tokens:', err);
+        console.error('Failed to refresh token balance:', err);
       }
     }
-  }, [auth.mode, auth.user]);
+    void amount;
+  }, [auth.mode, auth.user, auth.refreshProfile]);
 
   const updateActiveSectors = useCallback((sectors: string[]) => {
     const currentTables = getLatestTables();

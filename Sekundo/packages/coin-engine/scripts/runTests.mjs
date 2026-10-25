@@ -170,19 +170,6 @@ const STUB_MODULES = {
     };
     export default AsyncStorage;
   \`,
-  '@supabase/supabase-js': \`
-    export const createClient = () => ({
-      auth: {
-        getSession: async () => ({ data: { session: null }, error: null }),
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-      },
-      from: () => ({
-        select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
-        upsert: async () => ({ data: null, error: null }),
-      }),
-    });
-    export default { createClient };
-  \`,
 };
 
 function tryResolveFile(basePath) {

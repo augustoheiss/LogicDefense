@@ -57,9 +57,9 @@ export const pdfOutputWriter: OutputWriter<Uint8Array> = {
     let sdocYaml = input.sdocYaml;
     if (!sdocYaml) {
       const tplName = String(input.options?.template || '').toLowerCase();
-      if (tplName.includes('s13') || tplName.includes('territorio') || tplName.includes('multiciclo')) {
+      if (tplName.includes('territorio') || tplName.includes('multiciclo') || tplName.includes('ledger')) {
         sdocYaml = S13S_MULTICYCLE_SDOC_YAML;
-      } else if (tplName.includes('s89') || tplName.includes('4up') || tplName.includes('ficha')) {
+      } else if (tplName.includes('4up') || tplName.includes('ficha') || tplName.includes('slips')) {
         sdocYaml = S89_4UP_SDOC_YAML;
       } else {
         sdocYaml = autoGenerateSdocFromRegistry(input.registry, input.eventName);

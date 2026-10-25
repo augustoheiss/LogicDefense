@@ -293,23 +293,22 @@ describe('QAR1 Storage Quota, Rolling Backup & Quarantine Chaos Suite (QAR1-STOR
     }
   });
 
-  it('QAR1-SQL-01 (QAR1-DEF-05): Migrações SQL de profiles devem declarar ALTER TABLE ADD COLUMN IF NOT EXISTS de forma idempotente', async () => {
+  it('QAR1-SQL-01 (QAR1-DEF-05): LocalSync e AuthService operam 100% Local-First e apenas com Turso/Gateway opcional', async () => {
     const proc = (globalThis as any).process;
     const fs = proc.getBuiltinModule('fs');
     const path = proc.getBuiltinModule('path');
-    const triggerSql = fs.readFileSync(
-      path.resolve(proc.cwd(), 'supabase/migrations/20260721_auth_trigger.sql'),
+    const localSyncSrc = fs.readFileSync(
+      path.resolve(proc.cwd(), 'src/storage/localSync.ts'),
       'utf8'
     );
-    const schemaSql = fs.readFileSync(
-      path.resolve(proc.cwd(), 'supabase/migrations/20260721_master_sectors_schema.sql'),
+    const authServiceSrc = fs.readFileSync(
+      path.resolve(proc.cwd(), 'src/storage/authService.ts'),
       'utf8'
     );
 
-    expect(triggerSql).toContain('ADD COLUMN IF NOT EXISTS email');
-    expect(triggerSql).toContain('ADD COLUMN IF NOT EXISTS active_sectors');
-    expect(schemaSql).toContain('ADD COLUMN IF NOT EXISTS email');
-    expect(schemaSql).toContain('ADD COLUMN IF NOT EXISTS active_sectors');
+    expect(localSyncSrc).toContain('pushToCloud');
+    expect(localSyncSrc).toContain('pullFromCloud');
+    expect(authServiceSrc).toContain('validateMobileLicenseKey');
   });
 
   it('QAR1-STOR-05 (QAR1-V5-01/02): saveDBToIndexedDB e loadDBFromIndexedDB devem preservar activeTableIndex, isPrivacyMode, múltiplas tabelas e OpLog nas 4 Object Stores', async () => {

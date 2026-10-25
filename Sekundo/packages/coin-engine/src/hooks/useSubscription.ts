@@ -8,7 +8,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Platform, Alert } from 'react-native';
 import Purchases from 'react-native-purchases';
 import { useAuthContext } from './useAuth';
-import { supabase } from '../lib/supabase';
 
 export interface SubscriptionPackage {
   identifier: string;
@@ -72,96 +71,17 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const isReconciling = useRef(false);
   const rcConfiguredRef = useRef(false);
 
-  const syncStates = useCallback(async (active: boolean, plan: 'monthly' | 'yearly' | null) => {
+  const syncStates = useCallback(async (active: boolean, _plan: 'monthly' | 'yearly' | null) => {
     if (auth.mode !== 'authenticated' || !auth.user || isReconciling.current) return;
-
-    const isDbPremium = auth.profile?.premiumTier === 'premium';
-    const dbExpiresAt = auth.profile?.subscriptionExpiresAt;
-    
-    // Check if Stripe is active (expires in the future or no expiration date set yet)
-    let isStripeActive = false;
-    if (dbExpiresAt) {
+    if (active && auth.profile?.premiumTier !== 'premium') {
+      isReconciling.current = true;
       try {
-        isStripeActive = new Date(dbExpiresAt).getTime() > Date.now();
-      } catch (e) {
-        console.warn('Error parsing expiration date:', e);
-      }
-    } else if (isDbPremium) {
-      isStripeActive = true; // Lifetime/admin bypass
-    }
-
-    if (active) {
-      // Case 1: RevenueCat is active but DB is free. Upgrade DB.
-      if (!isDbPremium) {
-        console.log('Reconciler: RevenueCat active but DB free. Upgrading DB...');
-        isReconciling.current = true;
-        try {
-          const { error: profileErr } = await supabase
-            .from('profiles')
-            .update({
-              premium_tier: 'premium',
-              subscription_expires_at: expirationDate, // Send direct timestamp from RevenueCat
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', auth.user.id);
-
-          if (profileErr) throw profileErr;
-
-          const { error: settingsErr } = await supabase
-            .from('user_settings')
-            .update({
-              subscription_type: plan || 'monthly',
-              expires_at: expirationDate, // Send direct timestamp directly to user_settings
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', auth.user.id);
-
-          if (settingsErr) throw settingsErr;
-
-          await auth.refreshProfile();
-        } catch (e) {
-          console.error('Reconciler: Failed to upgrade DB:', e);
-        } finally {
-          isReconciling.current = false;
-        }
-      }
-    } else {
-      // Case 2: RevenueCat is inactive, DB says premium, and Stripe is NOT active. Downgrade DB.
-      if (isDbPremium && !isStripeActive) {
-        console.log('Reconciler: RevenueCat inactive and no Stripe fallback. Downgrading DB...');
-        isReconciling.current = true;
-        try {
-          const { error: profileErr } = await supabase
-            .from('profiles')
-            .update({
-              premium_tier: 'free',
-              subscription_expires_at: null,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', auth.user.id);
-
-          if (profileErr) throw profileErr;
-
-          const { error: settingsErr } = await supabase
-            .from('user_settings')
-            .update({
-              subscription_type: 'free',
-              expires_at: null,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', auth.user.id);
-
-          if (settingsErr) throw settingsErr;
-
-          await auth.refreshProfile();
-        } catch (e) {
-          console.error('Reconciler: Failed to downgrade DB:', e);
-        } finally {
-          isReconciling.current = false;
-        }
+        await auth.refreshProfile();
+      } finally {
+        isReconciling.current = false;
       }
     }
-  }, [auth.mode, auth.user?.id, auth.profile, expirationDate, auth.refreshProfile]);
+  }, [auth.mode, auth.user, auth.profile, auth.refreshProfile]);
 
   useEffect(() => {
     if (auth.mode === 'authenticated' && auth.user) {

@@ -58,7 +58,6 @@ import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { PrivilegeMatrixModal } from '../components/PrivilegeMatrixModal';
 import { IdentityAdmissionGateModal } from '../components/auth/IdentityAdmissionGateModal';
 import { ActivityLogModal } from '../components/audit/ActivityLogModal';
-import { usePeerChat } from '../hooks/usePeerChat';
 import { useSimultaneousCollab } from '../hooks/useSimultaneousCollab';
 import {
   loadTrustedSessionPrincipal,
@@ -210,28 +209,6 @@ export default function TokenViewer() {
     },
   });
 
-  // Legacy 1:1 WebRTC P2P Sync hook (kept as secondary transport ONLY when RBAC roster is absent)
-  const {
-    connectionState,
-    joinViewerHandshake,
-    broadcastState,
-    closeConnection,
-  } = usePeerChat({
-    eventId: payload ? payload.eventName : 'viewer-session',
-    role: 'viewer',
-    onStateUpdate: (incomingSkeleton) => {
-      if (payload && privilegeRoster.length === 0) {
-        setPayload((prev) => (prev ? { ...prev, skeleton: incomingSkeleton } : null));
-      }
-    },
-  });
-
-  useEffect(() => {
-    if (payload && roomParam && connectionState === 'disconnected' && isSessionUnlocked) {
-      joinViewerHandshake(roomParam);
-    }
-  }, [payload, roomParam, isSessionUnlocked]);
-
   const appendAndBroadcastLog = async (
     input: Omit<CreateActivityLogInput, 'eventId'>
   ) => {
@@ -280,7 +257,7 @@ export default function TokenViewer() {
       const resolvedRoster = (
         activePayload.privilegeRoster && activePayload.privilegeRoster.length > 0
           ? activePayload.privilegeRoster
-          : DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
+          : []
       ).map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx));
 
       setPrivilegeRoster(resolvedRoster);
@@ -570,7 +547,6 @@ export default function TokenViewer() {
     setActivityLog(updatedLog);
 
     await broadcastSkeletonSnapshot(newSkeleton, privilegeRoster, [entry]);
-    broadcastState(newSkeleton);
     await triggerAutoSave(newSkeleton, privilegeRoster, updatedLog);
   };
 
@@ -597,7 +573,6 @@ export default function TokenViewer() {
     setActivityLog(updatedLog);
 
     await broadcastSkeletonSnapshot(newSkeleton, privilegeRoster, [entry]);
-    broadcastState(newSkeleton);
     await triggerAutoSave(newSkeleton, privilegeRoster, updatedLog);
   };
 
@@ -660,7 +635,6 @@ export default function TokenViewer() {
   };
 
   const handleCloseLinkSession = () => {
-    closeConnection();
     setPayload(null);
     setPassphrase('');
     setErrorMsg(null);
@@ -1075,7 +1049,6 @@ export default function TokenViewer() {
           setActivityLog(updatedLog);
 
           await broadcastSkeletonSnapshot(newSkeleton, privilegeRoster, [entry]);
-          broadcastState(newSkeleton);
           await triggerAutoSave(newSkeleton, privilegeRoster, updatedLog);
         }}
       />
@@ -1132,6 +1105,7 @@ const styles = StyleSheet.create({
   },
   sessionPillRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
   },
@@ -1272,10 +1246,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
     backgroundColor: '#1E293B',
     borderRadius: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -1295,12 +1271,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1E293B',
   },
   sheetTabBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
     backgroundColor: '#090D16',
     borderWidth: 1,
     borderColor: '#334155',
     borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   sheetTabBtnActive: {
     backgroundColor: '#1D4ED8',

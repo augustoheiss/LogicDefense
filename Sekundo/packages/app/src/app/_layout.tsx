@@ -9,7 +9,7 @@
 
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { Platform, View, Text, Pressable, StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -55,6 +55,34 @@ class RootErrorBoundary extends React.Component<
 }
 
 export default function RootLayout() {
+  const pathname = usePathname();
+
+  // UX-08: Set dynamic document.title on Web per active route
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const routeTitles: Record<string, string> = {
+        '/': 'Sekundo — Painel Operacional Local-First',
+        '/schedule-hub': 'Sekundo — Programação, Escala & WhatsApp',
+        '/territory-checklist': 'Sekundo — Prancheta de Territórios',
+        '/territory-map': 'Sekundo — Mapa de Territórios CAD 2D',
+        '/share': 'Sekundo — Compartilhamento Seguro E2EE',
+        '/view': 'Sekundo — Visualizador Colaborativo',
+        '/studio': 'Sekundo — Estúdio Documental YAML ⇄ PDF',
+        '/hoje': 'Sekundo — Cockpit Hoje',
+        '/csv-import': 'Sekundo — Central Omni-CSV',
+        '/create-event': 'Sekundo — Novo Evento Multi-Engine',
+      };
+      const cleanPath = (pathname || '/').replace(/\/+$/, '') || '/';
+      if (cleanPath.startsWith('/s/')) {
+        document.title = 'Sekundo — Escopo Compartilhado';
+      } else if (cleanPath.startsWith('/coin')) {
+        document.title = 'Sekundo — Assistente Moeda';
+      } else {
+        document.title = routeTitles[cleanPath] || 'Sekundo — Painel Operacional';
+      }
+    }
+  }, [pathname]);
+
   // Hide splash screen on mount on native (with safety fallback timer)
   useEffect(() => {
     if (Platform.OS !== 'web') {

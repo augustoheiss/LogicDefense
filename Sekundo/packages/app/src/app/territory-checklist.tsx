@@ -57,6 +57,7 @@ import {
   TerritoryManageModal,
   type TerritoryManageTab,
 } from '../components/territory/TerritoryManageModal';
+import { QuickShareSheet } from '../components/share/QuickShareSheet';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
 import {
   loadSavedTerritoryRegistry,
@@ -133,6 +134,8 @@ export default function TerritoryChecklistScreen() {
   const [manageTargetGroupKey, setManageTargetGroupKey] = useState<string | undefined>(undefined);
   const [manageTargetGroupLabel, setManageTargetGroupLabel] = useState<string | undefined>(undefined);
   const [actionToast, setActionToast] = useState<string | null>(null);
+  const [quickShareOpen, setQuickShareOpen] = useState<boolean>(false);
+  const [quickShareTerritories, setQuickShareTerritories] = useState<string[]>([]);
 
   const openTerritoryManager = (
     tab: TerritoryManageTab,
@@ -703,6 +706,20 @@ export default function TerritoryChecklistScreen() {
               accessibilityLabel="Exportar Novo Modelo CSV Atualizado"
             >
               <Text style={[styles.mapLinkBtnText, { color: '#38BDF8' }]}>📤 Exportar CSV</Text>
+            </Pressable>
+            <Pressable
+              testID="checklist-quick-share-btn"
+              onPress={() => {
+                setQuickShareTerritories(focusTerritory ? [focusTerritory] : []);
+                setQuickShareOpen(true);
+              }}
+              style={[
+                styles.mapLinkBtn,
+                { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.22)' },
+              ]}
+              accessibilityLabel="Gerar Link Curto de Territórios"
+            >
+              <Text style={[styles.mapLinkBtnText, { color: '#34D399' }]}>🔗 Link Curto</Text>
             </Pressable>
             <Pressable
               testID="checklist-share-btn"
@@ -1847,6 +1864,16 @@ export default function TerritoryChecklistScreen() {
           </View>
         </View>
       </Modal>
+
+      <QuickShareSheet
+        visible={quickShareOpen}
+        onClose={() => setQuickShareOpen(false)}
+        eventId={eventId}
+        eventTitle={event?.config.name || 'Territórios Sekundo'}
+        skeleton={flatRegistry}
+        initialScopeKind="territories"
+        initialSelectedTerritoryNumbers={quickShareTerritories}
+      />
     </SafeAreaView>
   );
 }
@@ -1886,12 +1913,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   mapLinkBtn: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: 'rgba(59, 130, 246, 0.15)',
     borderWidth: 1,
     borderColor: '#3B82F6',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   mapLinkBtnText: {
     color: '#60A5FA',
@@ -2082,8 +2113,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   batchToggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 6,
   },
   batchBtnComplete: {
@@ -2114,8 +2147,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sortChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,

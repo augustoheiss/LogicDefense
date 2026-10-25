@@ -7,6 +7,18 @@
       "destination": "https://ocorrencias-pdf-writer.onrender.com/signal/:path*"
     },
     {
+      "source": "/share/:path*",
+      "destination": "https://ocorrencias-pdf-writer.onrender.com/signal/share/:path*"
+    },
+    {
+      "source": "/s/:id",
+      "destination": "/laboratorio/sekundo/index.html"
+    },
+    {
+      "source": "/laboratorio/sekundo/s/:id",
+      "destination": "/laboratorio/sekundo/index.html"
+    },
+    {
       "source": "/laboratorio/assistente-moeda/:path*",
       "destination": "/laboratorio/assistente-moeda/index.html"
     },

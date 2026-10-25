@@ -27,6 +27,7 @@ import {
   type SpreadsheetAccessRole,
   hasAdminSealPrivilege,
 } from '../auth/privilegeAccessGuard';
+import { signPacket, verifyPacket, derivePublicKeyFromSeed } from '../share/signedPacket';
 
 export const COLLAB_PACKET_PREFIX = 'SEKUNDO_COLLAB_v2:';
 
@@ -73,6 +74,10 @@ export interface CollabPacketPayloadV2 {
   activityEntries?: ActivityLogEntry[];
   /** Present on PRESENCE_HEARTBEAT */
   presence?: CollabPeerPresence;
+  /** Ed25519 signature over canonical packet fields (SEC-02) */
+  sig?: string;
+  /** Ed25519 public key (base64url, 32 bytes) matching the capability room's verifyPub */
+  verifyPub?: string;
 }
 
 export interface CollabRoomStateReconcileResult {
@@ -140,9 +145,31 @@ export function isPacketAuthorAuthorizedAdmin(
 }
 
 /**
+ * Signs a `CollabPacketPayloadV2` using the room's Ed25519 `signSeed` (`#w` capability fragment).
+ */
+export function signCollabPacket(
+  packet: CollabPacketPayloadV2,
+  signSeed: string
+): CollabPacketPayloadV2 {
+  const verifyPub = derivePublicKeyFromSeed(signSeed);
+  const packetWithPub: CollabPacketPayloadV2 = {
+    ...packet,
+    verifyPub,
+  };
+  const sig = signPacket(packetWithPub as unknown as Record<string, unknown>, signSeed);
+  return {
+    ...packetWithPub,
+    sig,
+  };
+}
+
+/**
  * Reconciles an incoming decrypted `CollabPacketPayloadV2` against the current client state,
- * strictly enforcing that ONLY authors with `👑 Selo Admin` in the Privilege Roster can
- * mutate spreadsheet cells (`SNAPSHOT_SYNC`, `DELTA_MUTATION`) or update the Privilege Roster (`ROSTER_UPDATE`).
+ * strictly enforcing that:
+ * 1. If `currentState.verifyPub` is configured (Capability Room v3), mutation packets MUST carry
+ *    a valid Ed25519 signature (`sig`) matching `currentState.verifyPub` (`SEC-02`).
+ * 2. Otherwise (v2 Admin Seal room), ONLY authors with `👑 Selo Admin` in the Privilege Roster can
+ *    mutate spreadsheet cells (`SNAPSHOT_SYNC`, `DELTA_MUTATION`) or update the Privilege Roster (`ROSTER_UPDATE`).
  */
 export function applyIncomingCollabPacket(
   currentState: {
@@ -151,6 +178,7 @@ export function applyIncomingCollabPacket(
     privilegeRoster: ParticipantProfile[];
     ledger: LedgerOperation[];
     activityLog: ActivityLogEntry[];
+    verifyPub?: string;
   },
   packet: CollabPacketPayloadV2
 ): CollabRoomStateReconcileResult {
@@ -175,26 +203,59 @@ export function applyIncomingCollabPacket(
     };
   }
 
-  // Mutation packets (`SNAPSHOT_SYNC`, `DELTA_MUTATION`, `ROSTER_UPDATE`) REQUIRE `👑 Selo Admin`!
-  const isAuthorizedAdmin = isPacketAuthorAuthorizedAdmin(packet, currentState.privilegeRoster);
-  if (!isAuthorizedAdmin) {
-    const securityAlert = appendActivityLogEntry(updatedActivityLog, {
-      eventId: currentState.eventId,
-      actorId: packet.author?.participantId || 'unknown',
-      actorName: packet.author?.fullName || 'Desconhecido',
-      actorGroup: packet.author?.groupTag || '',
-      actorRole: 'VIEWER',
-      actionType: 'UNAUTHORIZED_EDIT_ATTEMPT',
-      summary: `Tentativa de edição via rede bloqueada: ${packet.author?.fullName || 'Usuário'} não possui o 👑 Selo Admin.`,
-    });
-    return {
-      accepted: false,
-      rejectedReason: 'AUTHOR_MISSING_ADMIN_SEAL',
-      updatedSkeleton,
-      updatedRoster,
-      updatedLedger,
-      updatedActivityLog: securityAlert.updatedLog,
-    };
+  // SEC-02: When `verifyPub` is present on the room state, require cryptographic Ed25519 verification
+  if (currentState.verifyPub) {
+    const expectedPub = currentState.verifyPub.trim();
+    const hasValidSig =
+      Boolean(packet.sig) &&
+      (!packet.verifyPub || packet.verifyPub === expectedPub) &&
+      verifyPacket(
+        packet as unknown as Record<string, unknown>,
+        packet.sig || '',
+        expectedPub
+      );
+
+    if (!hasValidSig) {
+      const securityAlert = appendActivityLogEntry(updatedActivityLog, {
+        eventId: currentState.eventId,
+        actorId: packet.author?.participantId || 'unknown',
+        actorName: packet.author?.fullName || 'Desconhecido',
+        actorGroup: packet.author?.groupTag || '',
+        actorRole: 'VIEWER',
+        actionType: 'UNAUTHORIZED_EDIT_ATTEMPT',
+        summary: `Pacote de mutação rejeitado: assinatura digital Ed25519 ausente ou inválida (${packet.author?.fullName || 'Anônimo'}).`,
+      });
+      return {
+        accepted: false,
+        rejectedReason: 'INVALID_ED25519_SIGNATURE',
+        updatedSkeleton,
+        updatedRoster,
+        updatedLedger,
+        updatedActivityLog: securityAlert.updatedLog,
+      };
+    }
+  } else {
+    // Legacy v2 room: Mutation packets (`SNAPSHOT_SYNC`, `DELTA_MUTATION`, `ROSTER_UPDATE`) REQUIRE `👑 Selo Admin`!
+    const isAuthorizedAdmin = isPacketAuthorAuthorizedAdmin(packet, currentState.privilegeRoster);
+    if (!isAuthorizedAdmin) {
+      const securityAlert = appendActivityLogEntry(updatedActivityLog, {
+        eventId: currentState.eventId,
+        actorId: packet.author?.participantId || 'unknown',
+        actorName: packet.author?.fullName || 'Desconhecido',
+        actorGroup: packet.author?.groupTag || '',
+        actorRole: 'VIEWER',
+        actionType: 'UNAUTHORIZED_EDIT_ATTEMPT',
+        summary: `Tentativa de edição via rede bloqueada: ${packet.author?.fullName || 'Usuário'} não possui o 👑 Selo Admin.`,
+      });
+      return {
+        accepted: false,
+        rejectedReason: 'AUTHOR_MISSING_ADMIN_SEAL',
+        updatedSkeleton,
+        updatedRoster,
+        updatedLedger,
+        updatedActivityLog: securityAlert.updatedLog,
+      };
+    }
   }
 
   if (packet.kind === 'ROSTER_UPDATE' && Array.isArray(packet.privilegeRoster)) {

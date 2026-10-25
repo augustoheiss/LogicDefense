@@ -17,7 +17,7 @@ import { selectEnginePartitionNodes } from '../../csv/omniCsvBundle';
 import type { FlatSkeletonEntry } from '../../skeleton/types';
 
 describe('territoryCrudEngine', () => {
-  it('extracts territory summaries from S-13 seed registry', () => {
+  it('extracts territory summaries from territory seed registry', () => {
     const seed = buildTerritoriosS13HistoricalRegistry();
     const summaries = extractTerritorySummaries(seed);
     expect(summaries.length).toBeGreaterThan(0);
@@ -126,7 +126,7 @@ describe('territoryCrudEngine', () => {
         key: '01-01',
         type: 'slot',
         label: 'Presidente da Reunião',
-        value: 'João Silva',
+        value: 'Participante 05',
         email: '',
         meta: { engine_id: 'roster_assignments', _originalKey: '01' },
       },
@@ -158,7 +158,7 @@ describe('territoryCrudEngine', () => {
 
     // Roster node must remain untouched
     const rosterNode = mergedRaw.find((n) => n.key === '01-01');
-    expect(rosterNode?.value).toBe('João Silva');
+    expect(rosterNode?.value).toBe('Participante 05');
 
     // Territory nodes must be updated and keep 90- prefix
     const reExtracted = selectEnginePartitionNodes(mergedRaw, 'territory_logistics');
@@ -177,6 +177,7 @@ describe('territoryCrudEngine', () => {
         number: '500',
         lat: -23.5733,
         lng: -46.6752,
+        notes: 'Interfone 42 confidencial',
       },
     });
 
@@ -186,8 +187,14 @@ describe('territoryCrudEngine', () => {
 
     const addrShare = formatShareAddressLocationText(created.nodes[1]);
     expect(addrShare.text).toContain('Território 03 — Jardim Europa');
+    expect(addrShare.text).not.toContain('Interfone 42 confidencial');
     expect(addrShare.mapsUrl).toContain('google.com/maps');
     expect(addrShare.whatsappUrl).toContain('wa.me');
+
+    const addrShareWithNotes = formatShareAddressLocationText(created.nodes[1], undefined, {
+      includeNotes: true,
+    });
+    expect(addrShareWithNotes.text).toContain('Interfone 42 confidencial');
 
     const terrShare = formatShareTerritoryOrQuadraLocationsText({
       territoryNumber: '03',

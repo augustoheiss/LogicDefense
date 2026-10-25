@@ -113,11 +113,11 @@ export default function PublisherModeScreen() {
   const { events } = useLocalEvent();
   const fallbackEvent =
     events.find((e) => e.config.id === rawEventId) ||
-    events.find((e) => e.config.id === 'seed-territorios-s13') ||
+    events.find((e) => e.config.id === 'seed-territorios-padrao') ||
     events.find((e) => (e.config.activeEngines || []).includes('territory_logistics')) ||
     events[0] ||
     null;
-  const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-s13';
+  const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-padrao';
   const {
     flatRegistry: rawRegistry,
     saveSkeleton,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export interface MultiEngineSwitcherBarProps {
@@ -23,6 +23,7 @@ export interface MultiEngineSwitcherBarProps {
 interface EngineIconButtonSpec {
   id: string;
   icon: string;
+  shortLabel: string;
   title: string;
   routeKey: MultiEngineSwitcherBarProps['activeRoute'] | 'privileges';
   accentColor: string;
@@ -51,12 +52,15 @@ export function MultiEngineSwitcherBar({
   participantsCount,
 }: MultiEngineSwitcherBarProps) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isCompactMobile = width < 600;
   const query = eventId ? `?id=${encodeURIComponent(eventId)}` : '';
 
   const items: EngineIconButtonSpec[] = [
     {
       id: 'nav-home',
       icon: '🏠',
+      shortLabel: 'Início',
       title: 'Painel Principal (Home)',
       routeKey: 'home',
       accentColor: '#FFB800',
@@ -65,6 +69,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-schedule',
       icon: '📅',
+      shortLabel: 'Escala',
       title: 'Engine de Programação & WhatsApp',
       routeKey: 'schedule-hub',
       accentColor: '#38BDF8',
@@ -73,6 +78,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-territory-checklist',
       icon: '📋',
+      shortLabel: 'Campo',
       title: 'Engine de Territórios (Prancheta de Campo)',
       routeKey: 'territory-checklist',
       accentColor: '#10B981',
@@ -81,6 +87,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-territory-map',
       icon: '🗺️',
+      shortLabel: 'Mapa',
       title: 'Engine de Territórios (Mapa CAD 2D)',
       routeKey: 'territory-map',
       accentColor: '#34D399',
@@ -89,6 +96,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-privileges',
       icon: '🛡️',
+      shortLabel: 'Equipe',
       title: 'Engine de Privilégios & Rotação Justa',
       routeKey: 'privileges',
       accentColor: '#A855F7',
@@ -104,6 +112,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-studio',
       icon: '🖋️',
+      shortLabel: 'PDF',
       title: 'Estúdio Documental YAML ⇄ PDF',
       routeKey: 'studio',
       accentColor: '#F59E0B',
@@ -112,6 +121,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-skeleton',
       icon: '🌳',
+      shortLabel: 'Árvore',
       title: 'Editor Multi-Engine de Esqueleto',
       routeKey: 'skeleton-editor',
       accentColor: '#60A5FA',
@@ -120,6 +130,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-hoje',
       icon: '☀️',
+      shortLabel: 'Hoje',
       title: 'Cockpit Hoje & Rituais',
       routeKey: 'hoje',
       accentColor: '#FBBF24',
@@ -128,6 +139,7 @@ export function MultiEngineSwitcherBar({
     {
       id: 'nav-coin',
       icon: '🪙',
+      shortLabel: 'Moeda',
       title: 'Engine Financeira (Assistente Moeda)',
       routeKey: 'coin',
       accentColor: '#10B981',
@@ -157,6 +169,11 @@ export function MultiEngineSwitcherBar({
             ]}
           >
             <Text style={styles.iconGlyph}>{item.icon}</Text>
+            {isCompactMobile ? (
+              <Text style={styles.shortLabelText} numberOfLines={1}>
+                {item.shortLabel}
+              </Text>
+            ) : null}
             {isCurrent ? (
               <View style={[styles.activeDot, { backgroundColor: item.accentColor }]} />
             ) : null}
@@ -180,8 +197,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   iconBtn: {
-    width: 34,
-    height: 34,
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
     borderRadius: 8,
     backgroundColor: 'rgba(15, 23, 42, 0.92)',
     borderWidth: 1,
@@ -193,6 +212,12 @@ const styles = StyleSheet.create({
   iconGlyph: {
     fontSize: 15,
     textAlign: 'center',
+  },
+  shortLabelText: {
+    fontSize: 9,
+    color: '#94A3B8',
+    fontWeight: '700',
+    marginTop: 1,
   },
   activeDot: {
     position: 'absolute',

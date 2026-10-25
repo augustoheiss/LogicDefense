@@ -93,6 +93,8 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
     // Build patterns dynamically so this test file itself contains zero literal proprietary tokens
     const legacyArrayIdentifier = ['LEGACY', 'SENSITIVE', 'REPLACEMENTS'].join('_');
     const legacyRenderHost = ['ocorrencias', 'pdf', 'writer'].join('-');
+    const formPrefix = String.fromCharCode(83);
+    const forbiddenFormCodePattern = new RegExp(`\\b${formPrefix}-?(13|89)\\b`, 'i');
     const forbiddenPiiPattern = new RegExp(
       '\\b(' +
         [
@@ -122,6 +124,10 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
       const piiMatch = content.match(forbiddenPiiPattern);
       if (piiMatch) {
         violations.push(`${rel}: contains personal name "${piiMatch[0]}"`);
+      }
+      const formMatch = content.match(forbiddenFormCodePattern);
+      if (formMatch) {
+        violations.push(`${rel}: contains third-party form code "${formMatch[0]}"`);
       }
     }
 

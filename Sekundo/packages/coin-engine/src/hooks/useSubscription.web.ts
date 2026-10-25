@@ -118,7 +118,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       await new Promise((resolve) => setTimeout(resolve, 1000));
       const success = await webPurchase(pkg, userId);
       if (success) {
-        // Forcefully refresh Supabase profile
+        // Forcefully refresh local/gateway profile
         await auth.refreshProfile();
       }
       // Return mock transaction ID on web success
@@ -135,7 +135,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setSubscriptionType('yearly');
       setExpirationDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
       
-      // Forcefully refresh Supabase profile
+      // Forcefully refresh local/gateway profile
       await auth.refreshProfile();
       
       window.alert('Sucesso: Assinatura Pro restaurada no simulador web!');

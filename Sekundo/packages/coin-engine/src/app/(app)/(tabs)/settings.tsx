@@ -9,7 +9,6 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { supabase, isSupabaseConfigured } from '@coin/lib/supabase';
 import {
   View,
   Text,
@@ -69,7 +68,7 @@ export type SettingsStationId =
   | 'all';
 
 const SETTINGS_STATIONS: Array<{ id: SettingsStationId; icon: string; label: string }> = [
-  { id: 'account_license', icon: '👤', label: 'Conta & Licença' },
+  { id: 'account_license', icon: '🔑', label: 'Licença & Dados' },
   { id: 'sheets_backup', icon: '🗂️', label: 'Planilhas & Backup' },
   { id: 'goals_sectors', icon: '🎯', label: 'Metas & Setores' },
   { id: 'api_agents', icon: '🔌', label: 'API & Agentes IA' },
@@ -99,6 +98,7 @@ export default function SettingsScreen() {
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [showDebugger, setShowDebugger] = useState(false);
   const [showExamplesModal, setShowExamplesModal] = useState(false);
+  const [showOptionalLoginModal, setShowOptionalLoginModal] = useState(false);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -285,52 +285,9 @@ export default function SettingsScreen() {
       return;
     }
 
-    if (!isSupabaseConfigured) {
-      setPasswordError(
-        "Autenticação em nuvem não configurada neste modo Local-First. Use sua Chave de Licença PRO/Trial."
-      );
-      return;
-    }
-
-    setIsUpdatingPassword(true);
-    setPasswordError('');
-    try {
-      const email = auth.user?.email;
-      if (!email) throw new Error("Email do usuário não encontrado.");
-
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email,
-        password: currentPassword,
-      });
-
-      if (reauthError) {
-        setPasswordError("Senha atual incorreta");
-        return;
-      }
-
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (updateError) {
-        setPasswordError(updateError.message);
-        return;
-      }
-
-      setIsPasswordModalOpen(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      if (Platform.OS === 'web') {
-        window.alert("Senha alterada com sucesso!");
-      } else {
-        Alert.alert("Sucesso", "Senha alterada com sucesso!");
-      }
-    } catch (err: any) {
-      setPasswordError(err.message || String(err));
-    } finally {
-      setIsUpdatingPassword(false);
-    }
+    setPasswordError(
+      "O Assistente Moeda opera 100% Local-First com sincronização opcional via Turso. Use sua Chave de Licença PRO/Trial."
+    );
   };
 
   const fetchTokenBalance = useCallback(async () => {
@@ -543,9 +500,6 @@ export default function SettingsScreen() {
     const performDelete = async () => {
       setIsDeleting(true);
       try {
-        const { error } = await supabase.rpc('delete_user_account');
-        if (error) throw error;
-
         // Clear local state/DB
         await db.clearLocalState();
 
@@ -553,10 +507,10 @@ export default function SettingsScreen() {
         await auth.logout();
 
         if (Platform.OS === 'web') {
-          window.alert("Sua conta e todos os dados associados foram excluídos com sucesso.");
+          window.alert("Seus dados locais e sessão foram removidos com sucesso.");
           router.replace('/coin' as any);
         } else {
-          Alert.alert("Conta Excluída", "Sua conta e todos os dados associados foram excluídos com sucesso.");
+          Alert.alert("Dados Removidos", "Seus dados locais e sessão foram removidos com sucesso.");
           router.replace('/coin' as any);
         }
       } catch (err: any) {
@@ -654,42 +608,8 @@ export default function SettingsScreen() {
                   </View>
                 </View>
 
-                {/* Quick Account & API Console Actions */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.sm }}>
-                  {isVisitor && (
-                    <>
-                      <Pressable
-                        testID="coin-settings-login-btn"
-                        style={{
-                          backgroundColor: colors.accent.purple,
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: radius.sm,
-                        }}
-                        onPress={() => router.push('/coin/login' as any)}
-                      >
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
-                          🔐 Entrar na Conta
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        testID="coin-settings-register-btn"
-                        style={{
-                          backgroundColor: colors.background.tertiary,
-                          borderWidth: 1,
-                          borderColor: colors.accent.purpleBorder,
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: radius.sm,
-                        }}
-                        onPress={() => router.push('/coin/register' as any)}
-                      >
-                        <Text style={{ color: colors.text.primary, fontSize: 12, fontWeight: '700' }}>
-                          ✨ Criar Conta Cloud
-                        </Text>
-                      </Pressable>
-                    </>
-                  )}
+                {/* Quick API Console & Optional Discreet Account Icon Button */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: spacing.sm }}>
                   <Pressable
                     testID="coin-settings-api-test-btn"
                     style={{
@@ -706,7 +626,113 @@ export default function SettingsScreen() {
                       🧪 Console OpenAPI 3.1 & Turso
                     </Text>
                   </Pressable>
+                  {isVisitor && (
+                    <Pressable
+                      testID="coin-settings-login-btn"
+                      accessibilityRole="button"
+                      accessibilityLabel="Opções de acesso opcional"
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: radius.sm,
+                        backgroundColor: colors.background.tertiary,
+                        borderWidth: 1,
+                        borderColor: colors.border.default,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      onPress={() => setShowOptionalLoginModal(true)}
+                    >
+                      <Text style={{ fontSize: 15 }}>🔐</Text>
+                    </Pressable>
+                  )}
                 </View>
+
+                <Modal
+                  visible={showOptionalLoginModal}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setShowOptionalLoginModal(false)}
+                >
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(0,0,0,0.65)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 20,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: '100%',
+                        maxWidth: 340,
+                        backgroundColor: colors.background.secondary,
+                        borderRadius: radius.md,
+                        borderWidth: 1,
+                        borderColor: colors.border.default,
+                        padding: 18,
+                        gap: 12,
+                      }}
+                    >
+                      <Text style={{ color: colors.text.primary, fontSize: 15, fontWeight: '700' }}>
+                        🔐 Acesso Opcional
+                      </Text>
+                      <Text style={{ color: colors.text.secondary, fontSize: 12, lineHeight: 18 }}>
+                        O Assistente Moeda funciona 100% no seu aparelho e sincroniza opcionalmente via Turso. O login é totalmente opcional.
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                        <Pressable
+                          testID="coin-optional-login-confirm-btn"
+                          style={{
+                            flex: 1,
+                            backgroundColor: colors.accent.purple,
+                            paddingVertical: 10,
+                            borderRadius: radius.sm,
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            setShowOptionalLoginModal(false);
+                            router.push('/coin/login' as any);
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+                            Fazer Login
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          testID="coin-optional-register-confirm-btn"
+                          style={{
+                            flex: 1,
+                            backgroundColor: colors.background.tertiary,
+                            borderWidth: 1,
+                            borderColor: colors.border.default,
+                            paddingVertical: 10,
+                            borderRadius: radius.sm,
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            setShowOptionalLoginModal(false);
+                            router.push('/coin/register' as any);
+                          }}
+                        >
+                          <Text style={{ color: colors.text.primary, fontSize: 12, fontWeight: '600' }}>
+                            Criar Conta
+                          </Text>
+                        </Pressable>
+                      </View>
+                      <Pressable
+                        testID="coin-optional-login-close-btn"
+                        style={{ paddingVertical: 6, alignItems: 'center' }}
+                        onPress={() => setShowOptionalLoginModal(false)}
+                      >
+                        <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>
+                          Continuar sem login
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </Modal>
 
                 {/* License Key input / activation */}
                 <View style={styles.licenseInputContainer}>

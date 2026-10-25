@@ -10,7 +10,6 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@sekundo/coin-engine": "file:../coin-engine",
     "@sekundo/core": "file:../core",
-    "@supabase/supabase-js": "^2.99.3",
     "expo": "~56.0.12",
     "expo-build-properties": "~56.0.4",
     "expo-clipboard": "~56.0.4",

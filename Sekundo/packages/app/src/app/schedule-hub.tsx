@@ -38,6 +38,7 @@ import { useLocalEvent } from '../hooks/useLocalEvent';
 import * as storage from '../storage/localStorage';
 import { PrivilegeMatrixModal } from '../components/PrivilegeMatrixModal';
 import { ActivityLogModal } from '../components/audit/ActivityLogModal';
+import { QuickShareSheet } from '../components/share/QuickShareSheet';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
 import {
   loadPersistedActivityLog,
@@ -241,6 +242,7 @@ export default function ScheduleHubConsole() {
   // Custom Text/CSV Paste Modal
   const [showImportModal, setShowImportModal] = useState(false);
   const [customScheduleText, setCustomScheduleText] = useState('');
+  const [showQuickShareModal, setShowQuickShareModal] = useState(false);
 
   // PDF Generation State
   const [s13ServiceYear, setS13ServiceYear] = useState<'all' | '2027' | '2026'>('all');
@@ -985,6 +987,16 @@ export default function ScheduleHubConsole() {
             {...({ title: 'Salvar no App Sekundo' } as any)}
           >
             <Text style={styles.cadCommandBtnText}>💾</Text>
+          </Pressable>
+
+          <Pressable
+            testID="schedule-btn-quick-share"
+            onPress={() => setShowQuickShareModal(true)}
+            style={[styles.cadCommandBtn, styles.cadBtnCyan]}
+            accessibilityLabel="Gerar Link Curto de Escopo (Zero Login)"
+            {...({ title: 'Gerar Link Curto de Escopo (Sem Senha / <= 200 chars)' } as any)}
+          >
+            <Text style={styles.cadCommandBtnText}>⚡</Text>
           </Pressable>
 
           <Pressable
@@ -1889,6 +1901,19 @@ export default function ScheduleHubConsole() {
           </View>
         </View>
       </Modal>
+
+      <QuickShareSheet
+        visible={showQuickShareModal}
+        onClose={() => setShowQuickShareModal(false)}
+        eventId={eventId || 'schedule-hub'}
+        eventTitle={activeUnitName || 'Programação e Territórios'}
+        skeleton={
+          activeTab === 'territories'
+            ? territoryRegistry
+            : [...localScheduleRegistry, ...territoryRegistry]
+        }
+        initialScopeKind={activeTab === 'territories' ? 'territories' : 'weeks'}
+      />
     </SafeAreaView>
   );
 }

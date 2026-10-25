@@ -145,12 +145,12 @@ function TreeNode({
 
           {onAddChild ? (
             <Pressable onPress={() => onAddChild(node.key)} style={styles.controlBtn}>
-              <Text style={styles.controlBtnText}>+ Child</Text>
+              <Text style={styles.controlBtnText}>+ Filho</Text>
             </Pressable>
           ) : null}
           {onEditNode ? (
             <Pressable onPress={() => onEditNode(node)} style={styles.controlBtn}>
-              <Text style={styles.controlBtnText}>Edit</Text>
+              <Text style={styles.controlBtnText}>Editar</Text>
             </Pressable>
           ) : null}
           {onDeleteNode ? (
@@ -158,7 +158,7 @@ function TreeNode({
               onPress={() => onDeleteNode(node.key)}
               style={[styles.controlBtn, styles.deleteBtn]}
             >
-              <Text style={[styles.controlBtnText, styles.deleteBtnText]}>Delete</Text>
+              <Text style={[styles.controlBtnText, styles.deleteBtnText]}>Excluir</Text>
             </Pressable>
           ) : null}
         </View>

@@ -215,6 +215,8 @@ export {
   ACTIVITY_ACTION_LABELS,
   computeAuditHash,
   createActivityLogEntry,
+  signActivityLogEntry,
+  verifyActivityLogEntrySignature,
   appendActivityLogEntry,
   compareActivityLogEntries,
   mergeActivityLogs,
@@ -233,6 +235,7 @@ export {
   encodeEncryptedCollabPacket,
   decodeEncryptedCollabPacket,
   isPacketAuthorAuthorizedAdmin,
+  signCollabPacket,
   applyIncomingCollabPacket,
 } from './sync/collabRoomProtocol';
 export type {
@@ -710,4 +713,44 @@ export type {
   CreateAddressInTerritoryInput,
   ShareFormattedPayload,
 } from './territory/territoryCrudEngine';
+
+// Scoped Zero-Leakage Projection, Ed25519 Signed Packets & Capability URLs v3
+export {
+  resolveTerritoryKeysForNumbers,
+  projectScope,
+  assertScopedProjectionInvariants,
+} from './share/scopeProjection';
+export type {
+  ShareAccessMode,
+  ShareScopeKind,
+  ShareScope,
+  ScopedProjectionNode,
+  ScopedProjection,
+  ScopeSourceState,
+} from './share/scopeProjection';
+
+export {
+  generateSignSeed,
+  derivePublicKeyFromSeed,
+  canonicalizePacketForSigning,
+  signPacket,
+  verifyPacket,
+} from './share/signedPacket';
+
+export {
+  CAPABILITY_BLOB_PREFIX,
+  generateBlobId,
+  generateReadKey,
+  encryptBlobWithReadKey,
+  decryptBlobWithReadKey,
+  createCapabilityLink,
+  parseCapabilityUrl,
+} from './share/capabilityLink';
+export type {
+  CapabilityBlobEnvelopeV3,
+  CreateCapabilityLinkInput,
+  CapabilityLinkArtifacts,
+  ParsedCapabilityUrl,
+} from './share/capabilityLink';
+
 
