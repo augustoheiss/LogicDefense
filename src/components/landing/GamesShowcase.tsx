@@ -74,6 +74,18 @@ const GAMES: GameItem[] = [
     highlights: ['Metamorfose de Peça [M]', 'Selagem de Buracos [B]', 'Protocolo Fênix 142857'],
     mechanic: 'Bullet-Time Cognitivo (0.12×) com 2ª chance elástica e Códice das 8 Lentes Heiss-Lab.',
   },
+  {
+    id: 'logic-battle',
+    to: '/jogos/logic-battle',
+    icon: '⚔️',
+    title: 'Logic Battle',
+    genre: 'Crowd Runner · Conquista Territorial',
+    accentColor: 'gold',
+    badge: 'Genesis Edition · 20 Pegadinhas',
+    description: 'Cumprimos a promessa dos jogos de portões multiplicadores com 100% de honestidade matemática. Guie sua legião pela Ponte (Mundo 1), funda 10 soldados em Pelotões Posicionais (Vai-Um) e expanda seu Reino (Mundo 2).',
+    highlights: ['Pelotões Posicionais (Base 10)', '20 Pegadinhas & Fichas de Resgate', 'Mundo 1 (Ponte) + Mundo 2 (Reino)'],
+    mechanic: 'Cair numa pegadinha nunca dá Game Over: gera uma Ficha de Resgate para recuperar 100% das tropas pela razão.',
+  },
 ]
 
 export function GamesShowcase() {
@@ -84,7 +96,7 @@ export function GamesShowcase() {
         <div className="text-center mb-4">
           <span className="section-tag-arcade">
             <span>🎮</span>
-            <span>OS 5 JOGOS DO ECOSSISTEMA</span>
+            <span>OS 6 JOGOS DO ECOSSISTEMA</span>
           </span>
         </div>
 

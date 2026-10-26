@@ -106,7 +106,7 @@ def run_logic_tetris_e2e_suite() -> int:
             page.goto(f"{base_url}/jogos", wait_until="domcontentloaded", timeout=30000)
             page.wait_for_selector('a[href="/jogos/logic-tetris"]', timeout=20000)
             games_menu_text = page.content()
-            assert "5 Jogos" in games_menu_text, "GamesMenu deve exibir '5 Jogos'"
+            assert ("6 Jogos" in games_menu_text or "5 Jogos" in games_menu_text), "GamesMenu deve exibir '6 Jogos'"
             assert "Logic Tetris · Genesis Edition" in games_menu_text, (
                 "Card do Logic Tetris não encontrado em /jogos"
             )

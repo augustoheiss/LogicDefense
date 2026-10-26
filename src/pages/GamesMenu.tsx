@@ -4,7 +4,7 @@ export function GamesMenu() {
   return (
     <>
       <div className="hero" style={{ paddingBottom: 'clamp(24px, 3vw, 40px)' }}>
-        <p className="hero__eyebrow">Portal Educacional · 5 Jogos Interativos</p>
+        <p className="hero__eyebrow">Portal Educacional · 6 Jogos Interativos</p>
         <h1 className="hero__title">Menu de Jogos</h1>
         <p className="hero__sub">
           Aprenda Matemática sem perceber. Cada jogo treina raciocínio lógico
@@ -13,7 +13,7 @@ export function GamesMenu() {
       </div>
 
       <div className="section" style={{ paddingTop: 0 }}>
-        <p className="section__title">Disponível agora · 5 Jogos</p>
+        <p className="section__title">Disponível agora · 6 Jogos</p>
         <p className="section__subtitle">Jogue diretamente no navegador, sem instalação.</p>
 
         {/* ── Logic Defense card ── */}
@@ -126,6 +126,30 @@ export function GamesMenu() {
               <span className="game-card__badge">🔥 Protocolo Fênix 142857</span>
               <span className="game-card__badge">📖 Códice Heiss-Lab</span>
               <Link to="/jogos/logic-tetris" className="btn-primary">
+                ▶ Jogar agora
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Logic Battle (Genesis Edition) card ── */}
+        <div className="game-card" style={{ marginTop: 24 }}>
+          <div className="game-card__thumb" style={{ background: 'linear-gradient(135deg, #071226 0%, #162d4c 50%, #451a03 100%)' }}>
+            <span style={{ position: 'relative', zIndex: 1 }}>⚔️</span>
+          </div>
+          <div className="game-card__body">
+            <span className="game-card__tag" style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15', border: '1px solid rgba(250,204,21,0.35)' }}>Crowd Runner · Conquista Territorial</span>
+            <h2 className="game-card__title">Logic Battle · Genesis Edition</h2>
+            <p className="game-card__desc">
+              A Ponte dos Portões Honestos & O Reino da Matemática Soberana. Guie sua legião por portões
+              aritméticos (+, −, ×, ÷, %, potências), veja 10 soldados se fundirem em Pelotões Posicionais
+              (Vai-Um) e dome as 20 Pegadinhas da Intuição com Fichas de Resgate Socráticas.
+            </p>
+            <div className="game-card__footer">
+              <span className="game-card__badge">🌉 Mundo 1 (A Ponte) + Mundo 2 (O Reino)</span>
+              <span className="game-card__badge">⚡ 20 Pegadinhas & Fichas de Resgate</span>
+              <span className="game-card__badge">🔟 Fusão Posicional Vai-Um</span>
+              <Link to="/jogos/logic-battle" className="btn-primary">
                 ▶ Jogar agora
               </Link>
             </div>

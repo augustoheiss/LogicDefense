@@ -8,6 +8,7 @@ import { LogicAscensionPage } from './pages/LogicAscensionPage'
 import { LogicInvadersLanding } from './pages/LogicInvadersLanding'
 import { LogicFrictionPage } from './pages/LogicFrictionPage'
 const LogicTetrisPage = lazy(() => import('./pages/LogicTetrisPage'))
+const LogicBattlePage = lazy(() => import('./pages/LogicBattlePage'))
 import { LabPage } from './pages/LabPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
@@ -37,6 +38,14 @@ export default function App() {
             element={
               <Suspense fallback={<div className="min-h-screen bg-[#040711] flex items-center justify-center text-cyan-300 font-mono text-sm">Carregando Logic Tetris (Genesis Edition)...</div>}>
                 <LogicTetrisPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/jogos/logic-battle"
+            element={
+              <Suspense fallback={<div className="min-h-screen bg-[#040711] flex items-center justify-center text-cyan-300 font-mono text-sm">Carregando Logic Battle (Genesis Edition)...</div>}>
+                <LogicBattlePage />
               </Suspense>
             }
           />

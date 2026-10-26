@@ -13,7 +13,7 @@ export const STATIC_ROUTES_META = [
     path: '/',
     title: 'Heiss-Lab & Logic Defense · Matemática Soberana, IA e Jogos de Lógica',
     description:
-      'Portal educacional de Matemática Soberana e IA: 5 jogos cognitivos no navegador, ferramentas local-first (CV Maker, Sekundo, Moeda) e acervo aberto em LaTeX.',
+      'Portal educacional de Matemática Soberana e IA: 6 jogos cognitivos no navegador, ferramentas local-first (CV Maker, Sekundo, Moeda) e acervo aberto em LaTeX.',
     keywords:
       'Heiss Lab, Logic Defense, matemática soberana, jogos de matemática, cálculo mental, Hack Japonês, Augusto Heiss, edtech, IA na educação',
     badge: 'PORTAL EDUCACIONAL & LAB DE IA',
@@ -29,7 +29,7 @@ export const STATIC_ROUTES_META = [
     changefreq: 'weekly',
     includeInSitemap: true,
     highlights: [
-      '5 Jogos Matemáticos no Navegador (Zero Game Over)',
+      '6 Jogos Matemáticos no Navegador (Zero Game Over)',
       '5 Ferramentas Soberanas de IA & Produtividade Local-First',
       '18 Aulas e Apostilas Abertas em LaTeX + 40 Vídeos',
     ],
@@ -38,10 +38,10 @@ export const STATIC_ROUTES_META = [
     path: '/jogos',
     title: 'Jogos de Matemática e Raciocínio Lógico no Navegador · Heiss-Lab',
     description:
-      'Jogue 5 jogos educativos de matemática direto no navegador: Logic Defense, Logic Ascension, Logic Invaders, Logic Friction 3D e Logic Tetris (Genesis Edition).',
+      'Jogue 6 jogos educativos de matemática direto no navegador: Logic Defense, Logic Ascension, Logic Invaders, Logic Friction 3D, Logic Tetris e Logic Battle.',
     keywords:
-      'jogos de matemática, raciocínio lógico, cálculo mental, PEMDAS, jogos educativos online, Logic Defense, Logic Tetris, Heiss Lab',
-    badge: 'SUÍTE DE 5 JOGOS COGNITIVOS',
+      'jogos de matemática, raciocínio lógico, cálculo mental, PEMDAS, jogos educativos online, Logic Defense, Logic Tetris, Logic Battle, Heiss Lab',
+    badge: 'SUÍTE DE 6 JOGOS COGNITIVOS',
     cardSubtitle: 'Treine cálculo mental, PEMDAS e álgebra em tempo real sem instalação',
     emoji: '🎮',
     accentColor: '#00d4ff',
@@ -56,7 +56,7 @@ export const STATIC_ROUTES_META = [
     highlights: [
       'Logic Defense (Tower Defense) & Logic Ascension (RPG PEMDAS)',
       'Logic Invaders (Arcade) & Logic Friction (Arena 3D WebGL)',
-      'Logic Tetris · Genesis Edition (Matriz Base-10 & Fênix 142857)',
+      'Logic Tetris & Logic Battle (Genesis Edition · Portões & Reino)',
     ],
   },
   {
@@ -182,6 +182,31 @@ export const STATIC_ROUTES_META = [
       '3 Milagres Matemáticos ativos: Metamorfose [M], Cristal [B] e Fênix 142857',
       'Códice Heiss-Lab integrado com hacks visuais de cálculo mental',
       'Zero Game Over arbitrário: sua mente é o último escudo na matriz 10×20',
+    ],
+  },
+  {
+    path: '/jogos/logic-battle',
+    title: 'Logic Battle (Genesis Edition) · A Ponte dos Portões & O Reino | Heiss-Lab',
+    description:
+      'Guie sua legião por portões aritméticos 100% honestos, funda 10 soldados em Pelotões Posicionais (Vai-Um), dome 20 Pegadinhas com Fichas de Resgate e conquiste o Reino.',
+    keywords:
+      'Logic Battle, jogo dos portões matemáticos, crowd runner matemática, pegadinhas matemáticas, pelotões posicionais base 10, Heiss Lab',
+    badge: 'JOGO #06 · CROWD RUNNER & REINO MATEMÁTICO',
+    cardSubtitle: 'A Ponte dos Portões Honestos, Fusão Vai-Um e 20 Pegadinhas da Intuição',
+    emoji: '⚔️',
+    accentColor: '#facc15',
+    secondaryColor: '#38bdf8',
+    iconPath: '/icons/icon-logic-battle.png',
+    ogImagePath: '/og/jogo-logic-battle.png',
+    ogType: 'website',
+    schemaType: 'VideoGame',
+    sitemapPriority: 0.9,
+    changefreq: 'weekly',
+    includeInSitemap: true,
+    highlights: [
+      'Mundo 1 (Ponte dos Portões 60fps) + Mundo 2 (Reino & Cidadela)',
+      '20 Pegadinhas da Intuição com Fichas de Resgate Socráticas',
+      'Pelotões Posicionais na Base 10 (Fusão Vai-Um: 1 · 10 · 0,1k · 1k...)',
     ],
   },
   {

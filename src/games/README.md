@@ -1,10 +1,10 @@
-# 🎮 Heiss-Lab Logic Games Suite (`src/games`) — Catálogo Arquitetural & 10 Diagramas Interativos (PR Lens + ELI5)
+# 🎮 Heiss-Lab Logic Games Suite (`src/games`) — Catálogo Arquitetural & Diagramas Interativos (PR Lens + ELI5)
 
-Bem-vindo à suíte de jogos cognitivos e matemáticos do ecossistema **LogicDefense (`src/games`)**. Cada um dos **5 jogos** foi documentado com **Master Plan Architect (`agency-master-plan-architect`)**, um **Canvas Interativo ELI5 (`@[.agents/skills/eli5]`)** para entendimento imediato passo a passo e um **Canvas de Arquitetura Completa (`@[.agents/skills/pr-lens]`)** com fluxos de dados e payloads tipados.
+Bem-vindo à suíte de jogos cognitivos e matemáticos do ecossistema **LogicDefense (`src/games`)**. Cada um dos **6 jogos** foi documentado com **Master Plan Architect (`agency-master-plan-architect`)**, um **Guia ELI5 (`@[.agents/skills/eli5]`)** para entendimento imediato passo a passo e **Arquitetura Completa (`@[.agents/skills/pr-lens]`)** com fluxos de dados e payloads tipados.
 
 ---
 
-## 🗺️ Tabela Mestra dos 5 Jogos, READMEs e 10 Diagramas Interativos
+## 🗺️ Tabela Mestra dos 6 Jogos e READMEs
 
 | Jogo & Pasta | Gênero & Mecânica Central | Resumo ELI5 em 1 Frase | 📖 README Completo | 🟢 Canvas Interativo ELI5 | 🏛️ Canvas Arquitetura Completa |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -13,6 +13,7 @@ Bem-vindo à suíte de jogos cognitivos e matemáticos do ecossistema **LogicDef
 | ⚡ **3. LogicFriction**<br/>(`src/games/LogicFriction`) | **Arena MOBA 2.5D/3D WebGL (R3F + Rapier) & Labirinto A\***<br/>Grid A\* dinâmico anti-bloqueio, Desconflicção de Torres Sniper e 4 Pedestais Matemáticos Cardeais (`N/S/L/O`) que soltam Raios em Cadeia. | *"Pise nos altares 3D para eletrocutar hordas A\*."* | [**📄 Ler README do LogicFriction**](./LogicFriction/README.md) | [**👉 Abrir ELI5 (`Me1xix...`)**](https://prlens.dev/c/Me1xixa3VNSVkZaqmRle3w)<br/>[[SVG](https://prlens.dev/c/Me1xixa3VNSVkZaqmRle3w.svg)] | [**👉 Abrir Arquitetura (`5ecXQN...`)**](https://prlens.dev/c/5ecXQNKGoPrIsmtr5Lbyvw)<br/>[[SVG](https://prlens.dev/c/5ecXQNKGoPrIsmtr5Lbyvw.svg)] |
 | 🚀 **4. LogicInvaders v5**<br/>(`src/games/LogicInvaders`) | **Space Shooter Arcade das 6 Lentes Matemáticas**<br/>Trava de Plasma `[1][2][3]` nas bolhas, Zero Game-Over (*Difficulty Surge*), Andaime *"💡 Luz Guia"*, 4 Chefes Voxel e Portal Godot 4. | *"Trave nas bolhas certas para explodir chefes."* | [**📄 Ler README do LogicInvaders**](./LogicInvaders/README.md) | [**👉 Abrir ELI5 (`Y56Ui9...`)**](https://prlens.dev/c/Y56Ui9cQ3xTopiafkP2FJw)<br/>[[SVG](https://prlens.dev/c/Y56Ui9cQ3xTopiafkP2FJw.svg)] | [**👉 Abrir Arquitetura (`sI239O...`)**](https://prlens.dev/c/sI239OE5lya_IRmlFcx2mw)<br/>[[SVG](https://prlens.dev/c/sI239OE5lya_IRmlFcx2mw.svg)] |
 | 🧩 **5. LogicTetris (Cordão Tríplice)**<br/>(`src/games/LogicTetris`) | **Puzzle Polimórfico 3-em-1 (Tetris + Fruit Match + Tactile Grid)**<br/>Muta de jogo a cada 4 acertos, Scanner de Buracos (`cavityScanner`), Alquimia de Peças, 8 Lentes Isomórficas e Escudo Fênix `142857`. | *"Acerte 4 contas para mutar entre 3 puzzles."* | [**📄 Ler README do LogicTetris**](./LogicTetris/README.md) | [**👉 Abrir ELI5 (`q_ssSx...`)**](https://prlens.dev/c/q_ssSxw3zIVDPbEr9WN2aw)<br/>[[SVG](https://prlens.dev/c/q_ssSxw3zIVDPbEr9WN2aw.svg)] | [**👉 Abrir Arquitetura (`yE8Fmx...`)**](https://prlens.dev/c/yE8FmxmKF31memO1-HTKaw)<br/>[[SVG](https://prlens.dev/c/yE8FmxmKF31memO1-HTKaw.svg)] |
+| 🌉 **6. LogicBattle (Genesis Edition)**<br/>(`src/games/LogicBattle`) | **Crowd Runner de Portões Honestos + Reino Territorial**<br/>Oráculo de Caminhos (`pathOracle`), Pelotões Posicionais na Base 10 (`Vai-Um`), 20 Pegadinhas com Fichas de Resgate e Cidadela. | *"Cruze os portões certos, funda 10 soldados em 1 pelotão e conquiste o Reino."* | [**📄 Ler README do LogicBattle**](./LogicBattle/README.md) | [**👉 Ver Diagrama no README**](./LogicBattle/README.md) | [**👉 Ver Master Plan**](./LogicBattle/master-plan/MASTER_PLAN_LOGIC_BATTLE_GENESIS.md) |
 
 ---
 
