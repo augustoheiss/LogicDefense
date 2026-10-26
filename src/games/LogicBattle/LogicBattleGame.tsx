@@ -1,6 +1,6 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // src/games/LogicBattle/LogicBattleGame.tsx — Orquestrador Full-Screen (Mundo 1, 6 Engines & Mundo 2)
-// Fiel aos conceitos: master-plan/conceitos/ & MASTER_PLAN_V3_FLUXO_CONTINUO_E_ENGINES.md
+// MASTER_PLAN_V4: Rota dedicada para SerpentCanvas (Labirinto Toroidal 48×48) + ArcadeEnginesCanvas
 // ──────────────────────────────────────────────────────────────────────────────
 import React from 'react'
 import { BattleOverlay } from './components/BattleOverlay'
@@ -14,6 +14,7 @@ import { TrapAlertOverlay } from './components/TrapAlertOverlay'
 import { REGIONS } from './config/regions'
 import { ArcadeEnginesCanvas } from './engines/ArcadeEnginesCanvas'
 import { ENGINE_CATALOG } from './engines/engineContract'
+import { SerpentCanvas } from './engines/serpent/SerpentCanvas'
 import './logic-battle.css'
 import { CitadelPanel } from './realm/CitadelPanel'
 import { RealmMap } from './realm/RealmMap'
@@ -59,6 +60,8 @@ export const LogicBattleGame: React.FC = () => {
       {world === 'run' ? (
         activeEngineId === 'ponte_portoes' ? (
           <RunCanvas />
+        ) : activeEngineId === 'serpente_numeros' ? (
+          <SerpentCanvas />
         ) : (
           <ArcadeEnginesCanvas />
         )

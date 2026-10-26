@@ -42,7 +42,6 @@ export const RunCanvas: React.FC = () => {
   const currentLane = useLogicBattleStore((s) => s.snapshot.currentLane)
   const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
   const inspectedSegmentId = useLogicBattleStore((s) => s.snapshot.inspectedSegmentId)
-  const activeMergeEvent = useLogicBattleStore((s) => s.snapshot.activeMergeEvent)
   const activeSegment = useLogicBattleStore(
     (s) => s.snapshot.segments[s.snapshot.activeSegmentIndex] ?? null,
   )
@@ -95,6 +94,9 @@ export const RunCanvas: React.FC = () => {
     // Interpolação suave do movimento horizontal via RunEngine
     runEngineRef.current.setTargetNormX(snap.laneX)
     const smoothedLaneX = runEngineRef.current.stepSteering(frameDtMs)
+    ;(
+      window as unknown as { __lbHeroPos?: { x: number; y: number } }
+    ).__lbHeroPos = { x: smoothedLaneX, y: snap.progress }
 
     ctx.save()
     ctx.scale(dpr, dpr)
@@ -355,7 +357,7 @@ export const RunCanvas: React.FC = () => {
         aria-label="Ponte dos Portões Matemáticos — Deslize para guiar o exército"
       />
 
-      {/* Pop-up flutuante compacto de feedback (+99, Gêmeos, Vai-Um) — oculto durante BATTLE */}
+      {/* Pop-up flutuante compacto de feedback (+99, Gêmeos) — oculto durante BATTLE */}
       {latestFeedback && phase !== 'BATTLE' && (
         <div
           key={latestFeedback.id}
@@ -366,25 +368,17 @@ export const RunCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* Pílula compacta de Fusão Vai-Um / Empresta-Um */}
-      {activeMergeEvent && (
-        <div className="lb-vai-um-banner" data-testid="lb-vai-um-banner">
-          <strong>{activeMergeEvent.formulaLabel}</strong>
-        </div>
-      )}
-
-      {/* Camada Tática Flutuante Minimalista (Luneta + Zonas de Toque nas Faixas) */}
-      <div
-        className="lb-tactical-dock"
-        data-testid="lb-tactical-dock"
-        style={phase === 'BATTLE' ? { pointerEvents: 'none', opacity: 0 } : undefined}
-      >
+      {/* Camada Tática Flutuante Minimalista (Luneta + Zonas de Toque nas Faixas) — SIT-06: desmontada no resultado */}
+      {(phase === 'RUNNING' || phase === 'CALM_WAIT' || phase === 'PAUSED') && (
+        <div
+          className="lb-tactical-dock"
+          data-testid="lb-tactical-dock"
+        >
         <div
           className={`lb-lane-choice-grid lb-lanes-${laneCount} ${
             showVisibleTapPills ? 'is-visible-pills' : 'is-transparent-hitboxes'
           }`}
           data-testid="lb-lane-choice-grid"
-          style={phase === 'BATTLE' ? { pointerEvents: 'none' } : undefined}
         >
           {lanesForTap.map((laneGates, laneIdx) => {
             const primary = laneGates[0]
@@ -442,6 +436,7 @@ export const RunCanvas: React.FC = () => {
           <small>{lunetaCharges}</small>
         </button>
       </div>
+      )}
     </div>
   )
 }

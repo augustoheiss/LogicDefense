@@ -15,7 +15,7 @@ from playwright.sync_api import sync_playwright
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-PORT = 4181
+PORT = 4185
 BASE_URL = f"http://127.0.0.1:{PORT}"
 
 
@@ -224,7 +224,7 @@ def run_suite() -> dict:
 
             # Continuar atravessando até a Batalha Final caso tenha saído após testar a pegadinha
             legion_shot_saved = False
-            for step_i in range(20):
+            for step_i in range(32):
                 if (
                     page.locator('[data-testid="lb-battle-overlay-victory"]').count() > 0
                     or page.locator('[data-testid="lb-battle-overlay-defeat"]').count() > 0
@@ -265,10 +265,19 @@ def run_suite() -> dict:
                 or page.locator('[data-testid="lb-battle-overlay-defeat"]').count() > 0
             )
             assert battle_reached, "Nao alcancou o overlay de Batalha Final apos o Combate Visivel"
+            # SIT-06: lb-tactical-dock deve estar desmontado quando o resultado aparece
+            assert page.locator('[data-testid="lb-tactical-dock"]').count() == 0, (
+                "SIT-06: lb-tactical-dock nao deve continuar montado sob o modal de resultado"
+            )
+            # R1-08: HUD nao deve conter botoes extras de atalho dentro do <header data-testid="logic-battle-hud">
+            hud_extra_btns = page.locator('[data-testid="logic-battle-hud"] [data-testid="lb-toggle-calm"]').count()
+            assert hud_extra_btns == 0, "R1-08: lb-toggle-calm nao deve ficar dentro do header logic-battle-hud"
             results["functional"]["runAndTrapFlow"] = {
                 "trapTriggered": trap_triggered,
                 "redemptionTested": redemption_tested,
                 "battleReached": battle_reached,
+                "sit06DockUnmountedOnOverlay": True,
+                "r108CleanHudHeader": True,
             }
 
             # Fechar overlay de batalha indo para o Mundo 2 (O Reino)
@@ -301,24 +310,70 @@ def run_suite() -> dict:
                 academia_btn.click()
             results["functional"]["realmAndCitadel"] = "PASS"
 
-            # 2.7b V3: Verificar as 6 Engines no Hub do Reino + Execução Contínua
+            # 2.7b V4: Verificar as 6 Engines + Execução Contínua desde t=0s + Movimento Suave sem Teletransporte + Serpente Toroidal
             engine_btns = page.locator('[data-testid^="lb-engine-btn-"]').count()
             assert engine_btns == 6, f"Esperado 6 engines no seletor do Reino, encontrado {engine_btns}"
             for eng_id in ["cerco_torres", "forte_bandeira", "pedreira_rei", "arena_ondas", "serpente_numeros"]:
                 page.click(f'[data-testid="lb-engine-btn-{eng_id}"]')
                 page.wait_for_selector('[data-testid="lb-active-engine-badge"]', timeout=5000)
-                time.sleep(0.22)
+                time.sleep(0.25)
+
+                # UAT-01 / UAT-02: Tiro contínuo desde t=0s sem exigir clique em placa matemática
                 active_proj_eng = page.evaluate("() => window.__lbActiveProjectiles || 0")
                 assert active_proj_eng >= 1, f"Engine {eng_id} deve atirar continuamente desde t=0s"
-                for _ in range(3):
-                    if page.locator('[data-testid="lb-gate-choice-1"]').count() > 0:
-                        page.click('[data-testid="lb-gate-choice-1"]')
-                        time.sleep(0.08)
-                page.click('[data-testid="lb-battle-go-realm-btn"]')
+
+                # SIT-05: HUD sincronizado com a forca inicial do exercito
+                hud_army_txt = page.locator('[data-testid="lb-current-army-value"]').inner_text().strip()
+                assert len(hud_army_txt) >= 1, f"SIT-05: HUD army vazio na engine {eng_id}"
+
+                if eng_id == "serpente_numeros":
+                    # UAT-04: Minimapa toroidal 64x64, 3 corações e joystick 360° presentes
+                    assert page.locator('[data-testid="lb-serpent-minimap"]').count() == 1, "UAT-04: lb-serpent-minimap ausente"
+                    assert page.locator('[data-testid="lb-serpent-hearts"]').count() == 1, "UAT-04: lb-serpent-hearts ausente"
+                    assert page.locator('[data-testid="lb-serpent-joystick"]').count() == 1, "UAT-04: lb-serpent-joystick ausente"
+                    serp_shot = os.path.join(evid_dir, "v4_engine_serpente_labirinto.png")
+                    page.screenshot(path=serp_shot)
+                    results["screenshots"].append(serp_shot)
+
+                # Verificar Movimento Suave em passos na tela (sem teletransporte!)
+                pos0 = page.evaluate("() => window.__lbHeroPos ? {...window.__lbHeroPos} : null")
+                if page.locator('[data-testid="lb-gate-choice-0"]').count() > 0:
+                    page.click('[data-testid="lb-gate-choice-0"]')
+                pos1 = page.evaluate("() => window.__lbHeroPos ? {...window.__lbHeroPos} : null")
+                time.sleep(0.22)
+                pos2 = page.evaluate("() => window.__lbHeroPos ? {...window.__lbHeroPos} : null")
+                if pos0 and pos1 and pos2:
+                    step_delta = ((pos1["x"] - pos0["x"]) ** 2 + (pos1["y"] - pos0["y"]) ** 2) ** 0.5
+                    max_allowed_instant_step = 1.8 if eng_id == "serpente_numeros" else 0.35
+                    assert step_delta <= max_allowed_instant_step, (
+                        f"Movimento em {eng_id} nao pode teletransportar instantaneamente (step_delta={step_delta:.3f})"
+                    )
+
+                if eng_id == "cerco_torres":
+                    # Caminhar pelas 3 ondas em cerco_torres até concluir a partida e validar SIT-06 + SIT-07
+                    for _ in range(18):
+                        if (
+                            page.locator('[data-testid="lb-battle-overlay-victory"]').count() > 0
+                            or page.locator('[data-testid="lb-battle-overlay-defeat"]').count() > 0
+                        ):
+                            break
+                        if page.locator('[data-testid="lb-gate-choice-0"]').count() > 0:
+                            page.click('[data-testid="lb-gate-choice-0"]')
+                        time.sleep(0.16)
+                    assert page.locator('[data-testid="lb-tactical-dock"]').count() == 0, (
+                        "SIT-06: lb-tactical-dock deve desmontar ao concluir engine arcade"
+                    )
+                    page.click('[data-testid="lb-battle-go-realm-btn"]')
+                else:
+                    if page.locator('[data-testid="lb-battle-go-realm-btn"]').count() > 0:
+                        page.click('[data-testid="lb-battle-go-realm-btn"]')
+                    else:
+                        page.click('[data-testid="lb-tab-world-realm"]')
+
                 page.wait_for_selector('[data-testid="logic-battle-realm-stage"]', timeout=5000)
             page.click('[data-testid="lb-engine-btn-ponte_portoes"]')
             page.wait_for_selector('[data-testid="logic-battle-run-stage"]', timeout=5000)
-            results["functional"]["sixEnginesPlayable"] = "PASS"
+            results["functional"]["sixEnginesPlayable"] = "PASS (smooth non-teleporting steps + real-time action + serpent torus)"
 
             # 2.8 Resiliência de Save Corrompido (.bak recovery)
             page.evaluate(

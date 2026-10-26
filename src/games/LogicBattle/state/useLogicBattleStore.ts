@@ -484,14 +484,16 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
   stepLane: (delta) => {
     const state = get()
-    const nextLane = Math.max(
-      0,
-      Math.min(state.snapshot.laneCount - 1, state.snapshot.currentLane + delta),
+    // Passo suave horizontal (0.24 por toque) para mover o esquadrão gradualmente pela ponte sem teletransportar
+    const stepSize = state.snapshot.laneCount === 3 ? 0.22 : 0.26
+    const nextX = Math.max(
+      -0.86,
+      Math.min(0.86, state.snapshot.laneX + delta * stepSize),
     )
+    const nextLane = resolveLaneIndexFromNormX(nextX, state.snapshot.laneCount)
     if (nextLane !== state.snapshot.currentLane) {
       soundEngine.playLaneSwitch(nextLane)
     }
-    const nextX = getLaneCenterNormX(nextLane, state.snapshot.laneCount)
     set({
       snapshot: {
         ...state.snapshot,
@@ -511,17 +513,34 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       return
     }
     const clampedLane = Math.max(0, Math.min(snapshot.laneCount - 1, laneIndex))
-    const laneX = getLaneCenterNormX(clampedLane, snapshot.laneCount)
+    const targetLaneX = getLaneCenterNormX(clampedLane, snapshot.laneCount)
     const seg = snapshot.segments[snapshot.activeSegmentIndex]
     if (!seg) return
+
+    // Movimento suave em passos na tela: NUNCA teletransporta de um canto ao outro!
+    const dx = targetLaneX - snapshot.laneX
+    const maxHorizStep = 0.28
+    const steppedLaneX =
+      Math.abs(dx) <= maxHorizStep
+        ? targetLaneX
+        : snapshot.laneX + Math.sign(dx) * maxHorizStep
+
+    const isSwitchingSide = Math.abs(dx) > 0.22 && snapshot.phase === 'RUNNING'
+    const nextProgress = isSwitchingSide
+      ? Math.min(seg.zPosition - 0.012, snapshot.progress + 0.025)
+      : seg.zPosition
+
+    if (clampedLane !== snapshot.currentLane) {
+      soundEngine.playLaneSwitch(clampedLane)
+    }
 
     set({
       snapshot: {
         ...snapshot,
         currentLane: clampedLane,
-        laneX,
+        laneX: steppedLaneX,
         phase: 'RUNNING',
-        progress: seg.zPosition,
+        progress: Math.max(snapshot.progress, nextProgress),
       },
     })
     get().tickRun(16)

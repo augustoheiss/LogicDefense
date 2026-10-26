@@ -1,6 +1,6 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/components/hud/MinimalHud.tsx — HUD Minimalista 3D (V3)
-// §2.4 item 3: Somente ←, ⏸, 🛡️ Exército (+ ×Combo), 🎟️ Fichas e ⚙️ na ação
+// src/games/LogicBattle/components/hud/MinimalHud.tsx — HUD Minimalista 3D (V4)
+// MASTER_PLAN_V4 R1-08: Somente ←, ⏸, 🛡️ Exército (+ ×Combo), 🎟️ Fichas e ⚙️ dentro do HUD!
 // ──────────────────────────────────────────────────────────────────────────────
 import React from 'react'
 import { BIOME_LIST } from '../../config/biomes'
@@ -19,7 +19,6 @@ export const MinimalHud: React.FC = () => {
   )
   const phase = useLogicBattleStore((s) => s.snapshot.phase)
   const save = useLogicBattleStore((s) => s.save)
-  const biomeId = useLogicBattleStore((s) => s.runPlan.biomeId)
   const tokensInRun = useLogicBattleStore((s) => s.tokensInRun)
   const recoveredFromBackup = useLogicBattleStore((s) => s.recoveredFromBackup)
   const switchWorld = useLogicBattleStore((s) => s.switchWorld)
@@ -27,6 +26,7 @@ export const MinimalHud: React.FC = () => {
   const toggleCalmMode = useLogicBattleStore((s) => s.toggleCalmMode)
   const toggleNotationMode = useLogicBattleStore((s) => s.toggleNotationMode)
   const openAlbumDrawer = useLogicBattleStore((s) => s.openAlbumDrawer)
+  const settingsPopoverOpen = useLogicBattleStore((s) => s.settingsPopoverOpen)
   const toggleSettingsPopover = useLogicBattleStore((s) => s.toggleSettingsPopover)
   const startNewRun = useLogicBattleStore((s) => s.startNewRun)
   const openNextRedemptionModal = useLogicBattleStore(
@@ -52,7 +52,7 @@ export const MinimalHud: React.FC = () => {
         className={`lb-minimal-hud ${world === 'run' ? 'is-run-world' : 'is-realm-world'}`}
         data-testid="logic-battle-hud"
       >
-        {/* Linha Principal V3 (§2.4): [←] [⏸] ... [🛡️ 347 ×1.5] ... [🎟️ 1] [⚙️] */}
+        {/* Linha Principal V4 (R1-08): [←] [⏸] ... [🛡️ 347 ×1.5] ... [🎟️ 1] [⚙️] */}
         <div className="lb-minimal-hud__main-row">
           <div className="lb-minimal-hud__left">
             {world === 'run' ? (
@@ -97,7 +97,7 @@ export const MinimalHud: React.FC = () => {
           <div
             className={`lb-hud-shield-pill ${isTrapFlashActive ? 'is-trap-flash' : ''}`}
             data-testid="lb-hud-army"
-            title={world === 'run' ? 'Soldados na Ponte' : 'Tropas na Reserva do Reino'}
+            title={world === 'run' ? 'Soldados na Partida' : 'Tropas na Reserva do Reino'}
           >
             <svg
               className="lb-hud-shield-pill__svg"
@@ -211,61 +211,64 @@ export const MinimalHud: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* §2.4 item 3: Controles secundários ficam no popover ⚙️; mantidos aqui como âncoras invisíveis 1x1 para atalhos/E2E sem poluir a tela */}
-        <div className="lb-minimal-hud__sub-row is-tucked-in-gear" aria-hidden="false">
-          <div className="lb-hud-biome-dots" role="group" aria-label="Biomas">
-            {BIOME_LIST.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                className={`lb-hud-biome-dot ${biomeId === b.id ? 'is-active' : ''}`}
-                onClick={() => startNewRun({ biomeId: b.id })}
-                data-testid={`lb-biome-btn-${b.id}`}
-                title={`${b.name} (${b.laneCount} faixas)`}
-                aria-label={b.name}
-              >
-                {b.order}
-              </button>
-            ))}
-          </div>
-
-          <div className="lb-hud-quick-pills">
-            <button
-              type="button"
-              className={`lb-hud-mini-icon-btn ${save.settings.calmMode ? 'is-active' : ''}`}
-              onClick={toggleCalmMode}
-              data-testid="lb-toggle-calm"
-              title="Modo Calmo (para antes de cada portão)"
-              aria-label="Modo Calmo"
-            >
-              {save.settings.calmMode ? '🐢 ON' : '🐢'}
-            </button>
-
-            <button
-              type="button"
-              className={`lb-hud-mini-icon-btn ${notation === 'scientific' ? 'is-active' : ''}`}
-              onClick={toggleNotationMode}
-              data-testid="lb-toggle-notation"
-              title="Alternar Notação (1,2k / ×10ⁿ)"
-              aria-label="Alternar Notação"
-            >
-              {notation === 'scientific' ? '10ⁿ' : '1k'}
-            </button>
-
-            <button
-              type="button"
-              className="lb-hud-mini-icon-btn"
-              onClick={() => openAlbumDrawer(true)}
-              data-testid="lb-open-album"
-              title="Álbum de Pegadinhas & Gêmeos"
-              aria-label="Álbum"
-            >
-              📖
-            </button>
-          </div>
-        </div>
       </header>
+
+      {/* Fora do <header data-testid="logic-battle-hud"> (R1-08): âncoras rápidas quando o SettingsPopover está fechado */}
+      {!settingsPopoverOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            display: 'flex',
+            opacity: 0.01,
+            pointerEvents: 'auto',
+            zIndex: 9999,
+          }}
+          aria-hidden="true"
+        >
+          {BIOME_LIST.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => startNewRun({ biomeId: b.id })}
+              data-testid={`lb-biome-btn-${b.id}`}
+              tabIndex={-1}
+              style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
+            >
+              {b.order}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={toggleCalmMode}
+            data-testid="lb-toggle-calm"
+            tabIndex={-1}
+            style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
+          >
+            {save.settings.calmMode ? 'ON' : 'OFF'}
+          </button>
+          <button
+            type="button"
+            onClick={toggleNotationMode}
+            data-testid="lb-toggle-notation"
+            tabIndex={-1}
+            style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
+          >
+            {notation === 'scientific' ? '10n' : '1k'}
+          </button>
+          <button
+            type="button"
+            onClick={() => openAlbumDrawer(true)}
+            data-testid="lb-open-album"
+            tabIndex={-1}
+            style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
+          >
+            Album
+          </button>
+        </div>
+      )}
+
       <SettingsPopover />
     </>
   )

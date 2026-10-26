@@ -46,6 +46,7 @@ export const SettingsPopover: React.FC = () => {
             type="button"
             className={`lb-settings-row ${save.settings.notationMode === 'scientific' ? 'is-on' : ''}`}
             onClick={toggleNotationMode}
+            data-testid="lb-toggle-notation"
           >
             <span>🔢 Notação</span>
             <strong>{save.settings.notationMode === 'compact' ? '1,2k' : '10ⁿ'}</strong>
@@ -65,6 +66,7 @@ export const SettingsPopover: React.FC = () => {
             type="button"
             className={`lb-settings-row ${save.settings.calmMode ? 'is-on' : ''}`}
             onClick={toggleCalmMode}
+            data-testid="lb-toggle-calm"
           >
             <span>🐢 Modo Calmo (Sem Pressa)</span>
             <strong>{save.settings.calmMode ? 'ON' : 'OFF'}</strong>
@@ -92,6 +94,7 @@ export const SettingsPopover: React.FC = () => {
           <button
             type="button"
             className="lb-settings-row"
+            data-testid="lb-open-album"
             onClick={() => {
               toggleSettingsPopover(false)
               openAlbumDrawer(true)
@@ -109,6 +112,7 @@ export const SettingsPopover: React.FC = () => {
               <button
                 key={b.id}
                 type="button"
+                data-testid={`lb-biome-btn-${b.id}`}
                 className={`lb-settings-biome-pill ${runPlan.biomeId === b.id ? 'is-active' : ''}`}
                 onClick={() => {
                   startNewRun({ biomeId: b.id })
