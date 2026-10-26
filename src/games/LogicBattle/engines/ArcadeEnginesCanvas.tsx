@@ -1777,40 +1777,6 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           ctx.textBaseline = 'middle'
           ctx.fillText(`🪙 ${sim.coins}`, hx, hy - 40)
 
-          // V6: Desenhar Altar / Santuário Matemático 2.5D no canto superior direito do campo (0.84, 0.24)
-          const shrineX = 0.84 * w
-          const shrineY = 0.24 * h
-          const shrineName =
-            activeEngineId === 'cerco_torres'
-              ? '🧮 Cristal Alquímico'
-              : activeEngineId === 'forte_bandeira'
-                ? '🧮 Academia Militar'
-                : activeEngineId === 'pedreira_rei'
-                  ? '🧮 Geodo de Ouro'
-                  : '🧮 Cápsula Orbital'
-          ctx.save()
-          ctx.fillStyle = 'rgba(250, 204, 21, 0.25)'
-          ctx.beginPath()
-          ctx.ellipse(shrineX, shrineY + 14, 34, 14, 0, 0, Math.PI * 2)
-          ctx.fill()
-
-          ctx.fillStyle = 'rgba(30, 41, 59, 0.92)'
-          ctx.strokeStyle = '#facc15'
-          ctx.lineWidth = 2.5
-          ctx.beginPath()
-          ctx.roundRect(shrineX - 48, shrineY - 26, 96, 44, 10)
-          ctx.fill()
-          ctx.stroke()
-
-          ctx.fillStyle = '#fef08a'
-          ctx.font = '900 10px Inter, system-ui, sans-serif'
-          ctx.textAlign = 'center'
-          ctx.fillText(shrineName, shrineX, shrineY - 11)
-          ctx.fillStyle = '#4ade80'
-          ctx.font = '800 9px Inter, system-ui, sans-serif'
-          ctx.fillText('FAZER CONTA (+🪙/🪖)', shrineX, shrineY + 6)
-          ctx.restore()
-
           // 9. Atualizar Projéteis e Colisões Reais com o HP dos Inimigos e do Boss
           projectilePoolRef.current.updateAndDraw(
             ctx,
@@ -1911,11 +1877,6 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     sim.targetNormY = normY
 
     if (isDown) {
-      // V6: Clicar no Altar Matemático 2.5D no canto superior direito (0.84, 0.24) abre a Conta!
-      if (Math.hypot(normX - 0.84, normY - 0.24) <= 0.1) {
-        openMathChallengeModal()
-        return
-      }
       const clickedPad = sim.pads.find(
         (p) => Math.hypot(p.normX - normX, p.normY - normY) <= 0.095,
       )
@@ -2049,12 +2010,27 @@ export const ArcadeEnginesCanvas: React.FC = () => {
             ))}
           </div>
 
-          {/* V6: Botão Sempre Disponível de Fazer Conta (4 Graus: Fácil, Médio, Difícil ou Problema) */}
+          {/* V6: Botão Bônus Opcional de Fazer Conta — só abre quando o usuário clica! */}
           <button
             type="button"
             className="lb-luneta-fab"
             data-testid="lb-open-math-challenge-btn"
-            onClick={() => openMathChallengeModal()}
+            onClick={() => {
+              const sim = simRef.current
+              const rect = canvasRef.current?.getBoundingClientRect()
+              if (sim && rect) {
+                const hx = sim.heroNormX * (rect.width || 420)
+                const hy = sim.heroNormY * (rect.height || 620)
+                particlePoolRef.current.spawnBurst(hx, hy, '#facc15', 18, reducedMotion)
+                projectilePoolRef.current.spawnDamageText(
+                  hx,
+                  hy - 28,
+                  '✨ BÔNUS DE CONTA!',
+                  '#fde047',
+                )
+              }
+              openMathChallengeModal()
+            }}
             title="Fazer Conta Matemática (Fácil, Médio, Difícil ou Problema) para ganhar +Moedas, +Tropas/Tanques/Torres e Buffs"
             aria-label="Fazer Conta Matemática"
             style={{

@@ -208,32 +208,19 @@ export const RunCanvas: React.FC = () => {
           const sx = playerCenter.x + (i - (volleyCount - 1) * 0.5) * 18
           const sy = playerCenter.y - 16
 
-          // V6: Se o jogador encostar na borda direita do 3º Caminho (smoothedLaneX >= 0.72), os tiros miram no Altar de Conta
-          const rightAltar = rightMathRectRef.current
-          const aimRightMathAltar =
-            Boolean(rightAltar) &&
-            smoothedLaneX >= 0.72 &&
-            i === volleyCount - 1 &&
-            !liveState.activeMathChallenge
-
           // Alterna disparos entre a Vanguarda Rubra na ponte (progress < 0.88) e o Boss/Horda
-          const aimVanguard =
-            !aimRightMathAltar && snap.progress < 0.88 && i % 2 === 0
+          const aimVanguard = snap.progress < 0.88 && i % 2 === 0
           const vanguardPt = projectBridgePoint(
             proj,
             (i - 1) * 0.22,
             0.39 + (i % 2) * 0.03,
           )
-          const tx = aimRightMathAltar && rightAltar
-            ? rightAltar.centerX
-            : aimVanguard
-              ? vanguardPt.x
-              : fortressCoords.bossCenterX + (Math.random() - 0.5) * 48
-          const ty = aimRightMathAltar && rightAltar
-            ? rightAltar.centerY
-            : aimVanguard
-              ? vanguardPt.y - 14
-              : fortressCoords.bossCenterY + (Math.random() - 0.5) * 18
+          const tx = aimVanguard
+            ? vanguardPt.x
+            : fortressCoords.bossCenterX + (Math.random() - 0.5) * 48
+          const ty = aimVanguard
+            ? vanguardPt.y - 14
+            : fortressCoords.bossCenterY + (Math.random() - 0.5) * 18
 
           projectilePoolRef.current.spawnProjectile(
             kind,
@@ -241,7 +228,7 @@ export const RunCanvas: React.FC = () => {
             sy,
             tx,
             ty,
-            aimRightMathAltar ? 210 : aimVanguard ? 240 : 340,
+            aimVanguard ? 240 : 340,
           )
         }
 
@@ -278,30 +265,6 @@ export const RunCanvas: React.FC = () => {
             4,
             cfg.reducedMotion,
           )
-
-          // V6: Checar se o projétil do jogador acertou o 3º Caminho na Direita (Altar de Conta)
-          const rightAltar = rightMathRectRef.current
-          if (
-            kind !== 'enemy_bolt' &&
-            rightAltar &&
-            smoothedLaneX >= 0.72 &&
-            !liveState.activeMathChallenge &&
-            Math.abs(hitX - rightAltar.centerX) <= rightAltar.w * 0.65 &&
-            Math.abs(hitY - rightAltar.centerY) <= rightAltar.h * 0.65
-          ) {
-            rightMathHitsRef.current += 1
-            projectilePoolRef.current.spawnDamageText(
-              rightAltar.centerX,
-              rightAltar.y - 6,
-              `🧮 ${rightMathHitsRef.current}/3`,
-              '#fde047',
-            )
-            if (rightMathHitsRef.current >= 3) {
-              rightMathHitsRef.current = 0
-              liveState.openMathChallengeModal()
-            }
-            return
-          }
           if (kind === 'enemy_bolt') {
             if (snap.phase === 'RUNNING' && marchDamageTextTimerRef.current >= 520) {
               marchDamageTextTimerRef.current = 0
@@ -442,11 +405,25 @@ export const RunCanvas: React.FC = () => {
           const cx = e.clientX - rect.left
           const cy = e.clientY - rect.top
           if (
-            cx >= rightAltar.x - 14 &&
-            cx <= rightAltar.x + rightAltar.w + 14 &&
-            cy >= rightAltar.y - 14 &&
-            cy <= rightAltar.y + rightAltar.h + 14
+            cx >= rightAltar.x - 10 &&
+            cx <= rightAltar.x + rightAltar.w + 10 &&
+            cy >= rightAltar.y - 10 &&
+            cy <= rightAltar.y + rightAltar.h + 10
           ) {
+            rightMathHitsRef.current = -1
+            particlePoolRef.current.spawnBurst(
+              rightAltar.centerX,
+              rightAltar.centerY,
+              '#facc15',
+              18,
+              settings.reducedMotion,
+            )
+            projectilePoolRef.current.spawnDamageText(
+              rightAltar.centerX,
+              rightAltar.y - 10,
+              '✨ BÔNUS DE CONTA!',
+              '#fde047',
+            )
             openMathChallengeModal()
           }
         }}
@@ -531,14 +508,32 @@ export const RunCanvas: React.FC = () => {
           <small>{lunetaCharges}</small>
         </button>
 
-        {/* V6: 3º Caminho na Direita da Ponte — Fazer Conta (Fácil, Médio, Difícil ou Problema) */}
+        {/* V6: Botão Bônus Opcional de Conta — só abre quando o usuário clica! */}
         <button
           type="button"
           className="lb-luneta-fab"
           data-testid="lb-bridge-math-path-btn"
-          onClick={() => openMathChallengeModal()}
-          title="3º Caminho na Direita: Fazer Conta (Fácil, Médio, Difícil ou Problema) para ganhar +Soldados, +Moedas e Buffs"
-          aria-label="3º Caminho da Direita: Fazer Conta"
+          onClick={() => {
+            const rect = canvasRef.current?.getBoundingClientRect()
+            const cx = (rect?.width ?? 420) * 0.5
+            const cy = (rect?.height ?? 680) * 0.55
+            particlePoolRef.current.spawnBurst(
+              cx,
+              cy,
+              '#facc15',
+              18,
+              settings.reducedMotion,
+            )
+            projectilePoolRef.current.spawnDamageText(
+              cx,
+              cy - 18,
+              '✨ BÔNUS DE CONTA!',
+              '#fde047',
+            )
+            openMathChallengeModal()
+          }}
+          title="Bônus de Conta: Escolha Fácil, Médio, Difícil ou Problema para ganhar +Soldados, +Moedas e Buffs"
+          aria-label="Fazer Conta Bônus"
           style={{
             borderColor: '#facc15',
             background:

@@ -836,88 +836,49 @@ export function drawSegmentsOnBridge(
       ctx.restore()
     }
 
-    // V6: 3º Caminho na Direita da Ponte — Altar/Portão Dourado de Contas (Ao clicar ou dar tiro abre conta!)
-    const rightPt = projectBridgePoint(proj, 0.86, relDepth)
-    const rs = Math.max(0.48, rightPt.scale)
-    const altarW = Math.max(54, 72 * rs)
-    const altarH = Math.max(46, 82 * rs)
-    const ax = rightPt.x + 16 * rs - altarW * 0.5
-    const ay = rightPt.y - altarH
+    // V6: Caminho Bônus Opcional na Direita — aparece apenas no segmento especial de meio de pista (seg.index === 3)
+    // ou quando o jogador ativa o Caminho Bônus, sem poluir todos os portões da ponte!
+    if (seg.index === 3 && rightMathHits >= 0) {
+      const rightPt = projectBridgePoint(proj, 0.92, relDepth)
+      const rs = Math.max(0.45, rightPt.scale)
+      const orbR = Math.max(16, 22 * rs)
+      const cx = rightPt.x + 18 * rs
+      const cy = rightPt.y - 26 * rs
 
-    ctx.save()
-    // Trilha luminosa conectando a margem direita da ponte ao 3º Caminho
-    ctx.fillStyle = 'rgba(250, 204, 21, 0.34)'
-    ctx.beginPath()
-    ctx.ellipse(
-      ax + altarW * 0.5,
-      rightPt.y + 2 * rs,
-      altarW * 0.58,
-      9 * rs,
-      0,
-      0,
-      Math.PI * 2,
-    )
-    ctx.fill()
+      ctx.save()
+      ctx.fillStyle = 'rgba(250, 204, 21, 0.28)'
+      ctx.beginPath()
+      ctx.arc(cx, cy, orbR * 1.35, 0, Math.PI * 2)
+      ctx.fill()
 
-    // Painel 2.5D Dourado-Esmeralda do 3º Caminho (Altar de Conta)
-    const altarGrad = ctx.createLinearGradient(ax, ay, ax, ay + altarH)
-    altarGrad.addColorStop(0, 'rgba(250, 204, 21, 0.82)')
-    altarGrad.addColorStop(0.5, 'rgba(168, 85, 247, 0.68)')
-    altarGrad.addColorStop(1, 'rgba(234, 179, 8, 0.86)')
+      const orbGrad = ctx.createRadialGradient(cx - 4 * rs, cy - 4 * rs, 2, cx, cy, orbR)
+      orbGrad.addColorStop(0, '#fef08a')
+      orbGrad.addColorStop(0.6, '#facc15')
+      orbGrad.addColorStop(1, '#b45309')
+      ctx.fillStyle = orbGrad
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = Math.max(1.8, 2.4 * rs)
+      ctx.beginPath()
+      ctx.arc(cx, cy, orbR, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
 
-    ctx.fillStyle = altarGrad
-    ctx.strokeStyle = '#fde047'
-    ctx.lineWidth = Math.max(2.2, 3.2 * rs)
-    ctx.beginPath()
-    ctx.roundRect(ax, ay, altarW, altarH, Math.max(6, 9 * rs))
-    ctx.fill()
-    ctx.stroke()
+      ctx.fillStyle = '#0f172a'
+      ctx.font = `900 ${Math.max(9, Math.round(10 * rs))}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('🧮 BÔNUS', cx, cy)
+      ctx.restore()
 
-    // Título superior do 3º caminho
-    ctx.fillStyle = '#0f172a'
-    ctx.font = `900 ${Math.max(8, Math.round(9.5 * rs))}px Inter, system-ui, sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('3º CAMINHO', ax + altarW * 0.5, ay + 11 * rs)
-
-    // Ícone e chamada principal
-    ctx.fillStyle = '#ffffff'
-    ctx.strokeStyle = '#0f172a'
-    ctx.lineWidth = Math.max(2.5, 4 * rs)
-    ctx.font = `900 ${Math.max(11, Math.round(13 * rs))}px Inter, system-ui, sans-serif`
-    ctx.strokeText('🧮 CONTA', ax + altarW * 0.5, ay + altarH * 0.46)
-    ctx.fillText('🧮 CONTA', ax + altarW * 0.5, ay + altarH * 0.46)
-
-    ctx.fillStyle = '#fef08a'
-    ctx.font = `800 ${Math.max(8, Math.round(9 * rs))}px Inter, system-ui, sans-serif`
-    ctx.strokeText('+SOLDADOS/🪙', ax + altarW * 0.5, ay + altarH * 0.7)
-    ctx.fillText('+SOLDADOS/🪙', ax + altarW * 0.5, ay + altarH * 0.7)
-
-    // Barra de carga por tiro / toque na base do 3º Caminho
-    const chargeRatio = Math.min(1, (rightMathHits % 3) / 3)
-    const barW = altarW * 0.82
-    const barH = Math.max(5, 6 * rs)
-    const bx = ax + (altarW - barW) * 0.5
-    const by = ay + altarH - barH - 4 * rs
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'
-    ctx.beginPath()
-    ctx.roundRect(bx, by, barW, barH, 3 * rs)
-    ctx.fill()
-    ctx.fillStyle = '#4ade80'
-    ctx.beginPath()
-    ctx.roundRect(bx, by, Math.max(4 * rs, barW * (0.33 + chargeRatio * 0.67)), barH, 3 * rs)
-    ctx.fill()
-
-    ctx.restore()
-
-    if (closestSeg && seg.id === closestSeg.id) {
-      activeRightMathRect = {
-        x: ax,
-        y: ay,
-        w: altarW,
-        h: altarH,
-        centerX: ax + altarW * 0.5,
-        centerY: ay + altarH * 0.5,
+      if (closestSeg && seg.id === closestSeg.id) {
+        activeRightMathRect = {
+          x: cx - orbR,
+          y: cy - orbR,
+          w: orbR * 2,
+          h: orbR * 2,
+          centerX: cx,
+          centerY: cy,
+        }
       }
     }
   }
