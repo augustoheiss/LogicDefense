@@ -51,9 +51,11 @@ export function createDefaultSaveV1(): SaveV1 {
     mastery: createInitialMastery(),
     trapAlertSeenCount: createInitialTrapSeenMap(),
     mergeTutorialSeenCount: 0,
+    coachMarksSeen: false,
     settings: {
       notationMode: 'compact',
       calmMode: false,
+      simpleTapMode: false,
       soundEnabled: true,
       reducedMotion: false,
       fpsCap: 60,
@@ -126,6 +128,10 @@ export function migrateSave(raw: unknown): SaveV1 {
       typeof obj.mergeTutorialSeenCount === 'number'
         ? obj.mergeTutorialSeenCount
         : defaults.mergeTutorialSeenCount,
+    coachMarksSeen:
+      typeof obj.coachMarksSeen === 'boolean'
+        ? obj.coachMarksSeen
+        : defaults.coachMarksSeen,
     settings: {
       ...defaults.settings,
       ...(obj.settings && typeof obj.settings === 'object' ? obj.settings : {}),

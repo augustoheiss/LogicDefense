@@ -1019,7 +1019,7 @@ export const TRAP_CATALOG: Record<TrapId, TrapCatalogEntry> = {
     verifiedExamplePt: 'Com N = 3: 3² = 9, enquanto 3 + 10 = 13.',
     intuitionTrapPt: 'Elevar ao quadrado parece imbatível, mas para números pequenos uma boa soma vence.',
     luzGuiaPt: 'Elevar ao quadrado é multiplicar N × N. Com exército pequeno, compare N × N com a soma!',
-    isValidForArmy: (n) => n >= 2 && n <= 8,
+    isValidForArmy: (n) => n >= 2 && n <= 26,
     buildSegment: (n, _randFloat, laneCount) => {
       const addVal = Math.max(10, n * n - n + 4)
       const gSq = makeGate('t06-sq', '^', 2, 2, 1, '²', true)
@@ -1081,9 +1081,9 @@ export const TRAP_CATALOG: Record<TrapId, TrapCatalogEntry> = {
     buildSegment: (n, _randFloat, laneCount) => {
       const gainNeg = Math.max(15, Math.floor(n * 0.6))
       const gainPos = Math.max(10, Math.floor(gainNeg * 0.65))
-      const gSubNeg = makeGate('t09-subneg', '+', gainNeg, gainNeg, 1, `− (−${gainNeg})`, true, 'sub_neg')
+      const gSubNeg = makeGate('t09-subneg', '−', -gainNeg, -gainNeg, 1, `− (−${gainNeg})`, true, 'sub_neg')
       const gAdd = makeGate('t09-add', '+', gainPos, gainPos, 1, `+ ${gainPos}`)
-      const midAdd = Math.max(5, gainPos - 2)
+      const midAdd = Math.max(gainPos + 1, Math.floor((gainPos + gainNeg) / 2))
       return ensureTrapLaneCardinality(
         {
           kind: 'pair',

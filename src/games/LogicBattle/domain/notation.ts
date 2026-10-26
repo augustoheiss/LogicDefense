@@ -141,3 +141,29 @@ export function detectVaiUmMerge(
 
   return null
 }
+
+/**
+ * Detecta se o exército cruzou para baixo um limiar posicional ("Empresta-Um" da subtração)
+ * durante a batalha (ex.: caiu de >= 1.000 para < 1.000, desfazendo 1×[1k] em 10×[0,1k]).
+ */
+export function detectEmprestaUmSplit(
+  prevArmy: ArmyCount,
+  nextArmy: ArmyCount,
+): { fromTier: UnitTierSpec; toTier: UnitTierSpec; formulaLabel: string } | null {
+  if (nextArmy >= prevArmy || nextArmy <= 0) return null
+
+  for (let i = UNIT_TIERS.length - 1; i >= 1; i--) {
+    const highTier = UNIT_TIERS[i]
+    const lowTier = UNIT_TIERS[i - 1]
+    if (prevArmy >= highTier.value && nextArmy < highTier.value) {
+      const ratio = Math.round(highTier.value / lowTier.value)
+      return {
+        fromTier: highTier,
+        toTier: lowTier,
+        formulaLabel: `1 × ${highTier.denominationLabel} → ${ratio} × ${lowTier.denominationLabel}`,
+      }
+    }
+  }
+
+  return null
+}

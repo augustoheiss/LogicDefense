@@ -28,10 +28,11 @@ flowchart TB
         G3["⚡ LogicFriction<br/>3D WebGL MOBA (R3F/Rapier) + A* + Altares N/S/L/O"]
         G4["🚀 LogicInvaders v5<br/>Space Shooter + 6 Lentes + Luz Guia + VoxelBoss"]
         G5["🧩 LogicTetris (Trinity)<br/>Polimórfico 3-em-1 + Cavity Scanner + Fênix 142857"]
+        G6["🌉 LogicBattle (Genesis Edition)<br/>Crowd Runner Pseudo-3D + Oráculo + Reino SVG"]
     end
 
     subgraph Pillars["🧠 Pilares Pedagógicos e de Engenharia Compartilhados"]
-        P1["Oráculos Determinísticos<br/>(runOracle, BFS Relocation, A* Anti-Block, Cascade Oracle, Cavity Scanner)"]
+        P1["Oráculos Determinísticos<br/>(runOracle, BFS Relocation, A* Anti-Block, Cascade Oracle, Cavity Scanner, pathOracle)"]
         P2["Lentes Mentais Heiss-Lab<br/>(Andaime Luz Guia, 2 Métodos de Solução, Harmonia 142857, Distratores Diagnósticos)"]
         P3["Zero-Punishment Flow<br/>(Modo Desespero, Difficulty Surge sem Game-Over, Intervenção Fênix de 2ª Chance)"]
         P4["Motores 60fps & WebAudio<br/>(stateRef Zero-Rerender, React Three Fiber + Rapier 3D, Web Audio API Synth)"]

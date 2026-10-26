@@ -46,6 +46,7 @@ import {
   BiomeId,
   CitadelBuildingId,
   FloatingFeedbackItem,
+  MergeAnimationEvent,
   PathOracleResult,
   RedemptionContractOffer,
   RedemptionToken,
@@ -129,17 +130,23 @@ export interface LogicBattleStoreState {
   lunetaChargesRemaining: number
   albumDrawerOpen: boolean
   codexDrawerSlug: string | null
+  settingsPopoverOpen: boolean
+  activeRealmSheet: 'none' | 'region' | 'citadel'
   captainSpeech: CaptainSpeech
   lastDirectAttackResult: DirectAttackResult | null
 
   // Actions
   switchWorld: (world: 'run' | 'realm') => void
   toggleDebugMode: () => void
+  toggleSettingsPopover: (open?: boolean) => void
+  setActiveRealmSheet: (sheet: 'none' | 'region' | 'citadel') => void
   startNewRun: (opts?: { regionId?: string; biomeId?: BiomeId; seed?: number }) => void
   setSteeringX: (laneNormX: number) => void
   stepLane: (delta: -1 | 1) => void
   chooseLaneAndAdvance: (laneIndex: number) => void
   tickRun: (dtMs: number) => void
+  updateBattleArmyVisual: (newArmy: ArmyCount, splitEvent: MergeAnimationEvent | null) => void
+  finishBattle: () => void
   dismissTrapAlertAndContinue: () => void
   openImmediateRedemptionFromTrap: () => void
   submitRedemptionAnswer: (choiceId: string) => void
@@ -149,8 +156,10 @@ export interface LogicBattleStoreState {
   togglePauseRun: () => void
   toggleNotationMode: () => void
   toggleCalmMode: () => void
+  toggleSimpleTapMode: () => void
   toggleSound: () => void
   toggleReducedMotion: () => void
+  dismissCoachMarks: () => void
   selectRegion: (regionId: string) => void
   attackRegionDirect: (regionId: string, troopsToCommit: ArmyCount) => DirectAttackResult
   upgradeCitadelBuilding: (buildingId: CitadelBuildingId) => boolean
@@ -215,6 +224,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   lunetaChargesRemaining: initialLunetas,
   albumDrawerOpen: false,
   codexDrawerSlug: null,
+  settingsPopoverOpen: false,
+  activeRealmSheet: 'none',
   lastDirectAttackResult: null,
   captainSpeech: {
     mood: 'excited',
@@ -228,11 +239,23 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       battleResolution: null,
       activeTrapHit: null,
       activeRedemptionTokenId: null,
+      settingsPopoverOpen: false,
+      activeRealmSheet: 'none',
     })
   },
 
   toggleDebugMode: () => {
     set((s) => ({ debugMode: !s.debugMode }))
+  },
+
+  toggleSettingsPopover: (open) => {
+    set((s) => ({
+      settingsPopoverOpen: open !== undefined ? open : !s.settingsPopoverOpen,
+    }))
+  },
+
+  setActiveRealmSheet: (sheet) => {
+    set({ activeRealmSheet: sheet })
   },
 
   startNewRun: (opts) => {
@@ -332,6 +355,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   chooseLaneAndAdvance: (laneIndex) => {
     const state = get()
     const { snapshot } = state
+    if (snapshot.phase === 'BATTLE') {
+      get().finishBattle()
+      return
+    }
     if (
       snapshot.phase !== 'RUNNING' &&
       snapshot.phase !== 'CALM_WAIT'
@@ -678,7 +705,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       return
     }
 
-    // Se terminou todos os segmentos, inicia a Batalha Final!
+    // Se terminou todos os segmentos, inicia o Combate Visível (fase 'BATTLE')!
     if (snapshot.activeSegmentIndex >= snapshot.segments.length) {
       const resolution = resolveBattle(snapshot.currentArmy, snapshot.enemy)
       const contract = evaluateRedemptionContract(
@@ -687,87 +714,20 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         state.tokensInRun,
       )
 
-      if (resolution.outcome === 'VICTORY') {
-        soundEngine.playVictoryFanfare()
-        const region = REGIONS[runPlan.regionId] ?? REGIONS.r01_ponte_aurora
-        const alreadyConquered = save.conqueredRegionIds.includes(region.id)
-        const nextConquered = alreadyConquered
-          ? save.conqueredRegionIds
-          : [...save.conqueredRegionIds, region.id]
-        const passiveTribute = calculatePassiveTribute(nextConquered)
-        const survivorBonus = calculateCappedSurvivorBonus(
-          resolution.survivors,
-          region.rewardTroops,
-        )
-        const totalReward = region.rewardTroops + passiveTribute + survivorBonus
-
-        const nextSaveWin: SaveV1 = {
-          ...save,
-          reserveTroops: clampArmy(save.reserveTroops + totalReward),
-          remainderVault: save.remainderVault + snapshot.remainderBankInRun,
-          wisdomStars: save.wisdomStars + (alreadyConquered ? 1 : 2),
-          conqueredRegionIds: nextConquered,
-          stats: {
-            ...save.stats,
-            runsPlayed: save.stats.runsPlayed + 1,
-            runsWon: save.stats.runsWon + 1,
-            highestArmyReached: Math.max(
-              save.stats.highestArmyReached,
-              snapshot.currentArmy,
-            ),
-          },
-        }
-        SaveRepository.save(nextSaveWin)
-
-        set({
-          save: nextSaveWin,
-          battleResolution: resolution,
-          redemptionContract: contract,
-          snapshot: {
-            ...snapshot,
-            elapsedMs: nextElapsed,
-            progress: 1,
-            phase: 'VICTORY',
-          },
-          captainSpeech: {
-            mood: 'proud',
-            text: `Vitória gloriosa sobre ${snapshot.enemy.bossName}! Sobraram ${formatArmy(resolution.survivors, save.settings.notationMode)} soldados para a Reserva do Reino!`,
-          },
-        })
-      } else {
-        soundEngine.playDefeatRegroup()
-        const nextSaveDefeat: SaveV1 = {
-          ...save,
-          remainderVault: save.remainderVault + snapshot.remainderBankInRun,
-          stats: {
-            ...save.stats,
-            runsPlayed: save.stats.runsPlayed + 1,
-            highestArmyReached: Math.max(
-              save.stats.highestArmyReached,
-              snapshot.currentArmy,
-            ),
-          },
-        }
-        SaveRepository.save(nextSaveDefeat)
-
-        set({
-          save: nextSaveDefeat,
-          battleResolution: resolution,
-          redemptionContract: contract,
-          snapshot: {
-            ...snapshot,
-            elapsedMs: nextElapsed,
-            progress: 1,
-            phase: 'DEFEAT',
-          },
-          captainSpeech: {
-            mood: 'curious',
-            text: contract.canGuaranteeVictory
-              ? `Faltaram ${resolution.deficit} soldados! Mas suas Fichas de Resgate somam +${contract.totalRecoverableLoss} e garantem a virada!`
-              : `Faltaram ${resolution.deficit} soldados! Vamos tentar uma Revanche Tática com o Detector da Cidadela!`,
-          },
-        })
-      }
+      set({
+        battleResolution: resolution,
+        redemptionContract: contract,
+        snapshot: {
+          ...snapshot,
+          elapsedMs: nextElapsed,
+          progress: 1,
+          phase: 'BATTLE',
+        },
+        captainSpeech: {
+          mood: 'excited',
+          text: `Choque final nas muralhas contra ${snapshot.enemy.bossName}!`,
+        },
+      })
       return
     }
 
@@ -779,6 +739,120 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         progress: nextProgress,
       },
     })
+  },
+
+  updateBattleArmyVisual: (newArmy, splitEvent) => {
+    const state = get()
+    if (state.snapshot.phase !== 'BATTLE') return
+    if (splitEvent) {
+      soundEngine.playVaiUmMerge(0)
+    }
+    set({
+      snapshot: {
+        ...state.snapshot,
+        currentArmy: newArmy,
+        crowdNodes: buildCrowdNodes(newArmy),
+        activeMergeEvent: splitEvent ?? state.snapshot.activeMergeEvent,
+      },
+    })
+  },
+
+  finishBattle: () => {
+    const state = get()
+    const { snapshot, runPlan, save } = state
+    const resolution =
+      state.battleResolution ?? resolveBattle(snapshot.currentArmy, snapshot.enemy)
+    const contract =
+      state.redemptionContract ??
+      evaluateRedemptionContract(
+        resolution.playerArmy,
+        snapshot.enemy.totalForce,
+        state.tokensInRun,
+      )
+
+    if (resolution.outcome === 'VICTORY') {
+      soundEngine.playVictoryFanfare()
+      const region = REGIONS[runPlan.regionId] ?? REGIONS.r01_ponte_aurora
+      const alreadyConquered = save.conqueredRegionIds.includes(region.id)
+      const nextConquered = alreadyConquered
+        ? save.conqueredRegionIds
+        : [...save.conqueredRegionIds, region.id]
+      const passiveTribute = calculatePassiveTribute(nextConquered)
+      const survivorBonus = calculateCappedSurvivorBonus(
+        resolution.survivors,
+        region.rewardTroops,
+      )
+      const totalReward = region.rewardTroops + passiveTribute + survivorBonus
+
+      const nextSaveWin: SaveV1 = {
+        ...save,
+        reserveTroops: clampArmy(save.reserveTroops + totalReward),
+        remainderVault: save.remainderVault + snapshot.remainderBankInRun,
+        wisdomStars: save.wisdomStars + (alreadyConquered ? 1 : 2),
+        conqueredRegionIds: nextConquered,
+        stats: {
+          ...save.stats,
+          runsPlayed: save.stats.runsPlayed + 1,
+          runsWon: save.stats.runsWon + 1,
+          highestArmyReached: Math.max(
+            save.stats.highestArmyReached,
+            resolution.playerArmy,
+          ),
+        },
+      }
+      SaveRepository.save(nextSaveWin)
+
+      set({
+        save: nextSaveWin,
+        battleResolution: resolution,
+        redemptionContract: contract,
+        snapshot: {
+          ...snapshot,
+          progress: 1,
+          currentArmy: resolution.survivors,
+          crowdNodes: buildCrowdNodes(resolution.survivors),
+          phase: 'VICTORY',
+        },
+        captainSpeech: {
+          mood: 'proud',
+          text: `Vitória gloriosa sobre ${snapshot.enemy.bossName}! Sobraram ${formatArmy(resolution.survivors, save.settings.notationMode)} soldados para a Reserva do Reino!`,
+        },
+      })
+    } else {
+      soundEngine.playDefeatRegroup()
+      const nextSaveDefeat: SaveV1 = {
+        ...save,
+        remainderVault: save.remainderVault + snapshot.remainderBankInRun,
+        stats: {
+          ...save.stats,
+          runsPlayed: save.stats.runsPlayed + 1,
+          highestArmyReached: Math.max(
+            save.stats.highestArmyReached,
+            resolution.playerArmy,
+          ),
+        },
+      }
+      SaveRepository.save(nextSaveDefeat)
+
+      set({
+        save: nextSaveDefeat,
+        battleResolution: resolution,
+        redemptionContract: contract,
+        snapshot: {
+          ...snapshot,
+          progress: 1,
+          currentArmy: 0,
+          crowdNodes: [],
+          phase: 'DEFEAT',
+        },
+        captainSpeech: {
+          mood: 'curious',
+          text: contract.canGuaranteeVictory
+            ? `Faltaram ${resolution.deficit} soldados! Mas suas Fichas de Resgate somam +${contract.totalRecoverableLoss} e garantem a virada!`
+            : `Faltaram ${resolution.deficit} soldados! Vamos tentar uma Revanche Tática com o Detector da Cidadela!`,
+        },
+      })
+    }
   },
 
   dismissTrapAlertAndContinue: () => {
@@ -900,10 +974,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         resolution.survivors,
         region.rewardTroops,
       )
+      const passiveTribute = calculatePassiveTribute(nextConquered)
       nextSave = {
         ...nextSave,
         reserveTroops: clampArmy(
-          nextSave.reserveTroops + region.rewardTroops + survivorBonus,
+          nextSave.reserveTroops +
+            region.rewardTroops +
+            survivorBonus +
+            passiveTribute,
         ),
         conqueredRegionIds: nextConquered,
         stats: {
@@ -1075,6 +1153,20 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     })
   },
 
+  toggleSimpleTapMode: () => {
+    const state = get()
+    const nextTap = !state.save.settings.simpleTapMode
+    const nextSave: SaveV1 = {
+      ...state.save,
+      settings: {
+        ...state.save.settings,
+        simpleTapMode: nextTap,
+      },
+    }
+    SaveRepository.save(nextSave)
+    set({ save: nextSave })
+  },
+
   toggleSound: () => {
     const state = get()
     const nextSound = !state.save.settings.soundEnabled
@@ -1104,6 +1196,16 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     set({ save: nextSave })
   },
 
+  dismissCoachMarks: () => {
+    const state = get()
+    const nextSave: SaveV1 = {
+      ...state.save,
+      coachMarksSeen: true,
+    }
+    SaveRepository.save(nextSave)
+    set({ save: nextSave })
+  },
+
   selectRegion: (regionId) => {
     const state = get()
     if (!REGIONS[regionId]) return
@@ -1112,7 +1214,11 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       selectedRegionId: regionId,
     }
     SaveRepository.save(nextSave)
-    set({ save: nextSave, lastDirectAttackResult: null })
+    set({
+      save: nextSave,
+      lastDirectAttackResult: null,
+      activeRealmSheet: 'region',
+    })
   },
 
   attackRegionDirect: (regionId, troopsToCommit) => {

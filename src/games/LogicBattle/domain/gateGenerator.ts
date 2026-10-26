@@ -71,14 +71,17 @@ function buildFairPairSegment(
   enemyTotalForce: ArmyCount,
   rng: SeededRng,
 ): LaneSegment {
-  const remainingGap = Math.max(6, enemyTotalForce - currentBestArmy)
-  const addGood = Math.max(
-    4,
-    Math.min(
-      Math.max(12, Math.ceil(remainingGap * 0.28)),
-      Math.round(currentBestArmy * 0.3) + rng.nextInt(3, 9),
-    ),
-  )
+  const isAlreadyAboveEnemy = currentBestArmy >= enemyTotalForce
+  const remainingGap = Math.max(4, enemyTotalForce - currentBestArmy)
+  const addGood = isAlreadyAboveEnemy
+    ? rng.nextInt(2, 5)
+    : Math.max(
+        4,
+        Math.min(
+          Math.max(10, Math.ceil(remainingGap * 0.25)),
+          Math.round(currentBestArmy * 0.28) + rng.nextInt(3, 8),
+        ),
+      )
   const addModest = Math.max(1, Math.floor(addGood * 0.35))
   const canMultiplySafely = currentBestArmy * 2 <= enemyTotalForce * 1.15
 
@@ -158,7 +161,10 @@ function buildCalibratedFinalSegment(
   const minBestTarget = Math.ceil(
     enemyTotalForce * (1 + GATE_POLICIES.oracleBestMarginRatio + 0.05),
   )
-  const neededDelta = Math.max(6, minBestTarget - runningBestBeforeFinal)
+  const neededDelta =
+    runningBestBeforeFinal >= minBestTarget
+      ? rng.nextInt(3, 6)
+      : Math.max(6, minBestTarget - runningBestBeforeFinal)
 
   const bestGate = makeSimpleGate(
     `${segId}_cal_best`,
@@ -279,7 +285,11 @@ function tryBuildRunWithSeed(
   let detectorAlertsUsed = 0
   let placedTwins = false
 
-  const twinTargetIndex = Math.max(2, Math.floor(segmentCount / 2))
+  const twinTargetIndex = 2
+  let maxBestAllowed = Math.max(
+    Math.ceil(enemy.totalForce * GATE_POLICIES.oracleMaxBestRatio),
+    n0 + 95,
+  )
 
   for (let i = 0; i < segmentCount; i++) {
     const zPosition = Number(((i + 1) / (segmentCount + 1)).toFixed(4))
@@ -305,10 +315,10 @@ function tryBuildRunWithSeed(
       continue
     }
 
-    // Inserir 1 segmento de Portões Gêmeos por corrida (filtrando ×10³ se o inimigo for pequeno)
-    if (!placedTwins && i === twinTargetIndex && biome.twinIds.length > 0) {
+    // Inserir 1 segmento de Portões Gêmeos por corrida (filtrando ×10³ fora da Torre das Potências se o inimigo for pequeno)
+    if (!placedTwins && i >= twinTargetIndex && i < segmentCount - 2 && biome.twinIds.length > 0) {
       const eligibleTwins =
-        enemy.totalForce < 600
+        enemy.totalForce < 600 && params.biomeId !== 'torre_potencias'
           ? biome.twinIds.filter((tid) => tid !== 'G04')
           : biome.twinIds
       const twinPool = eligibleTwins.length > 0 ? eligibleTwins : biome.twinIds
@@ -324,11 +334,17 @@ function tryBuildRunWithSeed(
         zPosition,
       }
       const cf = evaluateSegmentCounterfactual(twinSeg, runningBest)
-      if (cf.bestValue >= 2) {
+      if (
+        cf.bestValue >= 2 &&
+        (twinId === 'G04' || cf.bestValue <= maxBestAllowed || cf.bestValue <= runningBest)
+      ) {
         segments.push(twinSeg)
         const cfW = evaluateSegmentCounterfactual(twinSeg, runningWorst)
         runningBest = cf.bestValue
         runningWorst = cfW.worstValue
+        if (twinId === 'G04') {
+          maxBestAllowed = Math.max(maxBestAllowed, Math.ceil(runningBest * 2.2))
+        }
         placedTwins = true
         continue
       }
@@ -372,10 +388,6 @@ function tryBuildRunWithSeed(
         }
 
         const cf = evaluateSegmentCounterfactual(candidateSeg, runningBest)
-        const maxBestAllowed = Math.max(
-          enemy.totalForce * GATE_POLICIES.oracleMaxBestRatio,
-          n0 + 95,
-        )
         // Garantir Regra do Portão Justo (n' >= 2, melhor > pior) e evitar explosão exponencial
         if (
           cf.bestValue >= 2 &&
@@ -429,7 +441,11 @@ function tryBuildRunWithSeed(
     enemy.totalForce * (1 + GATE_POLICIES.oracleBestMarginRatio),
   )
 
-  if (oracle.best >= minRequiredBest && oracle.worst < enemy.totalForce) {
+  if (
+    oracle.best >= minRequiredBest &&
+    oracle.best <= maxBestAllowed + 15 &&
+    oracle.worst < enemy.totalForce
+  ) {
     return candidatePlan
   }
 

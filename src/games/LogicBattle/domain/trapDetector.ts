@@ -43,7 +43,14 @@ export function detectTrap(
     return null
   }
 
-  // Se foi especificado intuitiveLane, o alerta de pegadinha foca na escolha não-ótima
+  // Se o segmento define explicitamente a faixa da pegadinha intuitiva (ex.: em biomas de 3 faixas),
+  // escolher a 3ª faixa intermediária não deve acusar falso-positivo da pegadinha específica.
+  if (
+    segment.intuitiveLane !== undefined &&
+    chosenLane !== segment.intuitiveLane
+  ) {
+    return null
+  }
   const maxAllowedLoss = entry.legendary
     ? counterfactualResult
     : Math.max(1, Math.floor(counterfactualResult * GATE_POLICIES.maxStandardTrapLossRatio))

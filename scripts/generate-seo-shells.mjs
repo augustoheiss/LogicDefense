@@ -148,11 +148,11 @@ function buildLlmsTxt(staticRoutes, lessonRoutes) {
 
   return `# Heiss-Lab · Matemática Soberana, Jogos Cognitivos & Ferramentas Local-First
 
-> Portal educacional aberto e laboratório de Inteligência Artificial criado pelo Prof. Augusto Heiss (${SITE_ORIGIN}). Reúne 5 jogos matemáticos interativos no navegador, 5 ferramentas SaaS soberanas (Local-First) e 18 apostilas didáticas em LaTeX/PDF com 40 vídeos educativos.
+> Portal educacional aberto e laboratório de Inteligência Artificial criado pelo Prof. Augusto Heiss (${SITE_ORIGIN}). Reúne 6 jogos matemáticos interativos no navegador, 5 ferramentas SaaS soberanas (Local-First) e 18 apostilas didáticas em LaTeX/PDF com 40 vídeos educativos.
 
 ## Páginas Principais (Hubs)
 - [Página Inicial](${SITE_ORIGIN}/): Portal Heiss-Lab & Logic Defense — Matemática Soberana, Filosofia e IA.
-- [Menu de Jogos Cognitivos](${SITE_ORIGIN}/jogos): Suíte de 5 jogos matemáticos gratuitos no navegador (Zero Game Over).
+- [Menu de Jogos Cognitivos](${SITE_ORIGIN}/jogos): Suíte de 6 jogos matemáticos gratuitos no navegador (Zero Game Over).
 - [Laboratório de IA & Ferramentas](${SITE_ORIGIN}/laboratorio): Ferramentas SaaS Local-First e vídeos de pesquisa.
 - [Repositório Didático Aberto](${SITE_ORIGIN}/repositorio): 18 apostilas em LaTeX/PDF e 40 vídeos organizados em 9 trilhas temáticas.
 - [Sobre o Heiss-Lab](${SITE_ORIGIN}/sobre): Manifesto pedagógico e arquitetural do Prof. Augusto Heiss.

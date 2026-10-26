@@ -7,7 +7,7 @@ import { ArmyCount, UnitTierSpec } from '../types'
 export const ARMY_CAP: ArmyCount = 9_000_000_000_000_000
 
 /** Abaixo deste limite o exército é desenhado 1:1 para sensação de horda; acima, funde em Pelotões Posicionais */
-export const RENDER_1TO1_MAX = 120
+export const RENDER_1TO1_MAX = 14
 
 /** Orçamento máximo de sprites simultâneos no Canvas */
 export const MAX_CROWD_SPRITES = 150
@@ -105,7 +105,7 @@ export const UNIT_TIERS: readonly UnitTierSpec[] = [
     tierIndex: 7,
     denominationLabel: '10M',
     value: 10_000_000,
-    unitName: 'Arcconte Solar',
+    unitName: 'Arconte Solar',
     etymologyPt: 'Dez milhões (10⁷ = 10M). Guardião de luz que marcha no centro da espiral áurea.',
     primaryColor: '#f97316',
     secondaryColor: '#c2410c',

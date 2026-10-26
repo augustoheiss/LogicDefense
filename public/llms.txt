@@ -1,10 +1,10 @@
 # Heiss-Lab · Matemática Soberana, Jogos Cognitivos & Ferramentas Local-First
 
-> Portal educacional aberto e laboratório de Inteligência Artificial criado pelo Prof. Augusto Heiss (https://heisslab.com.br). Reúne 5 jogos matemáticos interativos no navegador, 5 ferramentas SaaS soberanas (Local-First) e 18 apostilas didáticas em LaTeX/PDF com 40 vídeos educativos.
+> Portal educacional aberto e laboratório de Inteligência Artificial criado pelo Prof. Augusto Heiss (https://heisslab.com.br). Reúne 6 jogos matemáticos interativos no navegador, 5 ferramentas SaaS soberanas (Local-First) e 18 apostilas didáticas em LaTeX/PDF com 40 vídeos educativos.
 
 ## Páginas Principais (Hubs)
 - [Página Inicial](https://heisslab.com.br/): Portal Heiss-Lab & Logic Defense — Matemática Soberana, Filosofia e IA.
-- [Menu de Jogos Cognitivos](https://heisslab.com.br/jogos): Suíte de 5 jogos matemáticos gratuitos no navegador (Zero Game Over).
+- [Menu de Jogos Cognitivos](https://heisslab.com.br/jogos): Suíte de 6 jogos matemáticos gratuitos no navegador (Zero Game Over).
 - [Laboratório de IA & Ferramentas](https://heisslab.com.br/laboratorio): Ferramentas SaaS Local-First e vídeos de pesquisa.
 - [Repositório Didático Aberto](https://heisslab.com.br/repositorio): 18 apostilas em LaTeX/PDF e 40 vídeos organizados em 9 trilhas temáticas.
 - [Sobre o Heiss-Lab](https://heisslab.com.br/sobre): Manifesto pedagógico e arquitetural do Prof. Augusto Heiss.
@@ -22,6 +22,7 @@
 - [Logic Invaders · Arcade Shooter de Cálculo Mental Reflexivo](https://heisslab.com.br/jogos/logic-invaders): Naves alienígenas descem carregando equações e sua munição são os números. Atire a resposta certa ou veja o inimigo acelerar com Feedback Elástico (Zero Game Over).
 - [Logic Friction · Arena 3D WebGL de Aritmética e Física Real](https://heisslab.com.br/jogos/logic-friction): Arena 3D com física Rapier e Three.js no navegador. Movimentação WASD, combate corpo-a-corpo, construção de torres e equações 3D para desbloquear buffs divinos.
 - [Logic Tetris (Genesis Edition) · Puzzle Base-10 e Protocolo Fênix 142857](https://heisslab.com.br/jogos/logic-tetris): Onde a Matemática salva sua vida na Matriz 10x20. Use atalhos visuais Heiss-Lab para metamorfosear peças [M], selar buracos [B] e ativar o Protocolo Fênix 142857.
+- [Logic Battle (Genesis Edition) · A Ponte dos Portões & O Reino](https://heisslab.com.br/jogos/logic-battle): Guie sua legião por portões aritméticos 100% honestos, funda 10 soldados em Pelotões Posicionais (Vai-Um), dome 20 Pegadinhas com Fichas de Resgate e conquiste o Reino.
 
 ## Apostilas e Aulas do Repositório Didático (LaTeX & PDF)
 - [O Segredo da Balança: A Filosofia do Sinal de Igual · Aula e PDF](https://heisslab.com.br/repositorio/equacao-balanca): Esqueça tudo o que você acha que sabe sobre o sinal de igual (=). Descubra como a álgebra funciona usando o princípio inquebrável da balança perfeita!

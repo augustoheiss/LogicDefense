@@ -257,6 +257,7 @@ export interface MergeAnimationEvent {
   toTierLabel: string
   formulaLabel: string
   startedAtMs: number
+  direction?: 'merge' | 'split'
 }
 
 export interface RunSnapshot {
@@ -356,6 +357,7 @@ export interface TrapAlbumRecord {
 export interface LogicBattleSettings {
   notationMode: NotationMode
   calmMode: boolean
+  simpleTapMode?: boolean
   soundEnabled: boolean
   reducedMotion: boolean
   fpsCap: 30 | 60
@@ -375,6 +377,7 @@ export interface SaveV1 {
   mastery: Record<ConceptId, ConceptMasteryRecord>
   trapAlertSeenCount: Record<TrapId, number>
   mergeTutorialSeenCount: number
+  coachMarksSeen?: boolean
   settings: LogicBattleSettings
   stats: {
     runsPlayed: number

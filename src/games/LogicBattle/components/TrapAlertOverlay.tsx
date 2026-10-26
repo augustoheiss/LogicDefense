@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/components/TrapAlertOverlay.tsx — Alerta Socrático "Opa! Pegadinha!"
+// src/games/LogicBattle/components/TrapAlertOverlay.tsx — Alerta Compacto de Pegadinha
 // ──────────────────────────────────────────────────────────────────────────────
-import React from 'react'
+import React, { useState } from 'react'
 import { formatArmy } from '../domain/notation'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
 
@@ -15,6 +15,7 @@ export const TrapAlertOverlay: React.FC = () => {
     (s) => s.dismissTrapAlertAndContinue,
   )
   const openCodexForSlug = useLogicBattleStore((s) => s.openCodexForSlug)
+  const [showTip, setShowTip] = useState(false)
 
   if (!hit) return null
 
@@ -26,75 +27,64 @@ export const TrapAlertOverlay: React.FC = () => {
       aria-labelledby="lb-trap-alert-title"
       data-testid="lb-trap-alert-overlay"
     >
-      <div className="lb-modal-card lb-trap-card">
-        <div className="lb-modal-badge-row">
-          <span className="lb-badge-opa">⚡ OPA! PEGADINHA MATEMÁTICA ({hit.trapId})</span>
-          <span className="lb-badge-token">★ +1 Ficha de Resgate Emitida</span>
+      <div className="lb-trap-compact-card">
+        <div className="lb-trap-compact-card__header">
+          <span className="lb-badge-opa">⚠ Opa, cuidado para não ser enganado!</span>
+          <button
+            type="button"
+            className="lb-result-card__info-btn"
+            onClick={() => setShowTip((v) => !v)}
+            title="Ver dica socrática"
+          >
+            💡
+          </button>
         </div>
 
-        <h3 id="lb-trap-alert-title" className="lb-modal-title">
+        <h3 id="lb-trap-alert-title" className="lb-trap-compact-card__title">
           {hit.trapName}
         </h3>
 
-        <p className="lb-trap-intuition">{hit.intuitionTrapPt}</p>
-
-        {/* Comparação Contrafactual Clara + Rebobinar Fantasma */}
-        <div className="lb-counterfactual-grid">
-          <div className="lb-cf-box lb-cf-chosen">
-            <span className="lb-cf-label">Sua Escolha Intuitiva (Faixa {hit.chosenLane + 1})</span>
-            <strong className="lb-cf-val">
-              {formatArmy(hit.armyBefore, notationMode)} →{' '}
-              {formatArmy(hit.chosenResult, notationMode)}
-            </strong>
-          </div>
-          <div className="lb-cf-box lb-cf-better">
-            <span className="lb-cf-label">Caminho Ideal (Faixa {hit.betterLane + 1})</span>
-            <strong className="lb-cf-val">
-              {formatArmy(hit.armyBefore, notationMode)} →{' '}
-              {formatArmy(hit.counterfactualResult, notationMode)}
-            </strong>
-          </div>
-        </div>
-
         <div className="lb-ghost-rewind-banner" data-testid="lb-ghost-rewind-banner">
-          <span>⏪ Rebobinar Fantasma (Delta Contrafactual):</span>
+          <span>
+            {formatArmy(hit.chosenResult, notationMode)} vs{' '}
+            {formatArmy(hit.counterfactualResult, notationMode)}
+          </span>
           <strong>
-            Diferença de −{formatArmy(hit.loss, notationMode)} soldados (
-            {Math.max(1, Math.round(hit.lossRatio * 100))}% recuperáveis na Ficha de Resgate!)
+            −{formatArmy(hit.loss, notationMode)} 🛡️ → 🎟️ +1 Ficha
           </strong>
         </div>
 
-        <div className="lb-luz-guia-box">
-          <strong>💡 Luz-Guia Socrática:</strong>
-          <p>{hit.luzGuiaPt}</p>
-        </div>
+        {showTip && (
+          <p className="lb-trap-compact-card__tip">{hit.luzGuiaPt}</p>
+        )}
 
-        <div className="lb-modal-actions">
+        <div className="lb-trap-compact-card__actions">
           <button
             type="button"
             data-testid="lb-trap-redeem-now-btn"
-            className="lb-btn-primary lb-btn-gold"
+            className="lb-btn-3d lb-btn-3d--gold"
             onClick={openImmediateRedemption}
           >
-            ★ Resolver Conta de Resgate Agora (+{formatArmy(hit.loss, notationMode)} soldados)
+            🎟️ Resgatar +{formatArmy(hit.loss, notationMode)}
           </button>
 
           <button
             type="button"
             data-testid="lb-trap-continue-bridge-btn"
-            className="lb-btn-secondary"
+            className="lb-btn-3d lb-btn-3d--blue"
             onClick={dismissTrapAlert}
           >
-            Seguir Marcha (Portão Dourado aparecerá na Pista)
+            ▶ Seguir
           </button>
 
           <button
             type="button"
             data-testid="lb-trap-open-codex-btn"
-            className="lb-btn-ghost"
+            className="lb-btn-3d lb-btn-3d--slate"
             onClick={() => openCodexForSlug(hit.codexSlug)}
+            title="Ver no Códice"
           >
-            📚 Ver Truque no Códice Heiss-Lab
+            📖
           </button>
         </div>
       </div>

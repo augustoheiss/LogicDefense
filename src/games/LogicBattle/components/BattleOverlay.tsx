@@ -1,8 +1,8 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/components/BattleOverlay.tsx — Resolução da Batalha Final
+// src/games/LogicBattle/components/BattleOverlay.tsx — ResultCard Arcade Compacto
 // Implementa a Regra do Contrato de Resgate Honesto (§2.1 R2)
 // ──────────────────────────────────────────────────────────────────────────────
-import React from 'react'
+import React, { useState } from 'react'
 import { REGIONS } from '../config/regions'
 import { formatArmy } from '../domain/notation'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
@@ -19,6 +19,7 @@ export const BattleOverlay: React.FC = () => {
   const acceptContract = useLogicBattleStore(
     (s) => s.acceptRedemptionContractModal,
   )
+  const [showDetails, setShowDetails] = useState(false)
 
   if (world !== 'run' || (phase !== 'VICTORY' && phase !== 'DEFEAT') || !resolution) {
     return null
@@ -34,95 +35,89 @@ export const BattleOverlay: React.FC = () => {
       aria-modal="true"
       data-testid={`lb-battle-overlay-${phase.toLowerCase()}`}
     >
-      <div className="lb-modal-card lb-battle-card">
-        <div className="lb-modal-badge-row">
-          <span className={isVictory ? 'lb-badge-victory' : 'lb-badge-defeat'}>
-            {isVictory ? '🏆 VITÓRIA NA PONTE!' : '🛡️ EMBATE FINAL — HORA DE REAGRUPAR'}
-          </span>
-          <span className="lb-badge-region">{region.name}</span>
+      <div className={`lb-result-card ${isVictory ? 'is-victory' : 'is-defeat'}`}>
+        <div className="lb-result-card__top">
+          <span className="lb-result-card__region">{region.name}</span>
+          <button
+            type="button"
+            className="lb-result-card__info-btn"
+            onClick={() => setShowDetails((v) => !v)}
+            aria-label="Detalhes da batalha"
+            title="Ver detalhes numéricos"
+          >
+            ℹ️
+          </button>
         </div>
 
-        <h3 className="lb-modal-title">
-          {isVictory
-            ? `${runPlan.enemy.bossName} foi superado!`
-            : `${runPlan.enemy.bossName} resistiu por ${formatArmy(resolution.deficit, notationMode)} soldados!`}
-        </h3>
-
-        <div className="lb-counterfactual-grid">
-          <div className="lb-cf-box">
-            <span className="lb-cf-label">Sua Legião na Chegada</span>
-            <strong className="lb-cf-val">
-              {formatArmy(resolution.playerArmy, notationMode)}
-            </strong>
+        <div className="lb-result-card__hero">
+          <div className="lb-result-card__emblem">
+            {isVictory ? '🏆' : '💀'}
           </div>
-          <div className="lb-cf-box">
-            <span className="lb-cf-label">Horda + {runPlan.enemy.bossName}</span>
-            <strong className="lb-cf-val">
-              {formatArmy(resolution.enemyForce, notationMode)}
-            </strong>
+          <h3 className="lb-result-card__headline">
+            {isVictory
+              ? `+${formatArmy(resolution.survivors + region.rewardTroops, notationMode)} 🛡️`
+              : `−${formatArmy(resolution.deficit, notationMode)} 🛡️`}
+          </h3>
+          <div className="lb-result-card__stars">
+            {isVictory ? '★ ★ ★' : `${runPlan.enemy.bossName} resistiu`}
           </div>
         </div>
 
-        {isVictory ? (
-          <div className="lb-victory-summary">
-            <p>
-              Sobreviveram <strong>{formatArmy(resolution.survivors, notationMode)}</strong>{' '}
-              soldados, somados à recompensa regional de{' '}
-              <strong>+{formatArmy(region.rewardTroops, notationMode)}</strong> para a Reserva do
-              seu Reino no Mundo 2!
-            </p>
-          </div>
-        ) : contract?.canGuaranteeVictory ? (
-          <div className="lb-contract-offer-box" data-testid="lb-honest-contract-offer">
-            <h4>★ Contrato de Resgate Honesto Disponível!</h4>
-            <p>
-              Você possui Ficha(s) de Resgate não utilizadas que recuperam{' '}
-              <strong>+{formatArmy(contract.grantOnSuccess, notationMode)} soldados</strong> —
-              cobrindo 100% do déficit de {formatArmy(resolution.deficit, notationMode)} mais a
-              margem de segurança de +{formatArmy(contract.safetyMargin, notationMode)}!
-            </p>
-          </div>
-        ) : (
-          <div className="lb-rematch-offer-box" data-testid="lb-tactical-rematch-offer">
-            <h4>🧭 Revanche Tática (Sem Falsas Promessas)</h4>
-            <p>
-              Para vencer com folga, faltaram{' '}
-              <strong>{formatArmy(resolution.deficit, notationMode)} soldados</strong>. Tente uma
-              Revanche Tática observando o Detector ⚠ ou fortaleça o Quartel na Cidadela do
-              Mundo 2!
-            </p>
+        {showDetails && (
+          <div className="lb-result-card__details">
+            <div>
+              <span>Sua Legião</span>
+              <strong>{formatArmy(resolution.playerArmy, notationMode)}</strong>
+            </div>
+            <div>
+              <span>Força Inimiga</span>
+              <strong>{formatArmy(resolution.enemyForce, notationMode)}</strong>
+            </div>
           </div>
         )}
 
-        <div className="lb-modal-actions">
+        {!isVictory && contract?.canGuaranteeVictory && (
+          <div className="lb-contract-pill" data-testid="lb-honest-contract-offer">
+            🎟️ Fichas cobrem o déficit (+{formatArmy(contract.grantOnSuccess, notationMode)})!
+          </div>
+        )}
+
+        {!isVictory && !contract?.canGuaranteeVictory && (
+          <div className="lb-rematch-pill" data-testid="lb-tactical-rematch-offer">
+            🧭 Faltaram {formatArmy(resolution.deficit, notationMode)} soldados
+          </div>
+        )}
+
+        <div className="lb-result-card__actions">
           {!isVictory && contract?.canGuaranteeVictory && (
             <button
               type="button"
               data-testid="lb-accept-contract-btn"
-              className="lb-btn-primary lb-btn-gold"
+              className="lb-btn-3d lb-btn-3d--gold lb-btn-3d--wide"
               onClick={acceptContract}
             >
-              ★ Assinar Contrato de Resgate (+
-              {formatArmy(contract.grantOnSuccess, notationMode)} soldados e Virar o Jogo!)
+              🎟️ Virar Jogo (+{formatArmy(contract.grantOnSuccess, notationMode)})
             </button>
           )}
 
           <button
             type="button"
             data-testid="lb-battle-rematch-btn"
-            className="lb-btn-primary"
+            className="lb-btn-3d lb-btn-3d--blue"
             onClick={() => startNewRun({ regionId: region.id })}
+            title="Jogar Novamente"
           >
-            {isVictory ? '🌉 Nova Corrida nesta Região' : '⚔ Revanche Tática Imediata'}
+            ↻ {isVictory ? 'Jogar' : 'Revanche'}
           </button>
 
           <button
             type="button"
             data-testid="lb-battle-go-realm-btn"
-            className="lb-btn-secondary"
+            className="lb-btn-3d lb-btn-3d--teal"
             onClick={() => switchWorld('realm')}
+            title="Ir para o Mapa do Reino"
           >
-            🏰 Ir para o Mundo 2 (Mapa do Reino & Cidadela)
+            🗺️ Reino
           </button>
         </div>
       </div>

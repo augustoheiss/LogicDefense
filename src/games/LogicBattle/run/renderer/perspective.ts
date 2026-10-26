@@ -22,10 +22,10 @@ export function createBridgeProjection(width: number, height: number): BridgePro
   return {
     width,
     height,
-    horizonYRatio: 0.2,
-    playerYRatio: 0.82,
-    nearHalfWidthRatio: 0.43,
-    farHalfWidthRatio: 0.13,
+    horizonYRatio: 0.26,
+    playerYRatio: 0.84,
+    nearHalfWidthRatio: 0.44,
+    farHalfWidthRatio: 0.15,
   }
 }
 
@@ -39,9 +39,10 @@ export function projectBridgePoint(
   laneNormX: number,
   depthZ: number,
 ): ProjectedPoint {
-  const clampedZ = Math.max(-0.15, Math.min(1.05, depthZ))
-  // Curva de perspectiva suave para dar sensação real de profundidade
-  const perspT = Math.pow(Math.max(0, clampedZ), 0.78)
+  const clampedZ = Math.max(-0.35, Math.min(1.05, depthZ))
+  // Curva de perspectiva suave (permite valores negativos de Z irem até a borda inferior da tela)
+  const perspT =
+    clampedZ >= 0 ? Math.pow(clampedZ, 0.78) : clampedZ * 1.15
   const horizonY = cfg.height * cfg.horizonYRatio
   const playerY = cfg.height * cfg.playerYRatio
 
