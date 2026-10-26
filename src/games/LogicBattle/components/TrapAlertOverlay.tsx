@@ -1,7 +1,8 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/components/TrapAlertOverlay.tsx — Alerta Compacto de Pegadinha
+// src/games/LogicBattle/components/TrapAlertOverlay.tsx — Pílula Diegética (+1 Ficha Bônus)
+// §2.1 R1 & engine_G_ponte_tiro_continuo_sem_pausa.jpg: Zero texto longo durante a corrida!
 // ──────────────────────────────────────────────────────────────────────────────
-import React, { useState } from 'react'
+import React from 'react'
 import { formatArmy } from '../domain/notation'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
 
@@ -15,76 +16,54 @@ export const TrapAlertOverlay: React.FC = () => {
     (s) => s.dismissTrapAlertAndContinue,
   )
   const openCodexForSlug = useLogicBattleStore((s) => s.openCodexForSlug)
-  const [showTip, setShowTip] = useState(false)
 
   if (!hit) return null
 
   return (
     <div
-      className="lb-modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="lb-trap-alert-title"
+      className="lb-trap-toast-floating"
+      role="status"
+      aria-live="polite"
+      aria-label="Ficha Bônus Coletada"
       data-testid="lb-trap-alert-overlay"
     >
-      <div className="lb-trap-compact-card">
-        <div className="lb-trap-compact-card__header">
-          <span className="lb-badge-opa">⚠ Opa, cuidado para não ser enganado!</span>
-          <button
-            type="button"
-            className="lb-result-card__info-btn"
-            onClick={() => setShowTip((v) => !v)}
-            title="Ver dica socrática"
-          >
-            💡
-          </button>
-        </div>
-
-        <h3 id="lb-trap-alert-title" className="lb-trap-compact-card__title">
-          {hit.trapName}
-        </h3>
-
+      <div className="lb-trap-compact-card lb-trap-compact-card--diegetic-pill">
         <div className="lb-ghost-rewind-banner" data-testid="lb-ghost-rewind-banner">
-          <span>
-            {formatArmy(hit.chosenResult, notationMode)} vs{' '}
-            {formatArmy(hit.counterfactualResult, notationMode)}
-          </span>
-          <strong>
-            −{formatArmy(hit.loss, notationMode)} 🛡️ → 🎟️ +1 Ficha
+          <span className="lb-diegetic-pill__token">+1 Ficha Bônus 🪙</span>
+          <strong className="lb-diegetic-pill__loss">
+            −{formatArmy(hit.loss, notationMode)} 🛡️
           </strong>
         </div>
-
-        {showTip && (
-          <p className="lb-trap-compact-card__tip">{hit.luzGuiaPt}</p>
-        )}
 
         <div className="lb-trap-compact-card__actions">
           <button
             type="button"
             data-testid="lb-trap-redeem-now-btn"
-            className="lb-btn-3d lb-btn-3d--gold"
+            className="lb-diegetic-mini-btn lb-diegetic-mini-btn--gold"
             onClick={openImmediateRedemption}
+            title="Usar Ficha Bônus (+50% pts)"
           >
-            🎟️ Resgatar +{formatArmy(hit.loss, notationMode)}
-          </button>
-
-          <button
-            type="button"
-            data-testid="lb-trap-continue-bridge-btn"
-            className="lb-btn-3d lb-btn-3d--blue"
-            onClick={dismissTrapAlert}
-          >
-            ▶ Seguir
+            🎟️ +{formatArmy(hit.loss, notationMode)}
           </button>
 
           <button
             type="button"
             data-testid="lb-trap-open-codex-btn"
-            className="lb-btn-3d lb-btn-3d--slate"
+            className="lb-diegetic-mini-btn"
             onClick={() => openCodexForSlug(hit.codexSlug)}
             title="Ver no Códice"
           >
             📖
+          </button>
+
+          <button
+            type="button"
+            data-testid="lb-trap-continue-bridge-btn"
+            className="lb-diegetic-mini-btn"
+            onClick={dismissTrapAlert}
+            title="Continuar sem pausa"
+          >
+            ✕
           </button>
         </div>
       </div>

@@ -7,60 +7,78 @@ import { REGION_LIST, REGIONS } from '../config/regions'
 import { CITADEL_BUILDING_LIST, getUpgradeCost } from '../config/upgrades'
 import { canAttackRegion } from '../domain/economy'
 import { formatArmy } from '../domain/notation'
+import { ENGINE_LIST } from '../engines/engineContract'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
 import { CitadelBuildingId } from '../types'
 
 // Posições isométricas das 5 construções da Cidadela na zona verde-menta (fiel a mundo2_reino_conceito.jpg)
 const CITADEL_MAP_SPOTS: Record<
   CitadelBuildingId,
-  { x: number; y: number; pinTone: 'teal' | 'gold'; shortLabel: string }
+  {
+    x: number
+    y: number
+    pinTone: 'teal' | 'gold'
+    shortLabel: string
+    pinIcon: string
+    pinOffsetY: number
+  }
 > = {
   quartel: {
-    x: 135,
-    y: 330,
+    x: 138,
+    y: 325,
     pinTone: 'teal',
     shortLabel: 'Quartel',
+    pinIcon: '⚔️',
+    pinOffsetY: -80,
   },
   observatorio: {
-    x: 295,
-    y: 295,
+    x: 310,
+    y: 292,
     pinTone: 'teal',
     shortLabel: 'Observatório',
+    pinIcon: '🔭',
+    pinOffsetY: -82,
   },
   forja: {
-    x: 345,
-    y: 410,
+    x: 348,
+    y: 412,
     pinTone: 'teal',
     shortLabel: 'Códice',
+    pinIcon: '📖',
+    pinOffsetY: -74,
   },
   academia: {
     x: 145,
-    y: 485,
+    y: 492,
     pinTone: 'teal',
     shortLabel: 'Academia',
+    pinIcon: '🎓',
+    pinOffsetY: -74,
   },
   mina_resto: {
-    x: 445,
-    y: 490,
+    x: 438,
+    y: 495,
     pinTone: 'gold',
     shortLabel: 'Mina',
+    pinIcon: '🪙',
+    pinOffsetY: -74,
   },
 }
 
-// Coordenadas isométricas bem espaçadas: Cidadela da Origem na fronteira verde e as 11 províncias inimigas no platô terracota
+// Coordenadas isométricas bem espaçadas: Bastiao da Fronteira na saída da Cidadela e as 11 províncias inimigas no platô terracota
 const ISOMETRIC_REGION_ANCHORS: Record<string, { x: number; y: number }> = {
-  reg_cidadela_origem: { x: 255, y: 515 },
-  reg_ponte_leste: { x: 525, y: 365 },
-  reg_vila_balanca: { x: 555, y: 475 },
-  reg_forte_esteiras: { x: 545, y: 245 },
-  reg_bastião_pedra: { x: 645, y: 410 },
-  reg_porto_fiorde: { x: 625, y: 165 },
-  reg_glaciar_meio: { x: 660, y: 290 },
-  reg_pico_precedencia: { x: 725, y: 115 },
-  reg_oasis_decimais: { x: 755, y: 225 },
-  reg_dunas_ioio: { x: 835, y: 155 },
+  reg_cidadela_origem: { x: 422, y: 352 },
+  reg_ponte_leste: { x: 528, y: 358 },
+  reg_vila_balanca: { x: 562, y: 468 },
+  reg_forte_esteiras: { x: 545, y: 235 },
+  reg_bastião_pedra: { x: 652, y: 418 },
+  reg_porto_fiorde: { x: 622, y: 150 },
+  reg_glaciar_meio: { x: 658, y: 282 },
+  reg_pico_precedencia: { x: 728, y: 112 },
+  reg_oasis_decimais: { x: 752, y: 222 },
+  reg_dunas_ioio: { x: 838, y: 158 },
   reg_trono_solar: { x: 765, y: 360 },
-  reg_cratera_sinais: { x: 840, y: 285 },
+  reg_cratera_sinais: { x: 842, y: 286 },
 }
 
 /**
@@ -154,8 +172,8 @@ function renderCitadelBuildingSvg(id: CitadelBuildingId, x: number, y: number): 
         <polygon points="-32,-12 0,-28 32,-12 0,1" fill="#4d9078" stroke="#1e293b" strokeWidth="1.8" />
         <polygon points="0,-28 32,-12 0,1" fill="#3b7360" stroke="#1e293b" strokeWidth="1.8" />
         {/* Mastro e Bandeira Real */}
-        <line x1="-10" y1="-22" x2="-10" y2="-52" stroke="#451a03" strokeWidth="2.8" />
-        <polygon points="-10,-50 12,-45 -10,-38" fill="#52b788" stroke="#1e293b" strokeWidth="1.5" />
+        <line x1="-18" y1="-19" x2="-18" y2="-48" stroke="#451a03" strokeWidth="2.8" />
+        <polygon points="-18,-46 2,-41 -18,-35" fill="#52b788" stroke="#1e293b" strokeWidth="1.5" />
       </g>
     )
   }
@@ -213,10 +231,12 @@ function renderCitadelBuildingSvg(id: CitadelBuildingId, x: number, y: number): 
 
 export const RealmMap: React.FC = () => {
   const save = useLogicBattleStore((s) => s.save)
+  const activeEngineId = useLogicBattleStore((s) => s.activeEngineId)
   const conqueredIds = save.conqueredRegionIds
   const selectedRegionId = save.selectedRegionId
   const notationMode = save.settings.notationMode
   const selectRegion = useLogicBattleStore((s) => s.selectRegion)
+  const selectEngine = useLogicBattleStore((s) => s.selectEngine)
   const upgradeCitadelBuilding = useLogicBattleStore((s) => s.upgradeCitadelBuilding)
   const setActiveRealmSheet = useLogicBattleStore((s) => s.setActiveRealmSheet)
 
@@ -357,54 +377,51 @@ export const RealmMap: React.FC = () => {
 
         {/* 5. Estradas Orgânicas Cor de Areia conectando Cidadela e Fortalezas Inimigas */}
         <g strokeLinecap="round" strokeLinejoin="round" fill="none">
-          {/* Borda escura da estrada de terra */}
+          {/* Rotas secundárias de areia entre as fortalezas inimigas */}
+          {REGION_LIST.map((reg) => {
+            const a1 = ISOMETRIC_REGION_ANCHORS[reg.id] ?? reg.labelAnchor
+            return reg.neighbors.map((nId) => {
+              const nb = REGIONS[nId]
+              if (!nb || reg.id > nb.id) return null
+              const a2 = ISOMETRIC_REGION_ANCHORS[nb.id] ?? nb.labelAnchor
+              const midX = (a1.x + a2.x) * 0.5
+              const midY = (a1.y + a2.y) * 0.5 - 8
+              const pathD = `M ${a1.x},${a1.y} Q ${midX},${midY} ${a2.x},${a2.y}`
+              return (
+                <g key={`edge_${reg.id}_${nb.id}`}>
+                  <path d={pathD} stroke="#a35139" strokeWidth="11" opacity="0.65" />
+                  <path d={pathD} stroke="#d6b88c" strokeWidth="7" opacity="0.72" />
+                </g>
+              )
+            })
+          })}
+
+          {/* Borda escura da estrada principal da Cidadela */}
           <path
-            d="M 135,335 Q 215,375 265,395 M 295,305 Q 280,350 265,395 M 145,485 Q 210,440 265,395 M 265,395 Q 315,445 445,495 M 265,395 Q 415,345 525,365 Q 635,380 765,360 M 525,365 Q 535,305 545,245 Q 635,205 725,115 M 525,365 Q 585,420 645,410"
+            d="M 138,332 Q 215,375 265,395 M 310,302 Q 280,350 265,395 M 145,492 Q 210,440 265,395 M 265,395 Q 315,445 438,495 M 265,395 Q 355,365 422,352 Q 475,355 528,358"
             stroke="#9c7e54"
             strokeWidth="18"
           />
-          {/* Leito de areia clara da estrada */}
+          {/* Leito de areia clara da estrada principal */}
           <path
-            d="M 135,335 Q 215,375 265,395 M 295,305 Q 280,350 265,395 M 145,485 Q 210,440 265,395 M 265,395 Q 315,445 445,495 M 265,395 Q 415,345 525,365 Q 635,380 765,360 M 525,365 Q 535,305 545,245 Q 635,205 725,115 M 525,365 Q 585,420 645,410"
+            d="M 138,332 Q 215,375 265,395 M 310,302 Q 280,350 265,395 M 145,492 Q 210,440 265,395 M 265,395 Q 315,445 438,495 M 265,395 Q 355,365 422,352 Q 475,355 528,358"
             stroke="#d6b88c"
             strokeWidth="13"
           />
         </g>
 
-        {/* Rotas táticas secundárias entre os castelos inimigos */}
-        {REGION_LIST.map((reg) => {
-          const a1 = ISOMETRIC_REGION_ANCHORS[reg.id] ?? reg.labelAnchor
-          return reg.neighbors.map((nId) => {
-            const nb = REGIONS[nId]
-            if (!nb || reg.id > nb.id) return null
-            const a2 = ISOMETRIC_REGION_ANCHORS[nb.id] ?? nb.labelAnchor
-            return (
-              <line
-                key={`edge_${reg.id}_${nb.id}`}
-                x1={a1.x}
-                y1={a1.y}
-                x2={a2.x}
-                y2={a2.y}
-                stroke="rgba(124, 45, 18, 0.35)"
-                strokeWidth="3"
-                strokeDasharray="6 6"
-              />
-            )
-          })
-        })}
-
         {/* 6. As 5 Construções Isométricas 3D da Cidadela na Zona Verde */}
         {Object.entries(CITADEL_MAP_SPOTS).map(([id, spot]) =>
-          renderCitadelBuildingSvg(id as CitadelBuildingId, spot.x, spot.y - 12),
+          renderCitadelBuildingSvg(id as CitadelBuildingId, spot.x, spot.y - 8),
         )}
 
         {/* 7. Pelotões de Soldadinhos Turquesa nas Estradas com Balões Brancos (1,2k / 340) */}
-        {renderGarrisonPlatoon('platoon_1', 175, 385, vanguardLabel)}
-        {renderGarrisonPlatoon('platoon_2', 265, 345, mainReserveLabel)}
-        {renderGarrisonPlatoon('platoon_3', 205, 445, mainReserveLabel)}
-        {renderGarrisonPlatoon('platoon_4', 315, 470, mainReserveLabel)}
+        {renderGarrisonPlatoon('platoon_1', 182, 385, vanguardLabel)}
+        {renderGarrisonPlatoon('platoon_2', 262, 345, mainReserveLabel)}
+        {renderGarrisonPlatoon('platoon_3', 212, 445, mainReserveLabel)}
+        {renderGarrisonPlatoon('platoon_4', 318, 472, mainReserveLabel)}
 
-        {/* 8. As 12 Províncias como Castelos Fortificados Isométricos 3D de 4 Torres */}
+        {/* 8. As 12 Províncias como Castelos Fortificados Isométricos 3D de 4 Torres Ameadas */}
         {REGION_LIST.map((reg) => {
           const isConquered = conqueredIds.includes(reg.id)
           const isAvailable = canAttackRegion(reg.id, conqueredIds)
@@ -412,11 +429,12 @@ export const RealmMap: React.FC = () => {
           const pos = ISOMETRIC_REGION_ANCHORS[reg.id] ?? reg.labelAnchor
           const isBossCapital = reg.type === 'capital_chefe'
           const totalEnemy = reg.garrison + reg.bossHp
-          const cs = isBossCapital ? 1.22 : 0.96
+          const cs = isBossCapital ? 1.2 : reg.id === 'reg_cidadela_origem' ? 0.86 : 0.98
 
-          const wallFill = isConquered ? '#38bdf8' : '#d9483b'
-          const wallDark = isConquered ? '#0284c7' : '#a83228'
-          const towerTop = isConquered ? '#7dd3fc' : '#f87171'
+          const wallFill = isConquered ? '#2dd4bf' : '#e05344'
+          const wallDark = isConquered ? '#0d9488' : '#b8372a'
+          const towerTop = isConquered ? '#99f6e4' : '#fca5a5'
+          const courtyardFill = isConquered ? '#115e59' : '#691911'
 
           return (
             <g
@@ -430,34 +448,42 @@ export const RealmMap: React.FC = () => {
               {/* Sombra projetada do castelo */}
               <ellipse
                 cx="0"
-                cy={8 * cs}
-                rx={32 * cs}
+                cy={9 * cs}
+                rx={33 * cs}
                 ry={15 * cs}
-                fill="rgba(69, 10, 10, 0.32)"
+                fill="rgba(69, 10, 10, 0.34)"
               />
 
               {/* Halo dourado pulsante na província selecionada */}
               {isSelected && (
                 <ellipse
                   cx="0"
-                  cy={4 * cs}
-                  rx={38 * cs}
+                  cy={5 * cs}
+                  rx={39 * cs}
                   ry={19 * cs}
-                  fill="rgba(250, 204, 21, 0.32)"
+                  fill="rgba(250, 204, 21, 0.34)"
                   stroke="#fef08a"
                   strokeWidth="3.2"
                 />
               )}
 
-              {/* Muralhas de cortina isométricas do castelo */}
+              {/* Pátio interno escuro da fortaleza */}
               <polygon
-                points={`${-22 * cs},${4 * cs} 0,${14 * cs} ${22 * cs},${4 * cs} ${22 * cs},${-14 * cs} 0,${-4 * cs} ${-22 * cs},${-14 * cs}`}
+                points={`${-20 * cs},${-4 * cs} 0,${-13 * cs} ${20 * cs},${-4 * cs} 0,${5 * cs}`}
+                fill={courtyardFill}
+                stroke="#450a0a"
+                strokeWidth="1.2"
+              />
+
+              {/* Muralhas de cortina isométricas do castelo (face esquerda clara + face direita sombreada) */}
+              <polygon
+                points={`${-22 * cs},${4 * cs} 0,${15 * cs} 0,${-3 * cs} ${-22 * cs},${-13 * cs}`}
                 fill={wallFill}
                 stroke="#450a0a"
                 strokeWidth="1.6"
               />
               <polygon
-                points={`0,${14 * cs} ${22 * cs},${4 * cs} ${22 * cs},${-14 * cs} 0,${-4 * cs}`}
+                points={`0,${15 * cs} ${22 * cs},${4 * cs} ${22 * cs},${-13 * cs} 0,${-3 * cs}`}
                 fill={wallDark}
                 stroke="#450a0a"
                 strokeWidth="1.6"
@@ -465,14 +491,14 @@ export const RealmMap: React.FC = () => {
 
               {/* Portão arqueado escuro na muralha frontal */}
               <path
-                d={`M ${-12 * cs},${9 * cs} L ${-12 * cs},${1 * cs} A ${4 * cs},${4 * cs} 0 0,1 ${-5 * cs},${1 * cs} L ${-5 * cs},${12 * cs} Z`}
+                d={`M ${-12 * cs},${9 * cs} L ${-12 * cs},${1 * cs} A ${3.8 * cs},${3.8 * cs} 0 0,1 ${-5 * cs},${1 * cs} L ${-5 * cs},${12 * cs} Z`}
                 fill="#2a0808"
               />
 
-              {/* 4 Torres de Canto Ameadas (estilo mundo2_reino_conceito.jpg) */}
+              {/* 4 Torres de Canto Ameadas 3D (fiel a mundo2_reino_conceito.jpg) */}
               {[
                 [-21, -4],
-                [0, -13],
+                [0, -14],
                 [21, -4],
                 [0, 6],
               ].map(([tx, ty], tIdx) => (
@@ -482,8 +508,8 @@ export const RealmMap: React.FC = () => {
                     y={-14 * cs}
                     width={13 * cs}
                     height={16 * cs}
-                    rx={3 * cs}
-                    fill={wallFill}
+                    rx={2.5 * cs}
+                    fill={tIdx === 2 ? wallDark : wallFill}
                     stroke="#450a0a"
                     strokeWidth="1.4"
                   />
@@ -496,6 +522,30 @@ export const RealmMap: React.FC = () => {
                     stroke="#450a0a"
                     strokeWidth="1.3"
                   />
+                  {/* Dentes das ameias 3D no topo de cada torre */}
+                  {[-5, -1.5, 2, 5].map((mx, mIdx) => (
+                    <rect
+                      key={mIdx}
+                      x={mx * cs - 1.2 * cs}
+                      y={-17.5 * cs}
+                      width={2.4 * cs}
+                      height={3.2 * cs}
+                      rx={0.6 * cs}
+                      fill={wallFill}
+                      stroke="#450a0a"
+                      strokeWidth="0.9"
+                    />
+                  ))}
+                  {/* Flâmula rubra nas torres das Capitais de Chefe */}
+                  {isBossCapital && !isConquered && (
+                    <g transform={`translate(0, ${-17 * cs})`}>
+                      <line x1="0" y1="0" x2="0" y2={-7 * cs} stroke="#450a0a" strokeWidth="1.2" />
+                      <polygon
+                        points={`0,${-7 * cs} ${6 * cs},${-5 * cs} 0,${-3 * cs}`}
+                        fill="#ef4444"
+                      />
+                    </g>
+                  )}
                 </g>
               ))}
 
@@ -524,45 +574,60 @@ export const RealmMap: React.FC = () => {
                 </g>
               )}
 
-              {/* Pin Circular de Coroa acima das Capitais de Chefe (idêntico a mundo2_reino_conceito.jpg) */}
+              {/* Pin Teardrop de Coroa acima das Capitais de Chefe (idêntico a mundo2_reino_conceito.jpg) */}
               {isBossCapital && !isConquered && (
                 <g transform={`translate(0, ${-50 * cs})`}>
+                  <polygon
+                    points="-6,9 6,9 0,17"
+                    fill="#e06d53"
+                    stroke="#450a0a"
+                    strokeWidth="1.8"
+                  />
                   <circle
                     cx="0"
                     cy="0"
-                    r="13"
+                    r="13.5"
                     fill="#e06d53"
                     stroke="#450a0a"
                     strokeWidth="2"
                   />
-                  <text x="0" y="4.5" textAnchor="middle" fontSize="13">
-                    👑
-                  </text>
+                  <polygon
+                    points="-7,4 -8,-4 -3,-1 0,-6 3,-1 8,-4 7,4"
+                    fill="#fef3c7"
+                    stroke="#450a0a"
+                    strokeWidth="1.3"
+                  />
                 </g>
               )}
 
               {/* Balão Coral/Verde de Força Militar ("70", "520", "1,1k", "2,7k") */}
-              <g transform={`translate(0, ${isBossCapital ? 24 : 21})`}>
+              <g
+                transform={`translate(0, ${
+                  isBossCapital ? 24 : isConquered ? 22 : -36
+                })`}
+              >
+                {!isBossCapital && !isConquered && (
+                  <polygon
+                    points="-4,9 4,9 0,14"
+                    fill={isAvailable ? '#e05344' : '#b8372a'}
+                    stroke="#450a0a"
+                    strokeWidth="1.4"
+                  />
+                )}
                 <rect
-                  x="-26"
+                  x="-25"
                   y="-9.5"
-                  width="52"
+                  width="50"
                   height="19"
-                  rx="7"
+                  rx="6.5"
                   fill={
                     isConquered
                       ? '#15803d'
                       : isAvailable
-                        ? '#e11d48'
-                        : '#991b1b'
+                        ? '#e05344'
+                        : '#b8372a'
                   }
-                  stroke={
-                    isConquered
-                      ? '#bbf7d0'
-                      : isAvailable
-                        ? '#fecdd3'
-                        : '#fca5a5'
-                  }
+                  stroke={isConquered ? '#bbf7d0' : '#450a0a'}
                   strokeWidth="1.8"
                 />
                 <text
@@ -583,7 +648,7 @@ export const RealmMap: React.FC = () => {
         })}
       </svg>
 
-      {/* 9. Pins Circulares de Telhado + Pílulas [Nv X] das 5 Construções da Cidadela */}
+      {/* 9. Pins Teardrop Acima do Telhado + Pílulas [Nv X] na Base das 5 Construções da Cidadela */}
       <div className="lb-map-citadel-overlay" data-testid="lb-buildings-grid">
         {CITADEL_BUILDING_LIST.map((b) => {
           const spot = CITADEL_MAP_SPOTS[b.id]
@@ -605,11 +670,12 @@ export const RealmMap: React.FC = () => {
               <button
                 type="button"
                 className={`lb-map-building-pin lb-map-building-pin--${spot.pinTone}`}
+                style={{ transform: `translate(-50%, ${spot.pinOffsetY}px)` }}
                 onClick={() => setActiveRealmSheet('citadel')}
                 title={`${b.name} — ${b.descriptionPt}`}
                 aria-label={b.name}
               >
-                <span className="lb-map-building-pin__icon">{b.icon}</span>
+                <span className="lb-map-building-pin__icon">{spot.pinIcon}</span>
               </button>
 
               <button
@@ -627,6 +693,31 @@ export const RealmMap: React.FC = () => {
                 Nv {currentLevel} {!isMax && canAfford ? '⬆' : ''}
               </button>
             </div>
+          )
+        })}
+      </div>
+
+      {/* 10. Seletor Flutuante das 6 Engines do Reino (fiel a hub_reino_cidadela_engines.jpg & §3) */}
+      <div
+        className="lb-realm-engines-bar"
+        data-testid="lb-engine-selector"
+        role="group"
+        aria-label="Selecionar Modo de Jogo (6 Engines do Reino)"
+      >
+        {ENGINE_LIST.map((eng) => {
+          const isCurrent = activeEngineId === eng.id
+          return (
+            <button
+              key={eng.id}
+              type="button"
+              data-testid={`lb-engine-btn-${eng.id}`}
+              className={`lb-realm-engine-pill ${isCurrent ? 'is-active' : ''}`}
+              onClick={() => selectEngine(eng.id)}
+              title={`${eng.name} — ${eng.mechanicSummaryPt}`}
+            >
+              <span className="lb-realm-engine-pill__icon">{eng.icon}</span>
+              <span className="lb-realm-engine-pill__label">{eng.shortName}</span>
+            </button>
           )
         })}
       </div>

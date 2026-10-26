@@ -5,13 +5,8 @@ import React, { useState } from 'react'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
 
 export const CaptainVirgula: React.FC = () => {
-  const coachMarksSeen = useLogicBattleStore((s) => s.save.coachMarksSeen)
   const dismissCoachMarks = useLogicBattleStore((s) => s.dismissCoachMarks)
   const [openHelp, setOpenHelp] = useState(false)
-
-  if (!openHelp && coachMarksSeen) {
-    return null
-  }
 
   if (!openHelp) {
     return null

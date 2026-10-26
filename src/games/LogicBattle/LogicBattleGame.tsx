@@ -1,6 +1,6 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/LogicBattleGame.tsx — Orquestrador Full-Screen (Mundo 1 & Mundo 2)
-// Fiel aos conceitos: mundo1_ponte_conceito.jpg & mundo2_reino_conceito.jpg
+// src/games/LogicBattle/LogicBattleGame.tsx — Orquestrador Full-Screen (Mundo 1, 6 Engines & Mundo 2)
+// Fiel aos conceitos: master-plan/conceitos/ & MASTER_PLAN_V3_FLUXO_CONTINUO_E_ENGINES.md
 // ──────────────────────────────────────────────────────────────────────────────
 import React from 'react'
 import { BattleOverlay } from './components/BattleOverlay'
@@ -12,6 +12,8 @@ import { RedemptionChallengeModal } from './components/RedemptionChallengeModal'
 import { TrapAlbumDrawer } from './components/TrapAlbumDrawer'
 import { TrapAlertOverlay } from './components/TrapAlertOverlay'
 import { REGIONS } from './config/regions'
+import { ArcadeEnginesCanvas } from './engines/ArcadeEnginesCanvas'
+import { ENGINE_CATALOG } from './engines/engineContract'
 import './logic-battle.css'
 import { CitadelPanel } from './realm/CitadelPanel'
 import { RealmMap } from './realm/RealmMap'
@@ -21,18 +23,23 @@ import { useLogicBattleStore } from './state/useLogicBattleStore'
 
 export const LogicBattleGame: React.FC = () => {
   const world = useLogicBattleStore((s) => s.world)
+  const activeEngineId = useLogicBattleStore((s) => s.activeEngineId)
   const debugMode = useLogicBattleStore((s) => s.debugMode)
   const runPlan = useLogicBattleStore((s) => s.runPlan)
   const oracle = useLogicBattleStore((s) => s.oracle)
-  const snapshot = useLogicBattleStore((s) => s.snapshot)
-  const save = useLogicBattleStore((s) => s.save)
+  const debugProgress = useLogicBattleStore((s) =>
+    s.debugMode ? Math.round(s.snapshot.progress * 100) : 0,
+  )
+  const selectedRegionId = useLogicBattleStore((s) => s.save.selectedRegionId)
   const activeRealmSheet = useLogicBattleStore((s) => s.activeRealmSheet)
   const setActiveRealmSheet = useLogicBattleStore((s) => s.setActiveRealmSheet)
   const openAlbumDrawer = useLogicBattleStore((s) => s.openAlbumDrawer)
   const startNewRun = useLogicBattleStore((s) => s.startNewRun)
 
   const selectedRegion =
-    REGIONS[save.selectedRegionId] ?? REGIONS.r01_ponte_aurora
+    REGIONS[selectedRegionId] ?? REGIONS.r01_ponte_aurora
+  const activeEngineMeta =
+    ENGINE_CATALOG[activeEngineId] ?? ENGINE_CATALOG.ponte_portoes
 
   return (
     <div className="lb-game-shell" data-testid="logic-battle-game">
@@ -45,12 +52,16 @@ export const LogicBattleGame: React.FC = () => {
           <span>ORACLE BEST: {oracle.best}</span>
           <span>ORACLE WORST: {oracle.worst}</span>
           <span>ENEMY: {runPlan.enemy.totalForce}</span>
-          <span>PROGRESS: {(snapshot.progress * 100).toFixed(0)}%</span>
+          <span>PROGRESS: {debugProgress}%</span>
         </div>
       )}
 
       {world === 'run' ? (
-        <RunCanvas />
+        activeEngineId === 'ponte_portoes' ? (
+          <RunCanvas />
+        ) : (
+          <ArcadeEnginesCanvas />
+        )
       ) : (
         <div className="lb-realm-workspace" data-testid="logic-battle-realm-stage">
           <RealmMap />
@@ -101,6 +112,7 @@ export const LogicBattleGame: React.FC = () => {
               className="lb-realm-attack-cta"
               data-testid="lb-realm-attack-cta"
               onClick={() => startNewRun({ regionId: selectedRegion.id })}
+              title={`Iniciar ${activeEngineMeta.name} em ${selectedRegion.name}`}
             >
               <span>Atacar</span>
               <span className="lb-realm-attack-cta__arrow">▶</span>

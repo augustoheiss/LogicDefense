@@ -15,8 +15,8 @@ from playwright.sync_api import sync_playwright
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-PORT = 4179
-BASE_URL = f"http://localhost:{PORT}"
+PORT = 4181
+BASE_URL = f"http://127.0.0.1:{PORT}"
 
 
 def wait_for_server(url: str, timeout: float = 35.0) -> bool:
@@ -39,7 +39,7 @@ def run_suite() -> dict:
     os.makedirs(evid_dir, exist_ok=True)
 
     server_proc = subprocess.Popen(
-        f"npx vite --port {PORT} --strictPort",
+        f"npx vite --host 127.0.0.1 --port {PORT} --strictPort",
         cwd=repo_root,
         shell=True,
         stdout=subprocess.DEVNULL,
@@ -137,6 +137,10 @@ def run_suite() -> dict:
             assert debug_lines.get("ORACLE WORST", 999) < debug_lines.get("ENEMY", 0), f"ORACLE WORST >= ENEMY: {debug_text}"
             results["functional"]["deterministicSeed42"] = debug_text
 
+            # Recarregar sem debug=1 para capturar evidencias visuais limpas de jogador
+            page.goto(f"{BASE_URL}/jogos/logic-battle?seed=42", wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_selector('[data-testid="logic-battle-game"]', timeout=15000)
+
             # 2.3 Alternar Pausa, Modo Calmo e Notação Científica
             page.click('[data-testid="lb-toggle-pause"]')
             assert "Retomar" in page.locator('[data-testid="lb-toggle-pause"]').inner_text()
@@ -172,6 +176,13 @@ def run_suite() -> dict:
             page.click('[data-testid="lb-close-album-btn"]')
             results["functional"]["albumAndCodex"] = "PASS"
 
+            # 2.5.1 Validar tiro contínuo desde o início da ponte (progress < 0.5)
+            active_projectiles_start = page.evaluate("() => window.__lbActiveProjectiles || 0")
+            assert active_projectiles_start >= 1, (
+                f"Exército deve atirar continuamente desde o início da ponte (projéteis ativos={active_projectiles_start})"
+            )
+            results["functional"]["continuousShootingFromStart"] = f"PASS ({active_projectiles_start} active projectiles)"
+
             # 2.6 Atravessar segmentos até encontrar Pegadinha ou Batalha Final
             trap_triggered = False
             redemption_tested = False
@@ -179,6 +190,14 @@ def run_suite() -> dict:
             for _ in range(20):
                 if page.locator('[data-testid="lb-trap-alert-overlay"]').count() > 0:
                     trap_triggered = True
+                    overlay_pe = page.evaluate(
+                        """() => {
+                          const el = document.querySelector('[data-testid="lb-trap-alert-overlay"]');
+                          return el ? getComputedStyle(el).pointerEvents : 'auto';
+                        }"""
+                    )
+                    assert overlay_pe == "none", f"TrapAlertOverlay deve ser não-bloqueante (pointer-events: none), encontrado {overlay_pe}"
+                    results["functional"]["nonBlockingTrapFlow"] = "PASS (pointer-events: none, zero forced pause)"
                     assert page.locator('[data-testid="lb-ghost-rewind-banner"]').count() > 0, "Banner Ghost Rewind ausente no TrapAlertOverlay"
                     page.click('[data-testid="lb-trap-redeem-now-btn"]')
                     page.wait_for_selector('[data-testid="lb-redemption-modal"]', timeout=5000)
@@ -215,21 +234,37 @@ def run_suite() -> dict:
                     page.click('[data-testid="lb-trap-continue-bridge-btn"]')
                 if page.locator('[data-testid="lb-redemption-modal"]').count() > 0:
                     page.click('[data-testid="lb-redemption-close-btn"]')
-                if step_i == 6 and not legion_shot_saved:
+                if step_i == 4 and not legion_shot_saved:
                     legion_shot = os.path.join(evid_dir, "v2_mundo1_legiao_com_estandartes.png")
                     page.screenshot(path=legion_shot)
                     results["screenshots"].append(legion_shot)
                     legion_shot_saved = True
                 gate1 = page.locator('[data-testid="lb-gate-choice-1"]')
-                if gate1.count() > 0:
-                    gate1.click()
-                    time.sleep(0.06)
+                if gate1.count() > 0 and gate1.is_visible():
+                    gate1.click(force=True)
+                    time.sleep(0.08)
+
+            # Aguardar o Combate Visível (Fase BATTLE) concluir (com fast-forward 3x via pointerdown)
+            time.sleep(0.35)
+            battle_shot = os.path.join(evid_dir, "v2_mundo1_combate_visivel.png")
+            page.screenshot(path=battle_shot)
+            results["screenshots"].append(battle_shot)
+
+            page.dispatch_event('[data-testid="logic-battle-run-stage"]', "pointerdown")
+            for _ in range(30):
+                if (
+                    page.locator('[data-testid="lb-battle-overlay-victory"]').count() > 0
+                    or page.locator('[data-testid="lb-battle-overlay-defeat"]').count() > 0
+                ):
+                    break
+                time.sleep(0.15)
+            page.dispatch_event('[data-testid="logic-battle-run-stage"]', "pointerup")
 
             battle_reached = (
                 page.locator('[data-testid="lb-battle-overlay-victory"]').count() > 0
                 or page.locator('[data-testid="lb-battle-overlay-defeat"]').count() > 0
             )
-            assert battle_reached, "Nao alcancou o overlay de Batalha Final apos percorrer todos os segmentos"
+            assert battle_reached, "Nao alcancou o overlay de Batalha Final apos o Combate Visivel"
             results["functional"]["runAndTrapFlow"] = {
                 "trapTriggered": trap_triggered,
                 "redemptionTested": redemption_tested,
@@ -266,6 +301,25 @@ def run_suite() -> dict:
                 academia_btn.click()
             results["functional"]["realmAndCitadel"] = "PASS"
 
+            # 2.7b V3: Verificar as 6 Engines no Hub do Reino + Execução Contínua
+            engine_btns = page.locator('[data-testid^="lb-engine-btn-"]').count()
+            assert engine_btns == 6, f"Esperado 6 engines no seletor do Reino, encontrado {engine_btns}"
+            for eng_id in ["cerco_torres", "forte_bandeira", "pedreira_rei", "arena_ondas", "serpente_numeros"]:
+                page.click(f'[data-testid="lb-engine-btn-{eng_id}"]')
+                page.wait_for_selector('[data-testid="lb-active-engine-badge"]', timeout=5000)
+                time.sleep(0.22)
+                active_proj_eng = page.evaluate("() => window.__lbActiveProjectiles || 0")
+                assert active_proj_eng >= 1, f"Engine {eng_id} deve atirar continuamente desde t=0s"
+                for _ in range(3):
+                    if page.locator('[data-testid="lb-gate-choice-1"]').count() > 0:
+                        page.click('[data-testid="lb-gate-choice-1"]')
+                        time.sleep(0.08)
+                page.click('[data-testid="lb-battle-go-realm-btn"]')
+                page.wait_for_selector('[data-testid="logic-battle-realm-stage"]', timeout=5000)
+            page.click('[data-testid="lb-engine-btn-ponte_portoes"]')
+            page.wait_for_selector('[data-testid="logic-battle-run-stage"]', timeout=5000)
+            results["functional"]["sixEnginesPlayable"] = "PASS"
+
             # 2.8 Resiliência de Save Corrompido (.bak recovery)
             page.evaluate(
                 """() => {
@@ -293,11 +347,19 @@ def run_suite() -> dict:
         return results
 
     finally:
-        server_proc.terminate()
-        try:
-            server_proc.wait(timeout=5)
-        except Exception:
-            server_proc.kill()
+        if os.name == "nt":
+            subprocess.run(
+                f"taskkill /F /T /PID {server_proc.pid}",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            server_proc.terminate()
+            try:
+                server_proc.wait(timeout=5)
+            except Exception:
+                server_proc.kill()
 
 
 if __name__ == "__main__":

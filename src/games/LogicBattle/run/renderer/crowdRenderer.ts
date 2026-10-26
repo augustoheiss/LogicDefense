@@ -160,15 +160,12 @@ export function buildCrowdNodes(army: ArmyCount): CrowdSpriteNode[] {
     })
   }
 
-  // Comandante do Flanco Esquerdo: Centurião de Bronze com Crista Vermelha ([🛡️ 0,1k] ou [🛡️ 10])
+  // Comandante do Flanco Esquerdo: Centurião de Bronze com Crista Vermelha ([🛡️ 0,1k])
   const highestTier = tiers[0]?.tier
-  const secondTier = tiers[1]?.tier
   const leftLabel =
-    army >= 100
-      ? '0,1k'
-      : army >= 10
-        ? '10'
-        : highestTier?.denominationLabel ?? '1'
+    army >= 10_000
+      ? formatArmy(Math.pow(10, Math.floor(Math.log10(army)) - 1), 'compact')
+      : '0,1k'
 
   nodes.push({
     id: 'cmd_left_centurion',
@@ -179,13 +176,11 @@ export function buildCrowdNodes(army: ArmyCount): CrowdSpriteNode[] {
     scale: 1.32,
   })
 
-  // Comandante do Flanco Direito: Campeão / Quiliarca Dourado com Lança ([🛡️ 1k] ou maior posto ativo)
+  // Comandante do Flanco Direito: Campeão / Quiliarca Dourado com Lança ([🛡️ 1k])
   const rightLabel =
-    army >= 1000
-      ? highestTier?.denominationLabel ?? '1k'
-      : army >= 10
-        ? secondTier?.denominationLabel ?? highestTier?.denominationLabel ?? '10'
-        : String(army)
+    army >= 10_000
+      ? highestTier?.denominationLabel ?? '10k'
+      : '1k'
 
   nodes.push({
     id: 'cmd_right_champion',
@@ -294,12 +289,16 @@ export function drawPlayerCrowd(
       ctx.drawImage(sprite, drawX, drawY, drawW, drawH)
 
       if (node.id === 'cmd_left_centurion') {
+        const leftTierPower =
+          currentArmy >= 10_000
+            ? Math.pow(10, Math.floor(Math.log10(currentArmy)) - 1)
+            : 100
         const leftBannerText =
-          currentArmy >= 100
-            ? '0,1k'
-            : currentArmy >= 10
-              ? formatArmy(10, notationMode)
-              : '1'
+          notationMode === 'scientific'
+            ? formatArmy(leftTierPower, 'scientific')
+            : leftTierPower === 100
+              ? '0,1k'
+              : formatArmy(leftTierPower, 'compact')
         bannersToDraw.push({
           x: pt.x - 4 * pt.scale,
           y: drawY + 6 * pt.scale,
@@ -308,10 +307,11 @@ export function drawPlayerCrowd(
           scale: pt.scale,
         })
       } else if (node.id === 'cmd_right_champion') {
-        const rightBannerText =
-          currentArmy >= 1000
-            ? formatArmy(Math.pow(10, Math.floor(Math.log10(currentArmy))), notationMode)
-            : formatArmy(currentArmy, notationMode)
+        const rightTierPower =
+          currentArmy >= 10_000
+            ? Math.pow(10, Math.floor(Math.log10(currentArmy)))
+            : 1000
+        const rightBannerText = formatArmy(rightTierPower, notationMode)
         bannersToDraw.push({
           x: pt.x - 2 * pt.scale,
           y: drawY + 12 * pt.scale,

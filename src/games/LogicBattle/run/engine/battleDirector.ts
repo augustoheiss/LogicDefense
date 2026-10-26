@@ -31,6 +31,7 @@ export class BattleDirector {
   private volleyTimerMs = 0
   private enemyBoltTimerMs = 0
   private damageTextTimerMs = 0
+  private armySyncTimerMs = 0
   private lastPlayerLeft: ArmyCount = 0
   private lastKillsSoFar: ArmyCount = 0
   private hitFlashAlpha = 0
@@ -48,6 +49,7 @@ export class BattleDirector {
     this.volleyTimerMs = 0
     this.enemyBoltTimerMs = 120
     this.damageTextTimerMs = 0
+    this.armySyncTimerMs = 0
     this.lastPlayerLeft = this.timeline.initialPlayer
     this.lastKillsSoFar = 0
     this.hitFlashAlpha = 0
@@ -90,9 +92,15 @@ export class BattleDirector {
     this.hitFlashAlpha = Math.max(0, this.hitFlashAlpha - dtMs * 0.004)
 
     const sample: BattleTimelineSample = this.timeline.sampleAt(this.elapsedMs)
+    this.armySyncTimerMs += dtMs
+    const isFinalSample = this.elapsedMs >= this.timeline.durationMs
 
-    // 1. Verificar mudança no exército do jogador e Empresta-Um (decomposição posicional reversa)
-    if (sample.playerLeft !== this.lastPlayerLeft) {
+    // 1. Re-decompor a multidão a cada 100 ms (10 Hz, §2 & §3.2) ou imediatamente em Empresta-Um / frame final
+    if (
+      sample.playerLeft !== this.lastPlayerLeft &&
+      (this.armySyncTimerMs >= 100 || isFinalSample)
+    ) {
+      this.armySyncTimerMs = 0
       const splitRaw = detectEmprestaUmSplit(
         this.lastPlayerLeft,
         sample.playerLeft,

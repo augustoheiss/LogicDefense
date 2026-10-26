@@ -31,10 +31,10 @@ export function drawFortressAndBoss(
 ): { bossCenterX: number; bossCenterY: number; hordeCenterY: number } {
   const approach = battleState?.isBattlePhase
     ? 1
-    : Math.max(0, (progress - 0.62) / 0.38)
-  const bossDepth = Math.max(0.28, 0.9 - approach * 0.38)
+    : Math.max(0, (progress - 0.7) / 0.3)
+  const bossDepth = Math.max(0.78, 0.88 - approach * 0.08)
   const pt = projectBridgePoint(proj, 0, bossDepth)
-  const s = Math.max(0.56, pt.scale * 1.28)
+  const s = Math.max(0.62, pt.scale * 1.38)
 
   const cx = pt.x
   const baseY = pt.y + 10 * s
@@ -71,70 +71,79 @@ export function drawFortressAndBoss(
   ctx.fill()
   ctx.stroke()
 
-  // Pinheiros nevados flanqueando a fortaleza na ilha do castelo
-  for (const sideX of [-138, -114, 114, 138]) {
+  // Pinheiros nevados frondosos em 3 camadas flanqueando a fortaleza na ilha do castelo
+  for (const sideX of [-144, -116, 116, 144]) {
     const tx = cx + sideX * s
-    const ty = baseY + (Math.abs(sideX) > 125 ? -2 : 5) * s
-    const ts = s * (Math.abs(sideX) > 125 ? 0.72 : 0.85)
-    ctx.fillStyle = '#064e3b'
-    ctx.beginPath()
-    ctx.moveTo(tx, ty - 34 * ts)
-    ctx.lineTo(tx + 14 * ts, ty)
-    ctx.lineTo(tx - 14 * ts, ty)
-    ctx.closePath()
-    ctx.fill()
-    ctx.fillStyle = '#f8fafc'
-    ctx.beginPath()
-    ctx.moveTo(tx, ty - 34 * ts)
-    ctx.lineTo(tx + 9 * ts, ty - 14 * ts)
-    ctx.lineTo(tx - 9 * ts, ty - 14 * ts)
-    ctx.closePath()
-    ctx.fill()
+    const ty = baseY + (Math.abs(sideX) > 125 ? -3 : 6) * s
+    const ts = s * (Math.abs(sideX) > 125 ? 0.85 : 1.0)
+    const layers = [
+      { bY: ty - 3 * ts, tY: ty - 20 * ts, hw: 14 * ts, c: '#14532d' },
+      { bY: ty - 13 * ts, tY: ty - 30 * ts, hw: 11 * ts, c: '#166534' },
+      { bY: ty - 22 * ts, tY: ty - 39 * ts, hw: 8 * ts, c: '#15803d' },
+    ]
+    ctx.fillStyle = '#451a03'
+    ctx.fillRect(tx - 2.5 * ts, ty - 5 * ts, 5 * ts, 7 * ts)
+    for (const l of layers) {
+      ctx.fillStyle = l.c
+      ctx.beginPath()
+      ctx.moveTo(tx, l.tY)
+      ctx.lineTo(tx + l.hw, l.bY)
+      ctx.lineTo(tx - l.hw, l.bY)
+      ctx.closePath()
+      ctx.fill()
+      ctx.fillStyle = '#f8fafc'
+      ctx.beginPath()
+      ctx.moveTo(tx, l.tY)
+      ctx.lineTo(tx + l.hw * 0.68, l.tY + (l.bY - l.tY) * 0.58)
+      ctx.lineTo(tx - l.hw * 0.68, l.tY + (l.bY - l.tY) * 0.58)
+      ctx.closePath()
+      ctx.fill()
+    }
   }
 
-  // 2. Muralha Semicircular 3D de Cantaria (Anfiteatro Fortificado)
-  const wallW = 284 * s
-  const wallH = 84 * s
-  const wallTopY = baseY - wallH * 0.86
+  // 2. Muralha Semicircular 3D de Cantaria (Anfiteatro Fortificado como em mundo1_ponte_conceito.jpg)
+  const wallW = 292 * s
+  const wallH = 88 * s
+  const wallTopY = baseY - wallH * 0.88
 
   // Pátio interno escuro da fortaleza (atrás da horda)
   ctx.fillStyle = '#1e293b'
   ctx.strokeStyle = '#334155'
   ctx.lineWidth = 2.5 * s
   ctx.beginPath()
-  ctx.ellipse(cx, baseY - 18 * s, wallW * 0.48, 34 * s, 0, Math.PI, Math.PI * 2)
+  ctx.ellipse(cx, baseY - 16 * s, wallW * 0.48, 36 * s, 0, Math.PI, Math.PI * 2)
   ctx.fill()
   ctx.stroke()
 
-  // Muralha traseira elevada com ameias (battlements)
+  // Muralha traseira elevada com curvatura 3D e textura de blocos de cantaria
   const backWallGrad = ctx.createLinearGradient(cx - wallW / 2, wallTopY, cx + wallW / 2, baseY)
   backWallGrad.addColorStop(0, '#475569')
-  backWallGrad.addColorStop(0.25, '#94a3b8')
+  backWallGrad.addColorStop(0.22, '#94a3b8')
   backWallGrad.addColorStop(0.5, '#64748b')
-  backWallGrad.addColorStop(0.75, '#94a3b8')
+  backWallGrad.addColorStop(0.78, '#94a3b8')
   backWallGrad.addColorStop(1, '#475569')
 
   ctx.fillStyle = backWallGrad
   ctx.strokeStyle = '#1e293b'
   ctx.lineWidth = 2.2 * s
   ctx.beginPath()
-  ctx.roundRect(cx - wallW / 2, wallTopY, wallW, wallH * 0.72, 22 * s)
+  ctx.roundRect(cx - wallW / 2, wallTopY, wallW, wallH * 0.78, 28 * s)
   ctx.fill()
   ctx.stroke()
 
-  // Linhas horizontais de blocos de pedra na muralha
+  // Linhas horizontais e verticais de blocos de pedra na muralha
   ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)'
   ctx.lineWidth = 1.3 * s
   for (const rowOff of [0.24, 0.48]) {
     const ry = wallTopY + wallH * rowOff
     ctx.beginPath()
-    ctx.moveTo(cx - wallW * 0.46, ry)
-    ctx.lineTo(cx + wallW * 0.46, ry)
+    ctx.moveTo(cx - wallW * 0.47, ry)
+    ctx.lineTo(cx + wallW * 0.47, ry)
     ctx.stroke()
   }
 
-  // Ameias 3D no topo da muralha (Merlons)
-  const merlonCount = 13
+  // Ameias 3D no topo da muralha traseira (Merlons)
+  const merlonCount = 15
   const merlonSpan = wallW * 0.92
   const merlonStep = merlonSpan / merlonCount
   const merlonH = 13 * s
@@ -157,15 +166,15 @@ export function drawFortressAndBoss(
   // Estandartes de Guerra Medievais Rubros no topo da fortaleza
   for (const bxRatio of [-0.36, -0.2, 0.2, 0.36]) {
     const bx = cx + wallW * bxRatio
-    const by = wallTopY - 32 * s
+    const by = wallTopY - 30 * s
     // Mastro e travessa
     ctx.strokeStyle = '#334155'
     ctx.lineWidth = 2.2 * s
     ctx.beginPath()
     ctx.moveTo(bx, by)
     ctx.lineTo(bx, wallTopY + 4 * s)
-    ctx.moveTo(bx - 9 * s, by + 3 * s)
-    ctx.lineTo(bx + 9 * s, by + 3 * s)
+    ctx.moveTo(bx - 8.5 * s, by + 3 * s)
+    ctx.lineTo(bx + 8.5 * s, by + 3 * s)
     ctx.stroke()
 
     // Pano rubro com cauda bifurcada
@@ -173,11 +182,11 @@ export function drawFortressAndBoss(
     ctx.strokeStyle = '#f87171'
     ctx.lineWidth = 1.2 * s
     ctx.beginPath()
-    ctx.moveTo(bx - 8 * s, by + 3 * s)
-    ctx.lineTo(bx + 8 * s, by + 3 * s)
-    ctx.lineTo(bx + 8 * s, by + 23 * s)
-    ctx.lineTo(bx, by + 18 * s)
-    ctx.lineTo(bx - 8 * s, by + 23 * s)
+    ctx.moveTo(bx - 7.5 * s, by + 3 * s)
+    ctx.lineTo(bx + 7.5 * s, by + 3 * s)
+    ctx.lineTo(bx + 7.5 * s, by + 22 * s)
+    ctx.lineTo(bx, by + 17 * s)
+    ctx.lineTo(bx - 7.5 * s, by + 22 * s)
     ctx.closePath()
     ctx.fill()
     ctx.stroke()
@@ -185,13 +194,13 @@ export function drawFortressAndBoss(
     // Emblema dourado na bandeira
     ctx.fillStyle = '#fbbf24'
     ctx.beginPath()
-    ctx.arc(bx, by + 11 * s, 2.6 * s, 0, Math.PI * 2)
+    ctx.arc(bx, by + 10.5 * s, 2.5 * s, 0, Math.PI * 2)
     ctx.fill()
   }
 
   // 3. Horda Densa de Soldados Inimigos Rubros com Chifres e Espadas (dentro do pátio da fortaleza)
   const hordeRatio = enemy.horde > 0 ? Math.max(0, Math.min(1, hordeLeft / enemy.horde)) : 0
-  const maxVisualMinions = 26
+  const maxVisualMinions = 28
   const visibleMinions = Math.ceil(hordeRatio * maxVisualMinions)
 
   for (let i = visibleMinions - 1; i >= 0; i--) {
@@ -199,7 +208,7 @@ export function drawFortressAndBoss(
     const idxOnSide = Math.floor(i / 2)
     const row = Math.floor(idxOnSide / 4) // 0..3
     const col = idxOnSide % 4 // 0..3
-    const mx = cx + side * (28 + col * 20 + (row % 2) * 8) * s
+    const mx = cx + side * (26 + col * 20 + (row % 2) * 8) * s
     const my = baseY - (8 + row * 11) * s
     const bob = Math.sin(elapsedMs * 0.01 + i * 0.7) * 1.4 * s
 
@@ -237,31 +246,69 @@ export function drawFortressAndBoss(
     ctx.stroke()
   }
 
-  // Borda frontal curva das muralhas laterais abraçando a entrada da ponte
+  // Bastiões frontais curvos 3D com ameias abraçando a entrada da ponte (fiel a mundo1_ponte_conceito.jpg)
   for (const side of [-1, 1]) {
-    const wx = cx + side * (wallW * 0.34)
-    const wy = baseY - 12 * s
-    ctx.fillStyle = '#64748b'
+    const outerX = cx + side * (wallW * 0.48)
+    const innerX = cx + side * 46 * s
+    const bastionTopY = baseY - 30 * s
+    const bastionBotY = baseY + 2 * s
+
+    const bastionGrad = ctx.createLinearGradient(outerX, bastionTopY, innerX, bastionBotY)
+    bastionGrad.addColorStop(0, '#64748b')
+    bastionGrad.addColorStop(0.5, '#94a3b8')
+    bastionGrad.addColorStop(1, '#475569')
+
+    ctx.fillStyle = bastionGrad
     ctx.strokeStyle = '#1e293b'
     ctx.lineWidth = 2 * s
     ctx.beginPath()
-    ctx.roundRect(wx - 36 * s, wy - 18 * s, 72 * s, 24 * s, 8 * s)
+    ctx.moveTo(outerX, bastionTopY - 8 * s)
+    ctx.quadraticCurveTo(
+      cx + side * (wallW * 0.34),
+      bastionTopY + 6 * s,
+      innerX,
+      bastionTopY + 4 * s,
+    )
+    ctx.lineTo(innerX, bastionBotY)
+    ctx.quadraticCurveTo(
+      cx + side * (wallW * 0.34),
+      bastionBotY + 4 * s,
+      outerX,
+      bastionBotY - 6 * s,
+    )
+    ctx.closePath()
     ctx.fill()
     ctx.stroke()
+
+    // 3 Ameias 3D em cada bastião frontal
+    for (let m = 0; m < 3; m++) {
+      const t = (m + 0.3) / 3.2
+      const mx = outerX + (innerX - outerX) * t - 7 * s
+      const my = bastionTopY - (1 - t) * 4 * s - 6 * s
+      ctx.fillStyle = '#94a3b8'
+      ctx.strokeStyle = '#1e293b'
+      ctx.lineWidth = 1.5 * s
+      ctx.beginPath()
+      ctx.roundRect(mx, my, 13 * s, 9 * s, 2.5 * s)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = '#e2e8f0'
+      ctx.fillRect(mx + 1.5 * s, my, 10 * s, 2.5 * s)
+    }
   }
 
-  // 4. Chefe Gigante de Armadura Rubra com Chifres e Espada Flamejante (Proporção Heroica 1,55x)
-  const bs = s * 1.42
+  // 4. Chefe Gigante de Armadura Rubra com Chifres e Espada Flamejante (Proporção Heroica 1,45x)
+  const bs = s * 1.44
   if (bossLeft > 0 || enemyTotalLeft > 0) {
     const bossBob = Math.sin(elapsedMs * 0.007) * 2.2 * s
-    const bossY = baseY + 6 * s + bossBob
+    const bossY = baseY + 7 * s + bossBob
 
     // Círculo de ameaça rubro brilhante no chão sob o Chefe
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.34)'
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.36)'
     ctx.strokeStyle = '#f87171'
     ctx.lineWidth = 2.2 * s
     ctx.beginPath()
-    ctx.ellipse(cx, baseY + 6 * s, 32 * s, 12 * s, 0, 0, Math.PI * 2)
+    ctx.ellipse(cx, baseY + 7 * s, 33 * s, 12 * s, 0, 0, Math.PI * 2)
     ctx.fill()
     ctx.stroke()
 
@@ -275,17 +322,17 @@ export function drawFortressAndBoss(
     ctx.closePath()
     ctx.fill()
 
-    // Pernas couraçadas pesadas
+    // Pernas couraçadas pesadas com joelheiras
     ctx.fillStyle = '#7f1d1d'
     ctx.strokeStyle = '#2a0404'
     ctx.lineWidth = 2 * s
     ctx.beginPath()
-    ctx.roundRect(cx - 14 * bs, bossY - 18 * bs, 11 * bs, 18 * bs, 4 * s)
-    ctx.roundRect(cx + 3 * bs, bossY - 18 * bs, 11 * bs, 18 * bs, 4 * s)
+    ctx.roundRect(cx - 14.5 * bs, bossY - 18 * bs, 11.5 * bs, 18 * bs, 4 * s)
+    ctx.roundRect(cx + 3 * bs, bossY - 18 * bs, 11.5 * bs, 18 * bs, 4 * s)
     ctx.fill()
     ctx.stroke()
 
-    // Torso de armadura pesada rubra com peitoral chanfrado
+    // Torso de armadura pesada rubra com peitoral chanfrado em V
     const torsoGrad = ctx.createLinearGradient(cx - 22 * bs, bossY - 48 * bs, cx + 22 * bs, bossY - 14 * bs)
     torsoGrad.addColorStop(0, '#ef4444')
     torsoGrad.addColorStop(0.45, '#b91c1c')
@@ -296,9 +343,20 @@ export function drawFortressAndBoss(
     ctx.fill()
     ctx.stroke()
 
-    // Cinturão dourado
+    // Placa peitoral interna chanfrada
+    ctx.strokeStyle = '#fca5a5'
+    ctx.lineWidth = 1.4 * s
+    ctx.beginPath()
+    ctx.moveTo(cx - 12 * bs, bossY - 40 * bs)
+    ctx.lineTo(cx, bossY - 28 * bs)
+    ctx.lineTo(cx + 12 * bs, bossY - 40 * bs)
+    ctx.stroke()
+
+    // Cinturão dourado com fivela
     ctx.fillStyle = '#d97706'
     ctx.fillRect(cx - 18 * bs, bossY - 21 * bs, 36 * bs, 4.5 * bs)
+    ctx.fillStyle = '#fef08a'
+    ctx.fillRect(cx - 4 * bs, bossY - 22 * bs, 8 * bs, 6.5 * bs)
 
     // Ombreiras gigantes com espinhos brancos (Spiked Pauldrons — fiel ao conceito)
     for (const dir of [-1, 1]) {
@@ -308,7 +366,7 @@ export function drawFortressAndBoss(
       ctx.strokeStyle = '#2a0404'
       ctx.lineWidth = 2 * s
       ctx.beginPath()
-      ctx.arc(px, py, 11 * bs, 0, Math.PI * 2)
+      ctx.arc(px, py, 11.5 * bs, 0, Math.PI * 2)
       ctx.fill()
       ctx.stroke()
 
@@ -333,7 +391,7 @@ export function drawFortressAndBoss(
 
     // Chifres curvos escuros/marfim do Chefe
     ctx.strokeStyle = '#334155'
-    ctx.lineWidth = 5 * bs
+    ctx.lineWidth = 5.2 * bs
     ctx.lineCap = 'round'
     ctx.beginPath()
     ctx.moveTo(cx - 11 * bs, bossY - 55 * bs)
@@ -358,41 +416,54 @@ export function drawFortressAndBoss(
     ctx.rect(cx + 2.5 * bs, bossY - 54 * bs, 5.5 * bs, 3 * bs)
     ctx.fill()
 
-    // Espada Flamejante Gigante na mão direita do Chefe (esquerda da tela, como em mundo1_ponte_conceito.jpg)
+    // Espada Flamejante Gigante na mão direita do Chefe com guarda dourada e halo de fogo (fiel a mundo1_ponte_conceito.jpg)
     ctx.save()
-    ctx.translate(cx - 23 * bs, bossY - 27 * bs)
-    ctx.rotate(-0.28 + Math.sin(elapsedMs * 0.012) * 0.1)
+    ctx.translate(cx - 21 * bs, bossY - 25 * bs)
+    ctx.rotate(-0.3 + Math.sin(elapsedMs * 0.012) * 0.08)
 
-    // Halo de fogo externo
-    ctx.fillStyle = 'rgba(249, 115, 22, 0.38)'
+    // Halo de fogo externo incandescente
+    ctx.fillStyle = 'rgba(249, 115, 22, 0.45)'
     ctx.beginPath()
-    ctx.moveTo(2 * bs, -4 * bs)
-    ctx.lineTo(-36 * bs, 11 * bs)
-    ctx.lineTo(-42 * bs, 5 * bs)
-    ctx.lineTo(-4 * bs, -10 * bs)
+    ctx.moveTo(2 * bs, -5 * bs)
+    ctx.lineTo(-40 * bs, 12 * bs)
+    ctx.lineTo(-45 * bs, 4 * bs)
+    ctx.lineTo(-4 * bs, -11 * bs)
     ctx.closePath()
     ctx.fill()
 
-    // Lâmina incandescente laranja/amarela
-    ctx.fillStyle = '#fb923c'
-    ctx.strokeStyle = '#fef08a'
+    // Lâmina incandescente laranja/amarela com ponta afiada
+    const swordGrad = ctx.createLinearGradient(0, 0, -40 * bs, 8 * bs)
+    swordGrad.addColorStop(0, '#fde047')
+    swordGrad.addColorStop(0.55, '#fb923c')
+    swordGrad.addColorStop(1, '#ef4444')
+    ctx.fillStyle = swordGrad
+    ctx.strokeStyle = '#fef9c3'
     ctx.lineWidth = 2.2 * s
     ctx.beginPath()
-    ctx.moveTo(0, 0)
-    ctx.lineTo(-33 * bs, 9 * bs)
-    ctx.lineTo(-38 * bs, 4 * bs)
-    ctx.lineTo(-5 * bs, -6 * bs)
+    ctx.moveTo(-2 * bs, -4 * bs)
+    ctx.lineTo(-36 * bs, 9 * bs)
+    ctx.lineTo(-42 * bs, 4 * bs)
+    ctx.lineTo(-34 * bs, -2 * bs)
+    ctx.lineTo(-4 * bs, -8 * bs)
     ctx.closePath()
     ctx.fill()
+    ctx.stroke()
+
+    // Guarda-mão (crossguard) e punho dourado
+    ctx.strokeStyle = '#eab308'
+    ctx.lineWidth = 3.2 * s
+    ctx.beginPath()
+    ctx.moveTo(-1 * bs, -11 * bs)
+    ctx.lineTo(-4 * bs, 2 * bs)
     ctx.stroke()
     ctx.restore()
   }
 
-  // 5. Barra de Vida do Chefe proporcional no topo (idêntica a mundo1_ponte_conceito.jpg: [💀 1,2k])
-  const barW = Math.max(96, 122 * s)
+  // 5. Barra de Vida do Chefe proporcional e destacada ACIMA dos chifres e estandartes (idêntica a mundo1_ponte_conceito.jpg: [💀 1,2k])
+  const barW = Math.max(96, 124 * s)
   const barH = Math.max(18, 22 * s)
   const barX = cx - barW / 2 + 6 * s
-  const barY = baseY - 122 * s
+  const barY = baseY - 140 * s
   const hpRatio = Math.max(0, Math.min(1, enemyTotalLeft / maxEnemy))
 
   // Moldura metálica escura da barra

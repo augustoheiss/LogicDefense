@@ -106,7 +106,10 @@ function buildFairPairSegment(
       canMultiplySafely && rng.nextFloat() < 0.5
         ? makeSimpleGate(`${segId}_best`, '×', 3, 2, '× 3/2', true)
         : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${addGood}`)
-    altGate = makeSimpleGate(`${segId}_alt`, '÷', 2, 1, '÷ 2', true)
+    altGate =
+      index >= 4
+        ? makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${addModest}`)
+        : makeSimpleGate(`${segId}_alt`, '÷', 2, 1, '÷ 2', true)
   } else if (biomeId === 'deserto_decimais') {
     bestGate =
       canMultiplySafely && rng.nextFloat() < 0.5
@@ -193,7 +196,7 @@ function buildCalibratedFinalSegment(
     worstGate =
       safeSmallAdd > 0
         ? makeSimpleGate(`${segId}_cal_worst`, '+', safeSmallAdd, 1, `+ ${safeSmallAdd}`)
-        : makeSimpleGate(`${segId}_cal_worst`, '÷', 2, 1, '÷ 2')
+        : makeSimpleGate(`${segId}_cal_worst`, '−', 2, 1, '− 2')
   }
 
   const lanes: Gate[][] =

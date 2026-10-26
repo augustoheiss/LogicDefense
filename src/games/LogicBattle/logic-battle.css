@@ -4,9 +4,20 @@
    Suporte garantido para 360x740 (Mobile), 768x1024 (Tablet) e 1440x900 (Desktop)
    ────────────────────────────────────────────────────────────────────────────── */
 
+/* §2.4 item 5: Imersão total no desktop — ocultar navbar e footer do site em /jogos/logic-battle */
+.portal-root:has(.lb-page-fullscreen) > .navbar,
+.portal-root:has(.lb-page-fullscreen) > .footer {
+  display: none !important;
+}
+
+.portal-root:has(.lb-page-fullscreen) > .page-content {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
 .lb-page-fullscreen {
   width: 100%;
-  height: calc(100dvh - 64px);
+  height: 100dvh;
   min-height: 540px;
   background: radial-gradient(circle at 50% 25%, #0ea5e9 0%, #0369a1 45%, #020617 100%);
   overflow: hidden;
@@ -65,6 +76,44 @@
   justify-content: space-between;
   gap: 4px;
   pointer-events: auto;
+}
+
+/* §2.4 item 3: Controles 🐢, 1k, 📖 e biomas saem da tela de ação (ficam em ⚙️), mantendo âncora DOM clicável */
+.lb-minimal-hud__sub-row.is-tucked-in-gear {
+  height: 2px;
+  opacity: 0.02;
+  overflow: hidden;
+  margin-top: -2px;
+}
+
+.lb-hud-3d-btn--pause.is-active {
+  width: auto;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-color: #6ee7b7;
+}
+
+.lb-hud-shield-pill.is-trap-flash {
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  border-color: #fecaca;
+  animation: lbTrapPulse 0.35s ease-in-out 2;
+}
+
+@keyframes lbTrapPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.lb-hud-combo-badge {
+  background: linear-gradient(180deg, #facc15 0%, #ca8a04 100%);
+  color: #0f172a;
+  font-size: 0.76rem;
+  font-weight: 900;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1.5px solid #fef08a;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
 }
 
 .lb-hud-quick-pills {
@@ -133,19 +182,29 @@
   letter-spacing: 0.02em;
 }
 
-/* Pílula Dourada de Fichas de Resgate: [🎟️ 1] */
+/* Pílula Azul 3D de Fichas c/ Ticket Dourado: [🎟️ 1] (idêntica a mundo1_ponte_conceito.jpg) */
 .lb-hud-ticket-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: linear-gradient(180deg, #facc15 0%, #ca8a04 100%);
-  border: 2px solid #fef08a;
-  box-shadow: 0 3px 0 #713f12, 0 4px 10px rgba(2, 6, 23, 0.4);
+  gap: 5px;
+  background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
+  border: 2.2px solid #93c5fd;
+  box-shadow: 0 3px 0 #1e3a8a, 0 5px 12px rgba(2, 6, 23, 0.45);
   border-radius: 999px;
-  padding: 3px 10px;
-  color: #0f172a;
+  padding: 2px 12px 2px 6px;
+  color: #ffffff;
   font-weight: 900;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
+}
+
+.lb-hud-ticket-pill__svg,
+.lb-hud-shield-pill__svg {
+  filter: drop-shadow(0 2px 2px rgba(2, 6, 23, 0.45));
+  flex-shrink: 0;
+}
+
+.lb-hud-ticket-pill__value {
+  text-shadow: 0 2px 0 #0f172a, 0 -1px 0 #0f172a, 1px 0 0 #0f172a, -1px 0 0 #0f172a;
 }
 
 .lb-hud-mini-icon-btn {
@@ -249,7 +308,7 @@
   overflow: hidden;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .lb-run-stage {
     max-width: 100%;
   }
@@ -430,11 +489,12 @@
 
 .lb-realm-map-box {
   position: relative;
-  width: 100%;
-  max-width: 1160px;
-  height: 100%;
-  flex: 1;
+  width: min(100%, calc((100dvh - 76px) * 900 / 620));
+  max-width: 1180px;
+  aspect-ratio: 900 / 620;
+  margin: auto;
   overflow: hidden;
+  border-radius: 12px;
 }
 
 .lb-realm-svg {
@@ -443,7 +503,7 @@
   display: block;
 }
 
-/* As 5 Construções da Cidadela com Pin Circular acima do telhado e Pílula Nv X na base */
+/* As 5 Construções da Cidadela com Pin Teardrop acima do telhado e Pílula Nv X na base */
 .lb-map-citadel-overlay {
   position: absolute;
   inset: 0;
@@ -452,19 +512,17 @@
 
 .lb-map-building-node {
   position: absolute;
-  transform: translate(-50%, -62%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  height: 112px;
+  width: 0;
+  height: 0;
   pointer-events: auto;
 }
 
 .lb-map-building-pin {
-  position: relative;
-  width: 32px;
-  height: 32px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: linear-gradient(180deg, #74d3ae 0%, #43aa82 100%);
   border: 2px solid #0f172a;
@@ -477,6 +535,17 @@
   box-shadow: 0 3px 8px rgba(15, 23, 42, 0.45);
 }
 
+.lb-map-building-pin::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #0f172a;
+}
+
 .lb-map-building-pin--gold {
   background: linear-gradient(180deg, #fde047 0%, #ca8a04 100%);
 }
@@ -487,15 +556,19 @@
 }
 
 .lb-map-building-lvl-pill {
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  white-space: nowrap;
   background: linear-gradient(180deg, #1b4d3e 0%, #13382d 100%);
-  border: 1.6px solid #a7f3d0;
+  border: 1.8px solid #a7f3d0;
   border-radius: 7px;
   padding: 1px 8px;
   color: #ffffff;
   font-size: 0.68rem;
   font-weight: 900;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.55);
 }
 
 .lb-map-building-lvl-pill.can-upgrade {
@@ -709,8 +782,19 @@
   z-index: 60;
 }
 
-.lb-result-card,
-.lb-trap-compact-card {
+.lb-trap-toast-floating {
+  position: fixed;
+  top: 62px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 12px;
+  pointer-events: none;
+  z-index: 48;
+}
+
+.lb-result-card {
   width: 100%;
   max-width: 360px;
   background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
@@ -723,6 +807,23 @@
   gap: 12px;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
   text-align: center;
+}
+
+.lb-trap-compact-card {
+  width: 100%;
+  max-width: 360px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.94) 0%, rgba(15, 23, 42, 0.94) 100%);
+  border: 2px solid #38bdf8;
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.65);
+  text-align: center;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
 }
 
 .lb-result-card.is-victory {
@@ -883,6 +984,131 @@
   padding: 6px 10px;
   font-size: 0.8rem;
   box-sizing: border-box;
+}
+
+/* Pílula Diegética Dourada (+1 Ficha Bônus) no canto superior direito — zero texto longo (§2.1 R1) */
+.lb-trap-compact-card--diegetic-pill {
+  max-width: 280px;
+  margin-left: auto;
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.96) 0%, rgba(202, 138, 4, 0.96) 100%);
+  border: 2px solid #fef08a;
+  border-radius: 999px;
+  padding: 4px 10px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: #0f172a;
+}
+
+.lb-trap-compact-card--diegetic-pill .lb-ghost-rewind-banner {
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 6px;
+  width: auto;
+  font-size: 0.76rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.lb-trap-compact-card--diegetic-pill .lb-trap-compact-card__actions {
+  width: auto;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.lb-diegetic-mini-btn {
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #fef08a;
+  color: #fef08a;
+  font-size: 0.7rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lb-diegetic-mini-btn--gold {
+  background: #0f172a;
+  color: #facc15;
+}
+
+.lb-postrun-trap-summary {
+  width: 100%;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  color: #fecaca;
+}
+
+.lb-bonus-equal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.lb-btn-3d--slate-equal {
+  background: linear-gradient(180deg, #475569 0%, #334155 100%);
+  border: 2px solid #94a3b8;
+  box-shadow: 0 3px 0 #0f172a;
+  color: #f8fafc;
+}
+
+/* Barra Seletora das 6 Engines no Hub do Reino (§3 & hub_reino_cidadela_engines.jpg) */
+.lb-realm-engines-bar {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.86);
+  border: 1.8px solid rgba(147, 197, 253, 0.55);
+  border-radius: 999px;
+  padding: 4px 8px;
+  max-width: calc(100% - 16px);
+  overflow-x: auto;
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.6);
+}
+
+.lb-realm-engine-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1.5px solid #475569;
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lb-realm-engine-pill.is-active {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  border-color: #fef08a;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.55);
+}
+
+@media (max-width: 520px) {
+  .lb-realm-engine-pill__label {
+    display: none;
+  }
 }
 
 /* ── DEMAIS GAVETAS & PAINÉIS INTERNOS (REDEMPTION, ALBUM, CODEX, SHEET) ──── */

@@ -41,6 +41,12 @@ import {
   resolveLaneIndexFromNormX,
 } from '../run/renderer/perspective'
 import {
+  ENGINE_CATALOG,
+  EngineId,
+  EngineResult,
+  getComboMultiplier,
+} from '../engines/engineContract'
+import {
   ArmyCount,
   BattleResolution,
   BiomeId,
@@ -67,6 +73,7 @@ function readUrlParams(): {
   debug: boolean
   world: 'run' | 'realm'
   biome?: BiomeId
+  engine?: EngineId
 } {
   if (typeof window === 'undefined') {
     return { debug: false, world: 'run' }
@@ -80,24 +87,29 @@ function readUrlParams(): {
   const biomeParam = params.get('biome') as BiomeId | null
   const biome =
     biomeParam && BIOMES[biomeParam] ? biomeParam : undefined
+  const engineParam = params.get('engine') as EngineId | null
+  const engine =
+    engineParam && ENGINE_CATALOG[engineParam] ? engineParam : undefined
 
   return {
     seed: Number.isFinite(parsedSeed) ? parsedSeed : undefined,
     debug,
     world,
     biome,
+    engine,
   }
 }
 
 function createInitialSnapshotFromPlan(plan: RunPlan, calmMode: boolean): RunSnapshot {
   const initialLane = 0
   const laneX = getLaneCenterNormX(initialLane, plan.laneCount)
+  const safeN0 = clampArmy(plan.n0)
   return {
     runId: plan.runId,
     phase: calmMode ? 'CALM_WAIT' : 'RUNNING',
     elapsedMs: 0,
     progress: 0,
-    currentArmy: plan.n0,
+    currentArmy: safeN0,
     remainderBankInRun: 0,
     currentLane: initialLane,
     laneX,
@@ -105,16 +117,23 @@ function createInitialSnapshotFromPlan(plan: RunPlan, calmMode: boolean): RunSna
     activeSegmentIndex: 0,
     segments: plan.segments,
     resolvedSegments: {},
-    crowdNodes: buildCrowdNodes(plan.n0),
+    crowdNodes: buildCrowdNodes(safeN0),
     recentFeedback: [],
     activeMergeEvent: null,
     inspectedSegmentId: null,
     enemy: plan.enemy,
+    calcComboStreak: 0,
+    calcComboMultiplier: 1,
+    goldenTokensCollected: 0,
+    bridgeCoinsEarned: 0,
+    bridgeKills: 0,
+    lastTrapFlashAtMs: null,
   }
 }
 
 export interface LogicBattleStoreState {
   world: 'run' | 'realm'
+  activeEngineId: EngineId
   debugMode: boolean
   save: SaveV1
   recoveredFromBackup: boolean
@@ -122,6 +141,7 @@ export interface LogicBattleStoreState {
   oracle: PathOracleResult
   snapshot: RunSnapshot
   activeTrapHit: TrapHit | null
+  trapHistoryInRun: TrapHit[]
   activeRedemptionTokenId: string | null
   tokensInRun: RedemptionToken[]
   lastRedeemDiagnostic: string | null
@@ -137,10 +157,13 @@ export interface LogicBattleStoreState {
 
   // Actions
   switchWorld: (world: 'run' | 'realm') => void
+  selectEngine: (engineId: EngineId, startImmediately?: boolean) => void
+  completeEngineRun: (result: EngineResult) => void
+  recordBridgeEnemyKill: (coinsDelta?: number) => void
   toggleDebugMode: () => void
   toggleSettingsPopover: (open?: boolean) => void
   setActiveRealmSheet: (sheet: 'none' | 'region' | 'citadel') => void
-  startNewRun: (opts?: { regionId?: string; biomeId?: BiomeId; seed?: number }) => void
+  startNewRun: (opts?: { regionId?: string; biomeId?: BiomeId; seed?: number; engineId?: EngineId }) => void
   setSteeringX: (laneNormX: number) => void
   stepLane: (delta: -1 | 1) => void
   chooseLaneAndAdvance: (laneIndex: number) => void
@@ -149,6 +172,7 @@ export interface LogicBattleStoreState {
   finishBattle: () => void
   dismissTrapAlertAndContinue: () => void
   openImmediateRedemptionFromTrap: () => void
+  openNextRedemptionModal: () => void
   submitRedemptionAnswer: (choiceId: string) => void
   closeRedemptionModal: () => void
   acceptRedemptionContractModal: () => void
@@ -206,6 +230,7 @@ const initialLunetas = CITADEL_BUILDINGS.forja.levelEffects[initialForjaLevel] ?
 
 export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => ({
   world: urlCfg.world,
+  activeEngineId: urlCfg.engine ?? 'ponte_portoes',
   debugMode: urlCfg.debug,
   save: initialLoad.save,
   recoveredFromBackup: initialLoad.recoveredFromBackup,
@@ -216,6 +241,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     initialLoad.save.settings.calmMode,
   ),
   activeTrapHit: null,
+  trapHistoryInRun: [],
   activeRedemptionTokenId: null,
   tokensInRun: [],
   lastRedeemDiagnostic: null,
@@ -244,6 +270,126 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     })
   },
 
+  selectEngine: (engineId, startImmediately = true) => {
+    if (!ENGINE_CATALOG[engineId]) return
+    if (startImmediately) {
+      get().startNewRun({ engineId })
+    } else {
+      set({ activeEngineId: engineId })
+    }
+  },
+
+  recordBridgeEnemyKill: (coinsDelta = 2) => {
+    const state = get()
+    const snap = state.snapshot
+    if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
+    set({
+      snapshot: {
+        ...snap,
+        bridgeKills: (snap.bridgeKills ?? 0) + 1,
+        bridgeCoinsEarned: (snap.bridgeCoinsEarned ?? 0) + Math.max(1, coinsDelta),
+      },
+    })
+  },
+
+  completeEngineRun: (result) => {
+    const state = get()
+    const { save, runPlan, snapshot } = state
+    const safePlayer = clampArmy(result.playerArmy)
+    const safeEnemy = clampArmy(result.enemyForce)
+    const resolution: BattleResolution = {
+      outcome: result.outcome,
+      playerArmy: safePlayer,
+      enemyForce: safeEnemy,
+      survivors: result.outcome === 'VICTORY' ? Math.max(1, result.survivors) : 0,
+      deficit: result.outcome === 'DEFEAT' ? Math.max(1, safeEnemy - safePlayer) : 0,
+      durationMs: result.durationMs,
+    }
+    const contract = evaluateRedemptionContract(
+      safePlayer,
+      safeEnemy,
+      state.tokensInRun,
+    )
+
+    if (result.outcome === 'VICTORY') {
+      soundEngine.playVictoryFanfare()
+      const region = REGIONS[runPlan.regionId] ?? REGIONS.r01_ponte_aurora
+      const alreadyConquered = save.conqueredRegionIds.includes(region.id)
+      const nextConquered = alreadyConquered
+        ? save.conqueredRegionIds
+        : [...save.conqueredRegionIds, region.id]
+      const passiveTribute = calculatePassiveTribute(nextConquered)
+      const comboMult = Math.max(1, result.maxCombo)
+      const totalReward = Math.round(
+        (region.rewardTroops + passiveTribute + result.coinsEarned) *
+          (1 + (comboMult - 1) * 0.25),
+      )
+
+      const nextSaveWin: SaveV1 = {
+        ...save,
+        reserveTroops: clampArmy(save.reserveTroops + totalReward),
+        remainderVault: save.remainderVault + result.remaindersEarned,
+        wisdomStars: save.wisdomStars + Math.max(1, result.starsEarned),
+        conqueredRegionIds: nextConquered,
+        stats: {
+          ...save.stats,
+          runsPlayed: save.stats.runsPlayed + 1,
+          runsWon: save.stats.runsWon + 1,
+          highestArmyReached: Math.max(
+            save.stats.highestArmyReached,
+            safePlayer,
+          ),
+        },
+      }
+      SaveRepository.save(nextSaveWin)
+
+      set({
+        save: nextSaveWin,
+        activeTrapHit: null,
+        battleResolution: resolution,
+        redemptionContract: contract,
+        snapshot: {
+          ...snapshot,
+          progress: 1,
+          currentArmy: resolution.survivors,
+          crowdNodes: buildCrowdNodes(resolution.survivors),
+          calcComboMultiplier: comboMult,
+          bridgeCoinsEarned: result.coinsEarned,
+          phase: 'VICTORY',
+        },
+      })
+    } else {
+      soundEngine.playDefeatRegroup()
+      const nextSaveDefeat: SaveV1 = {
+        ...save,
+        remainderVault: save.remainderVault + result.remaindersEarned,
+        stats: {
+          ...save.stats,
+          runsPlayed: save.stats.runsPlayed + 1,
+          highestArmyReached: Math.max(
+            save.stats.highestArmyReached,
+            safePlayer,
+          ),
+        },
+      }
+      SaveRepository.save(nextSaveDefeat)
+
+      set({
+        save: nextSaveDefeat,
+        activeTrapHit: null,
+        battleResolution: resolution,
+        redemptionContract: contract,
+        snapshot: {
+          ...snapshot,
+          progress: 1,
+          currentArmy: 0,
+          crowdNodes: [],
+          phase: 'DEFEAT',
+        },
+      })
+    }
+  },
+
   toggleDebugMode: () => {
     set((s) => ({ debugMode: !s.debugMode }))
   },
@@ -263,6 +409,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const targetRegionId = opts?.regionId ?? state.save.selectedRegionId
     const region = REGIONS[targetRegionId] ?? REGIONS.r01_ponte_aurora
     const biomeId = opts?.biomeId ?? region.biomeId
+    const engineId = opts?.engineId ?? state.activeEngineId ?? 'ponte_portoes'
     const seed =
       opts?.seed ??
       urlCfg.seed ??
@@ -302,11 +449,13 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
     set({
       world: 'run',
+      activeEngineId: engineId,
       save: nextSave,
       runPlan: plan,
       oracle: nextOracle,
       snapshot: createInitialSnapshotFromPlan(plan, nextSave.settings.calmMode),
       activeTrapHit: null,
+      trapHistoryInRun: [],
       activeRedemptionTokenId: null,
       tokensInRun: [],
       lastRedeemDiagnostic: null,
@@ -355,10 +504,6 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   chooseLaneAndAdvance: (laneIndex) => {
     const state = get()
     const { snapshot } = state
-    if (snapshot.phase === 'BATTLE') {
-      get().finishBattle()
-      return
-    }
     if (
       snapshot.phase !== 'RUNNING' &&
       snapshot.phase !== 'CALM_WAIT'
@@ -435,44 +580,80 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       )
       const chosenGates = activeSeg.lanes[chosenLane] ?? []
 
-      // Se for um Portão Dourado do Resgate na ponte
-      const isChosenRedemptionGate = Boolean(
-        chosenGates[0]?.id.startsWith('redemption_gate_'),
+      // Se for um Portão Dourado do Resgate na ponte: fluxo 100% contínuo (sem pausar para modal!)
+      // V3 §2.2: Só conta se o jogador atravessar o portão dourado (checagem por gate.id, nunca por índice de faixa!)
+      const isChosenRedemptionGate = chosenGates.some((g) =>
+        g.id.startsWith('redemption_gate_'),
       )
       if (
         activeSeg.kind === 'redemption' &&
         activeSeg.redemptionTokenId &&
-        (chosenLane === 0 || isChosenRedemptionGate)
+        isChosenRedemptionGate
       ) {
+        const linkedToken = state.tokensInRun.find(
+          (t) => t.id === activeSeg.redemptionTokenId,
+        )
+        const instantBonus =
+          linkedToken && !linkedToken.used
+            ? Math.max(1, Math.round(linkedToken.loss * 0.5))
+            : 2
+        const boostedArmy = clampArmy(snapshot.currentArmy + instantBonus)
+        const nextStreak = (snapshot.calcComboStreak ?? 0) + 1
+        const nextMult = getComboMultiplier(nextStreak)
         const resolvedMap = {
           ...snapshot.resolvedSegments,
-          [activeSeg.id]: { chosenLane, resultArmy: snapshot.currentArmy },
+          [activeSeg.id]: { chosenLane, resultArmy: boostedArmy },
         }
+        const fbGold: FloatingFeedbackItem = {
+          id: `fb_${activeSeg.id}`,
+          text: `+${formatArmy(instantBonus, save.settings.notationMode)} · 🎟️ +1`,
+          tone: 'reinforcement',
+          createdAtMs: nextElapsed,
+        }
+        soundEngine.playGatePass(boostedArmy, true)
         set({
-          activeRedemptionTokenId: activeSeg.redemptionTokenId,
-          lastRedeemDiagnostic: null,
           snapshot: {
             ...snapshot,
             elapsedMs: nextElapsed,
-            progress: activeSeg.zPosition,
-            phase: 'REDEMPTION_CHALLENGE',
+            progress: nextProgress,
+            currentArmy: boostedArmy,
+            crowdNodes: buildCrowdNodes(boostedArmy),
             activeSegmentIndex: snapshot.activeSegmentIndex + 1,
             resolvedSegments: resolvedMap,
+            recentFeedback: [...snapshot.recentFeedback.slice(-4), fbGold],
+            calcComboStreak: nextStreak,
+            calcComboMultiplier: nextMult,
+            goldenTokensCollected: (snapshot.goldenTokensCollected ?? 0) + 1,
+            phase: save.settings.calmMode ? 'CALM_WAIT' : 'RUNNING',
           },
           captainSpeech: {
             mood: 'excited',
-            text: 'Portão Dourado do Resgate! Resolva a Conta de Resgate para recuperar +100% dos soldados!',
+            text: `Portão Dourado coletado! +${instantBonus} soldados e Ficha guardada para o final!`,
           },
         })
         return
       }
 
-      const armyBefore = snapshot.currentArmy
+      const armyBefore = clampArmy(snapshot.currentArmy)
       const cf = evaluateSegmentCounterfactual(activeSeg, armyBefore)
       const appResult = applyGateChainWithRemainder(armyBefore, chosenGates)
-      const nextArmy = appResult.nextArmy
+      const rawNextArmy = clampArmy(appResult.nextArmy)
       const nextRemainderBank = snapshot.remainderBankInRun + appResult.remainder
-      const wasOptimal = nextArmy >= cf.bestValue
+      const wasOptimal = rawNextArmy >= cf.bestValue
+
+      // Combo de Cálculo V3 (§2.2): escolher o portão ótimo sobe o multiplicador (×1 -> ×1,5 -> ×2 -> ×3)
+      const nextComboStreak = wasOptimal ? (snapshot.calcComboStreak ?? 0) + 1 : 0
+      const nextComboMult = getComboMultiplier(nextComboStreak)
+      const comboBonusTroops =
+        wasOptimal && nextComboStreak >= 2
+          ? Math.max(
+              1,
+              Math.round(
+                Math.max(1, rawNextArmy - armyBefore) * (nextComboMult - 1) * 0.25,
+              ),
+            )
+          : 0
+      const nextArmy = clampArmy(rawNextArmy + comboBonusTroops)
 
       // Detectar se houve Fusão Vai-Um (cruzamento de potência de 10)
       const mergeInfo = detectVaiUmMerge(armyBefore, nextArmy)
@@ -548,7 +729,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         return
       }
 
-      // Verificar se disparou Pegadinha Matemática catalogada
+      // Verificar se disparou Pegadinha Matemática catalogada (R1: NUNCA pausa a corrida!)
       const trapHit = detectTrap(activeSeg, armyBefore, chosenLane)
       if (trapHit) {
         soundEngine.playTrapOpaAlert()
@@ -572,6 +753,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           : undefined
 
         const nextSeenCount = (save.trapAlertSeenCount[trapHit.trapId] ?? 0) + 1
+        const safeTrapArmy = clampArmy(nextArmy)
         const nextSaveTrap: SaveV1 = {
           ...save,
           mergeTutorialSeenCount: nextMergeSeenCount,
@@ -591,42 +773,58 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           },
           stats: {
             ...save.stats,
-            highestArmyReached: Math.max(save.stats.highestArmyReached, nextArmy),
+            highestArmyReached: Math.max(save.stats.highestArmyReached, safeTrapArmy),
           },
         }
         SaveRepository.save(nextSaveTrap)
 
         const fbTrap: FloatingFeedbackItem = {
           id: `fb_${activeSeg.id}`,
-          text: `OPA! PEGADINHA: ${trapHit.trapName}`,
-          subText: `Ficha de Resgate (+${trapHit.loss}) ganha!`,
+          text: `−${formatArmy(trapHit.loss, save.settings.notationMode)} · 🎟️ +1`,
           tone: 'trap',
           createdAtMs: nextElapsed,
         }
 
+        const isFinalAfterTrap =
+          snapshot.activeSegmentIndex + 1 >= updatedSegments.length || safeTrapArmy <= 0
+
         set({
           save: nextSaveTrap,
           activeTrapHit: trapHit,
+          trapHistoryInRun: [...state.trapHistoryInRun, trapHit],
           tokensInRun: [...state.tokensInRun, newToken],
           snapshot: {
             ...snapshot,
             elapsedMs: nextElapsed,
-            progress: activeSeg.zPosition,
-            currentArmy: nextArmy,
+            progress: isFinalAfterTrap ? 1 : nextProgress,
+            currentArmy: safeTrapArmy,
             remainderBankInRun: nextRemainderBank,
-            activeSegmentIndex: snapshot.activeSegmentIndex + 1,
+            activeSegmentIndex:
+              safeTrapArmy <= 0
+                ? updatedSegments.length
+                : snapshot.activeSegmentIndex + 1,
             segments: updatedSegments,
             resolvedSegments: resolvedMap,
-            crowdNodes: nextCrowdNodes,
+            crowdNodes: buildCrowdNodes(safeTrapArmy),
             recentFeedback: [...snapshot.recentFeedback.slice(-4), fbTrap],
             activeMergeEvent: activeMerge,
-            phase: 'TRAP_CINEMATIC',
+            calcComboStreak: 0,
+            calcComboMultiplier: 1,
+            lastTrapFlashAtMs: nextElapsed,
+            phase: isFinalAfterTrap
+              ? 'RUNNING'
+              : save.settings.calmMode
+                ? 'CALM_WAIT'
+                : 'RUNNING',
           },
           captainSpeech: {
             mood: 'curious',
-            text: `Opa! Pegadinha "${trapHit.trapName}"! ${trapHit.luzGuiaPt} Tome uma Ficha de Resgate para recuperar os ${trapHit.loss} soldados!`,
+            text: `+1 Ficha Bônus (+${trapHit.loss}) guardada para o final!`,
           },
         })
+        if (isFinalAfterTrap) {
+          get().tickRun(16)
+        }
         return
       }
 
@@ -644,28 +842,34 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         }
       }
 
+      const safePassArmy = clampArmy(nextArmy)
       const nextSavePass: SaveV1 = {
         ...save,
         mergeTutorialSeenCount: nextMergeSeenCount,
         mastery: nextMastery,
         stats: {
           ...save.stats,
-          highestArmyReached: Math.max(save.stats.highestArmyReached, nextArmy),
+          highestArmyReached: Math.max(save.stats.highestArmyReached, safePassArmy),
         },
       }
       SaveRepository.save(nextSavePass)
 
-      const deltaArmy = nextArmy - armyBefore
-      const signStr = deltaArmy >= 0 ? `+${formatArmy(deltaArmy, save.settings.notationMode)}` : `−${formatArmy(Math.abs(deltaArmy), save.settings.notationMode)}`
+      const deltaArmy = safePassArmy - armyBefore
+      const signStr =
+        deltaArmy >= 0
+          ? `+${formatArmy(deltaArmy, save.settings.notationMode)}`
+          : `−${formatArmy(Math.abs(deltaArmy), save.settings.notationMode)}`
+      const comboTag =
+        wasOptimal && nextComboMult > 1 ? ` ×${nextComboMult}` : ''
       const fbPass: FloatingFeedbackItem = {
         id: `fb_${activeSeg.id}`,
-        text: wasOptimal ? `ÓTIMO! (${signStr})` : `${signStr}`,
-        subText: appResult.remainder > 0 ? `Resto +${appResult.remainder} na Mina` : undefined,
+        text: `${signStr}${comboTag}`,
         tone: wasOptimal ? 'optimal' : 'neutral',
         createdAtMs: nextElapsed,
       }
 
-      const isFinalSegment = snapshot.activeSegmentIndex + 1 >= snapshot.segments.length
+      const isFinalSegment =
+        snapshot.activeSegmentIndex + 1 >= snapshot.segments.length || safePassArmy <= 0
 
       set({
         save: nextSavePass,
@@ -673,13 +877,18 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           ...snapshot,
           elapsedMs: nextElapsed,
           progress: isFinalSegment ? 1 : nextProgress,
-          currentArmy: nextArmy,
+          currentArmy: safePassArmy,
           remainderBankInRun: nextRemainderBank,
-          activeSegmentIndex: snapshot.activeSegmentIndex + 1,
+          activeSegmentIndex:
+            safePassArmy <= 0
+              ? snapshot.segments.length
+              : snapshot.activeSegmentIndex + 1,
           resolvedSegments: resolvedMap,
-          crowdNodes: nextCrowdNodes,
+          crowdNodes: buildCrowdNodes(safePassArmy),
           recentFeedback: [...snapshot.recentFeedback.slice(-4), fbPass],
           activeMergeEvent: activeMerge,
+          calcComboStreak: nextComboStreak,
+          calcComboMultiplier: nextComboMult,
           phase: isFinalSegment
             ? 'RUNNING'
             : save.settings.calmMode
@@ -694,7 +903,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           : {
               mood: wasOptimal ? 'proud' : 'calm',
               text: wasOptimal
-                ? `Escolha certeira! Exército agora em ${formatArmy(nextArmy, save.settings.notationMode)}.`
+                ? `Escolha certeira! Exército agora em ${formatArmy(safePassArmy, save.settings.notationMode)}.`
                 : `Passamos pelo portão. Continue atento às próximas placas!`,
             },
       })
@@ -707,18 +916,21 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
     // Se terminou todos os segmentos, inicia o Combate Visível (fase 'BATTLE')!
     if (snapshot.activeSegmentIndex >= snapshot.segments.length) {
-      const resolution = resolveBattle(snapshot.currentArmy, snapshot.enemy)
+      const safeFinalArmy = clampArmy(snapshot.currentArmy)
+      const resolution = resolveBattle(safeFinalArmy, snapshot.enemy)
       const contract = evaluateRedemptionContract(
-        snapshot.currentArmy,
+        safeFinalArmy,
         snapshot.enemy.totalForce,
         state.tokensInRun,
       )
 
       set({
+        activeTrapHit: null,
         battleResolution: resolution,
         redemptionContract: contract,
         snapshot: {
           ...snapshot,
+          currentArmy: safeFinalArmy,
           elapsedMs: nextElapsed,
           progress: 1,
           phase: 'BATTLE',
@@ -731,12 +943,27 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       return
     }
 
+    const expiredMerge =
+      snapshot.activeMergeEvent &&
+      nextElapsed - snapshot.activeMergeEvent.startedAtMs >= 1800
+
+    // Auto-expirar o banner não-bloqueante de pegadinha se o jogador preferir apenas seguir correndo
+    const lastTrapFb = [...snapshot.recentFeedback]
+      .reverse()
+      .find((f) => f.tone === 'trap')
+    const expiredTrapToast =
+      state.activeTrapHit &&
+      lastTrapFb &&
+      nextElapsed - lastTrapFb.createdAtMs >= 3800
+
     // Atualização contínua da posição Z na ponte
     set({
+      activeTrapHit: expiredTrapToast ? null : state.activeTrapHit,
       snapshot: {
         ...snapshot,
         elapsedMs: nextElapsed,
         progress: nextProgress,
+        activeMergeEvent: expiredMerge ? null : snapshot.activeMergeEvent,
       },
     })
   },
@@ -804,6 +1031,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
       set({
         save: nextSaveWin,
+        activeTrapHit: null,
         battleResolution: resolution,
         redemptionContract: contract,
         snapshot: {
@@ -811,6 +1039,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           progress: 1,
           currentArmy: resolution.survivors,
           crowdNodes: buildCrowdNodes(resolution.survivors),
+          activeMergeEvent: null,
           phase: 'VICTORY',
         },
         captainSpeech: {
@@ -836,6 +1065,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
       set({
         save: nextSaveDefeat,
+        activeTrapHit: null,
         battleResolution: resolution,
         redemptionContract: contract,
         snapshot: {
@@ -843,6 +1073,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           progress: 1,
           currentArmy: 0,
           crowdNodes: [],
+          activeMergeEvent: null,
           phase: 'DEFEAT',
         },
         captainSpeech: {
@@ -861,14 +1092,21 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       activeTrapHit: null,
       snapshot: {
         ...state.snapshot,
-        phase: state.save.settings.calmMode ? 'CALM_WAIT' : 'RUNNING',
+        phase:
+          state.snapshot.phase === 'TRAP_CINEMATIC'
+            ? state.save.settings.calmMode
+              ? 'CALM_WAIT'
+              : 'RUNNING'
+            : state.snapshot.phase,
       },
     })
   },
 
   openImmediateRedemptionFromTrap: () => {
     const state = get()
-    const latestToken = state.tokensInRun[state.tokensInRun.length - 1]
+    const latestToken =
+      [...state.tokensInRun].reverse().find((t) => !t.used) ??
+      state.tokensInRun[state.tokensInRun.length - 1]
     if (!latestToken) {
       get().dismissTrapAlertAndContinue()
       return
@@ -876,6 +1114,21 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     set({
       activeTrapHit: null,
       activeRedemptionTokenId: latestToken.id,
+      lastRedeemDiagnostic: null,
+      snapshot: {
+        ...state.snapshot,
+        phase: 'REDEMPTION_CHALLENGE',
+      },
+    })
+  },
+
+  openNextRedemptionModal: () => {
+    const state = get()
+    const nextToken = [...state.tokensInRun].reverse().find((t) => !t.used)
+    if (!nextToken) return
+    set({
+      activeTrapHit: null,
+      activeRedemptionTokenId: nextToken.id,
       lastRedeemDiagnostic: null,
       snapshot: {
         ...state.snapshot,

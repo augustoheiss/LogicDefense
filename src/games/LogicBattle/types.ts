@@ -278,6 +278,18 @@ export interface RunSnapshot {
   activeMergeEvent: MergeAnimationEvent | null
   inspectedSegmentId: string | null
   enemy: EnemySpec
+  /** Combo de Cálculo V3 (§2.2): escolhas ótimas seguidas (0, 1, 2, 3+) */
+  calcComboStreak?: number
+  /** Multiplicador de pontos/bônus do Combo de Cálculo (1, 1.5, 2, 3) */
+  calcComboMultiplier?: number
+  /** Fichas Douradas coletadas em Portões Dourados sem pausar (§2.2) */
+  goldenTokensCollected?: number
+  /** Moedas ganhas ao abater ondas de inimigos na ponte (§2.3) */
+  bridgeCoinsEarned?: number
+  /** Quantidade de inimigos abatidos durante a marcha na ponte (§2.3) */
+  bridgeKills?: number
+  /** Timestamp do último piscar vermelho diegético de pegadinha (§2.1) */
+  lastTrapFlashAtMs?: number | null
 }
 
 export interface BattleResolution {

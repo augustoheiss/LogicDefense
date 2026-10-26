@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/run/renderer/projectilePool.ts — Pool Fixo de 64 Projéteis por Tier
+// src/games/LogicBattle/run/renderer/projectilePool.ts — Pool Fixo de 40 Projéteis por Tier (§2.3)
 // ──────────────────────────────────────────────────────────────────────────────
 
 export type ProjectileKind = 'arrow' | 'spear' | 'cannon' | 'enemy_bolt'
@@ -29,7 +29,7 @@ export interface FloatingDamageText {
 }
 
 export class ProjectilePool {
-  private readonly maxProjectiles = 64
+  private readonly maxProjectiles = 40
   private pool: BattleProjectile[] = []
   private floatingDamages: FloatingDamageText[] = []
   private nextDamageId = 1
@@ -57,6 +57,14 @@ export class ProjectilePool {
       p.active = false
     }
     this.floatingDamages = []
+  }
+
+  public getActiveCount(): number {
+    let count = 0
+    for (const p of this.pool) {
+      if (p.active) count++
+    }
+    return count
   }
 
   public spawnProjectile(

@@ -2,7 +2,7 @@
 // src/games/LogicBattle/run/RunCanvas.tsx — Mundo 1: A Ponte dos Portões (Canvas 2D Full-Screen)
 // Fiel ao conceito: master-plan/conceitos/mundo1_ponte_conceito.jpg
 // ──────────────────────────────────────────────────────────────────────────────
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { soundEngine } from '../audio/soundEngine'
 import { BIOMES } from '../config/biomes'
 import { applyGateChain } from '../domain/armyMath'
@@ -18,7 +18,6 @@ import { ParticlePool } from './renderer/fxParticles'
 import { drawBridgeAndBackdrop, drawSegmentsOnBridge } from './renderer/gateRenderer'
 import { createBridgeProjection, projectBridgePoint } from './renderer/perspective'
 import { ProjectilePool } from './renderer/projectilePool'
-import { getActiveSegment } from './runSimulation'
 
 export const RunCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -29,12 +28,28 @@ export const RunCanvas: React.FC = () => {
   const battleRenderStateRef = useRef<FortressRenderState | undefined>(undefined)
   const lastBattlePerfRef = useRef<number | null>(null)
   const lastBattleDtRef = useRef<number>(16)
+  const battleAnimElapsedRef = useRef<number>(0)
+  const lastFramePerfRef = useRef<number | null>(null)
+  const marchVolleyTimerRef = useRef<number>(180)
+  const marchDamageTextTimerRef = useRef<number>(0)
   const lastFeedbackIdRef = useRef<string | null>(null)
-  const [battleTick, setBattleTick] = useState(0)
+  const drawFrameRef = useRef<() => void>(() => {})
 
   const world = useLogicBattleStore((s) => s.world)
-  const runPlan = useLogicBattleStore((s) => s.runPlan)
-  const snapshot = useLogicBattleStore((s) => s.snapshot)
+  const biomeId = useLogicBattleStore((s) => s.runPlan.biomeId)
+  const phase = useLogicBattleStore((s) => s.snapshot.phase)
+  const laneCount = useLogicBattleStore((s) => s.snapshot.laneCount)
+  const currentLane = useLogicBattleStore((s) => s.snapshot.currentLane)
+  const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
+  const inspectedSegmentId = useLogicBattleStore((s) => s.snapshot.inspectedSegmentId)
+  const activeMergeEvent = useLogicBattleStore((s) => s.snapshot.activeMergeEvent)
+  const activeSegment = useLogicBattleStore(
+    (s) => s.snapshot.segments[s.snapshot.activeSegmentIndex] ?? null,
+  )
+  const latestFeedback = useLogicBattleStore(
+    (s) => s.snapshot.recentFeedback[s.snapshot.recentFeedback.length - 1] ?? null,
+  )
+  const enemy = useLogicBattleStore((s) => s.snapshot.enemy)
   const battleResolution = useLogicBattleStore((s) => s.battleResolution)
   const settings = useLogicBattleStore((s) => s.save.settings)
   const lunetaCharges = useLogicBattleStore((s) => s.lunetaChargesRemaining)
@@ -43,53 +58,22 @@ export const RunCanvas: React.FC = () => {
   const updateBattleArmyVisual = useLogicBattleStore((s) => s.updateBattleArmyVisual)
   const finishBattle = useLogicBattleStore((s) => s.finishBattle)
 
-  useRunLoop(world === 'run' && snapshot.phase === 'RUNNING')
+  useRunLoop(world === 'run' && phase === 'RUNNING')
   useSteeringInput(canvasRef)
 
-  const activeSegment = getActiveSegment(snapshot)
-  const biome = BIOMES[runPlan.biomeId] ?? BIOMES.planicie_pedra
+  const biome = BIOMES[biomeId] ?? BIOMES.planicie_pedra
 
-  // Inicializar e animar o Combate Visível (Fase 'BATTLE') com delta-time real
-  useEffect(() => {
-    if (world !== 'run' || snapshot.phase !== 'BATTLE' || !battleResolution) {
-      battleRenderStateRef.current = undefined
-      lastBattlePerfRef.current = null
-      battleDirectorRef.current.stop(projectilePoolRef.current)
-      return
-    }
-
-    battleDirectorRef.current.start(
-      battleResolution,
-      snapshot.enemy,
-      settings.reducedMotion,
-      projectilePoolRef.current,
-    )
-    lastBattlePerfRef.current = performance.now()
-
-    let rafId = 0
-
-    const stepBattleFrame = (now: number) => {
-      if (lastBattlePerfRef.current !== null) {
-        lastBattleDtRef.current = Math.min(64, Math.max(4, now - lastBattlePerfRef.current))
-      }
-      lastBattlePerfRef.current = now
-      setBattleTick((v) => (v + 1) % 1000000)
-      rafId = window.requestAnimationFrame(stepBattleFrame)
-    }
-
-    rafId = window.requestAnimationFrame(stepBattleFrame)
-    return () => {
-      window.cancelAnimationFrame(rafId)
-      lastBattlePerfRef.current = null
-    }
-  }, [world, snapshot.phase, battleResolution, snapshot.enemy, settings.reducedMotion])
-
-  // Renderização principal do Canvas 2D
-  useEffect(() => {
+  // Função imperativa de desenho do Canvas 2D (zero re-render React por frame)
+  drawFrameRef.current = () => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    const liveState = useLogicBattleStore.getState()
+    const snap = liveState.snapshot
+    const cfg = liveState.save.settings
+    const liveBiome = BIOMES[liveState.runPlan.biomeId] ?? BIOMES.planicie_pedra
 
     const dpr = Math.min(2, window.devicePixelRatio || 1)
     const rect = canvas.getBoundingClientRect()
@@ -101,9 +85,16 @@ export const RunCanvas: React.FC = () => {
       canvas.height = logicalH * dpr
     }
 
+    const nowPerf = performance.now()
+    const frameDtMs =
+      lastFramePerfRef.current !== null
+        ? Math.min(64, Math.max(8, nowPerf - lastFramePerfRef.current))
+        : 16
+    lastFramePerfRef.current = nowPerf
+
     // Interpolação suave do movimento horizontal via RunEngine
-    runEngineRef.current.setTargetNormX(snapshot.laneX)
-    const smoothedLaneX = runEngineRef.current.stepSteering(16)
+    runEngineRef.current.setTargetNormX(snap.laneX)
+    const smoothedLaneX = runEngineRef.current.stepSteering(frameDtMs)
 
     ctx.save()
     ctx.scale(dpr, dpr)
@@ -113,53 +104,56 @@ export const RunCanvas: React.FC = () => {
     const fortressCoords = drawBridgeAndBackdrop(
       ctx,
       proj,
-      biome,
-      snapshot.laneCount,
-      snapshot.progress,
-      snapshot.enemy,
-      settings.notationMode,
+      liveBiome,
+      snap.laneCount,
+      snap.progress,
+      snap.enemy,
+      cfg.notationMode,
       battleRenderStateRef.current,
     )
 
     drawSegmentsOnBridge(
       ctx,
       proj,
-      snapshot.segments,
-      snapshot.resolvedSegments,
-      snapshot.progress,
-      snapshot.laneCount,
-      snapshot.currentArmy,
-      snapshot.inspectedSegmentId,
-      settings.notationMode,
+      snap.segments,
+      snap.resolvedSegments,
+      snap.progress,
+      snap.laneCount,
+      snap.currentArmy,
+      snap.inspectedSegmentId,
+      cfg.notationMode,
     )
+
+    const visualClockMs = snap.elapsedMs + battleAnimElapsedRef.current
 
     drawPlayerCrowd(
       ctx,
       proj,
-      snapshot.crowdNodes,
+      snap.crowdNodes,
       smoothedLaneX,
-      snapshot.currentArmy,
-      settings.notationMode,
-      snapshot.elapsedMs + battleTick * 16,
-      snapshot.activeMergeEvent,
-      settings.reducedMotion,
+      snap.currentArmy,
+      cfg.notationMode,
+      visualClockMs,
+      snap.activeMergeEvent,
+      cfg.reducedMotion,
     )
 
+    const playerCenter = projectBridgePoint(proj, smoothedLaneX * 0.34, 0.05)
+
     // Se estiver na fase BATTLE, atualiza projéteis, horda e chefe com delta-time real
-    if (snapshot.phase === 'BATTLE') {
-      const playerCenter = projectBridgePoint(proj, smoothedLaneX * 0.34, 0.05)
+    if (snap.phase === 'BATTLE') {
       const realDt = lastBattleDtRef.current
       battleRenderStateRef.current = battleDirectorRef.current.stepAndDraw(
         ctx,
         realDt,
         { x: playerCenter.x, y: playerCenter.y },
         fortressCoords,
-        snapshot.crowdNodes,
-        settings.notationMode,
-        settings.reducedMotion,
+        snap.crowdNodes,
+        cfg.notationMode,
+        cfg.reducedMotion,
         projectilePoolRef.current,
         particlePoolRef.current,
-        snapshot.elapsedMs + battleTick * 16,
+        visualClockMs,
         {
           onArmyUpdate: (newArmy, splitEvent) => {
             updateBattleArmyVisual(newArmy, splitEvent)
@@ -172,9 +166,92 @@ export const RunCanvas: React.FC = () => {
           },
         },
       )
+    } else if (snap.phase === 'RUNNING' || snap.phase === 'CALM_WAIT') {
+      // Tiro contínuo desde o começo da corrida (progress = 0 até 1) contra a Vanguarda Rubra e a Fortaleza
+      marchVolleyTimerRef.current += frameDtMs
+      marchDamageTextTimerRef.current += frameDtMs
+
+      // §2.3: Cadência de tiro escala logaritmicamente com currentArmy
+      const logScale = Math.log10(Math.max(2, snap.currentArmy))
+      const dynamicCadenceMs = Math.max(85, Math.round(210 - logScale * 38))
+      const volleyIntervalMs = cfg.reducedMotion ? 320 : dynamicCadenceMs
+      if (
+        marchVolleyTimerRef.current >= volleyIntervalMs ||
+        projectilePoolRef.current.getActiveCount() === 0
+      ) {
+        marchVolleyTimerRef.current = 0
+        const hasTitans = snap.crowdNodes.some((n) => n.tierIndex >= 2)
+        const hasCenturions = snap.crowdNodes.some((n) => n.tierIndex === 1)
+        const volleyCount = cfg.reducedMotion
+          ? 1
+          : Math.min(4, Math.max(1, Math.ceil(logScale * 1.35)))
+
+        for (let i = 0; i < volleyCount; i++) {
+          const kind =
+            hasTitans && i === 0
+              ? 'cannon'
+              : hasCenturions && i % 2 === 0
+                ? 'spear'
+                : 'arrow'
+          const sx = playerCenter.x + (i - (volleyCount - 1) * 0.5) * 18
+          const sy = playerCenter.y - 16
+
+          // Alterna disparos entre a Vanguarda Rubra na ponte (progress < 0.88) e a Horda/Fortaleza ao fundo
+          const aimVanguard = snap.progress < 0.88 && i % 2 === 0
+          const vanguardPt = projectBridgePoint(
+            proj,
+            (i - 1) * 0.22,
+            0.39 + (i % 2) * 0.03,
+          )
+          const tx = aimVanguard
+            ? vanguardPt.x
+            : fortressCoords.bossCenterX + (Math.random() - 0.5) * 68
+          const ty = aimVanguard
+            ? vanguardPt.y - 14
+            : fortressCoords.hordeCenterY + (Math.random() - 0.5) * 18
+
+          projectilePoolRef.current.spawnProjectile(
+            kind,
+            sx,
+            sy,
+            tx,
+            ty,
+            aimVanguard ? 240 : 340,
+          )
+        }
+      }
+
+      projectilePoolRef.current.updateAndDraw(
+        ctx,
+        frameDtMs,
+        (hitX, hitY, kind) => {
+          particlePoolRef.current.spawnBurst(
+            hitX,
+            hitY,
+            kind === 'cannon' ? '#facc15' : '#38bdf8',
+            4,
+            cfg.reducedMotion,
+          )
+          if (marchDamageTextTimerRef.current >= 380) {
+            marchDamageTextTimerRef.current = 0
+            const marchHitDmg = Math.max(1, Math.round(snap.currentArmy * 0.08))
+            projectilePoolRef.current.spawnDamageText(
+              hitX,
+              hitY - 8,
+              `-${formatArmy(marchHitDmg, cfg.notationMode)}`,
+              kind === 'cannon' ? '#facc15' : '#bae6fd',
+            )
+            liveState.recordBridgeEnemyKill(1)
+          }
+        },
+      )
     }
 
-    const latestFb = snapshot.recentFeedback[snapshot.recentFeedback.length - 1]
+    ;(
+      window as unknown as { __lbActiveProjectiles?: number }
+    ).__lbActiveProjectiles = projectilePoolRef.current.getActiveCount()
+
+    const latestFb = snap.recentFeedback[snap.recentFeedback.length - 1]
     if (latestFb && latestFb.id !== lastFeedbackIdRef.current) {
       lastFeedbackIdRef.current = latestFb.id
       const color =
@@ -185,42 +262,88 @@ export const RunCanvas: React.FC = () => {
             : '#34d399'
       particlePoolRef.current.spawnBurst(
         logicalW * 0.5,
-        logicalH * 0.72,
+        logicalH * 0.58,
         color,
-        16,
-        settings.reducedMotion,
+        14,
+        cfg.reducedMotion,
       )
     }
 
-    particlePoolRef.current.updateAndDraw(ctx, 16)
+    particlePoolRef.current.updateAndDraw(ctx, frameDtMs)
     ctx.restore()
-  }, [
-    biome,
-    settings.notationMode,
-    settings.reducedMotion,
-    snapshot,
-    battleTick,
-    updateBattleArmyVisual,
-    finishBattle,
-  ])
+  }
 
-  const latestFeedback = snapshot.recentFeedback[snapshot.recentFeedback.length - 1]
+  // Inicializar e animar o Combate Visível (Fase 'BATTLE') com delta-time real sem re-render React
+  useEffect(() => {
+    if (world !== 'run' || phase !== 'BATTLE' || !battleResolution) {
+      battleRenderStateRef.current = undefined
+      lastBattlePerfRef.current = null
+      battleAnimElapsedRef.current = 0
+      return
+    }
+
+    battleDirectorRef.current.start(
+      battleResolution,
+      enemy,
+      settings.reducedMotion,
+      projectilePoolRef.current,
+    )
+    lastBattlePerfRef.current = performance.now()
+    battleAnimElapsedRef.current = 0
+
+    let rafId = 0
+
+    const stepBattleFrame = (now: number) => {
+      if (lastBattlePerfRef.current !== null) {
+        const dt = Math.min(64, Math.max(4, now - lastBattlePerfRef.current))
+        lastBattleDtRef.current = dt
+        battleAnimElapsedRef.current += dt
+      }
+      lastBattlePerfRef.current = now
+      drawFrameRef.current()
+      rafId = window.requestAnimationFrame(stepBattleFrame)
+    }
+
+    rafId = window.requestAnimationFrame(stepBattleFrame)
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      lastBattlePerfRef.current = null
+      battleDirectorRef.current.stop(projectilePoolRef.current)
+    }
+  }, [world, phase, battleResolution, enemy, settings.reducedMotion])
+
+  // Assinatura imperativa na store para redesenhar o Canvas a 60 FPS com zero re-render React por frame
+  useEffect(() => {
+    drawFrameRef.current()
+    const unsubscribe = useLogicBattleStore.subscribe(() => {
+      if (useLogicBattleStore.getState().snapshot.phase !== 'BATTLE') {
+        drawFrameRef.current()
+      }
+    })
+    return unsubscribe
+  }, [])
+
+  // Redesenhar caso mudem configurações visuais ou bioma
+  useEffect(() => {
+    drawFrameRef.current()
+  }, [biome, settings.notationMode, settings.reducedMotion])
+
   const showVisibleTapPills = Boolean(settings.simpleTapMode)
   const lanesForTap =
     activeSegment?.lanes ??
-    Array.from({ length: snapshot.laneCount }, () => [])
+    Array.from({ length: laneCount }, () => [])
 
   return (
     <div
       className="lb-run-stage"
       data-testid="logic-battle-run-stage"
       onPointerDown={() => {
-        if (snapshot.phase === 'BATTLE') {
+        if (phase === 'BATTLE') {
           battleDirectorRef.current.setFastForward(true)
         }
       }}
       onPointerUp={() => {
-        if (snapshot.phase === 'BATTLE') {
+        if (phase === 'BATTLE') {
           battleDirectorRef.current.setFastForward(false)
         }
       }}
@@ -232,8 +355,8 @@ export const RunCanvas: React.FC = () => {
         aria-label="Ponte dos Portões Matemáticos — Deslize para guiar o exército"
       />
 
-      {/* Pop-up flutuante compacto de feedback (+99, Gêmeos, Vai-Um) */}
-      {latestFeedback && (
+      {/* Pop-up flutuante compacto de feedback (+99, Gêmeos, Vai-Um) — oculto durante BATTLE */}
+      {latestFeedback && phase !== 'BATTLE' && (
         <div
           key={latestFeedback.id}
           className={`lb-floating-feedback lb-tone-${latestFeedback.tone}`}
@@ -244,30 +367,34 @@ export const RunCanvas: React.FC = () => {
       )}
 
       {/* Pílula compacta de Fusão Vai-Um / Empresta-Um */}
-      {snapshot.activeMergeEvent &&
-        snapshot.elapsedMs - snapshot.activeMergeEvent.startedAtMs < 1800 && (
-          <div className="lb-vai-um-banner" data-testid="lb-vai-um-banner">
-            <strong>{snapshot.activeMergeEvent.formulaLabel}</strong>
-          </div>
-        )}
+      {activeMergeEvent && (
+        <div className="lb-vai-um-banner" data-testid="lb-vai-um-banner">
+          <strong>{activeMergeEvent.formulaLabel}</strong>
+        </div>
+      )}
 
       {/* Camada Tática Flutuante Minimalista (Luneta + Zonas de Toque nas Faixas) */}
-      <div className="lb-tactical-dock" data-testid="lb-tactical-dock">
+      <div
+        className="lb-tactical-dock"
+        data-testid="lb-tactical-dock"
+        style={phase === 'BATTLE' ? { pointerEvents: 'none', opacity: 0 } : undefined}
+      >
         <div
-          className={`lb-lane-choice-grid lb-lanes-${snapshot.laneCount} ${
+          className={`lb-lane-choice-grid lb-lanes-${laneCount} ${
             showVisibleTapPills ? 'is-visible-pills' : 'is-transparent-hitboxes'
           }`}
           data-testid="lb-lane-choice-grid"
+          style={phase === 'BATTLE' ? { pointerEvents: 'none' } : undefined}
         >
           {lanesForTap.map((laneGates, laneIdx) => {
             const primary = laneGates[0]
-            const isSelected = snapshot.currentLane === laneIdx
+            const isSelected = currentLane === laneIdx
             const isInspected =
               Boolean(activeSegment) &&
-              snapshot.inspectedSegmentId === activeSegment?.id
+              inspectedSegmentId === activeSegment?.id
             const previewVal =
               isInspected && activeSegment
-                ? applyGateChain(snapshot.currentArmy, laneGates)
+                ? applyGateChain(currentArmy, laneGates)
                 : null
 
             return (
@@ -306,7 +433,7 @@ export const RunCanvas: React.FC = () => {
           disabled={
             lunetaCharges <= 0 ||
             !activeSegment ||
-            snapshot.inspectedSegmentId === activeSegment.id
+            inspectedSegmentId === activeSegment.id
           }
           title="Luneta Tática (revela o resultado dos próximos portões)"
           aria-label="Usar Luneta Tática"

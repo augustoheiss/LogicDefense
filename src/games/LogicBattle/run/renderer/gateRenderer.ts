@@ -231,11 +231,15 @@ export function drawBridgeAndBackdrop(
   // 2. Ilhas costeiras nevadas e pinheiros 3D nas margens da ponte
   drawSideIslandsAndScenery(ctx, proj, biome, progress)
 
-  // 3. Trapézio da Ponte de Pedra (Paredes Laterais 3D, Lajes de Cantaria, Neve e Parapeitos)
+  // 3. Trapézio da Ponte de Pedra (termina exatamente na entrada da Fortaleza sem nunca vazar atrás dela)
+  const approach = battleState?.isBattlePhase
+    ? 1
+    : Math.max(0, (progress - 0.7) / 0.3)
+  const bridgeFarZ = Math.max(0.76, 0.86 - approach * 0.08)
   const nearLeft = projectBridgePoint(proj, -1, -0.26)
   const nearRight = projectBridgePoint(proj, 1, -0.26)
-  const farLeft = projectBridgePoint(proj, -1, 0.88)
-  const farRight = projectBridgePoint(proj, 1, 0.88)
+  const farLeft = projectBridgePoint(proj, -1, bridgeFarZ)
+  const farRight = projectBridgePoint(proj, 1, bridgeFarZ)
 
   ctx.save()
 
@@ -275,9 +279,9 @@ export function drawBridgeAndBackdrop(
   const tileOffset = (progress * 18) % 1
   const rowCount = 15
   for (let i = 0; i < rowCount; i++) {
-    const z0 = ((i + (1 - tileOffset)) / rowCount) * 0.88
-    const z1 = ((i + 1 + (1 - tileOffset)) / rowCount) * 0.88
-    if (z0 <= -0.1 || z0 >= 0.87) continue
+    const z0 = ((i + (1 - tileOffset)) / rowCount) * bridgeFarZ
+    const z1 = ((i + 1 + (1 - tileOffset)) / rowCount) * bridgeFarZ
+    if (z0 <= -0.1 || z0 >= bridgeFarZ - 0.01) continue
     const pL = projectBridgePoint(proj, -1, z0)
     const pR = projectBridgePoint(proj, 1, z0)
 
@@ -288,7 +292,7 @@ export function drawBridgeAndBackdrop(
     ctx.lineTo(pR.x, pR.y)
     ctx.stroke()
 
-    if (z1 <= 0.88) {
+    if (z1 <= bridgeFarZ) {
       const cols = 5
       const shift = (i % 2) * 0.18
       for (let c = 1; c < cols; c++) {
@@ -306,7 +310,7 @@ export function drawBridgeAndBackdrop(
 
   // Faixas de neve acumulada junto aos parapeitos internos (como em mundo1_ponte_conceito.jpg)
   const snowInLNear = projectBridgePoint(proj, -0.91, -0.26)
-  const snowInLFar = projectBridgePoint(proj, -0.88, 0.88)
+  const snowInLFar = projectBridgePoint(proj, -0.88, bridgeFarZ)
   ctx.fillStyle = 'rgba(241, 245, 249, 0.65)'
   ctx.beginPath()
   ctx.moveTo(nearLeft.x, nearLeft.y)
@@ -317,7 +321,7 @@ export function drawBridgeAndBackdrop(
   ctx.fill()
 
   const snowInRNear = projectBridgePoint(proj, 0.91, -0.26)
-  const snowInRFar = projectBridgePoint(proj, 0.88, 0.88)
+  const snowInRFar = projectBridgePoint(proj, 0.88, bridgeFarZ)
   ctx.beginPath()
   ctx.moveTo(nearRight.x, nearRight.y)
   ctx.lineTo(farRight.x, farRight.y)
@@ -351,7 +355,7 @@ export function drawBridgeAndBackdrop(
   ctx.setLineDash([8, 10])
   if (laneCount === 2) {
     const midNear = projectBridgePoint(proj, 0, -0.05)
-    const midFar = projectBridgePoint(proj, 0, 0.85)
+    const midFar = projectBridgePoint(proj, 0, bridgeFarZ - 0.02)
     ctx.beginPath()
     ctx.moveTo(midNear.x, midNear.y)
     ctx.lineTo(midFar.x, midFar.y)
@@ -359,7 +363,7 @@ export function drawBridgeAndBackdrop(
   } else {
     for (const divX of [-0.33, 0.33]) {
       const dNear = projectBridgePoint(proj, divX, -0.05)
-      const dFar = projectBridgePoint(proj, divX, 0.85)
+      const dFar = projectBridgePoint(proj, divX, bridgeFarZ - 0.02)
       ctx.beginPath()
       ctx.moveTo(dNear.x, dNear.y)
       ctx.lineTo(dFar.x, dFar.y)
@@ -368,6 +372,141 @@ export function drawBridgeAndBackdrop(
   }
   ctx.setLineDash([])
   ctx.restore()
+
+  // 3.5 Ondas na Ponte, Mini-Torres Laterais (25/40), Caixote Hazard (15), Mini-Boss (50%) e Moedas Douradas (fiel a engine_G_ponte_tiro_continuo_sem_pausa.jpg e engine_A_estrada_do_besteiro.jpg)
+  if (!battleState?.isBattlePhase && progress < 0.88) {
+    ctx.save()
+
+    // Mini-torres laterais nos parapeitos (HP 25 à esquerda, HP 40 à direita)
+    const sideTowers = [
+      { normX: -0.96, z: 0.34, hpLabel: '25', destroyedAt: 0.36 },
+      { normX: 0.96, z: 0.52, hpLabel: '40', destroyedAt: 0.62 },
+    ]
+    for (const st of sideTowers) {
+      if (progress >= st.destroyedAt) continue
+      const tp = projectBridgePoint(proj, st.normX, st.z)
+      const ts = Math.max(0.45, tp.scale)
+      ctx.fillStyle = '#475569'
+      ctx.strokeStyle = '#1e293b'
+      ctx.lineWidth = 1.8 * ts
+      ctx.beginPath()
+      ctx.roundRect(tp.x - 11 * ts, tp.y - 26 * ts, 22 * ts, 24 * ts, 3 * ts)
+      ctx.fill()
+      ctx.stroke()
+
+      // Ameia da mini-torre + badge de HP
+      ctx.fillStyle = '#dc2626'
+      ctx.beginPath()
+      ctx.roundRect(tp.x - 12 * ts, tp.y - 31 * ts, 24 * ts, 7 * ts, 2 * ts)
+      ctx.fill()
+
+      ctx.fillStyle = '#0f172a'
+      ctx.beginPath()
+      ctx.roundRect(tp.x - 11 * ts, tp.y - 43 * ts, 22 * ts, 11 * ts, 4 * ts)
+      ctx.fill()
+      ctx.fillStyle = '#fef08a'
+      ctx.font = `900 ${Math.max(9, Math.round(10 * ts))}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(st.hpLabel, tp.x, tp.y - 37.5 * ts)
+    }
+
+    // Caixote listrado amarelo-e-preto de obstáculo destrutível (HP 15)
+    if (progress < 0.55) {
+      const cp = projectBridgePoint(proj, -0.32, 0.28)
+      const cs = Math.max(0.48, cp.scale)
+      ctx.fillStyle = '#facc15'
+      ctx.strokeStyle = '#0f172a'
+      ctx.lineWidth = 2 * cs
+      ctx.beginPath()
+      ctx.roundRect(cp.x - 13 * cs, cp.y - 18 * cs, 26 * cs, 18 * cs, 3 * cs)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = '#0f172a'
+      ctx.fillRect(cp.x - 9 * cs, cp.y - 16 * cs, 4 * cs, 14 * cs)
+      ctx.fillRect(cp.x + 3 * cs, cp.y - 16 * cs, 4 * cs, 14 * cs)
+      ctx.fillStyle = '#ffffff'
+      ctx.font = `900 ${Math.max(9, Math.round(10 * cs))}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.fillText('15', cp.x, cp.y - 23 * cs)
+    }
+
+    // Moedas douradas dropadas na ponte conforme abates acontecem
+    const coinPositions = [
+      { normX: -0.18, z: 0.16 },
+      { normX: 0.16, z: 0.21 },
+      { normX: -0.05, z: 0.25 },
+    ]
+    for (const coin of coinPositions) {
+      const cp = projectBridgePoint(proj, coin.normX, coin.z)
+      const cs = Math.max(0.5, cp.scale)
+      ctx.fillStyle = '#facc15'
+      ctx.strokeStyle = '#b45309'
+      ctx.lineWidth = 1.5 * cs
+      ctx.beginPath()
+      ctx.arc(cp.x, cp.y - 4 * cs, 5.5 * cs, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+    }
+
+    // Esquadrões de Goblins / Vanguarda Rubra avançando na ponte (alvos vivos desde t = 0s, HP 12 e 30)
+    const isMidBossActive = progress >= 0.35 && progress <= 0.68
+    const vanguardOffsets = [
+      { normX: -0.34, z: 0.42, phase: 0, hpBadge: '12', isMiniBoss: false },
+      { normX: -0.11, z: 0.36, phase: 1.4, hpBadge: isMidBossActive ? '45' : '12', isMiniBoss: isMidBossActive },
+      { normX: 0.12, z: 0.39, phase: 2.7, hpBadge: '30', isMiniBoss: false },
+      { normX: 0.35, z: 0.43, phase: 4.1, hpBadge: '15', isMiniBoss: false },
+    ]
+    for (const v of vanguardOffsets) {
+      const bobZ = v.z + Math.sin(progress * 45 + v.phase) * 0.012
+      const vp = projectBridgePoint(proj, v.normX, bobZ)
+      const vs = Math.max(0.45, vp.scale * (v.isMiniBoss ? 1.28 : 0.95))
+      const bobY = Math.abs(Math.sin(progress * 52 + v.phase)) * 3.5 * vs
+
+      // Sombra no chão da ponte
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.42)'
+      ctx.beginPath()
+      ctx.ellipse(vp.x, vp.y + 3 * vs, 10 * vs, 4.5 * vs, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Corpo blindado rubro
+      ctx.fillStyle = v.isMiniBoss ? '#991b1b' : '#dc2626'
+      ctx.strokeStyle = '#450a0a'
+      ctx.lineWidth = 1.6 * vs
+      ctx.beginPath()
+      ctx.roundRect(vp.x - 7.5 * vs, vp.y - 16 * vs - bobY, 15 * vs, 15 * vs, 4 * vs)
+      ctx.fill()
+      ctx.stroke()
+
+      // Elmo rubro com chifres claros
+      ctx.fillStyle = '#ef4444'
+      ctx.beginPath()
+      ctx.arc(vp.x, vp.y - 19 * vs - bobY, 6.8 * vs, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+
+      ctx.strokeStyle = '#fef08a'
+      ctx.lineWidth = 1.8 * vs
+      ctx.beginPath()
+      ctx.moveTo(vp.x - 5 * vs, vp.y - 22 * vs - bobY)
+      ctx.lineTo(vp.x - 9 * vs, vp.y - 27 * vs - bobY)
+      ctx.moveTo(vp.x + 5 * vs, vp.y - 22 * vs - bobY)
+      ctx.lineTo(vp.x + 9 * vs, vp.y - 27 * vs - bobY)
+      ctx.stroke()
+
+      // Badge numérico de HP acima do esquadrão/mini-boss (12, 30, 45)
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.86)'
+      ctx.beginPath()
+      ctx.roundRect(vp.x - 10 * vs, vp.y - 38 * vs - bobY, 20 * vs, 10 * vs, 3 * vs)
+      ctx.fill()
+      ctx.fillStyle = v.isMiniBoss ? '#facc15' : '#ffffff'
+      ctx.font = `900 ${Math.max(8, Math.round(9 * vs))}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(v.hpBadge, vp.x, vp.y - 33 * vs - bobY)
+    }
+    ctx.restore()
+  }
 
   // 4. Fortaleza semicircular, Horda de soldados rubros, Chefe com chifres e Barra de Vida [💀 1,2k]
   return drawFortressAndBoss(ctx, proj, progress, enemy, notationMode, battleState)
@@ -507,6 +646,32 @@ export function drawSegmentsOnBridge(
       ctx.roundRect(x0, y0, gateW, gateH, Math.max(6, 8 * pt.scale))
       ctx.fill()
       ctx.stroke()
+
+      // §2.4 item 2: Telegrafia visual 1.5s antes (brilho/borda de alerta pulsante em portões de perda/divisão/pegadinha)
+      const isTrapLane = Boolean(seg.trapId && seg.intuitiveLane === laneIdx)
+      const isHazardGate =
+        isTrapLane ||
+        primaryGate.op === '÷' ||
+        primaryGate.op === '−' ||
+        primaryGate.op === '%−'
+      if (isHazardGate && !isRedemptionGate && relDepth <= 0.56) {
+        const pulse = 0.55 + 0.45 * Math.sin(progress * 85)
+        ctx.save()
+        ctx.strokeStyle = `rgba(255, 77, 77, ${(0.55 + pulse * 0.4).toFixed(2)})`
+        ctx.lineWidth = Math.max(3, 5.2 * pt.scale)
+        ctx.setLineDash([6 * pt.scale, 4 * pt.scale])
+        ctx.beginPath()
+        ctx.roundRect(
+          x0 - 3 * pt.scale,
+          y0 - 3 * pt.scale,
+          gateW + 6 * pt.scale,
+          gateH + 6 * pt.scale,
+          Math.max(8, 10 * pt.scale),
+        )
+        ctx.stroke()
+        ctx.setLineDash([])
+        ctx.restore()
+      }
 
       // Brilho diagonal vítreo no painel do portão
       ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
