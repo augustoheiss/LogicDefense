@@ -58,13 +58,13 @@ export function buildBattleTimeline(
 
   let durationMs: number
   if (opts?.reducedMotion) {
-    durationMs = 1000
+    durationMs = 1800
   } else if (resolution.outcome === 'VICTORY') {
-    const raw = (6000 * E) / Math.max(1, P)
-    durationMs = Math.round(Math.max(1500, Math.min(6000, raw)))
+    const raw = (7800 * E) / Math.max(1, P)
+    durationMs = Math.round(Math.max(4800, Math.min(9500, raw)))
   } else {
-    const raw = 3000 + (3000 * P) / E
-    durationMs = Math.round(Math.max(3000, Math.min(6000, raw)))
+    const raw = 5000 + (4200 * P) / E
+    durationMs = Math.round(Math.max(5000, Math.min(9500, raw)))
   }
 
   const cadenceVolleysPerSec = Math.max(

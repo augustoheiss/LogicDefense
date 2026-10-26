@@ -159,7 +159,11 @@ export interface LogicBattleStoreState {
   switchWorld: (world: 'run' | 'realm') => void
   selectEngine: (engineId: EngineId, startImmediately?: boolean) => void
   completeEngineRun: (result: EngineResult) => void
-  recordBridgeEnemyKill: (coinsDelta?: number) => void
+  recordBridgeEnemyKill: (
+    coinsDelta?: number,
+    damageDealt?: number,
+    playerAttritionLoss?: number,
+  ) => void
   toggleDebugMode: () => void
   toggleSettingsPopover: (open?: boolean) => void
   setActiveRealmSheet: (sheet: 'none' | 'region' | 'citadel') => void
@@ -279,15 +283,58 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     }
   },
 
-  recordBridgeEnemyKill: (coinsDelta = 2) => {
+  recordBridgeEnemyKill: (
+    coinsDelta = 2,
+    damageDealt = 1,
+    playerAttritionLoss = 0,
+  ) => {
     const state = get()
     const snap = state.snapshot
     if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
+
+    const safeDmg = Math.max(0, Math.round(damageDealt))
+    const hordeDmg = Math.min(snap.enemy.horde, Math.ceil(safeDmg * 0.65))
+    const nextHorde = Math.max(0, snap.enemy.horde - hordeDmg)
+    const minMarchBossHp = Math.max(
+      8,
+      Math.round(state.runPlan.enemy.bossHp * 0.42),
+    )
+    const bossOverflowDmg =
+      snap.progress >= 0.45 || nextHorde === 0
+        ? Math.max(0, safeDmg - hordeDmg)
+        : 0
+    const nextBossHp = Math.max(
+      minMarchBossHp,
+      snap.enemy.bossHp - bossOverflowDmg,
+    )
+    const nextTotalForce = nextHorde + nextBossHp
+
+    const minSafePlayerArmy = Math.max(2, Math.floor(state.runPlan.n0 * 0.4))
+    const nextPlayerArmy =
+      playerAttritionLoss > 0
+        ? Math.max(
+            minSafePlayerArmy,
+            clampArmy(snap.currentArmy - Math.round(playerAttritionLoss)),
+          )
+        : snap.currentArmy
+
     set({
       snapshot: {
         ...snap,
-        bridgeKills: (snap.bridgeKills ?? 0) + 1,
-        bridgeCoinsEarned: (snap.bridgeCoinsEarned ?? 0) + Math.max(1, coinsDelta),
+        currentArmy: nextPlayerArmy,
+        crowdNodes:
+          nextPlayerArmy !== snap.currentArmy
+            ? buildCrowdNodes(nextPlayerArmy)
+            : snap.crowdNodes,
+        enemy: {
+          ...snap.enemy,
+          horde: nextHorde,
+          bossHp: nextBossHp,
+          totalForce: nextTotalForce,
+        },
+        bridgeKills: (snap.bridgeKills ?? 0) + Math.max(1, safeDmg),
+        bridgeCoinsEarned:
+          (snap.bridgeCoinsEarned ?? 0) + Math.max(0, coinsDelta),
       },
     })
   },
@@ -557,8 +604,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const safeDt = Math.min(80, Math.max(0, dtMs))
     const nextElapsed = snapshot.elapsedMs + safeDt
 
-    // Velocidade da marcha: percorre 0 -> 1 em ~36 segundos de corrida fluida
-    const speedPerMs = 1 / 36000
+    // Velocidade da marcha: percorre 0 -> 1 em ~48 segundos de corrida tática contínua
+    const speedPerMs = 1 / 48000
     let nextProgress = Math.min(1, snapshot.progress + safeDt * speedPerMs)
 
     const activeSeg = snapshot.segments[snapshot.activeSegmentIndex]

@@ -112,6 +112,7 @@ export const RunCanvas: React.FC = () => {
       snap.enemy,
       cfg.notationMode,
       battleRenderStateRef.current,
+      snap.bridgeKills ?? 0,
     )
 
     drawSegmentsOnBridge(
@@ -198,7 +199,7 @@ export const RunCanvas: React.FC = () => {
           const sx = playerCenter.x + (i - (volleyCount - 1) * 0.5) * 18
           const sy = playerCenter.y - 16
 
-          // Alterna disparos entre a Vanguarda Rubra na ponte (progress < 0.88) e a Horda/Fortaleza ao fundo
+          // Alterna disparos entre a Vanguarda Rubra na ponte (progress < 0.88) e o Boss/Horda
           const aimVanguard = snap.progress < 0.88 && i % 2 === 0
           const vanguardPt = projectBridgePoint(
             proj,
@@ -207,10 +208,10 @@ export const RunCanvas: React.FC = () => {
           )
           const tx = aimVanguard
             ? vanguardPt.x
-            : fortressCoords.bossCenterX + (Math.random() - 0.5) * 68
+            : fortressCoords.bossCenterX + (Math.random() - 0.5) * 48
           const ty = aimVanguard
             ? vanguardPt.y - 14
-            : fortressCoords.hordeCenterY + (Math.random() - 0.5) * 18
+            : fortressCoords.bossCenterY + (Math.random() - 0.5) * 18
 
           projectilePoolRef.current.spawnProjectile(
             kind,
@@ -219,6 +220,23 @@ export const RunCanvas: React.FC = () => {
             tx,
             ty,
             aimVanguard ? 240 : 340,
+          )
+        }
+
+        // Contra-fogo inimigo na ponte (reduz lentamente o HP/exército do jogador se exposto)
+        if (snap.phase === 'RUNNING' && snap.enemy.totalForce > 0 && Math.random() < 0.42) {
+          const enemyOrigin = projectBridgePoint(
+            proj,
+            (Math.random() - 0.5) * 0.45,
+            0.38,
+          )
+          projectilePoolRef.current.spawnProjectile(
+            'enemy_bolt',
+            enemyOrigin.x,
+            enemyOrigin.y - 14,
+            playerCenter.x + (Math.random() - 0.5) * 24,
+            playerCenter.y - 10,
+            260,
           )
         }
       }
@@ -230,20 +248,36 @@ export const RunCanvas: React.FC = () => {
           particlePoolRef.current.spawnBurst(
             hitX,
             hitY,
-            kind === 'cannon' ? '#facc15' : '#38bdf8',
+            kind === 'enemy_bolt'
+              ? '#ef4444'
+              : kind === 'cannon'
+                ? '#facc15'
+                : '#38bdf8',
             4,
             cfg.reducedMotion,
           )
-          if (marchDamageTextTimerRef.current >= 380) {
+          if (kind === 'enemy_bolt') {
+            if (snap.phase === 'RUNNING' && marchDamageTextTimerRef.current >= 520) {
+              marchDamageTextTimerRef.current = 0
+              const attritionLoss = Math.max(1, Math.floor(snap.currentArmy * 0.015))
+              projectilePoolRef.current.spawnDamageText(
+                playerCenter.x,
+                playerCenter.y - 24,
+                `-${formatArmy(attritionLoss, cfg.notationMode)}`,
+                '#f87171',
+              )
+              liveState.recordBridgeEnemyKill(0, 0, attritionLoss)
+            }
+          } else if (marchDamageTextTimerRef.current >= 320) {
             marchDamageTextTimerRef.current = 0
-            const marchHitDmg = Math.max(1, Math.round(snap.currentArmy * 0.08))
+            const marchHitDmg = Math.max(1, Math.round(snap.currentArmy * 0.06))
             projectilePoolRef.current.spawnDamageText(
               hitX,
               hitY - 8,
               `-${formatArmy(marchHitDmg, cfg.notationMode)}`,
               kind === 'cannon' ? '#facc15' : '#bae6fd',
             )
-            liveState.recordBridgeEnemyKill(1)
+            liveState.recordBridgeEnemyKill(2, marchHitDmg, 0)
           }
         },
       )

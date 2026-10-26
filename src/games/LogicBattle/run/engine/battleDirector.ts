@@ -65,7 +65,7 @@ export class BattleDirector {
   }
 
   public setFastForward(fast: boolean): void {
-    this.speedMultiplier = fast ? 3 : 1
+    this.speedMultiplier = fast ? 4.5 : 1
   }
 
   public isFastForward(): boolean {

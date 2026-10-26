@@ -339,9 +339,15 @@ def run_suite() -> dict:
                 pos0 = page.evaluate("() => window.__lbHeroPos ? {...window.__lbHeroPos} : null")
                 if page.locator('[data-testid="lb-gate-choice-0"]').count() > 0:
                     page.click('[data-testid="lb-gate-choice-0"]')
+                if page.locator('[data-testid="lb-gate-choice-1"]').count() > 0 and eng_id != "serpente_numeros":
+                    page.click('[data-testid="lb-gate-choice-1"]')
                 pos1 = page.evaluate("() => window.__lbHeroPos ? {...window.__lbHeroPos} : null")
-                time.sleep(0.22)
+                time.sleep(0.45)
                 pos2 = page.evaluate("() => window.__lbHeroPos ? {...window.__lbHeroPos} : null")
+
+                eng_shot_v5 = os.path.join(evid_dir, f"v5_engine_{eng_id}_25d.png")
+                page.screenshot(path=eng_shot_v5)
+                results["screenshots"].append(eng_shot_v5)
                 if pos0 and pos1 and pos2:
                     step_delta = ((pos1["x"] - pos0["x"]) ** 2 + (pos1["y"] - pos0["y"]) ** 2) ** 0.5
                     max_allowed_instant_step = 1.8 if eng_id == "serpente_numeros" else 0.35

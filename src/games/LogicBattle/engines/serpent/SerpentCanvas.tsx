@@ -17,6 +17,11 @@ import {
   torusEuclidean,
   wrapCoord,
 } from './torusGrid'
+import {
+  getDragonSegmentSprite,
+  getPropSprite,
+  getUnitSprite,
+} from '../renderer/engineSpriteFactory'
 
 const CELL_PX = 44
 
@@ -407,7 +412,8 @@ export const SerpentCanvas: React.FC = () => {
             }
           }
 
-          // Desenhar Moedas Douradas nos corredores
+          // Desenhar Moedas Douradas 2.5D nos corredores
+          const coinSprite = getPropSprite('gold_coin')
           for (const coin of sim.coins) {
             if (coin.collected) continue
             const dx = torusDelta(camX, coin.x, SERPENT_GRID_SIZE)
@@ -415,17 +421,12 @@ export const SerpentCanvas: React.FC = () => {
             if (Math.abs(dx) > halfCols || Math.abs(dy) > halfRows) continue
             const sx = centerX + dx * CELL_PX
             const sy = centerY + dy * CELL_PX
-
-            ctx.fillStyle = '#facc15'
-            ctx.strokeStyle = '#854d0e'
-            ctx.lineWidth = 2
-            ctx.beginPath()
-            ctx.arc(sx, sy, 7, 0, Math.PI * 2)
-            ctx.fill()
-            ctx.stroke()
+            ctx.drawImage(coinSprite, sx - 12, sy - 12, 24, 24)
           }
 
-          // Desenhar Placas de Operação (×2, +5, ÷2, ²) no chão das passarelas
+          // Desenhar Pedestais Roxos de Armas/+Besteiros e Blocos de Pedra 2.5D (fiel ao Kingdom Guard!)
+          const pedestalSprite = getPropSprite('purple_pedestal')
+          const blockSprite = getPropSprite('granite_block')
           for (const pad of sim.pads) {
             if (pad.used) continue
             const dx = torusDelta(camX, pad.x, SERPENT_GRID_SIZE)
@@ -434,22 +435,29 @@ export const SerpentCanvas: React.FC = () => {
             const sx = centerX + dx * CELL_PX
             const sy = centerY + dy * CELL_PX
 
-            ctx.fillStyle = pad.isTrap ? '#9333ea' : '#e0f2fe'
-            ctx.strokeStyle = pad.isTrap ? '#f43f5e' : '#0284c7'
-            ctx.lineWidth = 2.5
-            ctx.beginPath()
-            ctx.roundRect(sx - 16, sy - 14, 32, 28, 7)
-            ctx.fill()
-            ctx.stroke()
+            const sprite = pad.isTrap ? blockSprite : pedestalSprite
+            ctx.drawImage(sprite, sx - 24, sy - 24, 48, 48)
 
-            ctx.fillStyle = pad.isTrap ? '#ffffff' : '#0369a1'
-            ctx.font = '900 13px Inter, system-ui, sans-serif'
+            // Ícone de upgrade no pedestal (🏹 +Besteiro / ⚡ Besta Rápida / 🪨 Bloco)
+            const iconTag = pad.isTrap
+              ? '🪨'
+              : pad.op === '×' || pad.op === '^2'
+                ? '🏹'
+                : '⚡'
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
+            ctx.beginPath()
+            ctx.roundRect(sx - 20, sy - 28, 40, 14, 4)
+            ctx.fill()
+
+            ctx.fillStyle = pad.isTrap ? '#fca5a5' : '#fef08a'
+            ctx.font = '900 10px Inter, system-ui, sans-serif'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
-            ctx.fillText(pad.label, sx, sy)
+            ctx.fillText(`${iconTag}${pad.label}`, sx, sy - 21)
           }
 
-          // Desenhar Barris de TNT Numerados (−12, −18)
+          // Desenhar Barris de TNT 2.5D Encadeados (−12, −18)
+          const tntSprite = getPropSprite('tnt_barrel')
           for (const tnt of sim.tnts) {
             if (tnt.exploded) continue
             const dx = torusDelta(camX, tnt.x, SERPENT_GRID_SIZE)
@@ -458,24 +466,14 @@ export const SerpentCanvas: React.FC = () => {
             const sx = centerX + dx * CELL_PX
             const sy = centerY + dy * CELL_PX
 
-            ctx.fillStyle = '#dc2626'
-            ctx.strokeStyle = '#fef08a'
-            ctx.lineWidth = 2
-            ctx.beginPath()
-            ctx.roundRect(sx - 14, sy - 16, 28, 30, 6)
-            ctx.fill()
-            ctx.stroke()
-
-            ctx.fillStyle = '#ffffff'
+            ctx.drawImage(tntSprite, sx - 20, sy - 22, 40, 40)
+            ctx.fillStyle = '#fef08a'
             ctx.font = '900 10px Inter, system-ui, sans-serif'
             ctx.textAlign = 'center'
-            ctx.fillText('TNT', sx, sy - 4)
-            ctx.fillStyle = '#fef08a'
-            ctx.font = '900 11px Inter, system-ui, sans-serif'
-            ctx.fillText(tnt.label, sx, sy + 8)
+            ctx.fillText(tnt.label, sx, sy + 18)
           }
 
-          // Desenhar a Serpente/Dragão Escamado Numerado perseguindo pelos corredores
+          // Desenhar a Serpente/Dragão 3D Escamado Numerado perseguindo pelos corredores
           const aliveSegs = sim.getAliveSegments()
           for (let i = aliveSegs.length - 1; i >= 0; i--) {
             const seg = aliveSegs[i]
@@ -486,114 +484,73 @@ export const SerpentCanvas: React.FC = () => {
             }
             const sx = centerX + dx * CELL_PX
             const sy = centerY + dy * CELL_PX
-            const radius = seg.isHead ? 20 : 16
+            const role = seg.isHead
+              ? 'head'
+              : seg.isGolden || i % 2 === 1
+                ? 'gold'
+                : i === aliveSegs.length - 1
+                  ? 'tail'
+                  : 'body'
+            const segSprite = getDragonSegmentSprite(role)
+            const drawSz = seg.isHead ? 58 : 46
 
             // Halo pulsante no Segmento-Alvo Dourado (§2.3)
             if (seg.isGolden) {
               ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)'
-              ctx.lineWidth = 4
+              ctx.lineWidth = 3.5
               ctx.beginPath()
-              ctx.arc(sx, sy, radius + 5, 0, Math.PI * 2)
+              ctx.arc(sx, sy, drawSz * 0.48, 0, Math.PI * 2)
               ctx.stroke()
             }
 
-            ctx.fillStyle = seg.isHead
-              ? '#dc2626'
-              : seg.isGolden || i % 2 === 1
-                ? '#eab308'
-                : '#ef4444'
-            ctx.strokeStyle = '#450a0a'
-            ctx.lineWidth = 2.5
-            ctx.beginPath()
-            ctx.arc(sx, sy, radius, 0, Math.PI * 2)
-            ctx.fill()
-            ctx.stroke()
+            ctx.drawImage(
+              segSprite,
+              sx - drawSz * 0.5,
+              sy - drawSz * 0.5,
+              drawSz,
+              drawSz,
+            )
 
-            // Chifres brancos e olhos amarelos na cabeça do dragão (como em engine_F_serpente_labirinto_infinito.jpg)
-            if (seg.isHead) {
-              ctx.fillStyle = '#f8fafc'
-              ctx.beginPath()
-              ctx.moveTo(sx - 10, sy - 14)
-              ctx.lineTo(sx - 18, sy - 26)
-              ctx.lineTo(sx - 4, sy - 18)
-              ctx.closePath()
-              ctx.fill()
-
-              ctx.beginPath()
-              ctx.moveTo(sx + 10, sy - 14)
-              ctx.lineTo(sx + 18, sy - 26)
-              ctx.lineTo(sx + 4, sy - 18)
-              ctx.closePath()
-              ctx.fill()
-
-              ctx.fillStyle = '#fef08a'
-              ctx.beginPath()
-              ctx.arc(sx - 6, sy - 5, 3, 0, Math.PI * 2)
-              ctx.arc(sx + 6, sy - 5, 3, 0, Math.PI * 2)
-              ctx.fill()
-            }
-
-            // Número do segmento com contorno forte
-            ctx.font = '900 14px Inter, system-ui, sans-serif'
+            // Número do segmento com contorno forte 3D
+            ctx.font = '900 13px Inter, system-ui, sans-serif'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
             ctx.strokeStyle = '#0f172a'
             ctx.lineWidth = 3.5
-            ctx.strokeText(String(seg.hp), sx, sy + (seg.isHead ? 6 : 1))
+            ctx.strokeText(String(seg.hp), sx, sy + (seg.isHead ? 5 : 1))
             ctx.fillStyle = '#ffffff'
-            ctx.fillText(String(seg.hp), sx, sy + (seg.isHead ? 6 : 1))
+            ctx.fillText(String(seg.hp), sx, sy + (seg.isHead ? 5 : 1))
           }
 
-          // Desenhar o Herói Besteiro Azul com Coroa Dourada e passos suaves no centro da câmera
-          const walkSwing = Math.sin(walkPhaseRef.current) * 5
+          // Desenhar o Esquadrão de Besteiros 2.5D + Herói Coroado no centro da câmera (fiel ao Kingdom Guard!)
+          const animTick = Math.floor(walkPhaseRef.current)
           const isInvulnBlink =
             sim.hero.invulnMs > 0 && Math.floor(sim.elapsedMs / 90) % 2 === 0
 
           ctx.save()
           if (isInvulnBlink) ctx.globalAlpha = 0.55
 
-          // Sombra e pés caminhando suavemente
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.45)'
-          ctx.beginPath()
-          ctx.ellipse(centerX, centerY + 12, 13, 6, 0, 0, Math.PI * 2)
-          ctx.fill()
+          // Besteiros aliados extras destravados conforme o poder da besta cresce nos Pedestais Roxos!
+          const extraArchers = Math.min(3, Math.floor(Math.max(0, sim.hero.arrowDamage - 2) / 3))
+          const archerSprite = getUnitSprite('allied_archer', animTick)
+          const squadOffsets = [
+            { ox: -22, oy: 12 },
+            { ox: 22, oy: 12 },
+            { ox: 0, oy: 22 },
+          ]
+          for (let a = 0; a < extraArchers; a++) {
+            const off = squadOffsets[a]
+            ctx.drawImage(
+              archerSprite,
+              centerX + off.ox - 22,
+              centerY + off.oy - 26,
+              44,
+              44,
+            )
+          }
 
-          ctx.fillStyle = '#1d4ed8'
-          ctx.beginPath()
-          ctx.arc(centerX - 5 + walkSwing * 0.6, centerY + 10, 4.5, 0, Math.PI * 2)
-          ctx.arc(centerX + 5 - walkSwing * 0.6, centerY + 10, 4.5, 0, Math.PI * 2)
-          ctx.fill()
-
-          // Corpo azul e cabeça do Besteiro Real
-          ctx.fillStyle = '#0284c7'
-          ctx.strokeStyle = '#e0f2fe'
-          ctx.lineWidth = 2
-          ctx.beginPath()
-          ctx.roundRect(centerX - 10, centerY - 6, 20, 16, 6)
-          ctx.fill()
-          ctx.stroke()
-
-          ctx.fillStyle = '#38bdf8'
-          ctx.beginPath()
-          ctx.arc(centerX, centerY - 12, 9, 0, Math.PI * 2)
-          ctx.fill()
-          ctx.stroke()
-
-          // Coroa Dourada Real
-          ctx.fillStyle = '#facc15'
-          ctx.strokeStyle = '#78350f'
-          ctx.lineWidth = 1.4
-          ctx.beginPath()
-          ctx.moveTo(centerX - 7, centerY - 19)
-          ctx.lineTo(centerX - 8, centerY - 26)
-          ctx.lineTo(centerX - 3, centerY - 22)
-          ctx.lineTo(centerX, centerY - 27)
-          ctx.lineTo(centerX + 3, centerY - 22)
-          ctx.lineTo(centerX + 8, centerY - 26)
-          ctx.lineTo(centerX + 7, centerY - 19)
-          ctx.closePath()
-          ctx.fill()
-          ctx.stroke()
+          const heroSprite = getUnitSprite('crowned_hero', animTick)
+          ctx.drawImage(heroSprite, centerX - 28, centerY - 32, 56, 56)
           ctx.restore()
 
           // Atualizar e desenhar projéteis e partículas
@@ -866,18 +823,27 @@ export const SerpentCanvas: React.FC = () => {
               data-testid="lb-lane-choice-grid"
               style={{ padding: '4px 6%' }}
             >
-              {nearbyPadsUi.map((pad, idx) => (
-                <button
-                  key={pad.id}
-                  type="button"
-                  data-testid={`lb-gate-choice-${idx}`}
-                  className={`lb-gate-choice-btn ${pad.isOptimal ? 'is-selected' : ''}`}
-                  style={{ height: '38px' }}
-                  onClick={() => handleWalkToPad(pad)}
-                >
-                  <strong className="lb-gate-choice-label">{pad.label}</strong>
-                </button>
-              ))}
+              {nearbyPadsUi.map((pad, idx) => {
+                const iconTag = pad.isTrap
+                  ? '🪨 Bloco '
+                  : pad.op === '×' || pad.op === '^2'
+                    ? '🏹 +Besteiro '
+                    : '⚡ Arma '
+                return (
+                  <button
+                    key={pad.id}
+                    type="button"
+                    data-testid={`lb-gate-choice-${idx}`}
+                    className={`lb-gate-choice-btn ${pad.isOptimal ? 'is-selected' : ''}`}
+                    style={{ height: '38px' }}
+                    onClick={() => handleWalkToPad(pad)}
+                  >
+                    <strong className="lb-gate-choice-label" style={{ fontSize: '11px' }}>
+                      {iconTag}({pad.label})
+                    </strong>
+                  </button>
+                )
+              })}
             </div>
           </div>
         </>

@@ -196,6 +196,7 @@ export function drawBridgeAndBackdrop(
   enemy: EnemySpec,
   notationMode: NotationMode,
   battleState?: FortressRenderState,
+  bridgeDamageDealt = 0,
 ): { bossCenterX: number; bossCenterY: number; hordeCenterY: number } {
   const { width, height } = proj
 
@@ -373,46 +374,17 @@ export function drawBridgeAndBackdrop(
   ctx.setLineDash([])
   ctx.restore()
 
-  // 3.5 Ondas na Ponte, Mini-Torres Laterais (25/40), Caixote Hazard (15), Mini-Boss (50%) e Moedas Douradas (fiel a engine_G_ponte_tiro_continuo_sem_pausa.jpg e engine_A_estrada_do_besteiro.jpg)
-  if (!battleState?.isBattlePhase && progress < 0.88) {
+  // 3.5 Ondas Vivas na Ponte: Mini-Torres Laterais, Caixote Hazard e Esquadrões Rubros com HP Real Decrescente!
+  if (!battleState?.isBattlePhase && progress < 0.90) {
     ctx.save()
-
-    // Mini-torres laterais nos parapeitos (HP 25 à esquerda, HP 40 à direita)
-    const sideTowers = [
-      { normX: -0.96, z: 0.34, hpLabel: '25', destroyedAt: 0.36 },
-      { normX: 0.96, z: 0.52, hpLabel: '40', destroyedAt: 0.62 },
-    ]
-    for (const st of sideTowers) {
-      if (progress >= st.destroyedAt) continue
-      const tp = projectBridgePoint(proj, st.normX, st.z)
-      const ts = Math.max(0.45, tp.scale)
-      ctx.fillStyle = '#475569'
-      ctx.strokeStyle = '#1e293b'
-      ctx.lineWidth = 1.8 * ts
-      ctx.beginPath()
-      ctx.roundRect(tp.x - 11 * ts, tp.y - 26 * ts, 22 * ts, 24 * ts, 3 * ts)
-      ctx.fill()
-      ctx.stroke()
-
-      // Ameia da mini-torre + badge de HP
-      ctx.fillStyle = '#dc2626'
-      ctx.beginPath()
-      ctx.roundRect(tp.x - 12 * ts, tp.y - 31 * ts, 24 * ts, 7 * ts, 2 * ts)
-      ctx.fill()
-
-      ctx.fillStyle = '#0f172a'
-      ctx.beginPath()
-      ctx.roundRect(tp.x - 11 * ts, tp.y - 43 * ts, 22 * ts, 11 * ts, 4 * ts)
-      ctx.fill()
-      ctx.fillStyle = '#fef08a'
-      ctx.font = `900 ${Math.max(9, Math.round(10 * ts))}px Inter, system-ui, sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(st.hpLabel, tp.x, tp.y - 37.5 * ts)
-    }
+    let remainingBridgeDmg = Math.max(0, Math.round(bridgeDamageDealt))
 
     // Caixote listrado amarelo-e-preto de obstáculo destrutível (HP 15)
-    if (progress < 0.55) {
+    const crateMaxHp = 15
+    const crateDmg = Math.min(crateMaxHp, remainingBridgeDmg)
+    remainingBridgeDmg = Math.max(0, remainingBridgeDmg - crateDmg)
+    const crateHp = crateMaxHp - crateDmg
+    if (crateHp > 0 && progress < 0.58) {
       const cp = projectBridgePoint(proj, -0.32, 0.28)
       const cs = Math.max(0.48, cp.scale)
       ctx.fillStyle = '#facc15'
@@ -428,7 +400,51 @@ export function drawBridgeAndBackdrop(
       ctx.fillStyle = '#ffffff'
       ctx.font = `900 ${Math.max(9, Math.round(10 * cs))}px Inter, system-ui, sans-serif`
       ctx.textAlign = 'center'
-      ctx.fillText('15', cp.x, cp.y - 23 * cs)
+      ctx.fillText(String(crateHp), cp.x, cp.y - 23 * cs)
+    }
+
+    // Mini-torres laterais nos parapeitos (HP 25 à esquerda, HP 40 à direita)
+    const sideTowers = [
+      { normX: -0.96, z: 0.34, maxHp: 25, destroyedAt: 0.48 },
+      { normX: 0.96, z: 0.52, maxHp: 40, destroyedAt: 0.72 },
+    ]
+    for (const st of sideTowers) {
+      const tDmg = Math.min(st.maxHp, remainingBridgeDmg)
+      remainingBridgeDmg = Math.max(0, remainingBridgeDmg - tDmg)
+      const tHp = st.maxHp - tDmg
+      if (tHp <= 0 || progress >= st.destroyedAt) continue
+      const tp = projectBridgePoint(proj, st.normX, st.z)
+      const ts = Math.max(0.45, tp.scale)
+      ctx.fillStyle = '#475569'
+      ctx.strokeStyle = '#1e293b'
+      ctx.lineWidth = 1.8 * ts
+      ctx.beginPath()
+      ctx.roundRect(tp.x - 11 * ts, tp.y - 26 * ts, 22 * ts, 24 * ts, 3 * ts)
+      ctx.fill()
+      ctx.stroke()
+
+      // Ameia da mini-torre + barra e badge de HP real
+      ctx.fillStyle = '#dc2626'
+      ctx.beginPath()
+      ctx.roundRect(tp.x - 12 * ts, tp.y - 31 * ts, 24 * ts, 7 * ts, 2 * ts)
+      ctx.fill()
+
+      ctx.fillStyle = '#0f172a'
+      ctx.beginPath()
+      ctx.roundRect(tp.x - 12 * ts, tp.y - 44 * ts, 24 * ts, 12 * ts, 4 * ts)
+      ctx.fill()
+      ctx.fillStyle = '#ef4444'
+      ctx.fillRect(
+        tp.x - 10 * ts,
+        tp.y - 42 * ts,
+        Math.max(2, 20 * ts * (tHp / st.maxHp)),
+        8 * ts,
+      )
+      ctx.fillStyle = '#fef08a'
+      ctx.font = `900 ${Math.max(9, Math.round(10 * ts))}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(String(tHp), tp.x, tp.y - 38 * ts)
     }
 
     // Moedas douradas dropadas na ponte conforme abates acontecem
@@ -436,6 +452,7 @@ export function drawBridgeAndBackdrop(
       { normX: -0.18, z: 0.16 },
       { normX: 0.16, z: 0.21 },
       { normX: -0.05, z: 0.25 },
+      ...(crateHp <= 0 ? [{ normX: -0.30, z: 0.26 }] : []),
     ]
     for (const coin of coinPositions) {
       const cp = projectBridgePoint(proj, coin.normX, coin.z)
@@ -449,18 +466,36 @@ export function drawBridgeAndBackdrop(
       ctx.stroke()
     }
 
-    // Esquadrões de Goblins / Vanguarda Rubra avançando na ponte (alvos vivos desde t = 0s, HP 12 e 30)
-    const isMidBossActive = progress >= 0.35 && progress <= 0.68
-    const vanguardOffsets = [
-      { normX: -0.34, z: 0.42, phase: 0, hpBadge: '12', isMiniBoss: false },
-      { normX: -0.11, z: 0.36, phase: 1.4, hpBadge: isMidBossActive ? '45' : '12', isMiniBoss: isMidBossActive },
-      { normX: 0.12, z: 0.39, phase: 2.7, hpBadge: '30', isMiniBoss: false },
-      { normX: 0.35, z: 0.43, phase: 4.1, hpBadge: '15', isMiniBoss: false },
+    // Esquadrões de Goblins / Vanguarda Rubra marchando na ponte com HP real que diminui a cada tiro!
+    // Em múltiplas ondas ao longo da ponte (cicla caso a onda anterior seja abatida)
+    const baseScale = Math.max(1, Math.round(enemy.horde / 35))
+    const isMidBossActive = progress >= 0.30 && progress <= 0.78
+    const vanguardSpecs = [
+      { normX: -0.34, z: 0.42, phase: 0, maxHp: 14 * baseScale, isMiniBoss: false },
+      {
+        normX: -0.11,
+        z: 0.36,
+        phase: 1.4,
+        maxHp: (isMidBossActive ? 45 : 18) * baseScale,
+        isMiniBoss: isMidBossActive,
+      },
+      { normX: 0.12, z: 0.39, phase: 2.7, maxHp: 28 * baseScale, isMiniBoss: false },
+      { normX: 0.35, z: 0.43, phase: 4.1, maxHp: 16 * baseScale, isMiniBoss: false },
     ]
-    for (const v of vanguardOffsets) {
-      const bobZ = v.z + Math.sin(progress * 45 + v.phase) * 0.012
+    const totalWaveHp = vanguardSpecs.reduce((acc, s) => acc + s.maxHp, 0)
+    let waveDmg = remainingBridgeDmg % Math.max(1, totalWaveHp)
+
+    for (const v of vanguardSpecs) {
+      const unitDmg = Math.min(v.maxHp - 1, waveDmg)
+      waveDmg = Math.max(0, waveDmg - unitDmg)
+      const currentHp = Math.max(1, v.maxHp - unitDmg)
+      const hpRatio = currentHp / v.maxHp
+
+      // Os inimigos também caminham em direção ao jogador na ponte
+      const marchTowardsPlayer = ((progress * 2.8 + v.phase * 0.15) % 0.16)
+      const bobZ = Math.max(0.22, v.z - marchTowardsPlayer + Math.sin(progress * 45 + v.phase) * 0.01)
       const vp = projectBridgePoint(proj, v.normX, bobZ)
-      const vs = Math.max(0.45, vp.scale * (v.isMiniBoss ? 1.28 : 0.95))
+      const vs = Math.max(0.45, vp.scale * (v.isMiniBoss ? 1.32 : 0.98))
       const bobY = Math.abs(Math.sin(progress * 52 + v.phase)) * 3.5 * vs
 
       // Sombra no chão da ponte
@@ -494,16 +529,36 @@ export function drawBridgeAndBackdrop(
       ctx.lineTo(vp.x + 9 * vs, vp.y - 27 * vs - bobY)
       ctx.stroke()
 
-      // Badge numérico de HP acima do esquadrão/mini-boss (12, 30, 45)
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.86)'
+      // Barra + Badge numérico de HP vivo acima do esquadrão/mini-boss
+      const badgeW = 24 * vs
+      const badgeH = 11 * vs
+      const bx = vp.x - badgeW * 0.5
+      const by = vp.y - 39 * vs - bobY
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
       ctx.beginPath()
-      ctx.roundRect(vp.x - 10 * vs, vp.y - 38 * vs - bobY, 20 * vs, 10 * vs, 3 * vs)
+      ctx.roundRect(bx, by, badgeW, badgeH, 3 * vs)
       ctx.fill()
-      ctx.fillStyle = v.isMiniBoss ? '#facc15' : '#ffffff'
+
+      ctx.fillStyle = v.isMiniBoss ? '#f59e0b' : '#ef4444'
+      ctx.beginPath()
+      ctx.roundRect(
+        bx + 1.5 * vs,
+        by + 1.5 * vs,
+        Math.max(2 * vs, (badgeW - 3 * vs) * hpRatio),
+        badgeH - 3 * vs,
+        2 * vs,
+      )
+      ctx.fill()
+
+      ctx.fillStyle = '#ffffff'
       ctx.font = `900 ${Math.max(8, Math.round(9 * vs))}px Inter, system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(v.hpBadge, vp.x, vp.y - 33 * vs - bobY)
+      ctx.fillText(
+        formatArmy(currentHp, notationMode),
+        vp.x,
+        by + badgeH * 0.52,
+      )
     }
     ctx.restore()
   }

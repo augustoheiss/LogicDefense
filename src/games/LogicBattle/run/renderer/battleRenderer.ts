@@ -297,18 +297,31 @@ export function drawFortressAndBoss(
     }
   }
 
-  // 4. Chefe Gigante de Armadura Rubra com Chifres e Espada Flamejante (Proporção Heroica 1,45x)
-  const bs = s * 1.44
-  if (bossLeft > 0 || enemyTotalLeft > 0) {
-    const bossBob = Math.sin(elapsedMs * 0.007) * 2.2 * s
-    const bossY = baseY + 7 * s + bossBob
+  // 4. Chefe Gigante de Armadura Rubra com Chifres e Espada Flamejante — CAMINHA PELA PONTE ATÉ O JOGADOR!
+  const battleWalkRatio = battleState?.isBattlePhase
+    ? Math.max(0, Math.min(1, battleState.elapsedMs / 5200))
+    : 0
+  const marchWalkRatio = Math.max(0, Math.min(1, (progress - 0.42) / 0.58))
+  const bossWalkZ = battleState?.isBattlePhase
+    ? 0.56 - battleWalkRatio * 0.32
+    : 0.80 - marchWalkRatio * 0.24
+  const bossPt = projectBridgePoint(proj, 0, bossWalkZ)
+  const bs = Math.max(0.65, bossPt.scale * 1.48)
+  const walkClock = elapsedMs > 0 ? elapsedMs : progress * 48000
+  const isBossWalking = progress >= 0.42 || Boolean(battleState?.isBattlePhase)
+  const walkStride = isBossWalking ? Math.sin(walkClock * 0.013) * 6.5 * bs : 0
+  const bossAnchorY = bossPt.y + 8 * bs
 
-    // Círculo de ameaça rubro brilhante no chão sob o Chefe
+  if (bossLeft > 0 || enemyTotalLeft > 0) {
+    const bossBob = Math.abs(Math.sin(walkClock * 0.013)) * 3.2 * bs
+    const bossY = bossAnchorY - bossBob
+
+    // Círculo de ameaça rubro brilhante no chão sob o Chefe Caminhante
     ctx.fillStyle = 'rgba(239, 68, 68, 0.36)'
     ctx.strokeStyle = '#f87171'
-    ctx.lineWidth = 2.2 * s
+    ctx.lineWidth = 2.2 * bs
     ctx.beginPath()
-    ctx.ellipse(cx, baseY + 7 * s, 33 * s, 12 * s, 0, 0, Math.PI * 2)
+    ctx.ellipse(cx, bossAnchorY, 30 * bs, 11 * bs, 0, 0, Math.PI * 2)
     ctx.fill()
     ctx.stroke()
 
@@ -322,13 +335,13 @@ export function drawFortressAndBoss(
     ctx.closePath()
     ctx.fill()
 
-    // Pernas couraçadas pesadas com joelheiras
+    // Pernas couraçadas pesadas com passo de caminhada real (walkStride)
     ctx.fillStyle = '#7f1d1d'
     ctx.strokeStyle = '#2a0404'
-    ctx.lineWidth = 2 * s
+    ctx.lineWidth = 2 * bs
     ctx.beginPath()
-    ctx.roundRect(cx - 14.5 * bs, bossY - 18 * bs, 11.5 * bs, 18 * bs, 4 * s)
-    ctx.roundRect(cx + 3 * bs, bossY - 18 * bs, 11.5 * bs, 18 * bs, 4 * s)
+    ctx.roundRect(cx - 14.5 * bs, bossY - 18 * bs + walkStride * 0.5, 11.5 * bs, 18 * bs, 4 * bs)
+    ctx.roundRect(cx + 3 * bs, bossY - 18 * bs - walkStride * 0.5, 11.5 * bs, 18 * bs, 4 * bs)
     ctx.fill()
     ctx.stroke()
 
@@ -457,6 +470,46 @@ export function drawFortressAndBoss(
     ctx.lineTo(-4 * bs, 2 * bs)
     ctx.stroke()
     ctx.restore()
+
+    // Barra de HP individual do Boss Caminhante logo acima de seus chifres (quando avançando na ponte)
+    if (isBossWalking && enemy.bossHp > 0) {
+      const bBarW = Math.max(82, 92 * bs)
+      const bBarH = Math.max(14, 15 * bs)
+      const bBarX = cx - bBarW / 2
+      const bBarY = bossY - 88 * bs
+      const bossHpRatio = Math.max(0, Math.min(1, bossLeft / Math.max(1, enemy.bossHp)))
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)'
+      ctx.strokeStyle = '#facc15'
+      ctx.lineWidth = 1.8 * bs
+      ctx.beginPath()
+      ctx.roundRect(bBarX, bBarY, bBarW, bBarH, 5 * bs)
+      ctx.fill()
+      ctx.stroke()
+
+      if (bossHpRatio > 0) {
+        ctx.fillStyle = '#dc2626'
+        ctx.beginPath()
+        ctx.roundRect(
+          bBarX + 2 * bs,
+          bBarY + 2 * bs,
+          Math.max(4 * bs, (bBarW - 4 * bs) * bossHpRatio),
+          bBarH - 4 * bs,
+          3.5 * bs,
+        )
+        ctx.fill()
+      }
+
+      ctx.fillStyle = '#fef08a'
+      ctx.font = `900 ${Math.max(9, Math.round(10.5 * bs))}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(
+        `👑 BOSS ${formatArmy(bossLeft, notationMode)}`,
+        cx,
+        bBarY + bBarH * 0.52,
+      )
+    }
   }
 
   // 5. Barra de Vida do Chefe proporcional e destacada ACIMA dos chifres e estandartes (idêntica a mundo1_ponte_conceito.jpg: [💀 1,2k])
@@ -536,7 +589,7 @@ export function drawFortressAndBoss(
 
   return {
     bossCenterX: cx,
-    bossCenterY: baseY - 38 * s,
+    bossCenterY: bossAnchorY - 34 * bs,
     hordeCenterY: baseY - 16 * s,
   }
 }
