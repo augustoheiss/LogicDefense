@@ -42,6 +42,7 @@ import {
   formatRouteDuration,
   resolveTerritoryNameFromNodes,
   updateSingleNodeInCleanRegistry,
+  transferAddressesBetweenTerritories,
   formatShareAddressLocationText,
   formatShareTerritoryOrQuadraLocationsText,
 } from '@sekundo/core';
@@ -133,6 +134,7 @@ export default function TerritoryChecklistScreen() {
   const [manageTargetTerritory, setManageTargetTerritory] = useState<string | undefined>(undefined);
   const [manageTargetGroupKey, setManageTargetGroupKey] = useState<string | undefined>(undefined);
   const [manageTargetGroupLabel, setManageTargetGroupLabel] = useState<string | undefined>(undefined);
+  const [manageTargetAddressKey, setManageTargetAddressKey] = useState<string | undefined>(undefined);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [quickShareOpen, setQuickShareOpen] = useState<boolean>(false);
   const [quickShareTerritories, setQuickShareTerritories] = useState<string[]>([]);
@@ -141,12 +143,14 @@ export default function TerritoryChecklistScreen() {
     tab: TerritoryManageTab,
     targetTerr?: string,
     groupKey?: string,
-    groupLabel?: string
+    groupLabel?: string,
+    addressKey?: string
   ) => {
     setManageModalTab(tab);
     setManageTargetTerritory(targetTerr || focusTerritory || undefined);
     setManageTargetGroupKey(groupKey);
     setManageTargetGroupLabel(groupLabel);
+    setManageTargetAddressKey(addressKey);
     setManageModalOpen(true);
   };
 
@@ -683,6 +687,17 @@ export default function TerritoryChecklistScreen() {
               accessibilityLabel="Alterar Nome e Número de Território"
             >
               <Text style={[styles.mapLinkBtnText, { color: '#FFB800' }]}>✏️ Nome / Nº</Text>
+            </Pressable>
+            <Pressable
+              testID="checklist-transfer-addresses-btn"
+              onPress={() => openTerritoryManager('transfer_addresses')}
+              style={[
+                styles.mapLinkBtn,
+                { borderColor: '#C084FC', backgroundColor: 'rgba(192, 132, 252, 0.16)' },
+              ]}
+              accessibilityLabel="Transferir Endereço ou Território"
+            >
+              <Text style={[styles.mapLinkBtnText, { color: '#C084FC' }]}>🔀 Transferir</Text>
             </Pressable>
             <Pressable
               testID="checklist-export-csv-btn"
@@ -1246,6 +1261,14 @@ export default function TerritoryChecklistScreen() {
                 mapOpen={isMapOpenForSection}
                 onToggle={() => toggleExpanded(`T:${section.territory}`)}
                 onEditTerritory={() => openTerritoryManager('edit', section.territory)}
+                onTransferTerritory={() =>
+                  openTerritoryManager(
+                    'transfer_addresses',
+                    section.territory,
+                    section.groups[0]?.groupKey,
+                    section.groups[0]?.groupLabel
+                  )
+                }
                 onAddAddress={() =>
                   openTerritoryManager(
                     'new_address',
@@ -1351,6 +1374,28 @@ export default function TerritoryChecklistScreen() {
                   >
                     <Text style={[styles.inlineGmapsChipText, { color: '#34D399', fontWeight: '800' }]}>
                       ➕ Endereço
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`checklist-group-transfer-${group.groupKey}`}
+                    onPress={() =>
+                      openTerritoryManager(
+                        'transfer_addresses',
+                        section.territory,
+                        group.groupKey,
+                        group.groupLabel
+                      )
+                    }
+                    style={[
+                      styles.inlineGmapsChip,
+                      {
+                        backgroundColor: 'rgba(192, 132, 252, 0.16)',
+                        borderColor: 'rgba(192, 132, 252, 0.45)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.inlineGmapsChipText, { color: '#C084FC', fontWeight: '800' }]}>
+                      🔀 Transferir
                     </Text>
                   </Pressable>
                   <Pressable
@@ -1736,6 +1781,30 @@ export default function TerritoryChecklistScreen() {
                               📲 Compartilhar Local
                             </Text>
                           </Pressable>
+
+                          <Pressable
+                            testID={`checklist-item-transfer-${item.key}`}
+                            onPress={() =>
+                              openTerritoryManager(
+                                'transfer_addresses',
+                                section.territory,
+                                group.groupKey,
+                                group.groupLabel,
+                                item.key
+                              )
+                            }
+                            style={[
+                              styles.inlineGmapsChip,
+                              {
+                                backgroundColor: 'rgba(192, 132, 252, 0.16)',
+                                borderColor: 'rgba(192, 132, 252, 0.45)',
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.inlineGmapsChipText, { color: '#C084FC', fontWeight: '800' }]}>
+                              🔀 Transferir Endereço
+                            </Text>
+                          </Pressable>
                         </View>
                       </View>
 
@@ -1763,6 +1832,30 @@ export default function TerritoryChecklistScreen() {
                           {...({ title: 'Abrir no Google Maps / Traçar Rota' } as any)}
                         >
                           <Text style={styles.editAddressBtnText}>🗺️</Text>
+                        </Pressable>
+
+                        <Pressable
+                          testID={`checklist-item-transfer-icon-${item.key}`}
+                          onPress={() =>
+                            openTerritoryManager(
+                              'transfer_addresses',
+                              section.territory,
+                              group.groupKey,
+                              group.groupLabel,
+                              item.key
+                            )
+                          }
+                          style={[
+                            styles.editAddressBtn,
+                            {
+                              borderColor: 'rgba(192, 132, 252, 0.45)',
+                              backgroundColor: 'rgba(192, 132, 252, 0.14)',
+                            },
+                          ]}
+                          accessibilityLabel="Transferir Endereço para Outro Território"
+                          {...({ title: 'Transferir Endereço para Outro Território' } as any)}
+                        >
+                          <Text style={[styles.editAddressBtnText, { color: '#C084FC' }]}>🔀</Text>
                         </Pressable>
 
                         <Pressable
@@ -1803,10 +1896,29 @@ export default function TerritoryChecklistScreen() {
         item={editingAddressItem}
         onClose={() => setEditingAddressItem(null)}
         onSave={async (key, updates) => {
-          const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
-          await commitTerritoryNodes(nextClean, {
-            activeTerritoryNumber: updates.meta?.territory_number || undefined,
-            message: '✓ Endereço atualizado e salvo na memória!',
+          const prevNode = flatRegistry.find((n) => pathKey.equals(n.key, key));
+          const prevTerr = prevNode ? resolveTerritoryNumber(prevNode) : '';
+          const updatedNodes = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
+          const nextTerr = String(updates.meta?.territory_number || '').trim();
+          let finalClean = updatedNodes;
+          let toastMsg = '✓ Endereço atualizado e salvo na memória!';
+          if (nextTerr && prevTerr && nextTerr.toUpperCase() !== prevTerr.toUpperCase()) {
+            const transferred = transferAddressesBetweenTerritories(updatedNodes, {
+              sourceTerritoryNumber: prevTerr,
+              destinationTerritoryNumber: nextTerr,
+              destinationTerritoryName: updates.meta?.territory_name
+                ? String(updates.meta.territory_name)
+                : undefined,
+              mode: 'single',
+              addressKeys: [key],
+              emptySourcePolicy: 'keep_header',
+            });
+            finalClean = transferred.cleanNodes;
+            toastMsg = `🔀 Endereço transferido de ${prevTerr} → ${transferred.destinationTerritoryNumber} e salvo!`;
+          }
+          await commitTerritoryNodes(finalClean, {
+            activeTerritoryNumber: nextTerr || undefined,
+            message: toastMsg,
           });
         }}
       />
@@ -1818,6 +1930,7 @@ export default function TerritoryChecklistScreen() {
         targetTerritoryNumber={manageTargetTerritory}
         targetGroupKey={manageTargetGroupKey}
         targetGroupLabel={manageTargetGroupLabel}
+        targetAddressKey={manageTargetAddressKey}
         cleanNodes={flatRegistry}
         onClose={() => setManageModalOpen(false)}
         onCommitNodes={commitTerritoryNodes}
@@ -1928,6 +2041,7 @@ const styles = StyleSheet.create({
     color: '#60A5FA',
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   title: {
     color: '#FFFFFF',
@@ -2115,6 +2229,7 @@ const styles = StyleSheet.create({
   batchToggleBtn: {
     minHeight: 44,
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
@@ -2133,6 +2248,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   sortRow: {
     flexDirection: 'row',
@@ -2372,13 +2488,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 6,
-    paddingVertical: 4,
+    paddingVertical: 5,
     paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editAddressBtnText: {
     color: '#E2E8F0',
     fontSize: 11,
     fontWeight: '600',
+    textAlign: 'center',
   },
   addNoteBtn: {
     padding: 6,
@@ -2486,6 +2605,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inlineMapToolBtnActive: {
     backgroundColor: 'rgba(56, 189, 248, 0.22)',
@@ -2495,6 +2616,7 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   inlineMapToolBtnTextActive: {
     color: '#38BDF8',
@@ -2524,24 +2646,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.18)',
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inlineRouteClearText: {
     color: '#FCA5A5',
     fontSize: 10,
     fontWeight: '800',
+    textAlign: 'center',
   },
   inlineGmapsChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 7,
     backgroundColor: 'rgba(59, 130, 246, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(96, 165, 250, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inlineGmapsChipText: {
     color: '#93C5FD',
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   openedTerritoryActionRow: {
     flexDirection: 'row',
@@ -2557,12 +2685,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(56, 189, 248, 0.28)',
   },
   openedTerritoryActionBtn: {
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: 'rgba(56, 189, 248, 0.2)',
     borderWidth: 1,
     borderColor: '#38BDF8',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   openedTerritoryActionBtnActive: {
     backgroundColor: 'rgba(56, 189, 248, 0.35)',
@@ -2571,6 +2701,7 @@ const styles = StyleSheet.create({
     color: '#E0F2FE',
     fontSize: 11,
     fontWeight: '800',
+    textAlign: 'center',
   },
   itemQuickGmapsRow: {
     flexDirection: 'row',

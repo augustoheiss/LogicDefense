@@ -15,6 +15,7 @@ import {
   Modal,
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
@@ -129,6 +130,7 @@ export function QuickShareSheet({
   const [selectedTerritoryNums, setSelectedTerritoryNums] = useState<string[]>(
     initialSelectedTerritoryNumbers
   );
+  const [territoryFilterQuery, setTerritoryFilterQuery] = useState<string>('');
   const [selectedWeekDates, setSelectedWeekDates] = useState<string[]>([]);
   const [accessMode, setAccessMode] = useState<ShareAccessMode>('edit');
   const [includeNotes, setIncludeNotes] = useState<boolean>(false);
@@ -137,9 +139,36 @@ export function QuickShareSheet({
   const [relayStatus, setRelayStatus] = useState<'idle' | 'uploaded' | 'local_only'>('idle');
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
 
+  const filteredTerritorySummaries = useMemo(() => {
+    const q = (territoryFilterQuery || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    if (!q) return territorySummaries;
+    return territorySummaries.filter((t) => {
+      const hay = [
+        t.territoryNumber,
+        `T-${t.territoryNumber}`,
+        `T${t.territoryNumber}`,
+        t.territoryName,
+        t.subtitle,
+        t.city,
+        t.searchBlob,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      return hay.includes(q);
+    });
+  }, [territorySummaries, territoryFilterQuery]);
+
   useEffect(() => {
     if (visible) {
       setScopeKind(initialScopeKind);
+      setTerritoryFilterQuery('');
       if (initialSelectedTerritoryNumbers.length > 0) {
         setSelectedTerritoryNums(initialSelectedTerritoryNumbers);
       } else if (territorySummaries.length > 0 && selectedTerritoryNums.length === 0) {
@@ -367,21 +396,25 @@ export function QuickShareSheet({
               )}
             </View>
 
-            {/* Multi-Territory Chips */}
+            {/* Multi-Territory Filter + Vertical Checkable List */}
             {scopeKind === 'territories' && territorySummaries.length > 0 && (
               <View style={styles.chipsBox}>
                 <View style={styles.chipsHeaderRow}>
                   <Text style={styles.helperText}>
-                    Toque nos territórios que deseja incluir no mesmo link (os demais ficam ocultos):
+                    Digite para filtrar por nº, nome ou subtítulo e marque um ou vários territórios:
                   </Text>
                   <TouchableOpacity
                     onPress={() => {
                       setGeneratedLink(null);
-                      if (selectedTerritoryNums.length === territorySummaries.length) {
+                      const targetNums = filteredTerritorySummaries.map((t) => t.territoryNumber);
+                      const allFilteredSelected = targetNums.every((n) =>
+                        selectedTerritoryNums.includes(n)
+                      );
+                      if (allFilteredSelected && selectedTerritoryNums.length > 1) {
                         setSelectedTerritoryNums([territorySummaries[0].territoryNumber]);
                       } else {
-                        setSelectedTerritoryNums(
-                          territorySummaries.map((t) => t.territoryNumber)
+                        setSelectedTerritoryNums((prev) =>
+                          Array.from(new Set([...prev, ...targetNums]))
                         );
                       }
                     }}
@@ -389,32 +422,61 @@ export function QuickShareSheet({
                     <Text style={styles.selectAllLink}>
                       {selectedTerritoryNums.length === territorySummaries.length
                         ? 'Apenas 1º'
-                        : 'Todos'}
+                        : `Marcar Filtrados (${filteredTerritorySummaries.length})`}
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <View style={styles.chipsWrap}>
-                  {territorySummaries.map((t) => {
+
+                <TextInput
+                  testID="quick-share-territory-filter-input"
+                  style={styles.filterInput}
+                  value={territoryFilterQuery}
+                  onChangeText={setTerritoryFilterQuery}
+                  placeholder="🔍 Filtrar território por número (ex: T01), nome ou descrição..."
+                  placeholderTextColor="#64748B"
+                />
+
+                <ScrollView
+                  style={styles.verticalTerritoryScroll}
+                  contentContainerStyle={{ gap: 6 }}
+                  nestedScrollEnabled
+                >
+                  {filteredTerritorySummaries.map((t) => {
                     const isSelected = selectedTerritoryNums.includes(t.territoryNumber);
                     return (
                       <TouchableOpacity
                         key={t.territoryNumber}
-                        style={[styles.chip, isSelected && styles.chipSelected]}
+                        style={[styles.territoryListRow, isSelected && styles.chipSelected]}
                         onPress={() => toggleTerritoryNum(t.territoryNumber)}
                         testID={`quick-share-terr-chip-${t.territoryNumber}`}
                       >
-                        <Text
-                          style={[
-                            styles.chipText,
-                            isSelected && styles.chipTextSelected,
-                          ]}
-                        >
-                          {isSelected ? '✓ ' : ''}T-{t.territoryNumber}
+                        <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+                          {isSelected && <Text style={styles.checkboxMark}>✓</Text>}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.chipText,
+                              isSelected && styles.chipTextSelected,
+                              { textAlign: 'left' },
+                            ]}
+                          >
+                            T-{t.territoryNumber}
+                            {t.territoryName ? ` • ${t.territoryName}` : ''}
+                          </Text>
+                          {t.subtitle ? (
+                            <Text style={styles.territoryRowSub} numberOfLines={2}>
+                              {t.subtitle}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.territoryRowCount}>
+                          {t.workedAddresses}/{t.totalAddresses} end.
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </View>
+                </ScrollView>
               </View>
             )}
 
@@ -707,6 +769,41 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  filterInput: {
+    backgroundColor: '#0F172A',
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#334155',
+    color: '#F8FAFC',
+    fontSize: FontSize.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  verticalTerritoryScroll: {
+    maxHeight: 200,
+  },
+  territoryListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
+  territoryRowSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  territoryRowCount: {
+    fontSize: 11,
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
   chip: {
     minHeight: 38,
     paddingHorizontal: 12,
@@ -726,6 +823,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: '#94A3B8',
     fontWeight: '600',
+    textAlign: 'center',
   },
   chipTextSelected: {
     color: '#34D399',

@@ -77,6 +77,86 @@ function writeWebLocalStorage(key: string, value: string): void {
   }
 }
 
+const SEKUNDO_IDB_NAME = 'sekundo_idb_v1';
+const SEKUNDO_IDB_STORE = 'territory_registry_store';
+
+function openTerritoryIndexedDb(): Promise<IDBDatabase | null> {
+  if (
+    Platform.OS !== 'web' ||
+    typeof window === 'undefined' ||
+    typeof window.indexedDB === 'undefined'
+  ) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(SEKUNDO_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(SEKUNDO_IDB_STORE)) {
+          db.createObjectStore(SEKUNDO_IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function writeTerritoryIndexedDbMirror(
+  key: string,
+  nodes: FlatSkeletonEntry[]
+): Promise<boolean> {
+  const db = await openTerritoryIndexedDb();
+  if (!db) return false;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SEKUNDO_IDB_STORE, 'readwrite');
+      const store = tx.objectStore(SEKUNDO_IDB_STORE);
+      store.put(nodes, key);
+      tx.oncomplete = () => {
+        db.close();
+        resolve(true);
+      };
+      tx.onerror = () => {
+        db.close();
+        resolve(false);
+      };
+    } catch {
+      db.close();
+      resolve(false);
+    }
+  });
+}
+
+export async function readTerritoryIndexedDbMirror(
+  key: string
+): Promise<FlatSkeletonEntry[] | null> {
+  const db = await openTerritoryIndexedDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SEKUNDO_IDB_STORE, 'readonly');
+      const store = tx.objectStore(SEKUNDO_IDB_STORE);
+      const req = store.get(key);
+      req.onsuccess = () => {
+        db.close();
+        const res = req.result;
+        resolve(Array.isArray(res) && res.length > 0 ? (res as FlatSkeletonEntry[]) : null);
+      };
+      req.onerror = () => {
+        db.close();
+        resolve(null);
+      };
+    } catch {
+      db.close();
+      resolve(null);
+    }
+  });
+}
+
 /**
  * Loads the persisted Privilege Matrix participant directory from local storage.
  */
@@ -111,9 +191,9 @@ export async function savePrivilegeParticipants(
 }
 
 /**
- * Loads the persisted Territory Registry (`hub_territory_cycle`) from local storage
+ * Loads the persisted Territory Registry (`hub_territory_cycle`) from local storage or IndexedDB
  * so any screen (`/territory-checklist`, `/territory-map`, `/schedule-hub`) can access
- * the latest imported territory spreadsheet.
+ * the latest imported or transferred territory spreadsheet.
  */
 export async function loadSavedTerritoryRegistry(): Promise<FlatSkeletonEntry[] | null> {
   try {
@@ -126,6 +206,10 @@ export async function loadSavedTerritoryRegistry(): Promise<FlatSkeletonEntry[] 
         return parsed;
       }
     }
+    const idbMirror = await readTerritoryIndexedDbMirror(TERRITORY_HUB_REGISTRY_STORAGE_KEY);
+    if (idbMirror && idbMirror.length > 0) {
+      return idbMirror;
+    }
   } catch {
     // ignore
   }
@@ -133,16 +217,41 @@ export async function loadSavedTerritoryRegistry(): Promise<FlatSkeletonEntry[] 
 }
 
 /**
- * Saves the Territory Registry to local storage.
+ * Saves the Territory Registry to BOTH localStorage/AsyncStorage and IndexedDB.
  */
 export async function saveTerritoryRegistry(registry: FlatSkeletonEntry[]): Promise<void> {
   const serialized = JSON.stringify(registry);
   writeWebLocalStorage(TERRITORY_HUB_REGISTRY_STORAGE_KEY, serialized);
   await localStore.storage.setItem(TERRITORY_HUB_REGISTRY_STORAGE_KEY, serialized);
+  await writeTerritoryIndexedDbMirror(TERRITORY_HUB_REGISTRY_STORAGE_KEY, registry);
 }
 
 /**
- * Atomically persists in-app territory mutations to BOTH `sekundo:territory_hub_registry_v1`
+ * Loads the previous Territory Registry backup snapshot from localStorage or IndexedDB for instant 1-click undo.
+ */
+export async function loadTerritoryRegistryBackupSnapshot(): Promise<FlatSkeletonEntry[] | null> {
+  try {
+    const raw =
+      readWebLocalStorage(TERRITORY_HUB_REGISTRY_BACKUP_KEY) ??
+      (await localStore.storage.getItem(TERRITORY_HUB_REGISTRY_BACKUP_KEY));
+    if (raw) {
+      const parsed = JSON.parse(raw) as FlatSkeletonEntry[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+    const idbBackup = await readTerritoryIndexedDbMirror(TERRITORY_HUB_REGISTRY_BACKUP_KEY);
+    if (idbBackup && idbBackup.length > 0) {
+      return idbBackup;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Atomically persists in-app territory mutations to `sekundo:territory_hub_registry_v1` (localStorage + IndexedDB)
  * and the active event's skeleton (`sekundo_skeleton_${eventId}`), eliminating split-brain storage
  * and ensuring immediate visibility across Checklist, Prancheta, Map, and CSV Export.
  */
@@ -164,13 +273,14 @@ export async function persistTerritoryRegistryMutation(params: {
     };
   }
 
-  // 1. Save rollback backup snapshot before mutating
+  // 1. Save rollback backup snapshot before mutating (both localStorage and IndexedDB)
   try {
     const previous = await loadSavedTerritoryRegistry();
     if (previous && previous.length > 0) {
       const prevStr = JSON.stringify(previous);
       writeWebLocalStorage(TERRITORY_HUB_REGISTRY_BACKUP_KEY, prevStr);
       await localStore.storage.setItem(TERRITORY_HUB_REGISTRY_BACKUP_KEY, prevStr);
+      await writeTerritoryIndexedDbMirror(TERRITORY_HUB_REGISTRY_BACKUP_KEY, previous);
     }
   } catch {
     // ignore backup failure

@@ -28,6 +28,7 @@ import {
   createTerritoryOrQuadra,
   createAddressInTerritory,
   deleteTerritoryOrQuadra,
+  transferAddressesBetweenTerritories,
   formatShareTerritoryOrQuadraLocationsText,
   resolveTerritoryNumber,
   type FlatSkeletonEntry,
@@ -36,10 +37,16 @@ import {
   exportUpdatedTerritoryModelCsvFromStorage,
   triggerCsvFileDownloadOrCopy,
   shareLocationPayload,
+  loadTerritoryRegistryBackupSnapshot,
 } from '../../storage/omniStorageBridge';
 import { openExternalGoogleMaps } from '../../hooks/useLiveGpsLocation';
 
-export type TerritoryManageTab = 'edit' | 'new_territory' | 'new_address' | 'share_export';
+export type TerritoryManageTab =
+  | 'edit'
+  | 'transfer_addresses'
+  | 'new_territory'
+  | 'new_address'
+  | 'share_export';
 
 export interface TerritoryManageModalProps {
   visible: boolean;
@@ -47,6 +54,7 @@ export interface TerritoryManageModalProps {
   targetTerritoryNumber?: string;
   targetGroupKey?: string;
   targetGroupLabel?: string;
+  targetAddressKey?: string;
   cleanNodes: FlatSkeletonEntry[];
   onClose: () => void;
   onCommitNodes: (
@@ -55,12 +63,21 @@ export interface TerritoryManageModalProps {
   ) => Promise<void>;
 }
 
+function normalizeSearchToken(val: string): string {
+  return (val || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
 export function TerritoryManageModal({
   visible,
   initialTab = 'edit',
   targetTerritoryNumber,
   targetGroupKey,
   targetGroupLabel,
+  targetAddressKey,
   cleanNodes,
   onClose,
   onCommitNodes,
@@ -117,7 +134,24 @@ export function TerritoryManageModal({
   const [selectedShareTerritories, setSelectedShareTerritories] = useState<string[]>([
     effectiveTargetTerritory,
   ]);
+  const [shareFilterQuery, setShareFilterQuery] = useState('');
   const [copiedShare, setCopiedShare] = useState(false);
+
+  // --- Tab 5: Transfer Addresses Between Territories State ---
+  const [transferSourceTerritory, setTransferSourceTerritory] = useState(effectiveTargetTerritory);
+  const [transferScopeMode, setTransferScopeMode] = useState<'all_from_territory' | 'selected'>(
+    targetAddressKey ? 'selected' : 'all_from_territory'
+  );
+  const [selectedTransferKeys, setSelectedTransferKeys] = useState<string[]>(
+    targetAddressKey ? [targetAddressKey] : []
+  );
+  const [transferAddressFilterQuery, setTransferAddressFilterQuery] = useState('');
+  const [transferDestTerritory, setTransferDestTerritory] = useState('');
+  const [transferDestFilterQuery, setTransferDestFilterQuery] = useState('');
+  const [transferCreateNewDest, setTransferCreateNewDest] = useState(false);
+  const [transferNewDestNumber, setTransferNewDestNumber] = useState('');
+  const [transferNewDestName, setTransferNewDestName] = useState('');
+  const [transferDeleteEmptySource, setTransferDeleteEmptySource] = useState(false);
 
   // Sync fields when modal opens or target changes
   useEffect(() => {
@@ -143,7 +177,8 @@ export function TerritoryManageModal({
       const n = parseInt(s.territoryNumber.replace(/\D/g, ''), 10);
       return !isNaN(n) && n > max ? n : max;
     }, 0);
-    setNewTerrNumber(String(maxNum + 1).padStart(2, '0'));
+    const suggestedNextNum = String(maxNum + 1).padStart(2, '0');
+    setNewTerrNumber(suggestedNextNum);
     setNewTerrName('');
     setNewTerrQuadraLabel('');
     setNewTerrCity(defaultCity);
@@ -163,7 +198,37 @@ export function TerritoryManageModal({
     setAddrLat('');
     setAddrLng('');
     setAddrNotes('');
-  }, [visible, initialTab, effectiveTargetTerritory, targetGroupKey, targetGroupLabel, summaries, cleanNodes]);
+
+    // Initialize Transfer tab state
+    setTransferSourceTerritory(tNum);
+    if (targetAddressKey) {
+      setTransferScopeMode('selected');
+      setSelectedTransferKeys([targetAddressKey]);
+    } else {
+      setTransferScopeMode('all_from_territory');
+      setSelectedTransferKeys([]);
+    }
+    setTransferAddressFilterQuery('');
+    const otherTerr = summaries.find((s) => s.territoryNumber !== tNum)?.territoryNumber || suggestedNextNum;
+    setTransferDestTerritory(otherTerr);
+    setTransferDestFilterQuery('');
+    setTransferCreateNewDest(summaries.length <= 1);
+    setTransferNewDestNumber(suggestedNextNum);
+    setTransferNewDestName('');
+    setTransferDeleteEmptySource(false);
+
+    setShareFilterQuery('');
+    setSelectedShareTerritories((prev) => (prev.length > 0 ? prev : [tNum]));
+  }, [
+    visible,
+    initialTab,
+    effectiveTargetTerritory,
+    targetGroupKey,
+    targetGroupLabel,
+    targetAddressKey,
+    summaries,
+    cleanNodes,
+  ]);
 
   // Update edit fields if user picks another territory chip inside Tab 1
   const handleSelectTerritoryToEdit = (tNum: string) => {
@@ -371,6 +436,157 @@ export function TerritoryManageModal({
     }
   };
 
+  // Leaf addresses belonging to `transferSourceTerritory`
+  const sourceTerritoryLeafAddresses = useMemo(() => {
+    const parentKeys = new Set<string>();
+    for (const item of cleanNodes) {
+      const segs = item.key.replace(/^(90-|T::)/, '').split('-');
+      if (segs.length >= 2) {
+        parentKeys.add(segs[0]);
+      }
+    }
+    return cleanNodes.filter((n) => {
+      const tNum = resolveTerritoryNumber(n);
+      if (tNum !== transferSourceTerritory) return false;
+      const cleanKey = n.key.replace(/^(90-|T::)/, '');
+      const segs = cleanKey.split('-');
+      const isHeader = parentKeys.has(cleanKey) || (segs.length === 1 && n.type === 'header');
+      return !isHeader;
+    });
+  }, [cleanNodes, transferSourceTerritory]);
+
+  const filteredSourceLeafAddresses = useMemo(() => {
+    const q = normalizeSearchToken(transferAddressFilterQuery);
+    if (!q) return sourceTerritoryLeafAddresses;
+    return sourceTerritoryLeafAddresses.filter((item) => {
+      const hay = normalizeSearchToken(
+        [
+          item.key,
+          item.label,
+          item.meta?.line,
+          item.meta?.street,
+          item.meta?.number,
+          item.meta?.neighborhood,
+          item.meta?.notes,
+        ]
+          .filter(Boolean)
+          .join(' ')
+      );
+      return hay.includes(q);
+    });
+  }, [sourceTerritoryLeafAddresses, transferAddressFilterQuery]);
+
+  const filteredDestSummaries = useMemo(() => {
+    const q = normalizeSearchToken(transferDestFilterQuery);
+    return summaries.filter((s) => {
+      if (s.territoryNumber === transferSourceTerritory) return false;
+      if (!q) return true;
+      const hay = normalizeSearchToken(
+        [s.territoryNumber, `T${s.territoryNumber}`, s.territoryName, s.subtitle, s.city, s.searchBlob]
+          .filter(Boolean)
+          .join(' ')
+      );
+      return hay.includes(q);
+    });
+  }, [summaries, transferSourceTerritory, transferDestFilterQuery]);
+
+  const filteredShareSummaries = useMemo(() => {
+    const q = normalizeSearchToken(shareFilterQuery);
+    if (!q) return summaries;
+    return summaries.filter((s) => {
+      const hay = normalizeSearchToken(
+        [
+          s.territoryNumber,
+          `T${s.territoryNumber}`,
+          `Territorio ${s.territoryNumber}`,
+          s.territoryName,
+          s.subtitle,
+          s.city,
+          s.searchBlob,
+        ]
+          .filter(Boolean)
+          .join(' ')
+      );
+      return hay.includes(q);
+    });
+  }, [summaries, shareFilterQuery]);
+
+  const handleExecuteTransfer = async () => {
+    const destNum = transferCreateNewDest
+      ? transferNewDestNumber.trim()
+      : transferDestTerritory.trim();
+    if (!destNum) {
+      setFeedback('⚠️ Selecione ou digite o número do Território de Destino.');
+      return;
+    }
+    if (destNum === transferSourceTerritory && !transferCreateNewDest) {
+      setFeedback('⚠️ O território de destino deve ser diferente do território de origem.');
+      return;
+    }
+    if (transferScopeMode === 'selected' && selectedTransferKeys.length === 0) {
+      setFeedback('⚠️ Marque pelo menos 1 endereço na lista para transferir.');
+      return;
+    }
+
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const result = transferAddressesBetweenTerritories(cleanNodes, {
+        mode: transferScopeMode === 'all_from_territory' ? 'all_from_territory' : 'selected',
+        sourceTerritoryNumber: transferSourceTerritory,
+        sourceNodeKeys: transferScopeMode === 'selected' ? selectedTransferKeys : undefined,
+        destinationTerritoryNumber: destNum,
+        destinationTerritoryName: transferCreateNewDest
+          ? transferNewDestName.trim() || undefined
+          : undefined,
+        emptySourcePolicy: transferDeleteEmptySource ? 'delete_source' : 'keep_header',
+      });
+
+      if (result.transferredCount === 0) {
+        setFeedback('⚠️ Nenhum endereço encontrado para transferir neste filtro.');
+        setBusy(false);
+        return;
+      }
+
+      await onCommitNodes(result.nodes, {
+        activeTerritoryNumber: result.destinationTerritoryNumber,
+        message: `✓ ${result.transferredCount} endereço(s) transferido(s) do Território ${result.sourceTerritoryNumber} para o Território ${result.destinationTerritoryNumber} (salvo em LocalStorage + IndexedDB)!`,
+      });
+
+      setFeedback(
+        `✓ Transferência concluída! ${result.transferredCount} endereço(s) movido(s) do Território ${result.sourceTerritoryNumber} para o Território ${result.destinationTerritoryNumber}. Ao exportar a planilha CSV, os endereços já sairão no Território ${result.destinationTerritoryNumber}!`
+      );
+      setSelectedTransferKeys([]);
+      setSelectedEditTerritory(result.destinationTerritoryNumber);
+      setSelectedShareTerritories([result.destinationTerritoryNumber]);
+    } catch (err: any) {
+      setFeedback(`⚠️ Erro ao transferir endereços: ${err?.message || 'Falha desconhecida'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUndoLastBackup = async () => {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const backupNodes = await loadTerritoryRegistryBackupSnapshot();
+      if (!backupNodes || backupNodes.length === 0) {
+        setFeedback('⚠️ Nenhum snapshot anterior encontrado para desfazer.');
+        setBusy(false);
+        return;
+      }
+      await onCommitNodes(backupNodes, {
+        message: '⏪ Backup anterior restaurado com sucesso na memória!',
+      });
+      setFeedback('⏪ Alteração desfeita! Estado anterior restaurado na memória.');
+    } catch (err: any) {
+      setFeedback(`⚠️ Erro ao restaurar backup: ${err?.message || 'Falha desconhecida'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Share preview for the selected territories (supports multi-territory selection)
   const sharePayload = useMemo(() => {
     const activeTerrs =
@@ -460,6 +676,27 @@ export function TerritoryManageModal({
             >
               <Text style={[styles.tabBtnText, activeTab === 'edit' && styles.tabBtnTextActive]}>
                 ✏️ Editar Nome / Nº
+              </Text>
+            </Pressable>
+
+            <Pressable
+              testID="territory-manage-tab-transfer"
+              onPress={() => {
+                setActiveTab('transfer_addresses');
+                setFeedback(null);
+              }}
+              style={[
+                styles.tabBtn,
+                activeTab === 'transfer_addresses' && styles.tabBtnActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabBtnText,
+                  activeTab === 'transfer_addresses' && styles.tabBtnTextActive,
+                ]}
+              >
+                🔀 Transferir Endereços
               </Text>
             </Pressable>
 
@@ -979,50 +1216,453 @@ export function TerritoryManageModal({
               </View>
             ) : null}
 
+            {/* ==================== TAB: TRANSFER ADDRESSES BETWEEN TERRITORIES ==================== */}
+            {activeTab === 'transfer_addresses' ? (
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>
+                  🔀 TRANSFERIR ENDEREÇO(S) OU TODO UM TERRITÓRIO PARA OUTRO TERRITÓRIO
+                </Text>
+                <Text style={styles.helperText}>
+                  Transfira 1 endereço, vários endereços selecionados ou todos os endereços de um território para outro com 1 clique. O sistema salva automaticamente em LocalStorage e IndexedDB e já atualiza a planilha CSV na exportação!
+                </Text>
+
+                {/* Step 1: Source Territory */}
+                <Text style={styles.label}>1. Escolha o Território de Origem (De onde sairão os endereços):</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
+                >
+                  {summaries.map((s) => {
+                    const isSource = s.territoryNumber === transferSourceTerritory;
+                    return (
+                      <Pressable
+                        key={`transfer-src-${s.territoryNumber}`}
+                        testID={`transfer-source-territory-${s.territoryNumber}`}
+                        onPress={() => {
+                          setTransferSourceTerritory(s.territoryNumber);
+                          setSelectedTransferKeys([]);
+                          if (transferDestTerritory === s.territoryNumber) {
+                            const alt = summaries.find((x) => x.territoryNumber !== s.territoryNumber);
+                            if (alt) setTransferDestTerritory(alt.territoryNumber);
+                          }
+                        }}
+                        style={[styles.terrChip, isSource && styles.terrChipActive]}
+                      >
+                        <Text style={[styles.terrChipText, isSource && styles.terrChipTextActive]}>
+                          {isSource ? '📤 ' : ''}Território {s.territoryNumber}
+                          {s.territoryName ? ` • ${s.territoryName}` : ''} ({s.totalAddresses} end.)
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Step 2: Scope (All vs Selected) */}
+                <Text style={styles.label}>2. O que deseja transferir do Território {transferSourceTerritory}?</Text>
+                <View style={styles.scopeRow}>
+                  <Pressable
+                    testID="transfer-scope-all-btn"
+                    onPress={() => setTransferScopeMode('all_from_territory')}
+                    style={[
+                      styles.scopeBtn,
+                      transferScopeMode === 'all_from_territory' && styles.scopeBtnActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.scopeBtnText,
+                        transferScopeMode === 'all_from_territory' && styles.scopeBtnTextActive,
+                      ]}
+                    >
+                      📦 Todos os Endereços ({sourceTerritoryLeafAddresses.length})
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    testID="transfer-scope-selected-btn"
+                    onPress={() => setTransferScopeMode('selected')}
+                    style={[
+                      styles.scopeBtn,
+                      transferScopeMode === 'selected' && styles.scopeBtnActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.scopeBtnText,
+                        transferScopeMode === 'selected' && styles.scopeBtnTextActive,
+                      ]}
+                    >
+                      ☑️ Selecionar Endereços ({selectedTransferKeys.length})
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {transferScopeMode === 'selected' ? (
+                  <View style={{ gap: 8 }}>
+                    <TextInput
+                      testID="transfer-address-filter-input"
+                      style={styles.input}
+                      value={transferAddressFilterQuery}
+                      onChangeText={setTransferAddressFilterQuery}
+                      placeholder="🔍 Filtrar endereço por rua, número ou observação..."
+                      placeholderTextColor="#64748B"
+                    />
+                    <View style={styles.filterToolbarRow}>
+                      <Text style={styles.filterCountBadge}>
+                        ✓ {selectedTransferKeys.length} de {sourceTerritoryLeafAddresses.length} endereço(s) marcado(s)
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <Pressable
+                          onPress={() => {
+                            const keysToSelect = filteredSourceLeafAddresses.map((a) =>
+                              a.key.replace(/^(90-|T::)/, '')
+                            );
+                            setSelectedTransferKeys((prev) =>
+                              Array.from(new Set([...prev, ...keysToSelect]))
+                            );
+                          }}
+                          style={styles.miniFilterBtn}
+                        >
+                          <Text style={styles.miniFilterBtnText}>
+                            ☑️ Marcar Filtrados ({filteredSourceLeafAddresses.length})
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setSelectedTransferKeys([])}
+                          style={styles.miniFilterBtn}
+                        >
+                          <Text style={styles.miniFilterBtnText}>⬜ Limpar</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    <ScrollView
+                      style={styles.verticalListContainer}
+                      contentContainerStyle={{ gap: 6 }}
+                      nestedScrollEnabled
+                    >
+                      {filteredSourceLeafAddresses.length === 0 ? (
+                        <Text style={styles.emptyListHint}>
+                          Nenhum endereço encontrado neste território para o filtro digitado.
+                        </Text>
+                      ) : (
+                        filteredSourceLeafAddresses.map((addr) => {
+                          const cleanKey = addr.key.replace(/^(90-|T::)/, '');
+                          const isChecked = selectedTransferKeys.includes(cleanKey);
+                          const displayAddr = String(
+                            addr.meta?.line || addr.label || cleanKey
+                          ).trim();
+                          const noteSnippet = String(addr.meta?.notes || '').trim();
+                          return (
+                            <Pressable
+                              key={addr.key}
+                              testID={`transfer-address-item-${cleanKey}`}
+                              onPress={() => {
+                                setSelectedTransferKeys((prev) =>
+                                  prev.includes(cleanKey)
+                                    ? prev.filter((k) => k !== cleanKey)
+                                    : [...prev, cleanKey]
+                                );
+                              }}
+                              style={[
+                                styles.verticalCardItem,
+                                isChecked && styles.verticalCardItemActive,
+                              ]}
+                            >
+                              <View
+                                style={[
+                                  styles.verticalCheckBox,
+                                  isChecked && styles.verticalCheckBoxActive,
+                                ]}
+                              >
+                                <Text style={styles.verticalCheckIcon}>
+                                  {isChecked ? '✓' : ''}
+                                </Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.verticalCardTitle}>{displayAddr}</Text>
+                                {noteSnippet ? (
+                                  <Text style={styles.verticalCardSub}>📝 {noteSnippet}</Text>
+                                ) : null}
+                              </View>
+                              <Text style={styles.verticalCardBadge}>{cleanKey}</Text>
+                            </Pressable>
+                          );
+                        })
+                      )}
+                    </ScrollView>
+                  </View>
+                ) : null}
+
+                {/* Step 3: Destination Territory */}
+                <View style={styles.filterToolbarRow}>
+                  <Text style={styles.label}>
+                    3. Escolha o Território de Destino (Para onde vão os endereços):
+                  </Text>
+                  <Pressable
+                    testID="transfer-toggle-new-dest-btn"
+                    onPress={() => setTransferCreateNewDest((prev) => !prev)}
+                    style={[styles.miniFilterBtn, transferCreateNewDest && styles.scopeBtnActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.miniFilterBtnText,
+                        transferCreateNewDest && styles.scopeBtnTextActive,
+                      ]}
+                    >
+                      {transferCreateNewDest
+                        ? '📋 Escolher Território Existente'
+                        : '➕ Transferir p/ Novo Território'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {transferCreateNewDest ? (
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, minWidth: 120 }}>
+                      <Text style={styles.label}>Novo Nº de Destino</Text>
+                      <TextInput
+                        testID="transfer-new-dest-number-input"
+                        style={styles.input}
+                        value={transferNewDestNumber}
+                        onChangeText={setTransferNewDestNumber}
+                        placeholder="Ex: 09 ou T09"
+                        placeholderTextColor="#64748B"
+                      />
+                    </View>
+                    <View style={{ flex: 2, minWidth: 200 }}>
+                      <Text style={styles.label}>Nome / Bairro do Novo Destino</Text>
+                      <TextInput
+                        testID="transfer-new-dest-name-input"
+                        style={styles.input}
+                        value={transferNewDestName}
+                        onChangeText={setTransferNewDestName}
+                        placeholder="Ex: Jardim Paulista"
+                        placeholderTextColor="#64748B"
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ gap: 6 }}>
+                    <TextInput
+                      testID="transfer-dest-filter-input"
+                      style={styles.input}
+                      value={transferDestFilterQuery}
+                      onChangeText={setTransferDestFilterQuery}
+                      placeholder="🔍 Filtrar território de destino por nº, nome ou descrição..."
+                      placeholderTextColor="#64748B"
+                    />
+                    <ScrollView
+                      style={styles.verticalListContainer}
+                      contentContainerStyle={{ gap: 6 }}
+                      nestedScrollEnabled
+                    >
+                      {filteredDestSummaries.map((dest) => {
+                        const isDest = dest.territoryNumber === transferDestTerritory;
+                        return (
+                          <Pressable
+                            key={`transfer-dest-${dest.territoryNumber}`}
+                            testID={`transfer-dest-territory-${dest.territoryNumber}`}
+                            onPress={() => setTransferDestTerritory(dest.territoryNumber)}
+                            style={[
+                              styles.verticalCardItem,
+                              isDest && styles.verticalCardItemActive,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.verticalCheckBox,
+                                isDest && styles.verticalCheckBoxActive,
+                              ]}
+                            >
+                              <Text style={styles.verticalCheckIcon}>{isDest ? '✓' : ''}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.verticalCardTitle}>
+                                Território {dest.territoryNumber}
+                                {dest.territoryName ? ` — ${dest.territoryName}` : ''}
+                              </Text>
+                              {dest.subtitle ? (
+                                <Text style={styles.verticalCardSub}>{dest.subtitle}</Text>
+                              ) : null}
+                            </View>
+                            <Text style={styles.verticalCardCount}>
+                              {dest.totalAddresses} end.
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Optional cleanup toggle */}
+                <Pressable
+                  onPress={() => setTransferDeleteEmptySource((prev) => !prev)}
+                  style={styles.checkboxToggleRow}
+                >
+                  <View
+                    style={[
+                      styles.verticalCheckBox,
+                      transferDeleteEmptySource && styles.verticalCheckBoxActive,
+                    ]}
+                  >
+                    <Text style={styles.verticalCheckIcon}>
+                      {transferDeleteEmptySource ? '✓' : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.helperText}>
+                    Excluir o território de origem ({transferSourceTerritory}) caso todos os seus endereços sejam transferidos (se desmarcado, o território {transferSourceTerritory} continuará existindo vazio com 0 endereços).
+                  </Text>
+                </Pressable>
+
+                {/* Primary Transfer Submit & Quick CSV / Undo */}
+                <View style={styles.actionRow}>
+                  <Pressable
+                    testID="execute-transfer-addresses-btn"
+                    disabled={busy}
+                    onPress={handleExecuteTransfer}
+                    style={[styles.primaryBtn, { flex: 2 }]}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#062016" size="small" />
+                    ) : (
+                      <Text style={styles.primaryBtnText}>
+                        🔀 Transferir{' '}
+                        {transferScopeMode === 'all_from_territory'
+                          ? `Todos (${sourceTerritoryLeafAddresses.length})`
+                          : `${selectedTransferKeys.length} Endereço(s)`}{' '}
+                        para Território{' '}
+                        {transferCreateNewDest ? transferNewDestNumber : transferDestTerritory}
+                      </Text>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    testID="transfer-undo-backup-btn"
+                    disabled={busy}
+                    onPress={handleUndoLastBackup}
+                    style={styles.secondaryBtn}
+                  >
+                    <Text style={styles.secondaryBtnText}>⏪ Desfazer</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
             {/* ==================== TAB 4: SHARE LOCATIONS & EXPORT CSV ==================== */}
             {activeTab === 'share_export' ? (
               <>
                 <View style={styles.sectionCard}>
                   <Text style={styles.sectionTitle}>
-                    📲 COMPARTILHAR LOCALIZAÇÕES DIRETO (SEM BUROCRACIA / SEM PIN)
+                    📲 COMPARTILHAR LOCALIZAÇÕES DIRETO (FILTRO POR LISTA + MULTI-SELEÇÃO)
                   </Text>
                   <Text style={styles.helperText}>
-                    Envie as localizações e links diretos do Google Maps deste território para qualquer pessoa no WhatsApp com 1 clique — sem precisar cadastrar privilégios, grupos ou senhas.
+                    Digite o número, nome, subtítulo ou descrição do território abaixo para filtrar a lista, marque um ou vários territórios e copie ou envie no WhatsApp com 1 clique.
                   </Text>
 
+                  {/* Search Filter Input (Fixes teste02.png) */}
+                  <TextInput
+                    testID="share-territory-filter-input"
+                    style={styles.input}
+                    value={shareFilterQuery}
+                    onChangeText={setShareFilterQuery}
+                    placeholder="🔍 Filtrar por número (ex: T01), nome, subtítulo ou descrição..."
+                    placeholderTextColor="#64748B"
+                  />
+
+                  <View style={styles.filterToolbarRow}>
+                    <Text style={styles.filterCountBadge}>
+                      ✓ {selectedShareTerritories.length} território(s) marcado(s) •{' '}
+                      {filteredShareSummaries.length} visível(is)
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                      <Pressable
+                        testID="share-select-all-filtered-btn"
+                        onPress={() => {
+                          const nums = filteredShareSummaries.map((s) => s.territoryNumber);
+                          setSelectedShareTerritories((prev) =>
+                            Array.from(new Set([...prev, ...nums]))
+                          );
+                        }}
+                        style={styles.miniFilterBtn}
+                      >
+                        <Text style={styles.miniFilterBtnText}>
+                          ☑️ Marcar Filtrados ({filteredShareSummaries.length})
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        testID="share-clear-selection-btn"
+                        onPress={() => setSelectedShareTerritories([effectiveTargetTerritory])}
+                        style={styles.miniFilterBtn}
+                      >
+                        <Text style={styles.miniFilterBtnText}>⬜ Limpar</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Vertical Multi-Select Territory List (Fixes cramped horizontal strip in teste02.png) */}
                   <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
+                    style={styles.verticalListContainer}
+                    contentContainerStyle={{ gap: 6 }}
+                    nestedScrollEnabled
                   >
-                    {summaries.map((s) => {
-                      const isSelected = selectedShareTerritories.includes(s.territoryNumber);
-                      return (
-                        <Pressable
-                          key={s.territoryNumber}
-                          testID={`share-select-territory-${s.territoryNumber}`}
-                          onPress={() => {
-                            handleSelectTerritoryToEdit(s.territoryNumber);
-                            setSelectedShareTerritories((prev) => {
-                              if (prev.includes(s.territoryNumber)) {
-                                return prev.length > 1
-                                  ? prev.filter((item) => item !== s.territoryNumber)
-                                  : prev;
-                              }
-                              return [...prev, s.territoryNumber];
-                            });
-                          }}
-                          style={[styles.terrChip, isSelected && styles.terrChipActive]}
-                        >
-                          <Text
-                            style={[styles.terrChipText, isSelected && styles.terrChipTextActive]}
+                    {filteredShareSummaries.length === 0 ? (
+                      <Text style={styles.emptyListHint}>
+                        Nenhum território corresponde ao filtro "{shareFilterQuery}".
+                      </Text>
+                    ) : (
+                      filteredShareSummaries.map((s) => {
+                        const isSelected = selectedShareTerritories.includes(s.territoryNumber);
+                        return (
+                          <Pressable
+                            key={s.territoryNumber}
+                            testID={`share-select-territory-${s.territoryNumber}`}
+                            onPress={() => {
+                              handleSelectTerritoryToEdit(s.territoryNumber);
+                              setSelectedShareTerritories((prev) => {
+                                if (prev.includes(s.territoryNumber)) {
+                                  return prev.length > 1
+                                    ? prev.filter((item) => item !== s.territoryNumber)
+                                    : prev;
+                                }
+                                return [...prev, s.territoryNumber];
+                              });
+                            }}
+                            style={[
+                              styles.verticalCardItem,
+                              isSelected && styles.verticalCardItemActive,
+                            ]}
                           >
-                            {isSelected ? '✓ ' : ''}Território {s.territoryNumber}
-                            {s.territoryName ? ` • ${s.territoryName}` : ''}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                            <View
+                              style={[
+                                styles.verticalCheckBox,
+                                isSelected && styles.verticalCheckBoxActive,
+                              ]}
+                            >
+                              <Text style={styles.verticalCheckIcon}>
+                                {isSelected ? '✓' : ''}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.verticalCardTitle}>
+                                Território {s.territoryNumber}
+                                {s.territoryName ? ` • ${s.territoryName}` : ''}
+                              </Text>
+                              {s.subtitle ? (
+                                <Text style={styles.verticalCardSub} numberOfLines={2}>
+                                  {s.subtitle}
+                                </Text>
+                              ) : null}
+                            </View>
+                            <Text style={styles.verticalCardCount}>
+                              {s.workedAddresses}/{s.totalAddresses} end.
+                            </Text>
+                          </Pressable>
+                        );
+                      })
+                    )}
                   </ScrollView>
 
                   <View style={styles.scopeRow}>
@@ -1247,6 +1887,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   tabBtnActive: {
     backgroundColor: 'rgba(255, 184, 0, 0.18)',
@@ -1256,6 +1897,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   tabBtnTextActive: {
     color: '#FFB800',
@@ -1297,6 +1939,7 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     fontSize: 12,
     lineHeight: 17,
+    flex: 1,
   },
   terrChip: {
     paddingVertical: 6,
@@ -1305,6 +1948,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   terrChipActive: {
     backgroundColor: 'rgba(56, 189, 248, 0.2)',
@@ -1314,6 +1959,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   terrChipTextActive: {
     color: '#38BDF8',
@@ -1322,16 +1968,19 @@ const styles = StyleSheet.create({
   scopeRow: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   scopeBtn: {
     flex: 1,
-    paddingVertical: 7,
+    minWidth: 140,
+    paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   scopeBtnActive: {
     backgroundColor: 'rgba(59, 130, 246, 0.2)',
@@ -1341,6 +1990,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   scopeBtnTextActive: {
     color: '#93C5FD',
@@ -1386,6 +2036,7 @@ const styles = StyleSheet.create({
     color: '#052014',
     fontSize: 13,
     fontWeight: '800',
+    textAlign: 'center',
   },
   whatsappBtn: {
     backgroundColor: '#22C55E',
@@ -1399,6 +2050,7 @@ const styles = StyleSheet.create({
     color: '#052E16',
     fontSize: 13,
     fontWeight: '900',
+    textAlign: 'center',
   },
   secondaryBtn: {
     backgroundColor: 'rgba(56, 189, 248, 0.14)',
@@ -1414,6 +2066,7 @@ const styles = StyleSheet.create({
     color: '#38BDF8',
     fontSize: 12,
     fontWeight: '800',
+    textAlign: 'center',
   },
   dangerOutlineBtn: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -1422,22 +2075,139 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 13,
     borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dangerOutlineBtnText: {
     color: '#F87171',
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   dangerSolidBtn: {
     backgroundColor: '#EF4444',
     paddingVertical: 10,
     paddingHorizontal: 13,
     borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dangerSolidBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
+    textAlign: 'center',
+  },
+  filterToolbarRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterCountBadge: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  miniFilterBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniFilterBtnText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  verticalListContainer: {
+    maxHeight: 215,
+    backgroundColor: '#0E131D',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    padding: 8,
+  },
+  verticalCardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  verticalCardItemActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.14)',
+    borderColor: '#38BDF8',
+  },
+  verticalCheckBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#64748B',
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verticalCheckBoxActive: {
+    backgroundColor: '#38BDF8',
+    borderColor: '#38BDF8',
+  },
+  verticalCheckIcon: {
+    color: '#061523',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  verticalCardTitle: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  verticalCardSub: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  verticalCardBadge: {
+    color: '#FFB800',
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+    backgroundColor: 'rgba(255, 184, 0, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  verticalCardCount: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '700',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+  emptyListHint: {
+    color: '#94A3B8',
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 14,
+  },
+  checkboxToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
   },
   sharePreviewBox: {
     backgroundColor: '#0B0F17',

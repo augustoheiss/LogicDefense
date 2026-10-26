@@ -6,6 +6,7 @@ import {
   createAddressInTerritory,
   updateSingleNodeInCleanRegistry,
   deleteTerritoryOrQuadra,
+  transferAddressesBetweenTerritories,
   mergeTerritoryPartitionIntoRawRegistry,
   buildTerritoryModelCsvText,
   formatShareAddressLocationText,
@@ -203,5 +204,85 @@ describe('territoryCrudEngine', () => {
     });
     expect(terrShare.text).toContain('Av. Europa, 500');
     expect(terrShare.mapsUrl).toContain('google.com/maps');
+  });
+
+  it('transfers a single address or all addresses from one territory to another and updates CSV export', () => {
+    const t1 = createTerritoryOrQuadra([], {
+      territoryNumber: '01',
+      territoryName: 'Bairro Origem',
+      city: 'São Paulo',
+      initialAddress: {
+        street: 'Rua Alfa',
+        number: '100',
+        lat: -23.5505,
+        lng: -46.6333,
+        notes: 'Portão Azul',
+      },
+    });
+    const t1More = createAddressInTerritory(t1.nodes, {
+      territoryNumber: '01',
+      groupKey: t1.headerKey,
+      street: 'Rua Beta',
+      number: '200',
+      notes: 'Casa de esquina',
+    });
+    const t1AndT2 = createTerritoryOrQuadra(t1More.nodes, {
+      territoryNumber: '02',
+      territoryName: 'Bairro Destino',
+      city: 'Guarulhos',
+      initialAddress: {
+        street: 'Rua Gama',
+        number: '300',
+      },
+    });
+
+    // 1. Transfer a single address (Rua Alfa, 100) from Territory 01 to Territory 02
+    const singleTransfer = transferAddressesBetweenTerritories(t1AndT2.nodes, {
+      mode: 'single',
+      sourceNodeKeys: [t1.addressKey],
+      destinationTerritoryNumber: '02',
+    });
+
+    expect(singleTransfer.transferredCount).toBe(1);
+    expect(singleTransfer.destinationTerritoryNumber).toBe('02');
+    expect(singleTransfer.newKeys.length).toBe(1);
+
+    const summariesAfterSingle = extractTerritorySummaries(singleTransfer.nodes);
+    const s1 = summariesAfterSingle.find((s) => s.territoryNumber === '01');
+    const s2 = summariesAfterSingle.find((s) => s.territoryNumber === '02');
+    expect(s1?.totalAddresses).toBe(1); // Only Rua Beta remains in T01
+    expect(s2?.totalAddresses).toBe(2); // Rua Gama + transferred Rua Alfa in T02
+
+    const movedNode = singleTransfer.nodes.find((n) => n.key === singleTransfer.newKeys[0]);
+    expect(movedNode).toBeDefined();
+    expect(resolveTerritoryNumber(movedNode!)).toBe('02');
+    expect(movedNode?.meta?.territory_name).toBe('Bairro Destino');
+    expect(movedNode?.meta?.street).toBe('Rua Alfa');
+    expect(movedNode?.meta?.notes).toBe('Portão Azul');
+
+    // 2. Transfer ALL remaining addresses from Territory 01 to Territory 02
+    const bulkTransfer = transferAddressesBetweenTerritories(singleTransfer.nodes, {
+      mode: 'all_from_territory',
+      sourceTerritoryNumber: '01',
+      destinationTerritoryNumber: '02',
+      emptySourcePolicy: 'keep_header',
+    });
+
+    expect(bulkTransfer.transferredCount).toBe(1);
+    const summariesAfterBulk = extractTerritorySummaries(bulkTransfer.nodes);
+    const s1AfterBulk = summariesAfterBulk.find((s) => s.territoryNumber === '01');
+    const s2AfterBulk = summariesAfterBulk.find((s) => s.territoryNumber === '02');
+    expect(s1AfterBulk?.totalAddresses).toBe(0); // T01 kept as empty header
+    expect(s2AfterBulk?.totalAddresses).toBe(3); // All 3 addresses now in T02
+
+    // 3. Verify CSV export has all 3 addresses under Territory 02 and zero ghost rows for empty Territory 01
+    const csvText = buildTerritoryModelCsvText(bulkTransfer.nodes);
+    const csvLines = csvText.trim().split('\n');
+    expect(csvLines.length).toBe(4); // 1 header line + 3 address rows
+    expect(csvText).toContain(';02;Bairro Destino;');
+    expect(csvText).toContain('Rua Alfa');
+    expect(csvText).toContain('Rua Beta');
+    expect(csvText).toContain('Rua Gama');
+    expect(csvText).not.toContain(';01;Bairro Origem;');
   });
 });

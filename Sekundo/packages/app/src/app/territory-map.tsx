@@ -57,6 +57,7 @@ import {
   formatRouteDuration,
   resolveTerritoryNameFromNodes,
   updateSingleNodeInCleanRegistry,
+  transferAddressesBetweenTerritories,
   buildTerritoryModelCsvText,
   formatShareAddressLocationText,
   formatShareTerritoryOrQuadraLocationsText,
@@ -206,6 +207,7 @@ export default function TerritoryMapScreen() {
   const [manageModalTab, setManageModalTab] = useState<TerritoryManageTab>('edit');
   const [manageTargetGroupKey, setManageTargetGroupKey] = useState<string | undefined>(undefined);
   const [manageTargetGroupLabel, setManageTargetGroupLabel] = useState<string | undefined>(undefined);
+  const [manageTargetAddressKey, setManageTargetAddressKey] = useState<string | undefined>(undefined);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [showRecencyModal, setShowRecencyModal] = useState<boolean>(false);
   const [recencySortMode, setRecencySortMode] = useState<TerritoryRecencySort>('priority_oldest_first');
@@ -631,11 +633,13 @@ export default function TerritoryMapScreen() {
   const openTerritoryManager = (
     tab: TerritoryManageTab,
     groupKey?: string,
-    groupLabel?: string
+    groupLabel?: string,
+    addressKey?: string
   ) => {
     setManageModalTab(tab);
     setManageTargetGroupKey(groupKey);
     setManageTargetGroupLabel(groupLabel);
+    setManageTargetAddressKey(addressKey);
     setManageModalOpen(true);
   };
 
@@ -2373,8 +2377,8 @@ export default function TerritoryMapScreen() {
             </View>
 
             <ScrollView style={styles.drawerContent} contentContainerStyle={{ gap: 14 }}>
-              {/* Quick Navigation & Route Bar for Selected Quadra */}
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              {/* Symmetric 2x3 Action Matrix for Selected Quadra (Fixes teste03.png) */}
+              <View style={styles.quadraActionsMatrix}>
                 <Pressable
                   testID="quadra-drawer-gmaps-btn"
                   onPress={() =>
@@ -2389,7 +2393,7 @@ export default function TerritoryMapScreen() {
                       mode: 'directions',
                     })
                   }
-                  style={[styles.gpsNavBtn, { flex: 1, minWidth: 140 }]}
+                  style={[styles.gpsNavBtn, styles.quadraMatrixCell]}
                 >
                   <Text style={styles.gpsNavBtnText}>🗺️ Google Maps / Rota</Text>
                 </Pressable>
@@ -2399,9 +2403,8 @@ export default function TerritoryMapScreen() {
                   onPress={() => handleTraceQuadraAddressesRoute(selectedQuadra)}
                   style={[
                     styles.gpsNavBtn,
+                    styles.quadraMatrixCell,
                     {
-                      flex: 1,
-                      minWidth: 140,
                       backgroundColor: 'rgba(16, 185, 129, 0.14)',
                       borderColor: 'rgba(16, 185, 129, 0.45)',
                     },
@@ -2411,18 +2414,14 @@ export default function TerritoryMapScreen() {
                     {routingBusy ? '⏳ Calculando...' : '🧭 Rota pelas Ruas da Quadra'}
                   </Text>
                 </Pressable>
-              </View>
 
-              {/* Zero-Bureaucracy Share & Edit Territory/Quadra Bar */}
-              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
                 <Pressable
                   testID="quadra-drawer-share-btn"
                   onPress={() => handleQuickShareQuadra(selectedQuadra)}
                   style={[
                     styles.gpsNavBtn,
+                    styles.quadraMatrixCell,
                     {
-                      flex: 1,
-                      minWidth: 140,
                       backgroundColor: 'rgba(16, 185, 129, 0.22)',
                       borderColor: '#10B981',
                     },
@@ -2439,9 +2438,8 @@ export default function TerritoryMapScreen() {
                   }
                   style={[
                     styles.gpsNavBtn,
+                    styles.quadraMatrixCell,
                     {
-                      flex: 1,
-                      minWidth: 120,
                       backgroundColor: 'rgba(255, 184, 0, 0.14)',
                       borderColor: 'rgba(255, 184, 0, 0.45)',
                     },
@@ -2458,9 +2456,8 @@ export default function TerritoryMapScreen() {
                   }
                   style={[
                     styles.gpsNavBtn,
+                    styles.quadraMatrixCell,
                     {
-                      flex: 1,
-                      minWidth: 120,
                       backgroundColor: 'rgba(56, 189, 248, 0.14)',
                       borderColor: 'rgba(56, 189, 248, 0.45)',
                     },
@@ -2468,6 +2465,29 @@ export default function TerritoryMapScreen() {
                 >
                   <Text style={[styles.gpsNavBtnText, { color: '#38BDF8' }]}>
                     🏠 + Endereço
+                  </Text>
+                </Pressable>
+                <Pressable
+                  testID="quadra-drawer-transfer-btn"
+                  onPress={() => {
+                    setSelectedTerritory(selectedQuadra.territoryNumber);
+                    openTerritoryManager(
+                      'transfer_addresses',
+                      selectedQuadra.key,
+                      selectedQuadra.label
+                    );
+                  }}
+                  style={[
+                    styles.gpsNavBtn,
+                    styles.quadraMatrixCell,
+                    {
+                      backgroundColor: 'rgba(139, 92, 246, 0.16)',
+                      borderColor: '#8B5CF6',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gpsNavBtnText, { color: '#C4B5FD' }]}>
+                    🔀 Transferir Endereços
                   </Text>
                 </Pressable>
               </View>
@@ -3047,6 +3067,31 @@ export default function TerritoryMapScreen() {
                   <Text style={styles.pinStyleBtnText}>🎨 Personalizar Ícone (Forma & Cor)</Text>
                 </Pressable>
 
+                {/* Transfer Single Address to Another Territory */}
+                <Pressable
+                  testID="pin-drawer-transfer-btn"
+                  onPress={() => {
+                    setSelectedTerritory(selectedPin.territoryNumber);
+                    openTerritoryManager(
+                      'transfer_addresses',
+                      undefined,
+                      undefined,
+                      selectedPin.key
+                    );
+                  }}
+                  style={[
+                    styles.gpsNavBtn,
+                    {
+                      backgroundColor: 'rgba(139, 92, 246, 0.16)',
+                      borderColor: '#8B5CF6',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.gpsNavBtnText, { color: '#C4B5FD' }]}>
+                    🔀 Transferir Endereço p/ Outro Território
+                  </Text>
+                </Pressable>
+
                 {/* Edit Full Address */}
                 <Pressable
                   onPress={() => {
@@ -3069,19 +3114,41 @@ export default function TerritoryMapScreen() {
         item={editingAddressItem}
         onClose={() => setEditingAddressItem(null)}
         onSave={async (key, updates) => {
-          const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
-          await commitTerritoryNodes(nextClean);
-          showToast('✅ Endereço salvo na memória!');
+          const originalNode = flatRegistry.find((n) => pathKey.equals(n.key, key));
+          const originalTerr = originalNode ? resolveTerritoryNumber(originalNode) : '';
+          const nextTerr = String(updates.meta?.territory_number || originalTerr).trim();
+          let workingNodes = flatRegistry;
+          let targetKeyToUpdate = key;
+
+          if (nextTerr && originalTerr && nextTerr !== originalTerr) {
+            const transferred = transferAddressesBetweenTerritories(workingNodes, {
+              mode: 'single',
+              sourceNodeKeys: [key],
+              destinationTerritoryNumber: nextTerr,
+              destinationTerritoryName: updates.meta?.locality || undefined,
+            });
+            workingNodes = transferred.nodes;
+            if (transferred.newKeys.length > 0) {
+              targetKeyToUpdate = transferred.newKeys[0];
+            }
+          }
+
+          const nextClean = updateSingleNodeInCleanRegistry(workingNodes, targetKeyToUpdate, updates);
+          await commitTerritoryNodes(nextClean, {
+            activeTerritoryNumber: nextTerr || undefined,
+          });
+          showToast('✅ Endereço salvo na memória (LocalStorage + IndexedDB)!');
         }}
       />
 
-      {/* Territory & Address Manager Modal (Edit Name/Number, Create Territory, Add Address, Share & Export CSV) */}
+      {/* Territory & Address Manager Modal (Edit Name/Number, Transfer, Create Territory, Add Address, Share & Export CSV) */}
       <TerritoryManageModal
         visible={manageModalOpen}
         initialTab={manageModalTab}
         targetTerritoryNumber={selectedTerritory !== 'all' ? selectedTerritory : territoryList[0]}
         targetGroupKey={manageTargetGroupKey}
         targetGroupLabel={manageTargetGroupLabel}
+        targetAddressKey={manageTargetAddressKey}
         cleanNodes={flatRegistry}
         onClose={() => setManageModalOpen(false)}
         onCommitNodes={commitTerritoryNodes}
@@ -3638,6 +3705,7 @@ const styles = StyleSheet.create({
   },
   drawerActionBtn: {
     paddingVertical: 10,
+    paddingHorizontal: 10,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -3654,32 +3722,54 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   editFullBtn: {
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
-    paddingVertical: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   editFullBtnText: {
     color: '#E2E8F0',
     fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
   },
   gpsNavBtn: {
     backgroundColor: 'rgba(59, 130, 246, 0.15)',
     borderWidth: 1,
     borderColor: '#3B82F6',
-    paddingVertical: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    minHeight: 44,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   gpsNavBtnText: {
     color: '#60A5FA',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  quadraActionsMatrix: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 8,
+    columnGap: 6,
+  },
+  quadraMatrixCell: {
+    width: '48.5%',
+    flexBasis: '48.5%',
+    flexGrow: 0,
+    minHeight: 44,
   },
   headerActionBtns: {
     flexDirection: 'row',
@@ -3988,6 +4078,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.3,
+    textAlign: 'center',
   },
   streetsSection: {
     gap: 12,
@@ -4260,6 +4351,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   mapOverlay: {
     position: 'absolute',
@@ -4361,6 +4453,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editBtnPrimary: {
     backgroundColor: '#10B981',
@@ -4374,6 +4468,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   activeRouteBanner: {
     position: 'absolute',

@@ -328,10 +328,72 @@ export default function Dashboard() {
         <View style={[styles.column, isLargeScreen && styles.leftColumn]}>
           <View style={styles.dockHeader}>
             <Text style={styles.sectionTitle}>⚡ Módulos</Text>
-            <Text style={styles.dockMeta}>7</Text>
+            <Text style={styles.dockMeta}>9</Text>
           </View>
 
           <View style={styles.commandGrid}>
+            <Pressable
+              testID="quick-action-territories"
+              accessibilityRole="button"
+              accessibilityLabel="Territórios"
+              {...webTitle('Checklist & Gestão de Territórios')}
+              onPress={() => {
+                setSelectedToolInfo({
+                  code: 'TERR',
+                  title: '📋 Territórios & Campo',
+                  desc: 'Checklist de Territórios, Transferência de Endereços, WhatsApp e Exportação CSV.',
+                  route: '/territory-checklist',
+                  badge: 'TERRITÓRIOS',
+                });
+                router.push(
+                  activeSelectedEvent
+                    ? (`/territory-checklist?id=${encodeURIComponent(activeSelectedEvent.config.id)}` as any)
+                    : ('/territory-checklist' as any)
+                );
+              }}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.12)' },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.actionBigIcon}>📋</Text>
+              <Text style={[styles.actionShortLabel, { color: '#34D399' }]} numberOfLines={1}>
+                Territórios
+              </Text>
+            </Pressable>
+
+            <Pressable
+              testID="quick-action-territory-map"
+              accessibilityRole="button"
+              accessibilityLabel="Mapa de Territórios"
+              {...webTitle('Mapa CAD 2D de Territórios e Rotas GPS')}
+              onPress={() => {
+                setSelectedToolInfo({
+                  code: 'MAPA',
+                  title: '🗺️ Mapa CAD 2D & Rotas GPS',
+                  desc: 'Polígonos de Quadra, Pins, Rotas Google Maps e Transferência de Endereços.',
+                  route: '/territory-map',
+                  badge: 'MAPA CAD',
+                });
+                router.push(
+                  activeSelectedEvent
+                    ? (`/territory-map?id=${encodeURIComponent(activeSelectedEvent.config.id)}` as any)
+                    : ('/territory-map' as any)
+                );
+              }}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.12)' },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.actionBigIcon}>🗺️</Text>
+              <Text style={[styles.actionShortLabel, { color: '#38BDF8' }]} numberOfLines={1}>
+                Mapa CAD
+              </Text>
+            </Pressable>
+
             <Pressable
               testID="quick-action-create-event"
               accessibilityRole="button"
@@ -958,14 +1020,19 @@ const styles = StyleSheet.create({
   commandGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    justifyContent: 'space-between',
+    rowGap: 8,
+    columnGap: 6,
   },
   actionButton: {
     width: '31.5%',
-    minWidth: 88,
-    flexGrow: 1,
+    flexBasis: '31.5%',
+    maxWidth: '32%',
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 68,
     backgroundColor: 'rgba(30, 41, 59, 0.85)',
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 6,
     borderRadius: 8,
     borderWidth: 1,
@@ -979,11 +1046,14 @@ const styles = StyleSheet.create({
   },
   actionBigIcon: {
     fontSize: 20,
+    textAlign: 'center',
   },
   actionShortLabel: {
     color: '#F8FAFC',
     fontSize: 11,
     fontWeight: '800',
+    textAlign: 'center',
+    width: '100%',
   },
   inspectorBar: {
     marginTop: 6,

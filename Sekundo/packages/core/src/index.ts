@@ -701,6 +701,7 @@ export {
   createAddressInTerritory,
   updateSingleNodeInCleanRegistry,
   deleteTerritoryOrQuadra,
+  transferAddressesBetweenTerritories,
   mergeTerritoryPartitionIntoRawRegistry,
   buildTerritoryModelCsvText,
   formatShareAddressLocationText,
@@ -711,6 +712,8 @@ export type {
   RenameOrRenumberTerritoryPatch,
   CreateTerritoryOrQuadraInput,
   CreateAddressInTerritoryInput,
+  TransferTerritoryAddressesInput,
+  TransferTerritoryAddressesResult,
   ShareFormattedPayload,
 } from './territory/territoryCrudEngine';
 

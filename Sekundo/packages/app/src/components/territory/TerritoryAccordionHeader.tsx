@@ -26,6 +26,7 @@ interface Props {
   onOpenGoogleMaps?: () => void;
   onEditTerritory?: () => void;
   onAddAddress?: () => void;
+  onTransferTerritory?: () => void;
   onShareTerritory?: () => void;
 }
 
@@ -45,6 +46,7 @@ export function TerritoryAccordionHeader({
   onOpenGoogleMaps,
   onEditTerritory,
   onAddAddress,
+  onTransferTerritory,
   onShareTerritory,
 }: Props) {
   const percent = total > 0 ? Math.round((worked / total) * 100) : 0;
@@ -107,6 +109,17 @@ export function TerritoryAccordionHeader({
             accessibilityLabel={`Adicionar endereço no território ${territory}`}
           >
             <Text style={styles.editBtnText}>➕ Endereço</Text>
+          </Pressable>
+        ) : null}
+        {onTransferTerritory ? (
+          <Pressable
+            testID={`checklist-territory-transfer-btn-${territory}`}
+            onPress={onTransferTerritory}
+            style={styles.transferBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Transferir endereços do território ${territory}`}
+          >
+            <Text style={styles.transferBtnText}>🔀 Transferir</Text>
           </Pressable>
         ) : null}
         {onShareTerritory ? (
@@ -262,11 +275,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 184, 0, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(255, 184, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editBtnText: {
     color: '#FFB800',
     fontSize: 11,
     fontWeight: '800',
+    textAlign: 'center',
+  },
+  transferBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transferBtnText: {
+    color: '#C4B5FD',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   shareBtn: {
     paddingVertical: 6,
@@ -275,11 +307,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34, 197, 94, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(34, 197, 94, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shareBtnText: {
     color: '#4ADE80',
     fontSize: 11,
     fontWeight: '800',
+    textAlign: 'center',
   },
   pubBtn: {
     paddingVertical: 6,
@@ -288,11 +323,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(59, 130, 246, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pubBtnText: {
     color: '#93C5FD',
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   batchBtn: {
     paddingVertical: 6,
@@ -301,6 +339,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 185, 129, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   batchBtnReset: {
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
@@ -310,6 +350,7 @@ const styles = StyleSheet.create({
     color: '#34D399',
     fontSize: 11,
     fontWeight: '800',
+    textAlign: 'center',
   },
   batchBtnTextReset: {
     color: '#CBD5E1',

@@ -44,6 +44,7 @@ import {
   formatRouteDuration,
   resolveTerritoryNameFromNodes,
   updateSingleNodeInCleanRegistry,
+  transferAddressesBetweenTerritories,
   buildTerritoryModelCsvText,
   formatShareAddressLocationText,
   formatShareTerritoryOrQuadraLocationsText,
@@ -152,6 +153,7 @@ export default function PublisherModeScreen() {
   const [manageModalTab, setManageModalTab] = useState<TerritoryManageTab>('edit');
   const [manageTargetGroupKey, setManageTargetGroupKey] = useState<string | undefined>(undefined);
   const [manageTargetGroupLabel, setManageTargetGroupLabel] = useState<string | undefined>(undefined);
+  const [manageTargetAddressKey, setManageTargetAddressKey] = useState<string | undefined>(undefined);
   const [actionToast, setActionToast] = useState<string | null>(null);
 
   // Field Map states: Quadras <-> Pontos (preserving camera zoom!), walking direction, GPS & route
@@ -250,11 +252,13 @@ export default function PublisherModeScreen() {
   const openTerritoryManager = (
     tab: TerritoryManageTab,
     groupKey?: string,
-    groupLabel?: string
+    groupLabel?: string,
+    addressKey?: string
   ) => {
     setManageModalTab(tab);
     setManageTargetGroupKey(groupKey);
     setManageTargetGroupLabel(groupLabel);
+    setManageTargetAddressKey(addressKey);
     setManageModalOpen(true);
   };
 
@@ -737,6 +741,27 @@ export default function PublisherModeScreen() {
               >
                 <Text style={[styles.gmapsHeaderChipText, { color: '#34D399' }]}>
                   🏠 + Endereço
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="publisher-transfer-territory-btn"
+                onPress={() =>
+                  openTerritoryManager(
+                    'transfer_addresses',
+                    territoryQuadras[0]?.key,
+                    territoryQuadras[0]?.label
+                  )
+                }
+                style={[
+                  styles.gmapsHeaderChip,
+                  {
+                    backgroundColor: 'rgba(192, 132, 252, 0.16)',
+                    borderColor: 'rgba(192, 132, 252, 0.45)',
+                  },
+                ]}
+              >
+                <Text style={[styles.gmapsHeaderChipText, { color: '#C084FC' }]}>
+                  🔀 Transferir
                 </Text>
               </Pressable>
               <Pressable
@@ -1348,6 +1373,29 @@ export default function PublisherModeScreen() {
                                 </Text>
                               </Pressable>
                               <Pressable
+                                testID={`field-unit-transfer-${unit.key}`}
+                                onPress={() =>
+                                  openTerritoryManager(
+                                    'transfer_addresses',
+                                    quadra.key,
+                                    quadra.label,
+                                    unit.key
+                                  )
+                                }
+                                style={[
+                                  styles.fieldUnitMiniBtn,
+                                  {
+                                    backgroundColor: 'rgba(192, 132, 252, 0.14)',
+                                    borderColor: 'rgba(192, 132, 252, 0.45)',
+                                  },
+                                ]}
+                                accessibilityLabel={`Transferir endereço Nº ${unit.numberOrComplement || 'S/N'} para outro território`}
+                              >
+                                <Text style={[styles.fieldUnitMiniBtnText, { color: '#C084FC' }]}>
+                                  🔀
+                                </Text>
+                              </Pressable>
+                              <Pressable
                                 testID={`field-unit-edit-${unit.key}`}
                                 onPress={() => {
                                   const found = flatRegistry.find((n) => pathKey.equals(n.key, unit.key));
@@ -1434,12 +1482,31 @@ export default function PublisherModeScreen() {
         item={editingAddressItem}
         onClose={() => setEditingAddressItem(null)}
         onSave={async (key, updates) => {
-          const nextClean = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
-          await commitTerritoryNodes(nextClean);
-          if (updates.meta?.territory_number) {
-            setActiveTerritory(String(updates.meta.territory_number));
+          const prevNode = flatRegistry.find((n) => pathKey.equals(n.key, key));
+          const prevTerr = prevNode ? resolveTerritoryNumber(prevNode) : '';
+          const updatedNodes = updateSingleNodeInCleanRegistry(flatRegistry, key, updates);
+          const nextTerr = String(updates.meta?.territory_number || '').trim();
+          let finalClean = updatedNodes;
+          let toastMsg = '✅ Endereço salvo na memória!';
+          if (nextTerr && prevTerr && nextTerr.toUpperCase() !== prevTerr.toUpperCase()) {
+            const transferred = transferAddressesBetweenTerritories(updatedNodes, {
+              sourceTerritoryNumber: prevTerr,
+              destinationTerritoryNumber: nextTerr,
+              destinationTerritoryName: updates.meta?.territory_name
+                ? String(updates.meta.territory_name)
+                : undefined,
+              mode: 'single',
+              addressKeys: [key],
+              emptySourcePolicy: 'keep_header',
+            });
+            finalClean = transferred.cleanNodes;
+            toastMsg = `🔀 Endereço transferido de ${prevTerr} → ${transferred.destinationTerritoryNumber} e salvo!`;
           }
-          showToast('✅ Endereço salvo na memória!');
+          await commitTerritoryNodes(finalClean);
+          if (nextTerr) {
+            setActiveTerritory(nextTerr);
+          }
+          showToast(toastMsg);
         }}
       />
 
@@ -1449,6 +1516,7 @@ export default function PublisherModeScreen() {
         targetTerritoryNumber={effectiveTerritory}
         targetGroupKey={manageTargetGroupKey}
         targetGroupLabel={manageTargetGroupLabel}
+        targetAddressKey={manageTargetAddressKey}
         cleanNodes={flatRegistry}
         onClose={() => setManageModalOpen(false)}
         onCommitNodes={commitTerritoryNodes}
@@ -1713,6 +1781,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quadraToggleBtnDone: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -1723,6 +1793,7 @@ const styles = StyleSheet.create({
     color: '#052E16',
     fontSize: 13,
     fontWeight: '900',
+    textAlign: 'center',
   },
   quadraToggleTextDone: {
     color: '#E2E8F0',
@@ -1810,11 +1881,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(96, 165, 250, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gmapsHeaderChipText: {
     color: '#93C5FD',
     fontSize: 11,
     fontWeight: '800',
+    textAlign: 'center',
   },
   fieldMapToolbar: {
     paddingHorizontal: 14,
@@ -1831,6 +1905,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fieldMapToolBtnActive: {
     backgroundColor: 'rgba(56, 189, 248, 0.2)',
@@ -1840,6 +1916,7 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   fieldMapToolBtnTextActive: {
     color: '#38BDF8',
@@ -1869,11 +1946,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.18)',
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fieldRouteClearText: {
     color: '#FCA5A5',
     fontSize: 11,
     fontWeight: '800',
+    textAlign: 'center',
   },
   fieldUnitActionsRow: {
     flexDirection: 'row',
@@ -1899,6 +1979,7 @@ const styles = StyleSheet.create({
     color: '#93C5FD',
     fontSize: 10,
     fontWeight: '800',
+    textAlign: 'center',
   },
   bottomBar: {
     padding: 14,
@@ -1909,12 +1990,17 @@ const styles = StyleSheet.create({
   returnBtn: {
     backgroundColor: '#FFB800',
     paddingVertical: 14,
+    paddingHorizontal: 12,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   returnBtnText: {
     color: '#0D1117',
     fontSize: 14,
     fontWeight: '900',
+    textAlign: 'center',
   },
 });

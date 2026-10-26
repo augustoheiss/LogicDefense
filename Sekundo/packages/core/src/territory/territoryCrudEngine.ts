@@ -20,9 +20,36 @@ export interface TerritoryIdentitySummary {
   territoryName: string;
   city: string;
   quadraKeys: string[];
+  quadraLabels?: string[];
+  subtitle?: string;
+  searchBlob?: string;
   totalNodes: number;
   totalAddresses: number;
   workedAddresses: number;
+}
+
+export interface TransferTerritoryAddressesInput {
+  mode: 'single' | 'selected' | 'all_from_territory' | 'all_from_quadra';
+  sourceTerritoryNumber?: string;
+  sourceGroupKey?: string;
+  sourceNodeKeys?: string[];
+  addressKeys?: string[];
+  destinationTerritoryNumber: string;
+  destinationGroupKey?: string;
+  destinationTerritoryName?: string;
+  destinationCity?: string;
+  /** Default: 'keep_header' so the source territory remains available as an empty territory unless 'delete_source' is specified */
+  emptySourcePolicy?: 'keep_header' | 'delete_source';
+}
+
+export interface TransferTerritoryAddressesResult {
+  nodes: FlatSkeletonEntry[];
+  cleanNodes: FlatSkeletonEntry[];
+  transferredCount: number;
+  sourceTerritoryNumber: string;
+  destinationTerritoryNumber: string;
+  destinationGroupKey: string;
+  newKeys: string[];
 }
 
 export interface RenameOrRenumberTerritoryPatch {
@@ -227,6 +254,9 @@ export function extractTerritorySummaries(
       territoryName: string;
       city: string;
       quadraKeys: Set<string>;
+      quadraLabels: Set<string>;
+      streets: Set<string>;
+      notesSnippets: Set<string>;
       totalNodes: number;
       totalAddresses: number;
       workedAddresses: number;
@@ -242,6 +272,9 @@ export function extractTerritorySummaries(
         territoryName: '',
         city: '',
         quadraKeys: new Set<string>(),
+        quadraLabels: new Set<string>(),
+        streets: new Set<string>(),
+        notesSnippets: new Set<string>(),
         totalNodes: 0,
         totalAddresses: 0,
         workedAddresses: 0,
@@ -268,26 +301,65 @@ export function extractTerritorySummaries(
     const normKey = safeNormalizeKey(node.key);
     const isHeaderOnly =
       parentKeys.has(normKey) || (safeDepth(node.key) === 1 && node.type === 'header');
-    if (!isHeaderOnly) {
+    if (isHeaderOnly) {
+      const cleanLabel = String(node.label || '').trim();
+      if (cleanLabel) {
+        entry.quadraLabels.add(cleanLabel);
+      }
+    } else {
       entry.totalAddresses += 1;
       if (Number(meta.worked) === 1) {
         entry.workedAddresses += 1;
+      }
+      const rawStreet = String(meta.street || meta.line || node.label || '').trim();
+      if (rawStreet) {
+        entry.streets.add(rawStreet);
+      }
+      const rawNote = String(meta.notes || '').trim();
+      if (rawNote) {
+        entry.notesSnippets.add(rawNote);
       }
     }
   }
 
   return Array.from(byTerritory.entries())
     .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-    .map(([territoryNumber, data]) => ({
-      territoryNumber,
-      territoryName:
-        data.territoryName || resolveTerritoryNameFromNodes(cleanNodes, territoryNumber),
-      city: data.city,
-      quadraKeys: Array.from(data.quadraKeys),
-      totalNodes: data.totalNodes,
-      totalAddresses: data.totalAddresses,
-      workedAddresses: data.workedAddresses,
-    }));
+    .map(([territoryNumber, data]) => {
+      const resolvedName =
+        data.territoryName || resolveTerritoryNameFromNodes(cleanNodes, territoryNumber);
+      const quadraLabels = Array.from(data.quadraLabels);
+      const sampleStreets = Array.from(data.streets).slice(0, 4);
+      const subtitleParts = [
+        ...quadraLabels.filter((lbl) => lbl !== resolvedName),
+        ...(quadraLabels.length === 0 ? sampleStreets : []),
+      ];
+      const subtitle = subtitleParts.slice(0, 2).join(' • ') || data.city || '';
+      const searchBlob = [
+        territoryNumber,
+        `T${territoryNumber}`,
+        resolvedName,
+        data.city,
+        ...quadraLabels,
+        ...Array.from(data.streets),
+        ...Array.from(data.notesSnippets),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return {
+        territoryNumber,
+        territoryName: resolvedName,
+        city: data.city,
+        quadraKeys: Array.from(data.quadraKeys),
+        quadraLabels,
+        subtitle,
+        searchBlob,
+        totalNodes: data.totalNodes,
+        totalAddresses: data.totalAddresses,
+        workedAddresses: data.workedAddresses,
+      };
+    });
 }
 
 /**
@@ -675,6 +747,284 @@ export function deleteTerritoryOrQuadra(
 }
 
 /**
+ * Transfers one address, a selected set of addresses, or all addresses of a source territory/quadra
+ * into a destination territory/quadra.
+ *
+ * Atomically re-parents hierarchical keys (`${destinationGroupKey}-${nextSeq}`), updates `_originalKey`,
+ * `territoryNumber`, `meta.territory_number`, `meta.territory`, `meta.territory_name`, and `meta.locality`
+ * while preserving 100% of address visit history (`worked`, `completedAt`, `workerName`, `notes`, `lat`, `lng`).
+ */
+export function transferAddressesBetweenTerritories(
+  cleanNodes: FlatSkeletonEntry[],
+  input: TransferTerritoryAddressesInput
+): TransferTerritoryAddressesResult {
+  const safeInputNodes = Array.isArray(cleanNodes) ? cleanNodes : [];
+  const destTerritoryNumber = normalizeTerritoryId(input.destinationTerritoryNumber || '01');
+  const emptySourcePolicy = input.emptySourcePolicy || 'keep_header';
+
+  const parentKeys = new Set<string>();
+  for (const item of safeInputNodes) {
+    const p = safeParentKey(item.key);
+    if (p) {
+      parentKeys.add(safeNormalizeKey(p));
+    }
+  }
+
+  const isHeaderNode = (node: FlatSkeletonEntry): boolean => {
+    const normKey = safeNormalizeKey(node.key.replace(/^(90-|T::)/, ''));
+    return parentKeys.has(normKey) || (safeDepth(normKey) === 1 && node.type === 'header');
+  };
+
+  // Identify leaf nodes to transfer
+  const rawTargetKeys = input.sourceNodeKeys || input.addressKeys || [];
+  const targetKeySet = new Set(
+    rawTargetKeys.map((k) => safeNormalizeKey(String(k).replace(/^(90-|T::)/, '')))
+  );
+  const normSourceTerr = input.sourceTerritoryNumber
+    ? normalizeTerritoryId(input.sourceTerritoryNumber)
+    : '';
+  const normSourceGroup = input.sourceGroupKey
+    ? safeNormalizeKey(input.sourceGroupKey.replace(/^(90-|T::)/, ''))
+    : '';
+
+  const matchedLeafIndices = new Set<number>();
+  let detectedSourceTerritory = normSourceTerr;
+  let detectedSourceName = '';
+  let detectedSourceCity = '';
+
+  safeInputNodes.forEach((node, idx) => {
+    if (isHeaderNode(node)) return;
+    const cleanKey = safeNormalizeKey(node.key.replace(/^(90-|T::)/, ''));
+    const origKey = node.meta?._originalKey
+      ? safeNormalizeKey(String(node.meta._originalKey))
+      : '';
+    const nodeTerr = resolveTerritoryNumber(node);
+    const rootKey = safeRootKey(cleanKey);
+
+    let matches = false;
+    if (input.mode === 'single' || input.mode === 'selected') {
+      matches =
+        targetKeySet.has(cleanKey) || (Boolean(origKey) && targetKeySet.has(origKey));
+    } else if (input.mode === 'all_from_quadra' && normSourceGroup) {
+      matches = safeKeysEqual(rootKey, normSourceGroup);
+    } else if (input.mode === 'all_from_territory' && normSourceTerr) {
+      matches = nodeTerr === normSourceTerr;
+    }
+
+    if (matches) {
+      matchedLeafIndices.add(idx);
+      if (!detectedSourceTerritory) {
+        detectedSourceTerritory = nodeTerr;
+      }
+      if (!detectedSourceName) {
+        detectedSourceName = String(
+          node.meta?.territory_name || node.meta?.locality || node.meta?.neighborhood || ''
+        ).trim();
+      }
+      if (!detectedSourceCity) {
+        detectedSourceCity = String(node.meta?.city || node.meta?.cidade || '').trim();
+      }
+    }
+  });
+
+  if (matchedLeafIndices.size === 0) {
+    return {
+      nodes: safeInputNodes,
+      cleanNodes: safeInputNodes,
+      transferredCount: 0,
+      sourceTerritoryNumber: detectedSourceTerritory || normSourceTerr,
+      destinationTerritoryNumber: destTerritoryNumber,
+      destinationGroupKey: input.destinationGroupKey || '',
+      newKeys: [],
+    };
+  }
+
+  if (!detectedSourceName && detectedSourceTerritory) {
+    detectedSourceName = resolveTerritoryNameFromNodes(safeInputNodes, detectedSourceTerritory);
+  }
+
+  // Resolve destination territory metadata and destination group header key
+  const existingDestNodes = safeInputNodes.filter(
+    (n, idx) => !matchedLeafIndices.has(idx) && resolveTerritoryNumber(n) === destTerritoryNumber
+  );
+  const existingDestHeader = existingDestNodes.find((n) => safeDepth(n.key) === 1);
+
+  const destTerritoryName =
+    (input.destinationTerritoryName || '').trim() ||
+    (existingDestNodes.length > 0
+      ? resolveTerritoryNameFromNodes(existingDestNodes, destTerritoryNumber)
+      : '') ||
+    `Território ${destTerritoryNumber}`;
+
+  const destCity =
+    (input.destinationCity || '').trim() ||
+    String(
+      existingDestHeader?.meta?.city ||
+        existingDestNodes[0]?.meta?.city ||
+        detectedSourceCity ||
+        'São Paulo'
+    ).trim();
+
+  const destGroupKey = input.destinationGroupKey?.trim()
+    ? safeNormalizeKey(input.destinationGroupKey)
+    : existingDestHeader
+      ? safeRootKey(existingDestHeader.key)
+      : allocateNextNumericRootKey(safeInputNodes, destTerritoryNumber);
+
+  // Build working node list excluding the leaves being transferred
+  const remainingNodes: FlatSkeletonEntry[] = [];
+  const leavesToTransfer: FlatSkeletonEntry[] = [];
+
+  safeInputNodes.forEach((node, idx) => {
+    if (matchedLeafIndices.has(idx)) {
+      leavesToTransfer.push(node);
+    } else {
+      remainingNodes.push({ ...node, meta: { ...(node.meta || {}) } });
+    }
+  });
+
+  // Ensure destination group header exists in remainingNodes
+  const hasDestGroupHeader = remainingNodes.some(
+    (n) => safeDepth(n.key) === 1 && safeKeysEqual(safeRootKey(n.key), destGroupKey)
+  );
+  if (!hasDestGroupHeader) {
+    remainingNodes.push({
+      key: destGroupKey,
+      type: 'header',
+      label: `Quadra ${destGroupKey} — ${destTerritoryName}`,
+      value: '',
+      email: '',
+      meta: {
+        _originalKey: destGroupKey,
+        engine_id: 'territory_logistics',
+        territoryNumber: destTerritoryNumber,
+        territory_number: destTerritoryNumber,
+        territory: destTerritoryNumber,
+        territory_name: destTerritoryName,
+        locality: destTerritoryName,
+        neighborhood: destTerritoryName,
+        city: destCity,
+        worked: 0,
+      },
+    });
+  }
+
+  // Find current max child sequence under destGroupKey
+  let maxDestSeq = 0;
+  for (const node of remainingNodes) {
+    const segs = safeSegments(node.key.replace(/^(90-|T::)/, ''));
+    if (segs.length >= 2 && safeKeysEqual(segs[0], destGroupKey)) {
+      const lastSeg = segs[segs.length - 1];
+      const numeric = parseInt(lastSeg, 10);
+      if (!isNaN(numeric) && numeric > maxDestSeq) {
+        maxDestSeq = numeric;
+      }
+    }
+  }
+
+  const newKeys: string[] = [];
+  for (const leaf of leavesToTransfer) {
+    maxDestSeq += 1;
+    const allocatedKey = `${destGroupKey}-${String(maxDestSeq).padStart(2, '0')}`;
+    newKeys.push(allocatedKey);
+
+    const prevMeta = (leaf.meta || {}) as Record<string, any>;
+    remainingNodes.push({
+      ...leaf,
+      key: allocatedKey,
+      type: leaf.type === 'header' ? 'territory' : leaf.type,
+      meta: {
+        ...prevMeta,
+        _originalKey: allocatedKey,
+        engine_id: 'territory_logistics',
+        territoryNumber: destTerritoryNumber,
+        territory_number: destTerritoryNumber,
+        territory: destTerritoryNumber,
+        territory_name: destTerritoryName,
+        locality: destTerritoryName,
+        city: destCity || prevMeta.city,
+        custom_Order: maxDestSeq,
+      },
+    });
+  }
+
+  // Handle source territory cleanup policy if source territory now has 0 leaf addresses
+  let finalNodes = remainingNodes;
+  if (detectedSourceTerritory && detectedSourceTerritory !== destTerritoryNumber) {
+    const sourceRemainingNodes = finalNodes.filter(
+      (n) => resolveTerritoryNumber(n) === detectedSourceTerritory
+    );
+    if (emptySourcePolicy === 'delete_source') {
+      // If no leaf children remain in the source territory, remove its empty header nodes too
+      const postParentKeys = new Set<string>();
+      for (const item of finalNodes) {
+        const p = safeParentKey(item.key);
+        if (p) postParentKeys.add(safeNormalizeKey(p));
+      }
+      const sourceHasLeaves = sourceRemainingNodes.some((n) => {
+        const nk = safeNormalizeKey(n.key.replace(/^(90-|T::)/, ''));
+        return !(postParentKeys.has(nk) || (safeDepth(nk) === 1 && n.type === 'header'));
+      });
+      if (!sourceHasLeaves) {
+        finalNodes = finalNodes.filter(
+          (n) => resolveTerritoryNumber(n) !== detectedSourceTerritory
+        );
+      }
+    } else {
+      // 'keep_header': ensure the source territory still has at least one header node so it remains visible as empty (0 addresses)
+      if (sourceRemainingNodes.length === 0) {
+        const fallbackSourceHeaderKey = allocateNextNumericRootKey(finalNodes, detectedSourceTerritory);
+        const sourceLabel = detectedSourceName || `Território ${detectedSourceTerritory}`;
+        finalNodes.unshift({
+          key: fallbackSourceHeaderKey,
+          type: 'header',
+          label: `Quadra ${fallbackSourceHeaderKey} — ${sourceLabel}`,
+          value: '',
+          email: '',
+          meta: {
+            _originalKey: fallbackSourceHeaderKey,
+            engine_id: 'territory_logistics',
+            territoryNumber: detectedSourceTerritory,
+            territory_number: detectedSourceTerritory,
+            territory: detectedSourceTerritory,
+            territory_name: sourceLabel,
+            locality: sourceLabel,
+            neighborhood: sourceLabel,
+            city: detectedSourceCity || destCity,
+            worked: 0,
+          },
+        });
+      } else {
+        // Ensure any remaining depth-1 header node in source has type: 'header'
+        finalNodes = finalNodes.map((n) => {
+          if (
+            resolveTerritoryNumber(n) === detectedSourceTerritory &&
+            safeDepth(n.key) === 1 &&
+            sourceRemainingNodes.length === 1
+          ) {
+            return {
+              ...n,
+              type: 'header',
+            };
+          }
+          return n;
+        });
+      }
+    }
+  }
+
+  return {
+    nodes: finalNodes,
+    cleanNodes: finalNodes,
+    transferredCount: leavesToTransfer.length,
+    sourceTerritoryNumber: detectedSourceTerritory,
+    destinationTerritoryNumber: destTerritoryNumber,
+    destinationGroupKey: destGroupKey,
+    newKeys,
+  };
+}
+
+/**
  * Merges updated clean territory nodes back into a potentially multi-engine `rawRegistry`.
  * Preserves 100% of nodes belonging to other engines (`roster_assignments`, `event_schedule`, etc.)
  * and properly prefixes territory keys with `90-` when multi-engine partitioning is active.
@@ -767,7 +1117,7 @@ export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntr
 
   for (const node of cleanTerritoryNodes) {
     const normKey = safeNormalizeKey(node.key);
-    if (parentKeys.has(normKey) && safeDepth(node.key) === 1) {
+    if ((parentKeys.has(normKey) && safeDepth(node.key) === 1) || node.type === 'header') {
       continue;
     }
 
