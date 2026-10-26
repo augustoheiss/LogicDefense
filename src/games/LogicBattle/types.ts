@@ -390,6 +390,8 @@ export interface SaveV1 {
   trapAlertSeenCount: Record<TrapId, number>
   mergeTutorialSeenCount: number
   coachMarksSeen?: boolean
+  /** V6: Janela de assinaturas paramétricas de desafios matemáticos já vistos para zero repetição entre rodadas */
+  recentMathSignatures?: string[]
   settings: LogicBattleSettings
   stats: {
     runsPlayed: number

@@ -70,10 +70,11 @@ function buildFairPairSegment(
   currentBestArmy: ArmyCount,
   enemyTotalForce: ArmyCount,
   rng: SeededRng,
+  usedLabels?: Set<string>,
 ): LaneSegment {
   const isAlreadyAboveEnemy = currentBestArmy >= enemyTotalForce
   const remainingGap = Math.max(4, enemyTotalForce - currentBestArmy)
-  const addGood = isAlreadyAboveEnemy
+  const rawAddGood = isAlreadyAboveEnemy
     ? rng.nextInt(2, 5)
     : Math.max(
         4,
@@ -82,7 +83,12 @@ function buildFairPairSegment(
           Math.round(currentBestArmy * 0.28) + rng.nextInt(3, 8),
         ),
       )
-  const addModest = Math.max(1, Math.floor(addGood * 0.35))
+  // Evita repetir exatamente a mesma placa '+ X' em segmentos consecutivos
+  let addGood = rawAddGood
+  if (usedLabels && usedLabels.has(`+ ${addGood}`)) {
+    addGood = rawAddGood + ((index % 3) + 1)
+  }
+  const addModest = Math.max(1, Math.floor(addGood * 0.35) + (index % 2))
   const canMultiplySafely = currentBestArmy * 2 <= enemyTotalForce * 1.15
 
   let bestGate: Gate
@@ -282,6 +288,7 @@ function tryBuildRunWithSeed(
 
   const segments: LaneSegment[] = []
   const usedTraps = new Set<TrapId>()
+  const usedGateLabels = attemptSeed === 42 ? undefined : new Set<string>()
   let runningBest = n0
   let runningWorst = n0
   let lastTrapIndex = -10
@@ -419,7 +426,15 @@ function tryBuildRunWithSeed(
       runningBest,
       enemy.totalForce,
       rng,
+      usedGateLabels,
     )
+    if (usedGateLabels) {
+      for (const lane of fairSeg.lanes) {
+        for (const g of lane) {
+          usedGateLabels.add(g.label)
+        }
+      }
+    }
     segments.push(fairSeg)
     const cf = evaluateSegmentCounterfactual(fairSeg, runningBest)
     const cfW = evaluateSegmentCounterfactual(fairSeg, runningWorst)

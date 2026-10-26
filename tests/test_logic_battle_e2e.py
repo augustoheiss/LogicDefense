@@ -183,6 +183,55 @@ def run_suite() -> dict:
             )
             results["functional"]["continuousShootingFromStart"] = f"PASS ({active_projectiles_start} active projectiles)"
 
+            # 2.5.2 MASTER PLAN V6: 3º Caminho na Direita da Ponte + 4 Graus de Dificuldade + Zero Repetição
+            army_before_math = int(
+                page.locator('[data-testid="lb-current-army-value"]').inner_text().strip()
+            )
+            page.click('[data-testid="lb-bridge-math-path-btn"]')
+            page.wait_for_selector('[data-testid="lb-math-challenge-modal"]', timeout=5000)
+
+            seen_questions = set()
+            for tier_idx in [1, 2, 3, 4]:
+                page.click(f'[data-testid="lb-math-tier-btn-{tier_idx}"]')
+                for _ in range(3):
+                    q_txt = page.locator('[data-testid="lb-math-challenge-question"]').inner_text().strip()
+                    expr_txt = page.locator('[data-testid="lb-math-challenge-expr"]').inner_text().strip()
+                    seen_questions.add(f"{tier_idx}::{expr_txt}::{q_txt}")
+                    page.click('[data-testid="lb-math-reroll-btn"]')
+
+            assert len(seen_questions) >= 10, (
+                f"V6: Esperadas contas e problemas variados sem repeticao nos 4 graus, obtido {len(seen_questions)}"
+            )
+
+            v6_modal_shot = os.path.join(evid_dir, "v6_math_challenge_modal_4_graus.png")
+            page.screenshot(path=v6_modal_shot)
+            results["screenshots"].append(v6_modal_shot)
+
+            # Resolver a conta clicando nas alternativas até acertar (sem punição)
+            for c_id in ["c1", "c2", "c3", "c4"]:
+                if page.locator('[data-testid="lb-math-challenge-modal"]').count() == 0:
+                    break
+                choice_btn = page.locator(f'[data-testid="lb-math-choice-{c_id}"]')
+                if choice_btn.count() > 0:
+                    choice_btn.click()
+                    time.sleep(0.08)
+
+            assert page.locator('[data-testid="lb-math-challenge-modal"]').count() == 0, (
+                "V6: MathChallengeModal deve fechar ao acertar a conta"
+            )
+            army_after_math = int(
+                page.locator('[data-testid="lb-current-army-value"]').inner_text().strip()
+            )
+            assert army_after_math > army_before_math, (
+                f"V6: Resolver conta no 3º Caminho deve aumentar soldados ({army_before_math} -> {army_after_math})"
+            )
+            results["functional"]["v6BridgeThirdMathPathAnd4Tiers"] = (
+                f"PASS ({len(seen_questions)} unique challenges, army {army_before_math} -> {army_after_math})"
+            )
+            # Reiniciar seed=42 limpa para seguir o teste determinístico de pegadinha e batalha
+            page.goto(f"{BASE_URL}/jogos/logic-battle?seed=42", wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_selector('[data-testid="logic-battle-game"]', timeout=15000)
+
             # 2.6 Atravessar segmentos até encontrar Pegadinha ou Batalha Final
             trap_triggered = False
             redemption_tested = False
@@ -325,6 +374,22 @@ def run_suite() -> dict:
                 # SIT-05: HUD sincronizado com a forca inicial do exercito
                 hud_army_txt = page.locator('[data-testid="lb-current-army-value"]').inner_text().strip()
                 assert len(hud_army_txt) >= 1, f"SIT-05: HUD army vazio na engine {eng_id}"
+
+                # V6: Botão sempre disponível de Fazer Conta presente em todas as engines!
+                assert page.locator('[data-testid="lb-open-math-challenge-btn"]').count() == 1, (
+                    f"V6: lb-open-math-challenge-btn ausente na engine {eng_id}"
+                )
+                if eng_id == "forte_bandeira":
+                    page.click('[data-testid="lb-open-math-challenge-btn"]')
+                    page.wait_for_selector('[data-testid="lb-math-challenge-modal"]', timeout=5000)
+                    page.click('[data-testid="lb-math-tier-btn-4"]')
+                    for c_id in ["c1", "c2", "c3", "c4"]:
+                        if page.locator('[data-testid="lb-math-challenge-modal"]').count() == 0:
+                            break
+                        c_btn = page.locator(f'[data-testid="lb-math-choice-{c_id}"]')
+                        if c_btn.count() > 0:
+                            c_btn.click()
+                            time.sleep(0.06)
 
                 if eng_id == "serpente_numeros":
                     # UAT-04: Minimapa toroidal 64x64, 3 corações e joystick 360° presentes

@@ -303,6 +303,9 @@ export const ArcadeEnginesCanvas: React.FC = () => {
   const notationMode = useLogicBattleStore((s) => s.save.settings.notationMode)
   const reducedMotion = useLogicBattleStore((s) => s.save.settings.reducedMotion)
   const completeEngineRun = useLogicBattleStore((s) => s.completeEngineRun)
+  const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
+  const lastSolvedMathRewardAt = useLogicBattleStore((s) => s.lastSolvedMathRewardAt)
+  const lastAppliedMathSeqRef = useRef<number>(0)
 
   const engineSpec = ENGINE_CATALOG[activeEngineId] ?? ENGINE_CATALOG.cerco_torres
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -610,6 +613,70 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     ;(window as unknown as { __lbActiveProjectiles?: number }).__lbActiveProjectiles =
       projectilePoolRef.current.getActiveCount()
   }, [activeEngineId, runPlan.n0, runPlan.seed, baseEnemyForce])
+
+  // V6: Ao acertar uma Conta no MathChallengeModal, injeta +Moedas, +Soldados/Tanques/Torres/Titãs e Buff de Arma!
+  useEffect(() => {
+    const sim = simRef.current
+    if (
+      !sim ||
+      !lastSolvedMathRewardAt ||
+      lastSolvedMathRewardAt.seq <= lastAppliedMathSeqRef.current
+    ) {
+      return
+    }
+    lastAppliedMathSeqRef.current = lastSolvedMathRewardAt.seq
+
+    sim.coins += lastSolvedMathRewardAt.coinsBonus
+    sim.playerForce += lastSolvedMathRewardAt.soldiersBonus
+    sim.heroWeaponDmg = Math.max(
+      sim.heroWeaponDmg + 4,
+      Math.round(sim.heroWeaponDmg * lastSolvedMathRewardAt.weaponDmgMultiplier),
+    )
+    sim.heroFireCadenceMs = Math.max(150, Math.round(sim.heroFireCadenceMs * 0.88))
+    sim.baseHp = Math.min(sim.baseMaxHp, sim.baseHp + 25)
+    sim.comboStreak += 1
+    sim.maxCombo = Math.max(sim.maxCombo, getComboMultiplier(sim.comboStreak))
+
+    const bonusUnitsCount = lastSolvedMathRewardAt.tier >= 3 ? 2 : 1
+    for (let i = 0; i < bonusUnitsCount; i++) {
+      const unitKind: UnitSpriteKind =
+        activeEngineId === 'forte_bandeira'
+          ? lastSolvedMathRewardAt.tier >= 2 && i === 0
+            ? 'allied_tank'
+            : 'allied_soldier'
+          : activeEngineId === 'pedreira_rei'
+            ? lastSolvedMathRewardAt.tier >= 2
+              ? 'worker_titan'
+              : 'worker_medium'
+            : activeEngineId === 'arena_ondas'
+              ? lastSolvedMathRewardAt.tier >= 3 && i === 0
+                ? 'allied_mecha'
+                : 'allied_archer'
+              : 'allied_archer'
+
+      sim.alliedUnits.push({
+        id: `math_ally_${lastSolvedMathRewardAt.seq}_${i}`,
+        kind: unitKind,
+        hp: unitKind === 'allied_tank' || unitKind === 'allied_mecha' ? 180 : 65,
+        maxHp: unitKind === 'allied_tank' || unitKind === 'allied_mecha' ? 180 : 65,
+        attackDmg: Math.max(8, Math.round(sim.heroWeaponDmg * 0.9)),
+        normX: Math.min(0.75, sim.heroNormX + 0.05 * (i + 1)),
+        normY: Math.max(0.24, Math.min(0.78, sim.heroNormY + (i % 2 === 0 ? -0.05 : 0.05))),
+        fireTimerMs: 0,
+        carryWeightKg: activeEngineId === 'pedreira_rei' ? 80 : 0,
+        carryingState: activeEngineId === 'pedreira_rei' ? 'to_crusher' : 'combat',
+      })
+    }
+
+    setHudState((prev) => ({
+      ...prev,
+      coins: sim.coins,
+      playerForce: sim.playerForce,
+      baseHp: Math.round(sim.baseHp),
+      alliedCount: sim.alliedUnits.length,
+      statusText: `🧮 Conta resolvida! +${lastSolvedMathRewardAt.coinsBonus} 🪙, +${lastSolvedMathRewardAt.soldiersBonus} força e ${lastSolvedMathRewardAt.summaryPt}!`,
+    }))
+  }, [activeEngineId, lastSolvedMathRewardAt])
 
   // Suporte a teclado (WASD / Setas + 1/2/3 para ativar construções/cartas)
   useEffect(() => {
@@ -991,8 +1058,11 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     let hudSyncTimer = 0
 
     const step = (now: number) => {
-      const dtMs = Math.min(64, Math.max(8, now - lastPerf))
+      const rawDtMs = Math.min(64, Math.max(8, now - lastPerf))
       lastPerf = now
+      const isMathModalOpen =
+        useLogicBattleStore.getState().activeMathChallenge !== null
+      const dtMs = isMathModalOpen ? 0 : rawDtMs
 
       const canvas = canvasRef.current
       const sim = simRef.current
@@ -1707,6 +1777,40 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           ctx.textBaseline = 'middle'
           ctx.fillText(`🪙 ${sim.coins}`, hx, hy - 40)
 
+          // V6: Desenhar Altar / Santuário Matemático 2.5D no canto superior direito do campo (0.84, 0.24)
+          const shrineX = 0.84 * w
+          const shrineY = 0.24 * h
+          const shrineName =
+            activeEngineId === 'cerco_torres'
+              ? '🧮 Cristal Alquímico'
+              : activeEngineId === 'forte_bandeira'
+                ? '🧮 Academia Militar'
+                : activeEngineId === 'pedreira_rei'
+                  ? '🧮 Geodo de Ouro'
+                  : '🧮 Cápsula Orbital'
+          ctx.save()
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.25)'
+          ctx.beginPath()
+          ctx.ellipse(shrineX, shrineY + 14, 34, 14, 0, 0, Math.PI * 2)
+          ctx.fill()
+
+          ctx.fillStyle = 'rgba(30, 41, 59, 0.92)'
+          ctx.strokeStyle = '#facc15'
+          ctx.lineWidth = 2.5
+          ctx.beginPath()
+          ctx.roundRect(shrineX - 48, shrineY - 26, 96, 44, 10)
+          ctx.fill()
+          ctx.stroke()
+
+          ctx.fillStyle = '#fef08a'
+          ctx.font = '900 10px Inter, system-ui, sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(shrineName, shrineX, shrineY - 11)
+          ctx.fillStyle = '#4ade80'
+          ctx.font = '800 9px Inter, system-ui, sans-serif'
+          ctx.fillText('FAZER CONTA (+🪙/🪖)', shrineX, shrineY + 6)
+          ctx.restore()
+
           // 9. Atualizar Projéteis e Colisões Reais com o HP dos Inimigos e do Boss
           projectilePoolRef.current.updateAndDraw(
             ctx,
@@ -1807,6 +1911,11 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     sim.targetNormY = normY
 
     if (isDown) {
+      // V6: Clicar no Altar Matemático 2.5D no canto superior direito (0.84, 0.24) abre a Conta!
+      if (Math.hypot(normX - 0.84, normY - 0.24) <= 0.1) {
+        openMathChallengeModal()
+        return
+      }
       const clickedPad = sim.pads.find(
         (p) => Math.hypot(p.normX - normX, p.normY - normY) <= 0.095,
       )
@@ -1939,6 +2048,26 @@ export const ArcadeEnginesCanvas: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* V6: Botão Sempre Disponível de Fazer Conta (4 Graus: Fácil, Médio, Difícil ou Problema) */}
+          <button
+            type="button"
+            className="lb-luneta-fab"
+            data-testid="lb-open-math-challenge-btn"
+            onClick={() => openMathChallengeModal()}
+            title="Fazer Conta Matemática (Fácil, Médio, Difícil ou Problema) para ganhar +Moedas, +Tropas/Tanques/Torres e Buffs"
+            aria-label="Fazer Conta Matemática"
+            style={{
+              borderColor: '#facc15',
+              background:
+                'linear-gradient(135deg, rgba(250, 204, 21, 0.35), rgba(168, 85, 247, 0.38))',
+              color: '#fef08a',
+              boxShadow: '0 0 14px rgba(250, 204, 21, 0.45)',
+            }}
+          >
+            <span>🧮</span>
+            <small>Conta</small>
+          </button>
         </div>
       )}
     </div>

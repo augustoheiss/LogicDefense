@@ -8,6 +8,7 @@ import { CaptainVirgula } from './components/CaptainVirgula'
 import { CodexDrawer } from './components/CodexDrawer'
 import { BottomSheet } from './components/hud/BottomSheet'
 import { MinimalHud } from './components/hud/MinimalHud'
+import { MathChallengeModal } from './components/MathChallengeModal'
 import { RedemptionChallengeModal } from './components/RedemptionChallengeModal'
 import { TrapAlbumDrawer } from './components/TrapAlbumDrawer'
 import { TrapAlertOverlay } from './components/TrapAlertOverlay'
@@ -145,6 +146,7 @@ export const LogicBattleGame: React.FC = () => {
       {/* Overlays e Gavetas Socráticas */}
       <TrapAlertOverlay />
       <RedemptionChallengeModal />
+      <MathChallengeModal />
       <BattleOverlay />
       <TrapAlbumDrawer />
       <CodexDrawer />

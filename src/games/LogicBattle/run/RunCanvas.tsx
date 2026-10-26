@@ -15,7 +15,11 @@ import { RunEngine } from './engine/runEngine'
 import { FortressRenderState } from './renderer/battleRenderer'
 import { drawPlayerCrowd } from './renderer/crowdRenderer'
 import { ParticlePool } from './renderer/fxParticles'
-import { drawBridgeAndBackdrop, drawSegmentsOnBridge } from './renderer/gateRenderer'
+import {
+  drawBridgeAndBackdrop,
+  drawSegmentsOnBridge,
+  RightMathGateScreenRect,
+} from './renderer/gateRenderer'
 import { createBridgeProjection, projectBridgePoint } from './renderer/perspective'
 import { ProjectilePool } from './renderer/projectilePool'
 
@@ -33,6 +37,8 @@ export const RunCanvas: React.FC = () => {
   const marchVolleyTimerRef = useRef<number>(180)
   const marchDamageTextTimerRef = useRef<number>(0)
   const lastFeedbackIdRef = useRef<string | null>(null)
+  const rightMathRectRef = useRef<RightMathGateScreenRect | null>(null)
+  const rightMathHitsRef = useRef<number>(0)
   const drawFrameRef = useRef<() => void>(() => {})
 
   const world = useLogicBattleStore((s) => s.world)
@@ -52,12 +58,14 @@ export const RunCanvas: React.FC = () => {
   const battleResolution = useLogicBattleStore((s) => s.battleResolution)
   const settings = useLogicBattleStore((s) => s.save.settings)
   const lunetaCharges = useLogicBattleStore((s) => s.lunetaChargesRemaining)
+  const activeMathChallenge = useLogicBattleStore((s) => s.activeMathChallenge)
+  const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
   const chooseLaneAndAdvance = useLogicBattleStore((s) => s.chooseLaneAndAdvance)
   const useLunetaOnNextSegment = useLogicBattleStore((s) => s.useLunetaOnNextSegment)
   const updateBattleArmyVisual = useLogicBattleStore((s) => s.updateBattleArmyVisual)
   const finishBattle = useLogicBattleStore((s) => s.finishBattle)
 
-  useRunLoop(world === 'run' && phase === 'RUNNING')
+  useRunLoop(world === 'run' && phase === 'RUNNING' && activeMathChallenge === null)
   useSteeringInput(canvasRef)
 
   const biome = BIOMES[biomeId] ?? BIOMES.planicie_pedra
@@ -115,7 +123,7 @@ export const RunCanvas: React.FC = () => {
       snap.bridgeKills ?? 0,
     )
 
-    drawSegmentsOnBridge(
+    rightMathRectRef.current = drawSegmentsOnBridge(
       ctx,
       proj,
       snap.segments,
@@ -125,6 +133,7 @@ export const RunCanvas: React.FC = () => {
       snap.currentArmy,
       snap.inspectedSegmentId,
       cfg.notationMode,
+      rightMathHitsRef.current,
     )
 
     const visualClockMs = snap.elapsedMs + battleAnimElapsedRef.current
@@ -199,19 +208,32 @@ export const RunCanvas: React.FC = () => {
           const sx = playerCenter.x + (i - (volleyCount - 1) * 0.5) * 18
           const sy = playerCenter.y - 16
 
+          // V6: Se o jogador encostar na borda direita do 3º Caminho (smoothedLaneX >= 0.72), os tiros miram no Altar de Conta
+          const rightAltar = rightMathRectRef.current
+          const aimRightMathAltar =
+            Boolean(rightAltar) &&
+            smoothedLaneX >= 0.72 &&
+            i === volleyCount - 1 &&
+            !liveState.activeMathChallenge
+
           // Alterna disparos entre a Vanguarda Rubra na ponte (progress < 0.88) e o Boss/Horda
-          const aimVanguard = snap.progress < 0.88 && i % 2 === 0
+          const aimVanguard =
+            !aimRightMathAltar && snap.progress < 0.88 && i % 2 === 0
           const vanguardPt = projectBridgePoint(
             proj,
             (i - 1) * 0.22,
             0.39 + (i % 2) * 0.03,
           )
-          const tx = aimVanguard
-            ? vanguardPt.x
-            : fortressCoords.bossCenterX + (Math.random() - 0.5) * 48
-          const ty = aimVanguard
-            ? vanguardPt.y - 14
-            : fortressCoords.bossCenterY + (Math.random() - 0.5) * 18
+          const tx = aimRightMathAltar && rightAltar
+            ? rightAltar.centerX
+            : aimVanguard
+              ? vanguardPt.x
+              : fortressCoords.bossCenterX + (Math.random() - 0.5) * 48
+          const ty = aimRightMathAltar && rightAltar
+            ? rightAltar.centerY
+            : aimVanguard
+              ? vanguardPt.y - 14
+              : fortressCoords.bossCenterY + (Math.random() - 0.5) * 18
 
           projectilePoolRef.current.spawnProjectile(
             kind,
@@ -219,7 +241,7 @@ export const RunCanvas: React.FC = () => {
             sy,
             tx,
             ty,
-            aimVanguard ? 240 : 340,
+            aimRightMathAltar ? 210 : aimVanguard ? 240 : 340,
           )
         }
 
@@ -256,6 +278,30 @@ export const RunCanvas: React.FC = () => {
             4,
             cfg.reducedMotion,
           )
+
+          // V6: Checar se o projétil do jogador acertou o 3º Caminho na Direita (Altar de Conta)
+          const rightAltar = rightMathRectRef.current
+          if (
+            kind !== 'enemy_bolt' &&
+            rightAltar &&
+            smoothedLaneX >= 0.72 &&
+            !liveState.activeMathChallenge &&
+            Math.abs(hitX - rightAltar.centerX) <= rightAltar.w * 0.65 &&
+            Math.abs(hitY - rightAltar.centerY) <= rightAltar.h * 0.65
+          ) {
+            rightMathHitsRef.current += 1
+            projectilePoolRef.current.spawnDamageText(
+              rightAltar.centerX,
+              rightAltar.y - 6,
+              `🧮 ${rightMathHitsRef.current}/3`,
+              '#fde047',
+            )
+            if (rightMathHitsRef.current >= 3) {
+              rightMathHitsRef.current = 0
+              liveState.openMathChallengeModal()
+            }
+            return
+          }
           if (kind === 'enemy_bolt') {
             if (snap.phase === 'RUNNING' && marchDamageTextTimerRef.current >= 520) {
               marchDamageTextTimerRef.current = 0
@@ -389,6 +435,21 @@ export const RunCanvas: React.FC = () => {
         className="lb-run-canvas"
         data-testid="logic-battle-canvas"
         aria-label="Ponte dos Portões Matemáticos — Deslize para guiar o exército"
+        onClick={(e) => {
+          const rect = canvasRef.current?.getBoundingClientRect()
+          const rightAltar = rightMathRectRef.current
+          if (!rect || !rightAltar) return
+          const cx = e.clientX - rect.left
+          const cy = e.clientY - rect.top
+          if (
+            cx >= rightAltar.x - 14 &&
+            cx <= rightAltar.x + rightAltar.w + 14 &&
+            cy >= rightAltar.y - 14 &&
+            cy <= rightAltar.y + rightAltar.h + 14
+          ) {
+            openMathChallengeModal()
+          }
+        }}
       />
 
       {/* Pop-up flutuante compacto de feedback (+99, Gêmeos) — oculto durante BATTLE */}
@@ -468,6 +529,26 @@ export const RunCanvas: React.FC = () => {
         >
           <span>🔭</span>
           <small>{lunetaCharges}</small>
+        </button>
+
+        {/* V6: 3º Caminho na Direita da Ponte — Fazer Conta (Fácil, Médio, Difícil ou Problema) */}
+        <button
+          type="button"
+          className="lb-luneta-fab"
+          data-testid="lb-bridge-math-path-btn"
+          onClick={() => openMathChallengeModal()}
+          title="3º Caminho na Direita: Fazer Conta (Fácil, Médio, Difícil ou Problema) para ganhar +Soldados, +Moedas e Buffs"
+          aria-label="3º Caminho da Direita: Fazer Conta"
+          style={{
+            borderColor: '#facc15',
+            background:
+              'linear-gradient(135deg, rgba(250, 204, 21, 0.32), rgba(168, 85, 247, 0.35))',
+            color: '#fef08a',
+            boxShadow: '0 0 14px rgba(250, 204, 21, 0.45)',
+          }}
+        >
+          <span>🧮</span>
+          <small>+×</small>
         </button>
       </div>
       )}

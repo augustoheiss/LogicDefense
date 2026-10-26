@@ -5,14 +5,16 @@ import { GATE_POLICIES } from '../config/gatePolicies'
 import { TRAP_CATALOG } from '../config/trapCatalog'
 import {
   ArmyCount,
+  RedemptionChoice,
   RedemptionContractOffer,
   RedemptionToken,
   TrapHit,
 } from '../types'
+import { generateInfiniteChallenge } from './infiniteMathEngine'
 
 /**
  * Emite uma Ficha de Resgate (`RedemptionToken`) contendo uma Conta de Resgate
- * isomórfica (mesmo conceito da pegadinha, números diferentes).
+ * infinita e não-repetitiva gerada pelo motor paramétrico `infiniteMathEngine`.
  */
 export function issueToken(
   hit: TrapHit,
@@ -20,14 +22,44 @@ export function issueToken(
   randFloat: () => number = () => 0.5,
 ): RedemptionToken {
   const entry = TRAP_CATALOG[hit.trapId]
-  const built = entry.buildRedemption(randFloat)
   const tokenId = `tok_${runId}_${hit.segmentId}_${hit.trapId}`
+
+  // Usa o motor paramétrico infinito para nunca repetir a mesma conta entre rodadas
+  const tier =
+    hit.trapId <= 'T05'
+      ? 1
+      : hit.trapId <= 'T12'
+        ? 2
+        : 3
+  const inf = generateInfiniteChallenge({
+    tier,
+    seed: Math.floor(randFloat() * 999983) + hit.loss * 37,
+    preferredConceptId: entry.conceptId,
+  })
+
+  const correctChoice = inf.choices.find((c) => c.isCorrect) ?? inf.choices[0]
+  const distractors = inf.choices.filter((c) => !c.isCorrect).slice(0, 2)
+  const threeRaw = [correctChoice, ...distractors]
+  // Posição determinística para manter c1, c2, c3
+  const rot = Math.floor(randFloat() * 3) % 3
+  const rotated = [
+    threeRaw[rot % 3],
+    threeRaw[(rot + 1) % 3],
+    threeRaw[(rot + 2) % 3],
+  ]
+  const threeChoices: RedemptionChoice[] = rotated.map((c, idx) => ({
+    id: `c${idx + 1}`,
+    label: c.label,
+    value: c.value,
+    isCorrect: c.isCorrect,
+    diagnosticPt: c.diagnosticPt,
+  }))
 
   return {
     id: tokenId,
     runId,
     trapId: hit.trapId,
-    trapName: entry.name,
+    trapName: `${entry.name} · ${inf.lensTitlePt}`,
     loss: Math.max(1, hit.loss),
     used: false,
     scaffoldLevel: 1,
@@ -36,12 +68,12 @@ export function issueToken(
       trapId: hit.trapId,
       trapName: entry.name,
       conceptId: entry.conceptId,
-      questionPt: built.questionPt,
-      luzGuiaPt: entry.luzGuiaPt,
-      stepByStepPt: built.stepByStepPt,
-      guidedWalkthroughPt: built.guidedWalkthroughPt,
-      choices: built.choices,
-      codexSlug: entry.codexSlug,
+      questionPt: `${inf.questionPt} (${inf.expressionBadge})`,
+      luzGuiaPt: inf.luzGuiaPt,
+      stepByStepPt: inf.stepByStepPt,
+      guidedWalkthroughPt: inf.guidedWalkthroughPt,
+      choices: threeChoices,
+      codexSlug: inf.codexSlug || entry.codexSlug,
     },
   }
 }

@@ -36,6 +36,9 @@ export const SerpentCanvas: React.FC = () => {
   const initialStoreArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
   const reducedMotion = useLogicBattleStore((s) => s.save.settings.reducedMotion)
   const completeEngineRun = useLogicBattleStore((s) => s.completeEngineRun)
+  const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
+  const lastSolvedMathRewardAt = useLogicBattleStore((s) => s.lastSolvedMathRewardAt)
+  const lastAppliedMathSeqRef = useRef<number>(0)
 
   const simRef = useRef<SerpentSimulation>(
     SerpentSimulation.fromSeed(seed, 1, Math.max(5, initialStoreArmy)),
@@ -86,6 +89,34 @@ export const SerpentCanvas: React.FC = () => {
     }))
   }, [seed])
 
+  // V6: Ao resolver uma Conta Matemática, ganha +Besteiros, +Dano na Besta, +Moedas e estoura escamas do Dragão!
+  useEffect(() => {
+    const sim = simRef.current
+    if (
+      !sim ||
+      !lastSolvedMathRewardAt ||
+      lastSolvedMathRewardAt.seq <= lastAppliedMathSeqRef.current
+    ) {
+      return
+    }
+    lastAppliedMathSeqRef.current = lastSolvedMathRewardAt.seq
+
+    sim.coinsEarned += lastSolvedMathRewardAt.coinsBonus
+    sim.hero.armyPower += lastSolvedMathRewardAt.soldiersBonus
+    sim.hero.arrowDamage += Math.max(2, lastSolvedMathRewardAt.tier * 2)
+    sim.hero.hearts = Math.min(3, sim.hero.hearts + 1)
+
+    const targetSegs = sim
+      .getAliveSegments()
+      .slice(-Math.min(3, lastSolvedMathRewardAt.tier))
+    for (const seg of targetSegs) {
+      seg.hp = Math.max(1, seg.hp - 12 * lastSolvedMathRewardAt.tier)
+    }
+
+    setHeartsUi(sim.hero.hearts)
+    setArrowDmgUi(sim.hero.arrowDamage)
+  }, [lastSolvedMathRewardAt])
+
   // Teclado WASD + Setas para movimento contínuo suave
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -129,7 +160,9 @@ export const SerpentCanvas: React.FC = () => {
       lastNow = now
 
       const liveStore = useLogicBattleStore.getState()
-      const isPaused = liveStore.snapshot.phase === 'PAUSED'
+      const isPaused =
+        liveStore.snapshot.phase === 'PAUSED' ||
+        liveStore.activeMathChallenge !== null
       const sim = simRef.current
 
       if (!isPaused && sim.status === 'RUNNING') {
@@ -845,6 +878,26 @@ export const SerpentCanvas: React.FC = () => {
                 )
               })}
             </div>
+
+            {/* V6: Botão Sempre Disponível de Fazer Conta no Labirinto da Serpente */}
+            <button
+              type="button"
+              className="lb-luneta-fab"
+              data-testid="lb-open-math-challenge-btn"
+              onClick={() => openMathChallengeModal()}
+              title="Fazer Conta Matemática (Fácil, Médio, Difícil ou Problema) para ganhar +Besteiros, +Moedas e estourar escamas"
+              aria-label="Fazer Conta Matemática"
+              style={{
+                borderColor: '#facc15',
+                background:
+                  'linear-gradient(135deg, rgba(250, 204, 21, 0.35), rgba(168, 85, 247, 0.38))',
+                color: '#fef08a',
+                boxShadow: '0 0 14px rgba(250, 204, 21, 0.45)',
+              }}
+            >
+              <span>🧮</span>
+              <small>Conta</small>
+            </button>
           </div>
         </>
       )}

@@ -23,6 +23,14 @@ import {
   generateRun,
   injectRedemptionSegmentOnBridge,
 } from '../domain/gateGenerator'
+import {
+  generateInfiniteChallenge,
+  getRecentMathSignaturesSnapshot,
+  hydrateSeenMathSignatures,
+  InfiniteMathChallenge,
+  MATH_CHALLENGE_TIER_POLICIES,
+  MathDifficultyTier,
+} from '../domain/infiniteMathEngine'
 import { updateConceptMastery } from '../domain/mastery'
 import { detectVaiUmMerge, formatArmy } from '../domain/notation'
 import { evaluateSegmentCounterfactual, pathOracle } from '../domain/pathOracle'
@@ -155,7 +163,26 @@ export interface LogicBattleStoreState {
   captainSpeech: CaptainSpeech
   lastDirectAttackResult: DirectAttackResult | null
 
+  // V6: Desafio Matemático Infinito (4 Graus: Fácil, Médio, Difícil, Problema)
+  activeMathChallenge: InfiniteMathChallenge | null
+  activeMathChallengeScaffold: 1 | 2 | 3
+  activeMathChallengeDiagnostic: string | null
+  mathChallengesSolvedInRun: number
+  lastSolvedMathRewardAt: {
+    seq: number
+    tier: MathDifficultyTier
+    coinsBonus: number
+    soldiersBonus: number
+    armyMultiplier: number
+    weaponDmgMultiplier: number
+    summaryPt: string
+  } | null
+
   // Actions
+  openMathChallengeModal: (tier?: MathDifficultyTier) => void
+  switchMathChallengeTier: (tier: MathDifficultyTier) => void
+  submitMathChallengeChoice: (choiceId: string) => void
+  closeMathChallengeModal: () => void
   switchWorld: (world: 'run' | 'realm') => void
   selectEngine: (engineId: EngineId, startImmediately?: boolean) => void
   completeEngineRun: (result: EngineResult) => void
@@ -198,6 +225,7 @@ export interface LogicBattleStoreState {
 }
 
 const initialLoad = SaveRepository.load()
+hydrateSeenMathSignatures(initialLoad.save.recentMathSignatures)
 const urlCfg = readUrlParams()
 soundEngine.setEnabled(initialLoad.save.settings.soundEnabled)
 
@@ -257,9 +285,163 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   settingsPopoverOpen: false,
   activeRealmSheet: 'none',
   lastDirectAttackResult: null,
+  activeMathChallenge: null,
+  activeMathChallengeScaffold: 1,
+  activeMathChallengeDiagnostic: null,
+  mathChallengesSolvedInRun: 0,
+  lastSolvedMathRewardAt: null,
   captainSpeech: {
     mood: 'excited',
     text: 'Capitã Vírgula a postos! Deslize o exército pelos portões e cuidado com as pegadinhas da intuição!',
+  },
+
+  openMathChallengeModal: (tier) => {
+    const state = get()
+    const chosenTier: MathDifficultyTier =
+      tier ?? state.activeMathChallenge?.tier ?? 2
+    const seed =
+      state.runPlan.seed +
+      (state.mathChallengesSolvedInRun + 1) * 997 +
+      chosenTier * 313 +
+      Math.floor(performance.now() % 10000)
+    const challenge = generateInfiniteChallenge({
+      tier: chosenTier,
+      seed,
+    })
+    set({
+      activeMathChallenge: challenge,
+      activeMathChallengeScaffold: 1,
+      activeMathChallengeDiagnostic: null,
+      captainSpeech: {
+        mood: 'curious',
+        text: `Altar Matemático aberto (${MATH_CHALLENGE_TIER_POLICIES[chosenTier].titlePt})! Escolha qualquer dificuldade (Fácil, Médio, Difícil ou Problema) para ganhar mais soldados, moedas e buffs!`,
+      },
+    })
+  },
+
+  switchMathChallengeTier: (tier) => {
+    const state = get()
+    const seed =
+      state.runPlan.seed +
+      (state.mathChallengesSolvedInRun + 1) * 1423 +
+      tier * 521 +
+      Math.floor(performance.now() % 10000)
+    const challenge = generateInfiniteChallenge({
+      tier,
+      seed,
+    })
+    set({
+      activeMathChallenge: challenge,
+      activeMathChallengeScaffold: 1,
+      activeMathChallengeDiagnostic: null,
+      captainSpeech: {
+        mood: 'curious',
+        text: `Nível alterado para ${MATH_CHALLENGE_TIER_POLICIES[tier].titlePt}: ${MATH_CHALLENGE_TIER_POLICIES[tier].engineRewardSummary[state.activeEngineId]}`,
+      },
+    })
+  },
+
+  submitMathChallengeChoice: (choiceId) => {
+    const state = get()
+    const challenge = state.activeMathChallenge
+    if (!challenge) return
+
+    const chosen = challenge.choices.find((c) => c.id === choiceId)
+    if (!chosen) return
+
+    if (!chosen.isCorrect) {
+      const nextScaffold: 1 | 2 | 3 =
+        state.activeMathChallengeScaffold === 1 ? 2 : 3
+      set({
+        activeMathChallengeScaffold: nextScaffold,
+        activeMathChallengeDiagnostic: chosen.diagnosticPt,
+        captainSpeech: {
+          mood: 'curious',
+          text: `${chosen.diagnosticPt} Veja a Dica Socrática Nível ${nextScaffold} abaixo e tente novamente sem perder nada!`,
+        },
+      })
+      return
+    }
+
+    // Resposta correta! Aplica recompensas de soldados, moedas, combo e buffs!
+    soundEngine.playRedemptionSuccess()
+    const policy = MATH_CHALLENGE_TIER_POLICIES[challenge.tier]
+    const snap = state.snapshot
+    const multBonus = Math.max(
+      0,
+      Math.round(snap.currentArmy * (policy.armyMultiplier - 1)),
+    )
+    const soldiersAdded = Math.max(
+      policy.flatSoldiersBonus,
+      multBonus + Math.round(policy.flatSoldiersBonus * 0.5),
+    )
+    const nextArmy = clampArmy(snap.currentArmy + soldiersAdded)
+    const nextCoins = (snap.bridgeCoinsEarned ?? 0) + policy.coinsBonus
+    const nextStreak = (snap.calcComboStreak ?? 0) + 1
+    const nextMult = getComboMultiplier(nextStreak)
+    const nextSeq = state.mathChallengesSolvedInRun + 1
+
+    const rewardSummary =
+      policy.engineRewardSummary[state.activeEngineId] ?? policy.titlePt
+
+    const fbMath: FloatingFeedbackItem = {
+      id: `fb_math_${Date.now()}_${nextSeq}`,
+      text: `🧮 +${formatArmy(soldiersAdded, state.save.settings.notationMode)} · +${policy.coinsBonus}🪙`,
+      subText: rewardSummary,
+      tone: 'reinforcement',
+      createdAtMs: snap.elapsedMs,
+    }
+
+    const nextSave: SaveV1 = {
+      ...state.save,
+      wisdomStars: state.save.wisdomStars + (challenge.tier >= 3 ? 2 : 1),
+      recentMathSignatures: getRecentMathSignaturesSnapshot(),
+      stats: {
+        ...state.save.stats,
+        highestArmyReached: Math.max(
+          state.save.stats.highestArmyReached,
+          nextArmy,
+        ),
+      },
+    }
+    SaveRepository.save(nextSave)
+
+    set({
+      save: nextSave,
+      activeMathChallenge: null,
+      activeMathChallengeScaffold: 1,
+      activeMathChallengeDiagnostic: null,
+      mathChallengesSolvedInRun: nextSeq,
+      lastSolvedMathRewardAt: {
+        seq: nextSeq,
+        tier: challenge.tier,
+        coinsBonus: policy.coinsBonus,
+        soldiersBonus: soldiersAdded,
+        armyMultiplier: policy.armyMultiplier,
+        weaponDmgMultiplier: policy.weaponDmgMultiplier,
+        summaryPt: rewardSummary,
+      },
+      snapshot: {
+        ...snap,
+        currentArmy: nextArmy,
+        crowdNodes: buildCrowdNodes(nextArmy),
+        bridgeCoinsEarned: nextCoins,
+        calcComboStreak: nextStreak,
+        calcComboMultiplier: nextMult,
+        recentFeedback: [...snap.recentFeedback.slice(-4), fbMath],
+      },
+      captainSpeech: {
+        mood: 'proud',
+        text: `Conta resolvida (${policy.titlePt})! Você ganhou +${soldiersAdded} soldados, +${policy.coinsBonus} 🪙 e ${rewardSummary}!`,
+      },
+    })
+  },
+
+  closeMathChallengeModal: () => {
+    set({
+      activeMathChallenge: null,
+      activeMathChallengeDiagnostic: null,
+    })
   },
 
   switchWorld: (world) => {
@@ -269,6 +451,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       battleResolution: null,
       activeTrapHit: null,
       activeRedemptionTokenId: null,
+      activeMathChallenge: null,
+      activeMathChallengeDiagnostic: null,
       settingsPopoverOpen: false,
       activeRealmSheet: 'none',
     })
@@ -508,6 +692,11 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       lastRedeemDiagnostic: null,
       battleResolution: null,
       redemptionContract: null,
+      activeMathChallenge: null,
+      activeMathChallengeScaffold: 1,
+      activeMathChallengeDiagnostic: null,
+      mathChallengesSolvedInRun: 0,
+      lastSolvedMathRewardAt: null,
       lunetaChargesRemaining: lunetas,
       captainSpeech: {
         mood: 'excited',
@@ -597,7 +786,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const state = get()
     const { snapshot, runPlan, save } = state
 
-    if (snapshot.phase !== 'RUNNING') {
+    if (snapshot.phase !== 'RUNNING' || state.activeMathChallenge !== null) {
       return
     }
 
