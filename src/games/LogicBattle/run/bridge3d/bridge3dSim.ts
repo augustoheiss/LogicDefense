@@ -137,8 +137,8 @@ export function createInitialBridge3DSimState(
     const maxHp = isMiniBoss ? 176 : 18
     return {
       id: idx + 1,
-      x: col * 1.6,
-      z: -29 - row * 10.5 - (idx % 3) * 1.8,
+      x: col * 2.1,
+      z: -26 - row * 12 - (idx % 3) * 2.0,
       hp: maxHp,
       maxHp,
       isMiniBoss,
@@ -475,7 +475,7 @@ export function stepBridge3DSim(
           if (en.hp <= 0) {
             coinsEarnedThisFrame += en.isMiniBoss ? 5 : 1
             en.z = -84 - nextSimRandom(sim) * 16
-            en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
+            en.x = ((en.id % 4) - 1.5) * 2.1 + (nextSimRandom(sim) - 0.5) * 0.6
             en.maxHp = en.isMiniBoss
               ? 176 + (sim.sectorIndex - 1) * 90
               : 18 + (sim.sectorIndex - 1) * 10
@@ -492,13 +492,11 @@ export function stepBridge3DSim(
           input.progress >= 0.45 || input.isBattlePhase
             ? bolt.damage
             : Math.max(1, Math.ceil(bolt.damage * 0.25))
-        // No Modo Campanha (!infiniteBridgeMode) durante a marcha (antes de BATTLE),
-        // o Mega-Boss mantém uma reserva blindada (20% HP) para o embate final na muralha,
-        // garantindo que sim.sectorIndex nunca dessincronize do HUD!
-        const minBossHpFloor =
-          !input.infiniteBridgeMode && !input.isBattlePhase
-            ? Math.max(18, Math.round(sim.bossMaxHp * 0.2))
-            : 0
+        // Durante a fase BATTLE (choque final na muralha), mantém piso de HP ativo
+        // para que sim.sectorIndex nunca avance nem dessincronize do HUD no meio da animação final!
+        const minBossHpFloor = input.isBattlePhase
+          ? Math.max(18, Math.round(sim.bossMaxHp * 0.14))
+          : 0
         sim.bossHp = Math.max(minBossHpFloor, sim.bossHp - effectiveBossDmg)
         sim.bossHitFlashMs = 160
         bolt.active = false
