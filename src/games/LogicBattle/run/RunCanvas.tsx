@@ -452,9 +452,6 @@ export const RunCanvas: React.FC = () => {
       className="lb-run-stage"
       data-testid="logic-battle-run-stage"
       onPointerDown={(e) => {
-        if (phase === 'BATTLE') {
-          battleDirectorRef.current.setFastForward(true)
-        }
         // Na faixa superior do céu (26% de cima) ou clique direito, arrastar orbita a câmera 3D suavemente!
         const rect = e.currentTarget.getBoundingClientRect()
         const relY = (e.clientY - rect.top) / Math.max(1, rect.height)
@@ -476,9 +473,6 @@ export const RunCanvas: React.FC = () => {
         setPitchOffsetDeg((prev) => Math.max(-16, Math.min(20, prev + dy * 0.18)))
       }}
       onPointerUp={() => {
-        if (phase === 'BATTLE') {
-          battleDirectorRef.current.setFastForward(false)
-        }
         skyOrbitDragRef.current.active = false
       }}
       onWheel={(e) => {

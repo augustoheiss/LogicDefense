@@ -10,6 +10,7 @@
 import React, { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { formatArmy } from '../../domain/notation'
 import { BRIDGE_3D_ROUTES } from './bridge3dPolicies'
 import { Bridge3DSimState } from './bridge3dSim'
 import { getPlaqueTexture } from './plaqueTextureCache'
@@ -25,6 +26,9 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
 }) => {
   const leftCorridorFlowRef = useRef<THREE.Group | null>(null)
   const rightCorridorFlowRef = useRef<THREE.Group | null>(null)
+  const leftCannonGroupRef = useRef<THREE.Group | null>(null)
+  const rightWeaponGroupRef = useRef<THREE.Group | null>(null)
+  const rightAltarGroupRef = useRef<THREE.Group | null>(null)
   const leftIceShellRef = useRef<THREE.Mesh | null>(null)
   const rightIceShellRef = useRef<THREE.Mesh | null>(null)
   const leftBlockPlaqueMatRef = useRef<THREE.MeshBasicMaterial | null>(null)
@@ -36,7 +40,7 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
     [],
   )
   const rightWeaponTex = useMemo(
-    () => getPlaqueTexture('🔥 888', '#b91c1c', '#facc15', '#fef08a', 'METRALHADORA'),
+    () => getPlaqueTexture('🔥 888', '#b91c1c', '#facc15', '#fef08a', '🧮 FAZER CONTA'),
     [],
   )
   const mathAltarTex = useMemo(
@@ -56,15 +60,15 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
     [],
   )
   const rightGatePlus10Tex = useMemo(
-    () => getPlaqueTexture('+10', '#047857', '#34d399', '#ecfdf5', 'REFORÇO'),
+    () => getPlaqueTexture('+10', '#047857', '#34d399', '#ecfdf5', '🧮 FAZER CONTA'),
     [],
   )
   const rightGatePlus50Tex = useMemo(
-    () => getPlaqueTexture('+50', '#0d9488', '#5eead4', '#ffffff', 'ESQUADRÃO'),
+    () => getPlaqueTexture('+50', '#0d9488', '#5eead4', '#ffffff', '🧮 FAZER CONTA'),
     [],
   )
   const rightGatePlus99Tex = useMemo(
-    () => getPlaqueTexture('+99', '#ca8a04', '#fde047', '#ffffff', 'SUPER BÔNUS'),
+    () => getPlaqueTexture('+99', '#ca8a04', '#fde047', '#ffffff', '🧮 FAZER CONTA'),
     [],
   )
 
@@ -72,7 +76,21 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
     const sim = simRef.current
     const clockSec = state.clock.elapsedTime
 
-    // 1. Sincronizar posição Z física e visibilidade das esteiras de portões das Rotas Esquerda e Direita
+    // 1. Sincronizar posição Z contínua do Canhão da Esquerda, Metralhadora da Direita e Altar 🧮
+    if (leftCannonGroupRef.current) {
+      leftCannonGroupRef.current.position.z = sim.leftFrozenBlock.z
+      leftCannonGroupRef.current.visible = !sim.leftFrozenBlock.collectedInPass
+    }
+    if (rightWeaponGroupRef.current) {
+      rightWeaponGroupRef.current.position.z = sim.rightFrozenWeapon.z
+      rightWeaponGroupRef.current.visible = !sim.rightFrozenWeapon.collectedInPass
+    }
+    if (rightAltarGroupRef.current) {
+      rightAltarGroupRef.current.position.z = sim.rightAltarZ
+      rightAltarGroupRef.current.visible = !sim.rightAltarCollectedInPass
+    }
+
+    // 2. Sincronizar posição Z física, visibilidade e texturas evoluídas das esteiras Esquerda e Direita
     if (leftCorridorFlowRef.current) {
       const children = leftCorridorFlowRef.current.children
       for (let i = 0; i < sim.leftGates.length; i++) {
@@ -81,53 +99,91 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
         if (grp && gate) {
           grp.position.z = gate.z
           grp.visible = !gate.collectedInPass
+          const plaqueMesh = grp.children[3] as THREE.Mesh | undefined
+          const mat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
+          if (mat) {
+            const bg = i % 3 === 2 ? '#0d9488' : i % 2 === 1 ? '#0284c7' : '#0369a1'
+            const brd = i % 3 === 2 ? '#5eead4' : '#7dd3fc'
+            const sub = gate.bonusSoldiers > 1 ? 'SOLDADOS' : 'SOLDADO'
+            const nextTex = getPlaqueTexture(gate.label, bg, brd, '#ffffff', sub)
+            if (mat.map !== nextTex) {
+              mat.map = nextTex
+              mat.needsUpdate = true
+            }
+          }
         }
       }
     }
 
     if (rightCorridorFlowRef.current) {
       const children = rightCorridorFlowRef.current.children
+      const hasMathCharge = sim.rightMathBonusCharges > 0
+      const rightSubLabel = hasMathCharge ? '⚡ CONTA OK!' : '🧮 FAZER CONTA'
       for (let i = 0; i < sim.rightGates.length; i++) {
         const grp = children[i] as THREE.Group | undefined
         const gate = sim.rightGates[i]
         if (grp && gate) {
           grp.position.z = gate.z
           grp.visible = !gate.collectedInPass
+          const plaqueMesh = grp.children[3] as THREE.Mesh | undefined
+          const mat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
+          if (mat) {
+            const bg = hasMathCharge
+              ? '#15803d'
+              : i >= 2
+                ? '#ca8a04'
+                : i === 1
+                  ? '#0d9488'
+                  : '#047857'
+            const brd = hasMathCharge ? '#86efac' : '#fde047'
+            const nextTex = getPlaqueTexture(
+              gate.label,
+              bg,
+              brd,
+              '#ffffff',
+              rightSubLabel,
+            )
+            if (mat.map !== nextTex) {
+              mat.map = nextTex
+              mat.needsUpdate = true
+            }
+          }
         }
       }
     }
 
-    // 2. Casulo de gelo da Rota Esquerda (desaparece ao desbloquear e pulsa ao receber tiro)
+    // 3. Casulo de gelo da Rota Esquerda (desaparece ao desbloquear e pulsa ao receber tiro)
     if (leftIceShellRef.current) {
       leftIceShellRef.current.visible = !sim.leftFrozenBlock.unlocked
       const sLeft = sim.leftFrozenBlock.hitFlashMs > 0 ? 1.08 : 1.0
       leftIceShellRef.current.scale.set(sLeft, sLeft, sLeft)
     }
 
-    // 3. Casulo de gelo da Rota Direita (desaparece ao desbloquear e pulsa ao receber tiro)
+    // 4. Casulo de gelo da Rota Direita (desaparece ao desbloquear e pulsa ao receber tiro)
     if (rightIceShellRef.current) {
       rightIceShellRef.current.visible = !sim.rightFrozenWeapon.unlocked
       const sRight = sim.rightFrozenWeapon.hitFlashMs > 0 ? 1.06 : 1.0
       rightIceShellRef.current.scale.set(sRight, sRight, sRight)
     }
 
-    // 4. Girar cristal do Altar Matemático 🧮
+    // 5. Girar cristal do Altar Matemático 🧮
     if (mathCrystalRef.current) {
       mathCrystalRef.current.rotation.y = clockSec * 1.8
       mathCrystalRef.current.position.y = 1.75 + Math.sin(clockSec * 3.2) * 0.12
     }
 
-    // 5. Atualizar texturas cacheadas de HP dos blocos congelados Esquerdo (5 HP) e Direito (888 HP)
+    // 6. Atualizar texturas cacheadas de HP dos blocos congelados Esquerdo e Direito
     if (leftBlockPlaqueMatRef.current) {
+      const cannonLvl = sim.leftFrozenBlock.level ?? sim.leftCannonLevel + 1
       const lbl = sim.leftFrozenBlock.unlocked
-        ? '✅ ATIVO'
-        : `❄️ ${sim.leftFrozenBlock.hp} HP`
+        ? '✅ PEGAR!'
+        : `❄️ ${formatArmy(sim.leftFrozenBlock.hp, 'compact')} HP`
       const nextTex = getPlaqueTexture(
         lbl,
         sim.leftFrozenBlock.unlocked ? '#047857' : '#0284c7',
         '#7dd3fc',
         '#ffffff',
-        'CANHÃO +1',
+        `CANHÃO NV.${cannonLvl}`,
       )
       if (leftBlockPlaqueMatRef.current.map !== nextTex) {
         leftBlockPlaqueMatRef.current.map = nextTex
@@ -136,15 +192,20 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
     }
 
     if (rightWeaponPlaqueMatRef.current) {
+      const wepLvl = sim.rightFrozenWeapon.level ?? sim.rightWeaponLevel + 1
       const lbl = sim.rightFrozenWeapon.unlocked
-        ? '✅ ATIVO'
-        : `🔥 ${sim.rightFrozenWeapon.hp}`
+        ? `✅ NV.${wepLvl}`
+        : `🔥 ${formatArmy(sim.rightFrozenWeapon.hp, 'compact')}`
+      const sub =
+        sim.rightFrozenWeapon.unlocked || sim.rightMathBonusCharges > 0
+          ? `METRALHADORA NV.${wepLvl}`
+          : '🧮 FAZER CONTA'
       const nextTex = getPlaqueTexture(
         lbl,
         sim.rightFrozenWeapon.unlocked ? '#047857' : '#b91c1c',
         '#facc15',
         '#fef08a',
-        'METRALHADORA',
+        sub,
       )
       if (rightWeaponPlaqueMatRef.current.map !== nextTex) {
         rightWeaponPlaqueMatRef.current.map = nextTex
@@ -175,7 +236,7 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
         name="LeftRouteContent3D"
         position={[BRIDGE_3D_ROUTES.LEFT.xCenter, 0, 0]}
       >
-        <group position={[0, 0, -10.5]}>
+        <group ref={leftCannonGroupRef} position={[0, 0, -8.0]}>
           {/* Pedestal Hexagonal */}
           <mesh position={[0, 0.35, 0]} receiveShadow>
             <cylinderGeometry args={[1.65, 1.85, 0.7, 8]} />
@@ -254,7 +315,14 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
         name="RightRouteContent3D"
         position={[BRIDGE_3D_ROUTES.RIGHT.xCenter, 0, 0]}
       >
-        <group position={[0, 0, -12.5]}>
+        <group
+          ref={rightWeaponGroupRef}
+          position={[0, 0, -38.0]}
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenMathBonus()
+          }}
+        >
           {/* Pedestal Blindado */}
           <mesh position={[0, 0.4, 0]} receiveShadow>
             <cylinderGeometry args={[1.85, 2.05, 0.8, 8]} />
@@ -296,9 +364,10 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
           </mesh>
         </group>
 
-        {/* Altar Interativo 3D de Bônus de Conta (🧮) clicável na Rota Direita */}
+        {/* Altar Interativo 3D de Bônus de Conta (🧮) clicável e móvel na Rota Direita */}
         <group
-          position={[0, 0, -2.5]}
+          ref={rightAltarGroupRef}
+          position={[0, 0, -18.0]}
           onClick={(e) => {
             e.stopPropagation()
             onOpenMathBonus()
@@ -334,7 +403,14 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
           {simRef.current.rightGates.map((gate, idx) => {
             const tex = rightGateTextures[idx % rightGateTextures.length] ?? rightGatePlus99Tex
             return (
-              <group key={gate.id} position={[0, 0, gate.z]}>
+              <group
+                key={gate.id}
+                position={[0, 0, gate.z]}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenMathBonus()
+                }}
+              >
                 <mesh position={[-2.3, 1.75, 0]} castShadow>
                   <cylinderGeometry args={[0.2, 0.24, 3.5, 8]} />
                   <meshStandardMaterial color="#facc15" metalness={0.65} roughness={0.25} />

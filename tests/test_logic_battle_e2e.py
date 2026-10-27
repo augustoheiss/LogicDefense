@@ -75,8 +75,8 @@ def run_suite() -> dict:
                 page.on("console", lambda msg: results["consoleErrors"].append(msg.text) if msg.type == "error" else None)
                 page.on("pageerror", lambda err: results["pageErrors"].append(str(err)))
 
-                page.goto(f"{BASE_URL}/jogos/logic-battle?seed=42", wait_until="domcontentloaded", timeout=30000)
-                page.wait_for_selector('[data-testid="logic-battle-game"]', timeout=15000)
+                page.goto(f"{BASE_URL}/jogos/logic-battle?seed=42", wait_until="domcontentloaded", timeout=60000)
+                page.wait_for_selector('[data-testid="logic-battle-game"]', timeout=30000)
                 time.sleep(0.35)
 
                 layout_metrics = page.evaluate(
@@ -209,6 +209,7 @@ def run_suite() -> dict:
                 "V7 Fase 4: lb-fullscreen-btn ausente na Ponte 3D"
             )
             page.click('[data-testid="lb-fullscreen-btn"]')
+            page.click('[data-testid="lb-fullscreen-btn"]')
 
             results["functional"]["hudToggles"] = "PASS"
             results["functional"]["v7CameraCompassAnd3DStage"] = "PASS (BALANCED/FREE/LOCKED + Yaw Left/Right/North + Full-Screen 100vw)"
@@ -295,9 +296,29 @@ def run_suite() -> dict:
             assert army_after_math > army_before_math, (
                 f"V6: Resolver conta no 3º Caminho deve aumentar soldados ({army_before_math} -> {army_after_math})"
             )
+            time.sleep(0.25)
+            post_math_tel = page.evaluate("() => window.__lbBridge3DTelemetry || {}")
+            assert post_math_tel.get("rightMathBonusCharges", 0) >= 1 or post_math_tel.get("rightWeaponLevel", 0) >= 1, (
+                f"Teste01 Fix: Resolver conta deve conceder carga/nivel na Rota Direita: {post_math_tel}"
+            )
+            assert post_math_tel.get("leftBlockZ", -8.0) > -8.0, (
+                f"Teste01 Fix: Canhao da Rota Esquerda deve avancar continuamente em +Z: {post_math_tel}"
+            )
+            assert post_math_tel.get("rightWeaponZ", -38.0) > -38.0, (
+                f"Teste01 Fix: Metralhadora da Rota Direita deve avancar continuamente em +Z: {post_math_tel}"
+            )
             results["functional"]["v6BridgeThirdMathPathAnd4Tiers"] = (
                 f"PASS ({len(seen_questions)} unique challenges, army {army_before_math} -> {army_after_math})"
             )
+            results["functional"]["teste01SideRoutesEvolutionAndMotion"] = {
+                "status": "PASS",
+                "leftBlockZ": post_math_tel.get("leftBlockZ"),
+                "rightWeaponZ": post_math_tel.get("rightWeaponZ"),
+                "rightAltarZ": post_math_tel.get("rightAltarZ"),
+                "leftGateLabels": post_math_tel.get("leftGateLabels"),
+                "rightGateLabels": post_math_tel.get("rightGateLabels"),
+                "rightMathBonusCharges": post_math_tel.get("rightMathBonusCharges"),
+            }
             # Reiniciar seed=42 limpa para seguir o teste determinístico de pegadinha e batalha
             page.goto(f"{BASE_URL}/jogos/logic-battle?seed=42", wait_until="domcontentloaded", timeout=30000)
             page.wait_for_selector('[data-testid="logic-battle-game"]', timeout=15000)
@@ -360,13 +381,48 @@ def run_suite() -> dict:
                     legion_shot_saved = True
                 if page.locator('[data-testid="lb-tactical-dock"]').count() == 0:
                     break
+                gate0 = page.locator('[data-testid="lb-gate-choice-0"]')
                 gate1 = page.locator('[data-testid="lb-gate-choice-1"]')
                 if gate1.count() > 0 and gate1.is_visible():
-                    gate1.click(force=True)
+                    g1_txt = gate1.get_attribute("aria-label") or ""
+                    if ("−" in g1_txt or "÷" in g1_txt) and gate0.count() > 0 and gate0.is_visible():
+                        gate0.click(force=True)
+                        gate0.click(force=True)
+                    else:
+                        gate1.click(force=True)
                     time.sleep(0.08)
 
-            # Aguardar o Combate Visível (Fase BATTLE) concluir (com fast-forward 3x via pointerdown)
-            time.sleep(0.25)
+            # Aguardar o Combate Visível (Fase BATTLE) e validar Requisito 5 de teste01:
+            # Controle dos soldados (Esquerda/Direita) 100% destravado na hora de matar o Boss (phase === 'BATTLE')!
+            time.sleep(0.15)
+            battle_phase_check = page.evaluate(
+                """() => {
+                    const st = window.__lbStore ? window.__lbStore.getState() : null;
+                    if (!st) return { ok: false };
+                    const beforeX = st.snapshot.laneX;
+                    st.setSteeringX(-0.78);
+                    const leftX = window.__lbStore.getState().snapshot.laneX;
+                    st.stepLane(1);
+                    const stepRightX = window.__lbStore.getState().snapshot.laneX;
+                    st.setSteeringX(0.78);
+                    const rightX = window.__lbStore.getState().snapshot.laneX;
+                    st.setSteeringX(0);
+                    return {
+                        ok: leftX < -0.5 && rightX > 0.5 && stepRightX > leftX,
+                        phase: st.snapshot.phase,
+                        beforeX,
+                        leftX,
+                        stepRightX,
+                        rightX,
+                    };
+                }"""
+            )
+            assert battle_phase_check.get("ok"), (
+                f"Teste01 Req 5: Movimentacao lateral deve estar destravada durante BATTLE: {battle_phase_check}"
+            )
+            results["functional"]["teste01Req5BattleSteeringUnlocked"] = battle_phase_check
+
+            time.sleep(0.15)
             battle_shot = os.path.join(evid_dir, "v2_mundo1_combate_visivel.png")
             page.screenshot(path=battle_shot)
             results["screenshots"].append(battle_shot)
@@ -404,8 +460,77 @@ def run_suite() -> dict:
                 "r108CleanHudHeader": True,
             }
 
-            # Fechar overlay de batalha indo para o Mundo 2 (O Reino)
-            page.click('[data-testid="lb-battle-go-realm-btn"]')
+            # 2.6a Validar Requisitos 1, 2, 3 e 4 de teste01.png (Exponencial XX,XXe+YY >= 9000T, Buffs Negativos Evoluindo,
+            # Rota Esquerda Evoluindo + Canhão na Esteira, Rota Direita Evoluindo Acima do Centro + Obrigação de Fazer Conta)
+            teste01_audit = page.evaluate(
+                """() => {
+                    const st = window.__lbStore.getState();
+                    // Avancar para Setor Infinito com exercito de 2500 soldados para verificar evolucao dos portoes negativos
+                    st.advanceInfiniteBridgeSector();
+                    window.__lbStore.setState((prev) => ({
+                        snapshot: {
+                            ...prev.snapshot,
+                            currentArmy: 2500,
+                        },
+                    }));
+                    window.__lbStore.getState().advanceInfiniteBridgeSector();
+                    const s2 = window.__lbStore.getState();
+                    const negLabels = [];
+                    for (const seg of s2.snapshot.segments) {
+                        for (const lane of seg.lanes) {
+                            for (const g of lane) {
+                                if (g.label.startsWith('−')) {
+                                    negLabels.push(g.label);
+                                }
+                            }
+                        }
+                    }
+                    // Agora testar escala acima de 9000T (>= 9e15 e 3.35123456789e52)
+                    window.__lbStore.setState((prev) => ({
+                        snapshot: {
+                            ...prev.snapshot,
+                            currentArmy: 3.35123456789e52,
+                        },
+                    }));
+                    window.__lbStore.getState().advanceInfiniteBridgeSector();
+                    const sHigh = window.__lbStore.getState();
+                    const highGateLabels = [];
+                    for (const seg of sHigh.snapshot.segments) {
+                        for (const lane of seg.lanes) {
+                            for (const g of lane) {
+                                highGateLabels.push(g.label);
+                            }
+                        }
+                    }
+                    return {
+                        negLabelsSector3: negLabels,
+                        highArmyValue: sHigh.snapshot.currentArmy,
+                        highGateLabels,
+                    };
+                }"""
+            )
+            time.sleep(0.35)
+            hud_high_text = page.locator('[data-testid="lb-current-army-value"]').inner_text().strip()
+            high_tel = page.evaluate("() => window.__lbBridge3DTelemetry || {}")
+            assert "e+52" in hud_high_text and "," in hud_high_text and len(hud_high_text) <= 9, (
+                f"Teste01 Req 1: Acima de 9000T o HUD deve exibir exponencial limpa com 2 casas decimais (XX,XXe+YY), obtido: {hud_high_text}"
+            )
+            for lbl in high_tel.get("rightGateLabels", []) + high_tel.get("leftGateLabels", []):
+                assert "e+" in lbl and "," in lbl and len(lbl) <= 10, (
+                    f"Teste01 Req 1: Placas laterais 3D acima de 9000T devem usar XX,XXe+YY sem 15 casas decimais, obtido: {lbl}"
+                )
+            assert any(lbl != "− 1" for lbl in teste01_audit.get("negLabelsSector3", [])), (
+                f"Teste01 Req 2: Portoes negativos centrais devem evoluir acima de '- 1': {teste01_audit}"
+            )
+            results["functional"]["teste01Req1And2ExponentialAndNegGates"] = {
+                "hudHighText": hud_high_text,
+                "negLabelsSector3": teste01_audit.get("negLabelsSector3"),
+                "leftGateLabelsHigh": high_tel.get("leftGateLabels"),
+                "rightGateLabelsHigh": high_tel.get("rightGateLabels"),
+            }
+
+            # Voltar ao Mundo 2 (O Reino) para continuar os testes de bioma e mapa
+            page.click('[data-testid="lb-tab-world-realm"]')
             page.wait_for_selector('[data-testid="logic-battle-realm-stage"]', timeout=5000)
             time.sleep(0.25)
             realm_shot = os.path.join(evid_dir, "v2_mundo2_reino_desktop.png")

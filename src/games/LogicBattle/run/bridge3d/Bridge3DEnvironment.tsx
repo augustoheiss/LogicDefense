@@ -11,6 +11,7 @@ import React, { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BIOMES } from '../../config/biomes'
+import { formatArmy } from '../../domain/notation'
 import { useLogicBattleStore } from '../../state/useLogicBattleStore'
 import {
   BRIDGE_3D_DIMENSIONS,
@@ -96,11 +97,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       } else {
         const nextSim = simRef.current
         nextSim.sectorIndex = live.bridgeSectorIndex
-        const nextBossMax = Math.max(
-          150,
-          snap.enemy.totalForce,
-          Math.round(150 * Math.pow(1.85, live.bridgeSectorIndex - 1)),
-        )
+        const nextBossMax = Math.max(150, snap.enemy.totalForce)
         nextSim.bossMaxHp = nextBossMax
         nextSim.bossHp = nextBossMax
         for (const barrel of nextSim.barrels) {
@@ -119,24 +116,33 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
     const clockSec = state.clock.elapsedTime
     const sim = simRef.current
 
-    // Garantir interpolação horizontal suave a 60Hz mesmo em CALM_WAIT ou PAUSED
-    if (snap.phase !== 'RUNNING') {
-      smoothedLaneXRef.current +=
-        (snap.laneX - smoothedLaneXRef.current) * Math.min(1, dt * 14)
-      if (typeof window !== 'undefined') {
-        ;(
-          window as unknown as { __lbHeroPos?: { x: number; y: number } }
-        ).__lbHeroPos = { x: smoothedLaneXRef.current, y: snap.progress }
-      }
+    // Garantir interpolação horizontal suave a 60Hz em TODAS as fases (incluindo BATTLE e CALM_WAIT)
+    smoothedLaneXRef.current +=
+      (snap.laneX - smoothedLaneXRef.current) * Math.min(1, dt * 15)
+    if (typeof window !== 'undefined') {
+      ;(
+        window as unknown as { __lbHeroPos?: { x: number; y: number } }
+      ).__lbHeroPos = { x: smoothedLaneXRef.current, y: snap.progress }
     }
 
-    // Se o jogador resolveu uma conta no Altar 🧮 da Rota Direita, aplica dano de cerco na Arma 888 HP!
+    // Se o jogador resolveu uma conta no Altar 🧮 da Rota Direita, libera o Super Buff e destrava/evolui a Metralhadora!
     const currentMathSeq = live.lastSolvedMathRewardAt?.seq ?? 0
     if (currentMathSeq > lastMathSeqRef.current) {
       lastMathSeqRef.current = currentMathSeq
-      const unlockedNow = applyMathBonusToRightWeapon(sim, 296)
-      if (unlockedNow) {
-        live.applySideRouteReward('RIGHT', 20, '🔥 Metralhadora 888 Desbloqueada! +20')
+      const mathOutcome = applyMathBonusToRightWeapon(sim, 296)
+      if (mathOutcome.bonusSoldiersFromPendingGate > 0) {
+        live.applySideRouteReward(
+          'RIGHT',
+          mathOutcome.bonusSoldiersFromPendingGate,
+          `🧮 Super Buff +${formatArmy(mathOutcome.bonusSoldiersFromPendingGate, 'compact')} Liberado!`,
+        )
+      } else if (mathOutcome.unlockedWeapon) {
+        const wepBonus = Math.max(20, Math.round(snap.currentArmy * 0.85))
+        live.applySideRouteReward(
+          'RIGHT',
+          wepBonus,
+          `🔥 Metralhadora Nv.${sim.rightWeaponLevel} +${formatArmy(wepBonus, 'compact')}!`,
+        )
       }
     }
 
@@ -162,6 +168,14 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         onSectorBossDefeated: (newSector, bonusSoldiers) => {
           live.onSectorBossDefeatedInBridge(newSector, bonusSoldiers)
         },
+        onRequireMathChallenge: () => {
+          if (
+            live.activeMathChallenge === null &&
+            live.activeRedemptionTokenId === null
+          ) {
+            onOpenMathBonus()
+          }
+        },
       },
     )
 
@@ -179,9 +193,17 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         parallelBarrels: sim.shotProfile.parallelBarrels,
         damagePerShot: sim.shotProfile.damagePerShot,
         leftBlockHp: sim.leftFrozenBlock.hp,
+        leftBlockZ: Number(sim.leftFrozenBlock.z.toFixed(2)),
         leftBlockUnlocked: sim.leftFrozenBlock.unlocked,
+        leftCannonLevel: sim.leftCannonLevel,
         rightWeaponHp: sim.rightFrozenWeapon.hp,
+        rightWeaponZ: Number(sim.rightFrozenWeapon.z.toFixed(2)),
+        rightAltarZ: Number(sim.rightAltarZ.toFixed(2)),
         rightWeaponUnlocked: sim.rightFrozenWeapon.unlocked,
+        rightWeaponLevel: sim.rightWeaponLevel,
+        rightMathBonusCharges: sim.rightMathBonusCharges,
+        leftGateLabels: sim.leftGates.map((g) => g.label),
+        rightGateLabels: sim.rightGates.map((g) => g.label),
         bossHp: sim.bossHp,
         bossMaxHp: sim.bossMaxHp,
         enemiesCount: sim.enemies.length,

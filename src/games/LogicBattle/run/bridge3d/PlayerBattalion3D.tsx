@@ -110,7 +110,7 @@ export const PlayerBattalion3D: React.FC<PlayerBattalion3DProps> = ({
     if (heroShieldPlaqueMatRef.current) {
       const subLabel =
         sim.rightFrozenWeapon.unlocked || sim.leftFrozenBlock.unlocked
-          ? `⚡ ${sim.shotProfile.damagePerShot}×${sim.shotProfile.parallelBarrels} CANOS`
+          ? `⚡ ${formatArmy(sim.shotProfile.damagePerShot, notationMode)}×${sim.shotProfile.parallelBarrels}`
           : sim.shotProfile.tierLabel
       const nextTex = getPlaqueTexture(
         `🛡️ ${formatArmy(currentArmy, notationMode)}`,
@@ -243,7 +243,7 @@ export const PlayerBattalion3D: React.FC<PlayerBattalion3DProps> = ({
           </group>
 
           {/* Placa 3D Flutuante com Pontuação Atual e Tier do Tiro */}
-          <mesh position={[0, 3.45, 0]}>
+          <mesh position={[0, 3.82, 0]}>
             <planeGeometry args={[3.8, 1.9]} />
             <meshBasicMaterial
               ref={heroShieldPlaqueMatRef}
@@ -294,7 +294,7 @@ export const PlayerBattalion3D: React.FC<PlayerBattalion3DProps> = ({
               <sphereGeometry args={[0.28, 10, 10]} />
               <meshStandardMaterial color="#67e8f9" metalness={0.5} />
             </mesh>
-            <mesh position={[0, 2.32, 0]}>
+            <mesh position={[0, 2.52, 0]}>
               <planeGeometry args={[1.9, 0.95]} />
               <meshBasicMaterial map={squad10Tex} transparent />
             </mesh>
@@ -312,7 +312,7 @@ export const PlayerBattalion3D: React.FC<PlayerBattalion3DProps> = ({
               <sphereGeometry args={[0.36, 12, 12]} />
               <meshStandardMaterial color="#fbbf24" metalness={0.7} roughness={0.2} />
             </mesh>
-            <mesh position={[0, 2.8, 0]}>
+            <mesh position={[0, 3.05, 0]}>
               <planeGeometry args={[2.5, 1.25]} />
               <meshBasicMaterial map={centurionTex} transparent />
             </mesh>
@@ -330,7 +330,7 @@ export const PlayerBattalion3D: React.FC<PlayerBattalion3DProps> = ({
               <sphereGeometry args={[0.42, 12, 12]} />
               <meshStandardMaterial color="#fef08a" metalness={0.85} roughness={0.15} />
             </mesh>
-            <mesh position={[0, 3.1, 0]}>
+            <mesh position={[0, 3.35, 0]}>
               <planeGeometry args={[2.7, 1.35]} />
               <meshBasicMaterial map={championTex} transparent />
             </mesh>

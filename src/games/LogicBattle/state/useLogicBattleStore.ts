@@ -340,8 +340,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   applySideRouteReward: (route, soldiersDelta, reasonLabel) => {
     const state = get()
     const snap = state.snapshot
-    if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
-    const nextArmy = clampArmy(Math.max(1, snap.currentArmy + Math.round(soldiersDelta)))
+    if (
+      snap.phase !== 'RUNNING' &&
+      snap.phase !== 'CALM_WAIT' &&
+      snap.phase !== 'BATTLE'
+    ) {
+      return
+    }
+    const nextArmy = clampArmy(Math.max(1, snap.currentArmy + soldiersDelta))
     const fb: FloatingFeedbackItem = {
       id: `fb_side_${route}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       text: `${reasonLabel}`,
@@ -366,17 +372,63 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const nextArmy = clampArmy(snap.currentArmy + bonusSoldiers)
     const isInfinite = state.infiniteBridgeMode
     const scaledBossHp = isInfinite
-      ? Math.round(150 * Math.pow(1.85, newSector - 1))
+      ? clampArmy(
+          Math.max(
+            150,
+            Math.min(
+              Math.round(150 * Math.pow(1.85, newSector - 1)),
+              Math.round(nextArmy * 12),
+            ),
+            Math.round(nextArmy * 1.85),
+          ),
+        )
       : Math.max(5, Math.floor(snap.enemy.bossHp * 0.5))
     const scaledHorde = isInfinite
-      ? Math.round(snap.enemy.horde * 1.45 + 25)
+      ? clampArmy(Math.max(25, Math.round(scaledBossHp * 0.25)))
       : Math.max(0, Math.floor(snap.enemy.horde * 0.5))
+    const bonusStr = formatArmy(bonusSoldiers, state.save.settings.notationMode)
     const fb: FloatingFeedbackItem = {
       id: `fb_sector_boss_${newSector}_${Date.now()}`,
-      text: `👹 BOSS ABATIDO! +${bonusSoldiers} 🛡️ · Setor ${newSector}`,
+      text: `👹 BOSS ABATIDO! +${bonusStr} 🛡️ · Setor ${newSector}`,
       tone: 'optimal',
       createdAtMs: snap.elapsedMs,
     }
+    const updatedSegments =
+      newSector > 1
+        ? snap.segments.map((seg, idx) => {
+            if (idx < snap.activeSegmentIndex) return seg
+            return {
+              ...seg,
+              lanes: seg.lanes.map((laneGates) =>
+                laneGates.map((g) => {
+                  if (g.op === '+') {
+                    const scaledNum = Math.max(
+                      g.operand.value,
+                      Math.round(nextArmy * (0.14 + (idx % 3) * 0.06)),
+                    )
+                    return {
+                      ...g,
+                      label: `+ ${formatArmy(scaledNum, 'compact')}`,
+                      operand: { value: scaledNum, num: scaledNum, den: 1 },
+                    }
+                  }
+                  if (g.op === '−') {
+                    const scaledSub = Math.max(
+                      g.operand.value,
+                      Math.round(nextArmy * (0.12 + (idx % 3) * 0.05)),
+                    )
+                    return {
+                      ...g,
+                      label: `− ${formatArmy(scaledSub, 'compact')}`,
+                      operand: { value: scaledSub, num: scaledSub, den: 1 },
+                    }
+                  }
+                  return g
+                }),
+              ),
+            }
+          })
+        : snap.segments
     soundEngine.playVictoryFanfare()
     set({
       bridgeSectorIndex: newSector,
@@ -384,17 +436,18 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         ...snap,
         currentArmy: nextArmy,
         crowdNodes: buildCrowdNodes(nextArmy),
+        segments: updatedSegments,
         enemy: {
           ...snap.enemy,
           horde: scaledHorde,
           bossHp: scaledBossHp,
-          totalForce: scaledHorde + scaledBossHp,
+          totalForce: clampArmy(scaledHorde + scaledBossHp),
         },
         recentFeedback: [...snap.recentFeedback.slice(-4), fb],
       },
       captainSpeech: {
         mood: 'proud',
-        text: `Mega-Boss derrotado! Avançando para o Setor ${newSector} com +${bonusSoldiers} soldados e poder de tiro ampliado!`,
+        text: `Mega-Boss derrotado! Avançando para o Setor ${newSector} com +${bonusStr} soldados e poder de tiro ampliado!`,
       },
     })
   },
@@ -403,11 +456,19 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const state = get()
     const { save, runPlan, snapshot } = state
     const nextSector = state.bridgeSectorIndex + 1
-    const carryArmy = clampArmy(Math.max(5, snapshot.currentArmy + 10 * nextSector))
+    const sectorBonus = Math.max(10 * nextSector, Math.round(snapshot.currentArmy * 0.15))
+    const carryArmy = clampArmy(Math.max(5, snapshot.currentArmy + sectorBonus))
     const nextSeed = runPlan.seed + nextSector * 997
-    const scaledHorde = Math.round(runPlan.enemy.horde * Math.pow(1.45, nextSector - 1))
-    const scaledBossHp = Math.round(
-      Math.max(150, runPlan.enemy.bossHp) * Math.pow(1.85, nextSector - 1),
+    const baseBossCurve = 150 * Math.pow(1.85, nextSector - 1)
+    const scaledBossHp = clampArmy(
+      Math.max(
+        150,
+        Math.min(baseBossCurve, carryArmy * 12),
+        carryArmy * 1.65,
+      ),
+    )
+    const scaledHorde = clampArmy(
+      Math.max(25, Math.round(scaledBossHp * 0.25)),
     )
 
     const nextPlan = generateRun({
@@ -418,9 +479,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       enemy: {
         horde: scaledHorde,
         bossHp: scaledBossHp,
-        bossName: `${runPlan.enemy.bossName} S${nextSector}`,
+        bossName: `${runPlan.enemy.bossName.replace(/ S\d+$/u, '')} S${nextSector}`,
         bossTitle: `Titã do Setor ${nextSector}`,
-        totalForce: scaledHorde + scaledBossHp,
+        totalForce: clampArmy(scaledHorde + scaledBossHp),
       },
       mastery: save.mastery,
       observatoryLevel: save.citadelLevels.observatorio ?? 1,
@@ -430,7 +491,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const nextOracle = pathOracle(nextPlan)
     const fbSector: FloatingFeedbackItem = {
       id: `fb_inf_sector_${nextSector}_${Date.now()}`,
-      text: `♾️ SETOR ${nextSector}! +${10 * nextSector} 🛡️`,
+      text: `♾️ SETOR ${nextSector}! +${formatArmy(sectorBonus, save.settings.notationMode)} 🛡️`,
       tone: 'optimal',
       createdAtMs: snapshot.elapsedMs,
     }
@@ -601,7 +662,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       },
       captainSpeech: {
         mood: 'proud',
-        text: `Conta resolvida (${policy.titlePt})! Você ganhou +${soldiersAdded} soldados, +${policy.coinsBonus} 🪙 e ${rewardSummary}!`,
+        text: `Conta resolvida (${policy.titlePt})! Você ganhou +${formatArmy(soldiersAdded, state.save.settings.notationMode)} soldados, +${policy.coinsBonus} 🪙 e ${rewardSummary}!`,
       },
     })
   },
@@ -914,14 +975,13 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const { snapshot } = state
     if (
       snapshot.phase !== 'RUNNING' &&
-      snapshot.phase !== 'CALM_WAIT'
+      snapshot.phase !== 'CALM_WAIT' &&
+      snapshot.phase !== 'BATTLE'
     ) {
       return
     }
     const clampedLane = Math.max(0, Math.min(snapshot.laneCount - 1, laneIndex))
     const targetLaneX = getLaneCenterNormX(clampedLane, snapshot.laneCount)
-    const seg = snapshot.segments[snapshot.activeSegmentIndex]
-    if (!seg) return
 
     // Movimento suave em passos na tela: NUNCA teletransporta de um canto ao outro!
     const dx = targetLaneX - snapshot.laneX
@@ -931,14 +991,27 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         ? targetLaneX
         : snapshot.laneX + Math.sign(dx) * maxHorizStep
 
+    if (clampedLane !== snapshot.currentLane) {
+      soundEngine.playLaneSwitch(clampedLane)
+    }
+
+    const seg = snapshot.segments[snapshot.activeSegmentIndex]
+    // Se já estiver matando o Boss (fase BATTLE ou fim da ponte), mantém o controle horizontal destravado!
+    if (!seg || snapshot.phase === 'BATTLE') {
+      set({
+        snapshot: {
+          ...snapshot,
+          currentLane: clampedLane,
+          laneX: steppedLaneX,
+        },
+      })
+      return
+    }
+
     const isSwitchingSide = Math.abs(dx) > 0.22 && snapshot.phase === 'RUNNING'
     const nextProgress = isSwitchingSide
       ? Math.min(seg.zPosition - 0.012, snapshot.progress + 0.025)
       : seg.zPosition
-
-    if (clampedLane !== snapshot.currentLane) {
-      soundEngine.playLaneSwitch(clampedLane)
-    }
 
     set({
       snapshot: {
@@ -2016,3 +2089,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     get().startNewRun({ regionId: 'r01_ponte_aurora' })
   },
 }))
+
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __lbStore?: typeof useLogicBattleStore }).__lbStore =
+    useLogicBattleStore
+}

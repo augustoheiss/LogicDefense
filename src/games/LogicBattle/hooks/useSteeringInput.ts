@@ -24,15 +24,16 @@ export function useSteeringInput(canvasRef: RefObject<HTMLCanvasElement | null>)
         if (
           state.world === 'run' &&
           (state.snapshot.phase === 'RUNNING' ||
-            state.snapshot.phase === 'CALM_WAIT')
+            state.snapshot.phase === 'CALM_WAIT' ||
+            state.snapshot.phase === 'BATTLE')
         ) {
           let dir = 0
           if (heldDirs.has('left')) dir -= 1
           if (heldDirs.has('right')) dir += 1
           if (dir !== 0) {
             const nextX = Math.max(
-              -0.86,
-              Math.min(0.86, state.snapshot.laneX + dir * 1.45 * dtSec),
+              -0.9,
+              Math.min(0.9, state.snapshot.laneX + dir * 1.45 * dtSec),
             )
             setSteeringX(nextX)
           }
@@ -47,7 +48,7 @@ export function useSteeringInput(canvasRef: RefObject<HTMLCanvasElement | null>)
       const state = useLogicBattleStore.getState()
       if (state.world !== 'run') return
       const phase = state.snapshot.phase
-      if (phase !== 'RUNNING' && phase !== 'CALM_WAIT') return
+      if (phase !== 'RUNNING' && phase !== 'CALM_WAIT' && phase !== 'BATTLE') return
 
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
         e.preventDefault()
@@ -101,9 +102,10 @@ export function useSteeringInput(canvasRef: RefObject<HTMLCanvasElement | null>)
       const rel = (clientX - rect.left) / rect.width
       const targetNormX = Math.max(-0.86, Math.min(0.86, (rel - 0.5) * 2.05))
       // Passo suave em direção ao toque/ponteiro sem teletransportar de um extremo ao outro
-      const curX = useLogicBattleStore.getState().snapshot.laneX
+      const snap = useLogicBattleStore.getState().snapshot
+      const curX = snap.laneX
       const diff = targetNormX - curX
-      const maxStep = 0.28
+      const maxStep = snap.phase === 'BATTLE' ? 0.65 : 0.28
       const nextX =
         Math.abs(diff) <= maxStep ? targetNormX : curX + Math.sign(diff) * maxStep
       setSteeringX(nextX)
@@ -122,6 +124,16 @@ export function useSteeringInput(canvasRef: RefObject<HTMLCanvasElement | null>)
         const btn = targetEl.closest('button')
         if (btn) {
           if (btn.classList.contains('lb-gate-choice-btn')) {
+            const st = useLogicBattleStore.getState().snapshot
+            if (
+              st.phase === 'BATTLE' ||
+              st.activeSegmentIndex >= st.segments.length
+            ) {
+              isDragging = true
+              downOnGateChoice = false
+              mapClientX(e.clientX)
+              return
+            }
             downOnGateChoice = true
             downClientX = e.clientX
             return

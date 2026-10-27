@@ -28,14 +28,40 @@ export function toSuperscript(exp: number): string {
     .join('')
 }
 
+export function formatExponentialPtBr(val: number): string {
+  if (!Number.isFinite(val) || val <= 0) return '0'
+  let exp = Math.floor(Math.log10(val))
+  let mantissa = val / Math.pow(10, exp)
+  if (!Number.isFinite(mantissa) || mantissa <= 0) {
+    const parts = val.toExponential(4).split('e')
+    mantissa = Number(parts[0])
+    exp = Number(parts[1])
+  }
+  if (mantissa >= 10) {
+    mantissa /= 10
+    exp += 1
+  }
+  // Duas casas decimais depois da vírgula (ex.: 3,35e+52, 9,00e+15) sem casas infinitas
+  const scaled = Math.min(999, Math.max(100, Math.floor(mantissa * 100 + 1e-7)))
+  const mantissaFixed = (scaled / 100).toFixed(2).replace('.', ',')
+  const sign = exp >= 0 ? '+' : ''
+  return `${mantissaFixed}e${sign}${exp}`
+}
+
 /**
  * Formata uma quantidade de exército segundo o Contrato C6 (§3.2):
  * - Usa vírgula decimal `pt-BR` (`1,2k`, `3,4 × 10⁴`).
  * - Jamais arredonda para cima mudando de ordem de grandeza (`999 -> '999'`, `1999 -> '1,99k'`).
+ * - Quando atinge ou ultrapassa 9000T (>= 9e15), exibe com 2 casas decimais após a vírgula + e+XX (ex.: 9,00e+15, 3,35e+52).
  */
 export function formatArmy(n: ArmyCount, mode: NotationMode = 'compact'): string {
   const safe = clampArmy(n)
   if (safe === 0) return '0'
+
+  // Acima de 9000T (>= 9e15): usa formato exponencial limpo com 2 casas decimais e vírgula (ex.: 9,00e+15, 3,35e+52)
+  if (safe >= 9_000_000_000_000_000) {
+    return formatExponentialPtBr(safe)
+  }
 
   if (mode === 'scientific') {
     if (safe < 10) return String(safe)
@@ -55,7 +81,7 @@ export function formatArmy(n: ArmyCount, mode: NotationMode = 'compact'): string
 
   // Modo compacto: '999', '1k', '1,99k', '12,5M', '3,4B', '1,2T'
   if (safe < 1_000) {
-    return String(safe)
+    return String(Math.floor(safe))
   }
 
   const units: { threshold: number; suffix: string }[] = [
@@ -79,7 +105,7 @@ export function formatArmy(n: ArmyCount, mode: NotationMode = 'compact'): string
     }
   }
 
-  return String(safe)
+  return String(Math.floor(safe))
 }
 
 /**

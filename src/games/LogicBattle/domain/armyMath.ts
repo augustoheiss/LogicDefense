@@ -5,8 +5,14 @@ import { ARMY_CAP } from '../config/unitTiers'
 import { ArmyCount, Gate } from '../types'
 
 export function clampArmy(value: number): ArmyCount {
-  if (!Number.isFinite(value) || Number.isNaN(value) || value <= 0) {
+  if (Number.isNaN(value) || value <= 0) {
     return 0
+  }
+  if (value >= ARMY_CAP || value === Number.POSITIVE_INFINITY) {
+    return ARMY_CAP
+  }
+  if (value > 9_000_000_000_000_000) {
+    return value
   }
   const floored = Math.floor(value + 1e-9)
   return Math.max(0, Math.min(ARMY_CAP, floored))

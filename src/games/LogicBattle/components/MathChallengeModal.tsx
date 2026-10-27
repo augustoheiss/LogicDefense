@@ -45,6 +45,9 @@ export const MathChallengeModal: React.FC = () => {
         className="lb-modal-card lb-redemption-card"
         style={{
           maxWidth: '640px',
+          maxHeight: '92vh',
+          padding: '12px 16px',
+          gap: '7px',
           border: '2px solid rgba(250, 204, 21, 0.55)',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.78)',
         }}
@@ -212,12 +215,12 @@ export const MathChallengeModal: React.FC = () => {
           <div
             className="lb-scaffold-panel lb-scaffold-3"
             data-testid="lb-math-scaffold-3"
-            style={{ maxHeight: '150px', overflowY: 'auto' }}
+            style={{ maxHeight: '86px', overflowY: 'auto', padding: '6px 10px' }}
           >
             <strong>🔓 3 Caminhos de Resolução Mental (Apostila Heiss-Lab):</strong>
-            <ul style={{ margin: '4px 0 0', paddingLeft: '16px', fontSize: '0.78rem' }}>
+            <ul style={{ margin: '3px 0 0', paddingLeft: '16px', fontSize: '0.75rem' }}>
               {challenge.methods.map((m, idx) => (
-                <li key={idx} style={{ marginBottom: '4px' }}>
+                <li key={idx} style={{ marginBottom: '2px' }}>
                   <strong style={{ color: '#fde047' }}>{m.badge}:</strong>{' '}
                   <span>{m.summary}</span>
                 </li>
@@ -227,18 +230,30 @@ export const MathChallengeModal: React.FC = () => {
         )}
 
         {diagnostic && (
-          <div className="lb-diagnostic-banner" data-testid="lb-math-diagnostic">
+          <div
+            className="lb-diagnostic-banner"
+            data-testid="lb-math-diagnostic"
+            style={{ padding: '6px 10px', fontSize: '0.76rem' }}
+          >
             {diagnostic}
           </div>
         )}
 
-        <div className="lb-choices-grid" data-testid="lb-math-choices">
+        <div
+          className="lb-choices-grid"
+          data-testid="lb-math-choices"
+          style={{
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            flexShrink: 0,
+          }}
+        >
           {challenge.choices.map((c) => (
             <button
               key={c.id}
               type="button"
               data-testid={`lb-math-choice-${c.id}`}
               className="lb-choice-btn"
+              style={{ padding: '10px 6px' }}
               onClick={() => submitChoice(c.id)}
             >
               <span className="lb-choice-label">{c.label}</span>

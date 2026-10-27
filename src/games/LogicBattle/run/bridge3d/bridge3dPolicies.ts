@@ -147,14 +147,16 @@ export interface DynamicShotProfile {
  * - Se os pontos caem (portão negativo ou dano de monstro), o tiro enfraquece imediatamente.
  */
 export function computeShotProfile(armyPoints: number): DynamicShotProfile {
-  const safePts = Math.max(1, Math.floor(armyPoints))
+  const safePts = Math.max(1, Number.isFinite(armyPoints) ? armyPoints : 1)
   // Pontos ganhos além da base inicial (5)
   const netGain = Math.max(0, safePts - 5)
   const logPower = Math.log10(Math.max(1, netGain + 1))
 
   const damagePerShot = Math.max(
     1,
-    Math.round(1 + netGain * 0.14 + Math.pow(logPower, 1.85) * 4),
+    netGain >= 1e12
+      ? netGain * 0.14
+      : Math.round(1 + netGain * 0.14 + Math.pow(logPower, 1.85) * 4),
   )
 
   const shotsPerSecond = Math.min(

@@ -22,8 +22,13 @@ import {
   selectNextTrapForBiome,
   shouldShowObservatoryDetector,
 } from './mastery'
+import { formatArmy } from './notation'
 import { evaluateSegmentCounterfactual, pathOracle } from './pathOracle'
 import { createRng, SeededRng } from './rng'
+
+function fmtGateVal(val: number): string {
+  return formatArmy(Math.max(1, val), 'compact')
+}
 
 export interface GenerateRunParams {
   seed: number
@@ -75,7 +80,9 @@ function buildFairPairSegment(
   const isAlreadyAboveEnemy = currentBestArmy >= enemyTotalForce
   const remainingGap = Math.max(4, enemyTotalForce - currentBestArmy)
   const rawAddGood = isAlreadyAboveEnemy
-    ? rng.nextInt(2, 5)
+    ? currentBestArmy > 30
+      ? Math.max(4, Math.round(currentBestArmy * (0.1 + (index % 3) * 0.04)))
+      : rng.nextInt(2, 5)
     : Math.max(
         4,
         Math.min(
@@ -85,8 +92,12 @@ function buildFairPairSegment(
       )
   // Evita repetir exatamente a mesma placa '+ X' em segmentos consecutivos
   let addGood = rawAddGood
-  if (usedLabels && usedLabels.has(`+ ${addGood}`)) {
-    addGood = rawAddGood + ((index % 3) + 1)
+  if (usedLabels && usedLabels.has(`+ ${fmtGateVal(addGood)}`)) {
+    const jitter =
+      rawAddGood >= 1000
+        ? Math.max(10, Math.round(rawAddGood * 0.12 * ((index % 3) + 1)))
+        : (index % 3) + 1
+    addGood = rawAddGood + jitter
   }
   const addModest = Math.max(1, Math.floor(addGood * 0.35) + (index % 2))
   const canMultiplySafely = currentBestArmy * 2 <= enemyTotalForce * 1.15
@@ -98,40 +109,43 @@ function buildFairPairSegment(
     const useMul = currentBestArmy >= 8 && canMultiplySafely && rng.nextFloat() < 0.4
     if (useMul) {
       bestGate = makeSimpleGate(`${segId}_best`, '×', 2, 1, '× 2')
-      altGate = makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${addModest}`)
+      altGate = makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
     } else {
-      bestGate = makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${addGood}`)
-      const subAmt = Math.max(1, Math.min(Math.floor(currentBestArmy * 0.25), 6))
+      bestGate = makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
+      const subAmt =
+        currentBestArmy <= 90 && enemyTotalForce <= 120
+          ? Math.max(1, Math.min(Math.floor(currentBestArmy * 0.16), 8))
+          : Math.max(2, Math.floor(currentBestArmy * (0.18 + (index % 3) * 0.06)))
       altGate =
         currentBestArmy > 6 && rng.nextFloat() < 0.5
-          ? makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${subAmt}`)
-          : makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${addModest}`)
+          ? makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
+          : makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
     }
   } else if (biomeId === 'fiorde_gelado') {
     bestGate =
       canMultiplySafely && rng.nextFloat() < 0.5
         ? makeSimpleGate(`${segId}_best`, '×', 3, 2, '× 3/2', true)
-        : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${addGood}`)
+        : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
     altGate =
       index >= 4
-        ? makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${addModest}`)
+        ? makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
         : makeSimpleGate(`${segId}_alt`, '÷', 2, 1, '÷ 2', true)
   } else if (biomeId === 'deserto_decimais') {
     bestGate =
       canMultiplySafely && rng.nextFloat() < 0.5
         ? makeSimpleGate(`${segId}_best`, '%+', 50, 1, '+ 50%', true)
-        : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${addGood}`)
+        : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
     altGate = makeSimpleGate(`${segId}_alt`, '%−', 20, 1, '− 20%', true)
   } else if (biomeId === 'vulcao_negativos') {
-    bestGate = makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${addGood}`)
+    bestGate = makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
     const subAmt = Math.max(1, Math.floor(currentBestArmy * 0.2))
-    altGate = makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${subAmt}`)
+    altGate = makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
   } else {
     bestGate =
       canMultiplySafely && currentBestArmy < 250 && rng.nextFloat() < 0.45
         ? makeSimpleGate(`${segId}_best`, '×', 2, 1, '× 2')
-        : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${addGood}`)
-    altGate = makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${addModest}`)
+        : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
+    altGate = makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
   }
 
   const lanes: Gate[][] =
@@ -139,7 +153,7 @@ function buildFairPairSegment(
 
   if (laneCount === 3) {
     const midAdd = Math.max(2, Math.floor((addGood + addModest) / 2))
-    lanes.push([makeSimpleGate(`${segId}_mid`, '+', midAdd, 1, `+ ${midAdd}`)])
+    lanes.push([makeSimpleGate(`${segId}_mid`, '+', midAdd, 1, `+ ${fmtGateVal(midAdd)}`)])
   }
 
   return {
@@ -180,29 +194,37 @@ function buildCalibratedFinalSegment(
     '+',
     neededDelta,
     1,
-    `+ ${neededDelta}`,
+    `+ ${fmtGateVal(neededDelta)}`,
   )
 
   // Para garantir que o pior caminho termine estritamente abaixo de enemyTotalForce:
   let worstGate: Gate
   if (runningWorstBeforeFinal >= enemyTotalForce) {
-    const dropNeeded = runningWorstBeforeFinal - Math.max(1, enemyTotalForce - 5)
+    const dropNeeded = Math.max(1, runningWorstBeforeFinal - Math.max(1, enemyTotalForce * 0.85))
     worstGate = makeSimpleGate(
       `${segId}_cal_worst`,
       '−',
-      Math.max(1, dropNeeded),
+      dropNeeded,
       1,
-      `− ${Math.max(1, dropNeeded)}`,
+      `− ${fmtGateVal(dropNeeded)}`,
     )
   } else {
     const safeSmallAdd = Math.max(
       0,
       Math.min(3, Math.floor((enemyTotalForce - 1 - runningWorstBeforeFinal) * 0.25)),
     )
+    const refScale =
+      enemyTotalForce > 120
+        ? Math.max(runningWorstBeforeFinal, Math.floor(runningBestBeforeFinal * 0.22))
+        : runningWorstBeforeFinal
+    const scaledDrop =
+      refScale > 30
+        ? Math.max(2, Math.floor(refScale * 0.22))
+        : 2
     worstGate =
-      safeSmallAdd > 0
-        ? makeSimpleGate(`${segId}_cal_worst`, '+', safeSmallAdd, 1, `+ ${safeSmallAdd}`)
-        : makeSimpleGate(`${segId}_cal_worst`, '−', 2, 1, '− 2')
+      safeSmallAdd > 0 && refScale <= 30
+        ? makeSimpleGate(`${segId}_cal_worst`, '+', safeSmallAdd, 1, `+ ${fmtGateVal(safeSmallAdd)}`)
+        : makeSimpleGate(`${segId}_cal_worst`, '−', scaledDrop, 1, `− ${fmtGateVal(scaledDrop)}`)
   }
 
   const lanes: Gate[][] =
@@ -210,7 +232,7 @@ function buildCalibratedFinalSegment(
 
   if (laneCount === 3) {
     const midDelta = Math.max(2, Math.floor(neededDelta * 0.5))
-    lanes.push([makeSimpleGate(`${segId}_cal_mid`, '+', midDelta, 1, `+ ${midDelta}`)])
+    lanes.push([makeSimpleGate(`${segId}_cal_mid`, '+', midDelta, 1, `+ ${fmtGateVal(midDelta)}`)])
   }
 
   return {
@@ -325,10 +347,11 @@ function tryBuildRunWithSeed(
       continue
     }
 
-    // Inserir 1 segmento de Portões Gêmeos por corrida (filtrando ×10³ fora da Torre das Potências se o inimigo for pequeno)
+    // Inserir 1 segmento de Portões Gêmeos por corrida (filtrando ×10³ fora da Torre das Potências se o inimigo não exigir salto de milhar)
     if (!placedTwins && i >= twinTargetIndex && i < segmentCount - 2 && biome.twinIds.length > 0) {
       const eligibleTwins =
-        enemy.totalForce < 600 && params.biomeId !== 'torre_potencias'
+        (enemy.totalForce < 600 || enemy.totalForce < n0 * 400) &&
+        params.biomeId !== 'torre_potencias'
           ? biome.twinIds.filter((tid) => tid !== 'G04')
           : biome.twinIds
       const twinPool = eligibleTwins.length > 0 ? eligibleTwins : biome.twinIds
@@ -500,11 +523,25 @@ export function generateRun(params: GenerateRunParams): RunPlan {
     { length: biome.segmentCount },
     (_, idx) => {
       const zPosition = Number(((idx + 1) / (biome.segmentCount + 1)).toFixed(4))
-      const gBest = makeSimpleGate(`fb_${idx}_b`, '+', stepAdd, 1, `+ ${stepAdd}`)
-      const gWorst = makeSimpleGate(`fb_${idx}_w`, '−', 1, 1, '− 1')
-      const lanes: Gate[][] = [[gBest], [gWorst]]
+      const segAdd = Math.max(5, Math.round(stepAdd * (0.8 + (idx % 3) * 0.2)))
+      const subPenalty = Math.max(
+        1,
+        Math.round(Math.max(n0, segAdd) * (0.22 + (idx % 4) * 0.1)),
+      )
+      const gBest =
+        idx % 3 === 1 && n0 >= 10
+          ? makeSimpleGate(`fb_${idx}_b`, '×', 2, 1, '× 2')
+          : makeSimpleGate(`fb_${idx}_b`, '+', segAdd, 1, `+ ${fmtGateVal(segAdd)}`)
+      const gWorst =
+        idx % 4 === 2 && n0 >= 20
+          ? makeSimpleGate(`fb_${idx}_w`, '÷', 2, 1, '÷ 2', true)
+          : makeSimpleGate(`fb_${idx}_w`, '−', subPenalty, 1, `− ${fmtGateVal(subPenalty)}`)
+      const lanes: Gate[][] = idx % 2 === 0 ? [[gBest], [gWorst]] : [[gWorst], [gBest]]
       if (biome.laneCount === 3) {
-        lanes.push([makeSimpleGate(`fb_${idx}_m`, '+', Math.max(1, Math.floor(stepAdd / 2)), 1, `+ ${Math.max(1, Math.floor(stepAdd / 2))}`)])
+        const midAdd = Math.max(1, Math.floor(segAdd / 2))
+        lanes.push([
+          makeSimpleGate(`fb_${idx}_m`, '+', midAdd, 1, `+ ${fmtGateVal(midAdd)}`),
+        ])
       }
       return {
         id: `fb_seg_${idx}`,
@@ -563,7 +600,7 @@ export function injectRedemptionSegmentOnBridge(
       id: `redemption_gate_${token.id}`,
       op: '+',
       operand: { value: token.loss, num: token.loss, den: 1 },
-      label: `★ RESGATE (+${token.loss})`,
+      label: `★ RESGATE (+${fmtGateVal(token.loss)})`,
       subLabel: token.trapName,
       readingTimeMs: GATE_POLICIES.baseReadingTimeMs,
     }

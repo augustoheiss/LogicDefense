@@ -78,6 +78,7 @@ export function getPlaqueTexture(
   }
 
   const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
   texture.needsUpdate = true
   plaqueTextureCache.set(key, texture)
   return texture

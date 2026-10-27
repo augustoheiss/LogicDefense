@@ -3,8 +3,8 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import { ArmyCount, UnitTierSpec } from '../types'
 
-/** Limite superior exato em IEEE-754 double precision (~9 × 10^15) */
-export const ARMY_CAP: ArmyCount = 9_000_000_000_000_000
+/** Limite superior em IEEE-754 double precision (1e300, evitando travar em 9000T) */
+export const ARMY_CAP: ArmyCount = 1e300
 
 /** Abaixo deste limite o exército é desenhado 1:1 para sensação de horda; acima, funde em Pelotões Posicionais */
 export const RENDER_1TO1_MAX = 14

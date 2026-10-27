@@ -73,7 +73,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
           const plaqueMat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
           if (plaqueMat) {
             const nextTex = getPlaqueTexture(
-              `🛢️ ${Math.max(0, barrel.hp)} HP`,
+              `🛢️ ${formatArmy(Math.max(0, barrel.hp), notationMode)} HP`,
               barrel.explosionFlashMs > 0 ? '#dc2626' : '#b45309',
               '#facc15',
               '#ffffff',
@@ -116,7 +116,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             const plaqueMat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
             if (plaqueMat) {
               const nextTex = getPlaqueTexture(
-                `💀 ${Math.max(1, en.hp)} HP`,
+                `💀 ${formatArmy(Math.max(1, en.hp), notationMode)} HP`,
                 en.hitFlashMs > 0 ? '#ca8a04' : '#7f1d1d',
                 en.hitFlashMs > 0 ? '#fef08a' : '#f87171',
                 '#ffffff',

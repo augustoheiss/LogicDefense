@@ -3,6 +3,7 @@
 // Fonte da verdade: master-plan/CATALOGO_PEGADINHAS.md
 // Todos os codexSlug apontam para aulas reais verificadas em src/data/content.ts
 // ──────────────────────────────────────────────────────────────────────────────
+import { formatArmy } from '../domain/notation'
 import {
   ArmyCount,
   BiomeId,
@@ -67,11 +68,22 @@ function makeGate(
   exprKind?: Gate['operand']['exprKind'],
   secondaryValue?: number,
 ): Gate {
+  let cleanLabel = label
+  if (id !== 'g04-c') {
+    if ((op === '+' || op === '−') && !exprKind && den === 1 && Math.abs(value) >= 1_000) {
+      cleanLabel = `${op} ${formatArmy(Math.abs(value), 'compact')}`
+    } else if (exprKind === 'sub_neg' && Math.abs(value) >= 1_000) {
+      cleanLabel = `− (−${formatArmy(Math.abs(value), 'compact')})`
+    } else if (exprKind === 'add_mul' && secondaryValue && secondaryValue >= 1_000) {
+      const kFmt = formatArmy(secondaryValue, 'compact')
+      cleanLabel = `+ ${kFmt} × ${kFmt}`
+    }
+  }
   return {
     id,
     op,
     operand: { value, num, den, exprKind, secondaryValue },
-    label,
+    label: cleanLabel,
     readingTimeMs:
       GATE_POLICIES.baseReadingTimeMs +
       (complex ? GATE_POLICIES.complexOperatorReadingBonusMs : 0),
