@@ -178,7 +178,20 @@ export interface LogicBattleStoreState {
     summaryPt: string
   } | null
 
+  // V7: Modo Infinito por Setores & 3 Rotas Reais na Ponte 3D
+  bridgeSectorIndex: number
+  infiniteBridgeMode: boolean
+
   // Actions
+  toggleInfiniteBridgeMode: () => void
+  advanceInfiniteBridgeSector: () => void
+  applySideRouteReward: (
+    route: 'LEFT' | 'RIGHT',
+    soldiersDelta: number,
+    reasonLabel: string,
+  ) => void
+  onSectorBossDefeatedInBridge: (newSector: number, bonusSoldiers: number) => void
+  steerToRoute: (route: 'LEFT' | 'CENTER' | 'RIGHT') => void
   openMathChallengeModal: (tier?: MathDifficultyTier) => void
   switchMathChallengeTier: (tier: MathDifficultyTier) => void
   submitMathChallengeChoice: (choiceId: string) => void
@@ -290,9 +303,165 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   activeMathChallengeDiagnostic: null,
   mathChallengesSolvedInRun: 0,
   lastSolvedMathRewardAt: null,
+  bridgeSectorIndex: 1,
+  infiniteBridgeMode: false,
   captainSpeech: {
     mood: 'excited',
     text: 'Capitã Vírgula a postos! Deslize o exército pelos portões e cuidado com as pegadinhas da intuição!',
+  },
+
+  toggleInfiniteBridgeMode: () => {
+    set((s) => ({
+      infiniteBridgeMode: !s.infiniteBridgeMode,
+      captainSpeech: {
+        mood: 'excited',
+        text: !s.infiniteBridgeMode
+          ? `♾️ Modo Infinito ATIVO! Setor ${s.bridgeSectorIndex}: ao vencer o Boss, a ponte avança automaticamente para o próximo Setor com chefes maiores!`
+          : 'Modo Campanha Padrão ativo: conclua o setor atual para enfrentar o choque final.',
+      },
+    }))
+  },
+
+  steerToRoute: (route) => {
+    const state = get()
+    const targetLaneNormX =
+      route === 'LEFT' ? -0.82 : route === 'RIGHT' ? 0.82 : 0
+    const laneIdx = resolveLaneIndexFromNormX(targetLaneNormX, state.snapshot.laneCount)
+    soundEngine.playLaneSwitch(laneIdx)
+    set({
+      snapshot: {
+        ...state.snapshot,
+        laneX: targetLaneNormX,
+        currentLane: laneIdx,
+      },
+    })
+  },
+
+  applySideRouteReward: (route, soldiersDelta, reasonLabel) => {
+    const state = get()
+    const snap = state.snapshot
+    if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
+    const nextArmy = clampArmy(Math.max(1, snap.currentArmy + Math.round(soldiersDelta)))
+    const fb: FloatingFeedbackItem = {
+      id: `fb_side_${route}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      text: `${reasonLabel}`,
+      tone: 'reinforcement',
+      createdAtMs: snap.elapsedMs,
+    }
+    soundEngine.playGatePass(nextArmy, true)
+    set({
+      snapshot: {
+        ...snap,
+        currentArmy: nextArmy,
+        crowdNodes: buildCrowdNodes(nextArmy),
+        recentFeedback: [...snap.recentFeedback.slice(-4), fb],
+      },
+    })
+  },
+
+  onSectorBossDefeatedInBridge: (newSector, bonusSoldiers) => {
+    const state = get()
+    const snap = state.snapshot
+    if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
+    const nextArmy = clampArmy(snap.currentArmy + bonusSoldiers)
+    const isInfinite = state.infiniteBridgeMode
+    const scaledBossHp = isInfinite
+      ? Math.round(150 * Math.pow(1.85, newSector - 1))
+      : Math.max(5, Math.floor(snap.enemy.bossHp * 0.5))
+    const scaledHorde = isInfinite
+      ? Math.round(snap.enemy.horde * 1.45 + 25)
+      : Math.max(0, Math.floor(snap.enemy.horde * 0.5))
+    const fb: FloatingFeedbackItem = {
+      id: `fb_sector_boss_${newSector}_${Date.now()}`,
+      text: `👹 BOSS ABATIDO! +${bonusSoldiers} 🛡️ · Setor ${newSector}`,
+      tone: 'optimal',
+      createdAtMs: snap.elapsedMs,
+    }
+    soundEngine.playVictoryFanfare()
+    set({
+      bridgeSectorIndex: newSector,
+      snapshot: {
+        ...snap,
+        currentArmy: nextArmy,
+        crowdNodes: buildCrowdNodes(nextArmy),
+        enemy: {
+          ...snap.enemy,
+          horde: scaledHorde,
+          bossHp: scaledBossHp,
+          totalForce: scaledHorde + scaledBossHp,
+        },
+        recentFeedback: [...snap.recentFeedback.slice(-4), fb],
+      },
+      captainSpeech: {
+        mood: 'proud',
+        text: `Mega-Boss derrotado! Avançando para o Setor ${newSector} com +${bonusSoldiers} soldados e poder de tiro ampliado!`,
+      },
+    })
+  },
+
+  advanceInfiniteBridgeSector: () => {
+    const state = get()
+    const { save, runPlan, snapshot } = state
+    const nextSector = state.bridgeSectorIndex + 1
+    const carryArmy = clampArmy(Math.max(5, snapshot.currentArmy + 10 * nextSector))
+    const nextSeed = runPlan.seed + nextSector * 997
+    const scaledHorde = Math.round(runPlan.enemy.horde * Math.pow(1.45, nextSector - 1))
+    const scaledBossHp = Math.round(
+      Math.max(150, runPlan.enemy.bossHp) * Math.pow(1.85, nextSector - 1),
+    )
+
+    const nextPlan = generateRun({
+      seed: nextSeed,
+      biomeId: runPlan.biomeId,
+      regionId: runPlan.regionId,
+      n0: carryArmy,
+      enemy: {
+        horde: scaledHorde,
+        bossHp: scaledBossHp,
+        bossName: `${runPlan.enemy.bossName} S${nextSector}`,
+        bossTitle: `Titã do Setor ${nextSector}`,
+        totalForce: scaledHorde + scaledBossHp,
+      },
+      mastery: save.mastery,
+      observatoryLevel: save.citadelLevels.observatorio ?? 1,
+      trapAlertSeenCount: save.trapAlertSeenCount,
+    })
+
+    const nextOracle = pathOracle(nextPlan)
+    const fbSector: FloatingFeedbackItem = {
+      id: `fb_inf_sector_${nextSector}_${Date.now()}`,
+      text: `♾️ SETOR ${nextSector}! +${10 * nextSector} 🛡️`,
+      tone: 'optimal',
+      createdAtMs: snapshot.elapsedMs,
+    }
+    soundEngine.playVictoryFanfare()
+
+    set({
+      infiniteBridgeMode: true,
+      bridgeSectorIndex: nextSector,
+      runPlan: nextPlan,
+      oracle: nextOracle,
+      battleResolution: null,
+      redemptionContract: null,
+      activeTrapHit: null,
+      snapshot: {
+        ...snapshot,
+        runId: nextPlan.runId,
+        phase: save.settings.calmMode ? 'CALM_WAIT' : 'RUNNING',
+        progress: 0.02,
+        currentArmy: carryArmy,
+        crowdNodes: buildCrowdNodes(carryArmy),
+        activeSegmentIndex: 0,
+        segments: nextPlan.segments,
+        resolvedSegments: {},
+        enemy: nextPlan.enemy,
+        recentFeedback: [...snapshot.recentFeedback.slice(-4), fbSector],
+      },
+      captainSpeech: {
+        mood: 'excited',
+        text: `♾️ Setor ${nextSector} iniciado! Novo Mega-Boss (${formatArmy(scaledBossHp, save.settings.notationMode)} HP) e novas placas na ponte!`,
+      },
+    })
   },
 
   openMathChallengeModal: (tier) => {
@@ -697,6 +866,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       activeMathChallengeDiagnostic: null,
       mathChallengesSolvedInRun: 0,
       lastSolvedMathRewardAt: null,
+      bridgeSectorIndex: 1,
       lunetaChargesRemaining: lunetas,
       captainSpeech: {
         mood: 'excited',
@@ -1169,8 +1339,13 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       return
     }
 
-    // Se terminou todos os segmentos, inicia o Combate Visível (fase 'BATTLE')!
+    // Se terminou todos os segmentos: no Modo Infinito avança automaticamente para o próximo Setor;
+    // no Modo Campanha inicia o Combate Visível (fase 'BATTLE')!
     if (snapshot.activeSegmentIndex >= snapshot.segments.length) {
+      if (state.infiniteBridgeMode && snapshot.currentArmy > 0) {
+        get().advanceInfiniteBridgeSector()
+        return
+      }
       const safeFinalArmy = clampArmy(snapshot.currentArmy)
       const resolution = resolveBattle(safeFinalArmy, snapshot.enemy)
       const contract = evaluateRedemptionContract(

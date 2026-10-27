@@ -20,6 +20,10 @@ export const BattleOverlay: React.FC = () => {
   const notationMode = useLogicBattleStore((s) => s.save.settings.notationMode)
   const startNewRun = useLogicBattleStore((s) => s.startNewRun)
   const switchWorld = useLogicBattleStore((s) => s.switchWorld)
+  const bridgeSectorIndex = useLogicBattleStore((s) => s.bridgeSectorIndex)
+  const advanceInfiniteBridgeSector = useLogicBattleStore(
+    (s) => s.advanceInfiniteBridgeSector,
+  )
   const acceptContract = useLogicBattleStore(
     (s) => s.acceptRedemptionContractModal,
   )
@@ -158,6 +162,16 @@ export const BattleOverlay: React.FC = () => {
         )}
 
         <div className="lb-result-card__actions">
+          <button
+            type="button"
+            data-testid="lb-infinite-next-sector-btn"
+            className="lb-btn-3d lb-btn-3d--gold"
+            onClick={advanceInfiniteBridgeSector}
+            title="Continuar no Modo Infinito para o próximo Setor com Boss mais forte"
+          >
+            ♾️ Setor {bridgeSectorIndex + 1}
+          </button>
+
           <button
             type="button"
             data-testid="lb-battle-rematch-btn"

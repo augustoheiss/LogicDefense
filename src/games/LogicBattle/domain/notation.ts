@@ -5,6 +5,8 @@ import { MAX_CROWD_SPRITES, RENDER_1TO1_MAX, UNIT_TIERS } from '../config/unitTi
 import { ArmyCount, DecomposedTier, NotationMode, UnitTierSpec } from '../types'
 import { clampArmy } from './armyMath'
 
+export type { NotationMode }
+
 const SUPERSCRIPT_DIGITS: Record<string, string> = {
   '0': '⁰',
   '1': '¹',

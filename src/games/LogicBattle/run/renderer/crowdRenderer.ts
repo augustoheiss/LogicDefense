@@ -132,9 +132,10 @@ function drawSwallowtailBanner(
 
 /**
  * Constrói a formação da legião em fileiras de marcha + Comandantes de Flanco.
- * Garante que a ponte apresente sempre a formação heroica de `mundo1_ponte_conceito.jpg`
- * (fileiras de recrutas azuis + Centurião de Bronze à esquerda + Campeão Dourado à direita)
- * e que NUNCA haja colisão ou sobreposição entre estandartes.
+ * Progressão honesta Zero-to-Hero (Master Plan V7):
+ * - Sem pontos extras (army <= 5): começa apenas com 1 Herói Atirador (sem exército falso e sem heróis de 0,1k/1k).
+ * - À medida que ganha pontos na ponte, os soldados crescem gradualmente.
+ * - O Centurião 0,1k só entra quando army >= 100; o Campeão 1k só entra quando army >= 1000.
  */
 export function buildCrowdNodes(army: ArmyCount): CrowdSpriteNode[] {
   if (army <= 0) return []
@@ -142,11 +143,14 @@ export function buildCrowdNodes(army: ArmyCount): CrowdSpriteNode[] {
   const tiers = decomposeTiers(army)
   const nodes: CrowdSpriteNode[] = []
 
-  // Quantidade visual de recrutas na falange (cresce suavemente de 18 a 25 para preencher a ponte como no conceito)
-  const recruitCount = Math.min(
-    MARCHING_SLOTS.length,
-    Math.max(18, 16 + Math.floor(Math.log10(Math.max(1, army)) * 4)),
-  )
+  // Zero-to-Hero Honesto: 1 unidade base quando army <= 5; cresce com os pontos ganhos na ponte
+  const recruitCount =
+    army <= 5
+      ? 1
+      : Math.min(
+          MARCHING_SLOTS.length,
+          Math.max(2, Math.min(army - 4, 25)),
+        )
 
   for (let i = 0; i < recruitCount; i++) {
     const slot = MARCHING_SLOTS[i]
@@ -154,42 +158,58 @@ export function buildCrowdNodes(army: ArmyCount): CrowdSpriteNode[] {
       id: `rec_${i}`,
       tierIndex: 0,
       denominationLabel: '1',
-      offsetX: slot.x,
-      offsetZ: slot.z,
-      scale: 1,
+      offsetX: i === 0 && recruitCount === 1 ? 0 : slot.x,
+      offsetZ: i === 0 && recruitCount === 1 ? 0 : slot.z,
+      scale: i === 0 && recruitCount === 1 ? 1.18 : 1,
     })
   }
 
-  // Comandante do Flanco Esquerdo: Centurião de Bronze com Crista Vermelha ([🛡️ 0,1k])
+  // Esquadrão intermediário (10+)
+  if (army >= 10 && army < 100) {
+    nodes.push({
+      id: 'cmd_squad_leader',
+      tierIndex: 1,
+      denominationLabel: '10',
+      offsetX: -0.18,
+      offsetZ: -0.03,
+      scale: 1.2,
+    })
+  }
+
+  // Comandante do Flanco Esquerdo: Centurião de Bronze ([🛡️ 0,1k]) — SOMENTE quando army >= 100!
   const highestTier = tiers[0]?.tier
-  const leftLabel =
-    army >= 10_000
-      ? formatArmy(Math.pow(10, Math.floor(Math.log10(army)) - 1), 'compact')
-      : '0,1k'
+  if (army >= 100) {
+    const leftLabel =
+      army >= 10_000
+        ? formatArmy(Math.pow(10, Math.floor(Math.log10(army)) - 1), 'compact')
+        : '0,1k'
 
-  nodes.push({
-    id: 'cmd_left_centurion',
-    tierIndex: 2,
-    denominationLabel: leftLabel,
-    offsetX: -0.22,
-    offsetZ: -0.04,
-    scale: 1.32,
-  })
+    nodes.push({
+      id: 'cmd_left_centurion',
+      tierIndex: 2,
+      denominationLabel: leftLabel,
+      offsetX: -0.22,
+      offsetZ: -0.04,
+      scale: 1.32,
+    })
+  }
 
-  // Comandante do Flanco Direito: Campeão / Quiliarca Dourado com Lança ([🛡️ 1k])
-  const rightLabel =
-    army >= 10_000
-      ? highestTier?.denominationLabel ?? '10k'
-      : '1k'
+  // Comandante do Flanco Direito: Campeão Dourado ([🛡️ 1k]) — SOMENTE quando army >= 1000!
+  if (army >= 1000) {
+    const rightLabel =
+      army >= 10_000
+        ? highestTier?.denominationLabel ?? '10k'
+        : '1k'
 
-  nodes.push({
-    id: 'cmd_right_champion',
-    tierIndex: 3,
-    denominationLabel: rightLabel,
-    offsetX: 0.24,
-    offsetZ: -0.09,
-    scale: 1.48,
-  })
+    nodes.push({
+      id: 'cmd_right_champion',
+      tierIndex: 3,
+      denominationLabel: rightLabel,
+      offsetX: 0.24,
+      offsetZ: -0.09,
+      scale: 1.48,
+    })
+  }
 
   // Ordenar de trás para frente no eixo Z (maior Z = mais longe na ponte = desenhado primeiro)
   nodes.sort((a, b) => b.offsetZ - a.offsetZ || a.tierIndex - b.tierIndex)

@@ -1907,6 +1907,31 @@ export const ArcadeEnginesCanvas: React.FC = () => {
         aria-label={`Palco 2.5D da engine ${engineSpec.name}`}
       />
 
+      {/* Fase 4 V7: Controle Widescreen de Tela Cheia (⛶) harmonizado em todas as Engines */}
+      <div
+        className="lb-camera-compass-dock"
+        data-testid="lb-camera-compass-dock"
+        aria-label="Controle Widescreen de Tela Cheia"
+      >
+        <button
+          type="button"
+          className="lb-compass-btn"
+          data-testid="lb-fullscreen-btn"
+          onClick={() => {
+            const shell =
+              document.querySelector('.lb-page-fullscreen') ?? document.documentElement
+            if (!document.fullscreenElement) {
+              shell.requestFullscreen?.().catch(() => undefined)
+            } else {
+              document.exitFullscreen?.().catch(() => undefined)
+            }
+          }}
+          title="Alternar Tela Cheia (Full Screen)"
+        >
+          ⛶
+        </button>
+      </div>
+
       {/* Painel Superior de Status 2.5D: Onda, Moedas (🪙), Tropas Aliadas, HP da Base e Barra do Boss */}
       <div
         style={{

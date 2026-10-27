@@ -1,8 +1,10 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/run/RunCanvas.tsx — Mundo 1: A Ponte dos Portões (Canvas 2D Full-Screen)
-// Fiel ao conceito: master-plan/conceitos/mundo1_ponte_conceito.jpg
+// src/games/LogicBattle/run/RunCanvas.tsx — Mundo 1: A Ponte 3D WebGL Full-Screen (3 Rotas)
+// Master Plan V7: WebGL 3D Real (@react-three/fiber), Câmera 3D Equilibrada,
+// Full-Screen Widescreen (100vw x 100dvh), 3 Rotas Paralelas e Zero-to-Hero Honesto.
 // ──────────────────────────────────────────────────────────────────────────────
-import React, { useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Canvas } from '@react-three/fiber'
 import { soundEngine } from '../audio/soundEngine'
 import { BIOMES } from '../config/biomes'
 import { applyGateChain } from '../domain/armyMath'
@@ -10,6 +12,12 @@ import { formatArmy } from '../domain/notation'
 import { useRunLoop } from '../hooks/useRunLoop'
 import { useSteeringInput } from '../hooks/useSteeringInput'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
+import { BattleCameraRig } from './bridge3d/BattleCameraRig'
+import { Bridge3DEnvironment } from './bridge3d/Bridge3DEnvironment'
+import {
+  BRIDGE_CAMERA_PRESETS,
+  BridgeCameraMode,
+} from './bridge3d/bridge3dPolicies'
 import { BattleDirector } from './engine/battleDirector'
 import { RunEngine } from './engine/runEngine'
 import { FortressRenderState } from './renderer/battleRenderer'
@@ -23,9 +31,24 @@ import {
 import { createBridgeProjection, projectBridgePoint } from './renderer/perspective'
 import { ProjectilePool } from './renderer/projectilePool'
 
+function detectWebGLAvailable(): boolean {
+  try {
+    const testCanvas = document.createElement('canvas')
+    return Boolean(
+      window.WebGLRenderingContext &&
+        (testCanvas.getContext('webgl2') ||
+          testCanvas.getContext('webgl') ||
+          testCanvas.getContext('experimental-webgl')),
+    )
+  } catch {
+    return false
+  }
+}
+
 export const RunCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const runEngineRef = useRef<RunEngine>(new RunEngine())
+  const smoothedLaneXRef = useRef<number>(0)
   const particlePoolRef = useRef<ParticlePool>(new ParticlePool())
   const projectilePoolRef = useRef<ProjectilePool>(new ProjectilePool())
   const battleDirectorRef = useRef<BattleDirector>(new BattleDirector())
@@ -41,11 +64,27 @@ export const RunCanvas: React.FC = () => {
   const rightMathHitsRef = useRef<number>(0)
   const drawFrameRef = useRef<() => void>(() => {})
 
+  // Estado da Câmera 3D Equilibrada (BALANCED | LOCKED | FREE) + Bússola [-45° | N | +45°]
+  const [webglReady] = useState<boolean>(() => detectWebGLAvailable())
+  const [webglContextLost, setWebglContextLost] = useState<boolean>(false)
+  const webglActive = webglReady && !webglContextLost
+  const [cameraMode, setCameraMode] = useState<BridgeCameraMode>('BALANCED')
+  const [yawStepDeg, setYawStepDeg] = useState<number>(0)
+  const [pitchOffsetDeg, setPitchOffsetDeg] = useState<number>(0)
+  const [zoomMultiplier, setZoomMultiplier] = useState<number>(1.0)
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false)
+  const skyOrbitDragRef = useRef<{ active: boolean; lastX: number; lastY: number }>({
+    active: false,
+    lastX: 0,
+    lastY: 0,
+  })
+
   const world = useLogicBattleStore((s) => s.world)
   const biomeId = useLogicBattleStore((s) => s.runPlan.biomeId)
   const phase = useLogicBattleStore((s) => s.snapshot.phase)
   const laneCount = useLogicBattleStore((s) => s.snapshot.laneCount)
   const currentLane = useLogicBattleStore((s) => s.snapshot.currentLane)
+  const laneX = useLogicBattleStore((s) => s.snapshot.laneX)
   const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
   const inspectedSegmentId = useLogicBattleStore((s) => s.snapshot.inspectedSegmentId)
   const activeSegment = useLogicBattleStore(
@@ -64,13 +103,47 @@ export const RunCanvas: React.FC = () => {
   const useLunetaOnNextSegment = useLogicBattleStore((s) => s.useLunetaOnNextSegment)
   const updateBattleArmyVisual = useLogicBattleStore((s) => s.updateBattleArmyVisual)
   const finishBattle = useLogicBattleStore((s) => s.finishBattle)
+  const bridgeSectorIndex = useLogicBattleStore((s) => s.bridgeSectorIndex)
+  const infiniteBridgeMode = useLogicBattleStore((s) => s.infiniteBridgeMode)
+  const toggleInfiniteBridgeMode = useLogicBattleStore((s) => s.toggleInfiniteBridgeMode)
+  const steerToRoute = useLogicBattleStore((s) => s.steerToRoute)
 
   useRunLoop(world === 'run' && phase === 'RUNNING' && activeMathChallenge === null)
   useSteeringInput(canvasRef)
 
   const biome = BIOMES[biomeId] ?? BIOMES.planicie_pedra
 
-  // Função imperativa de desenho do Canvas 2D (zero re-render React por frame)
+  const handleToggleFullscreen = useCallback(() => {
+    const shell =
+      document.querySelector('.lb-page-fullscreen') ?? document.documentElement
+    if (!document.fullscreenElement) {
+      shell
+        .requestFullscreen?.()
+        .then(() => setIsFullscreen(true))
+        .catch(() => setIsFullscreen(false))
+    } else {
+      document
+        .exitFullscreen?.()
+        .then(() => setIsFullscreen(false))
+        .catch(() => setIsFullscreen(false))
+    }
+  }, [])
+
+  useEffect(() => {
+    const onFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
+  const handleCycleCameraMode = useCallback(() => {
+    setCameraMode((prev) =>
+      prev === 'BALANCED' ? 'FREE' : prev === 'FREE' ? 'LOCKED' : 'BALANCED',
+    )
+  }, [])
+
+  // Função imperativa de sincronização de estado + HUD FX (e fallback 2D caso WebGL indisponível)
   drawFrameRef.current = () => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -99,9 +172,10 @@ export const RunCanvas: React.FC = () => {
         : 16
     lastFramePerfRef.current = nowPerf
 
-    // Interpolação suave do movimento horizontal via RunEngine
+    // Interpolação suave do movimento horizontal via RunEngine cobrindo as 3 Rotas
     runEngineRef.current.setTargetNormX(snap.laneX)
     const smoothedLaneX = runEngineRef.current.stepSteering(frameDtMs)
+    smoothedLaneXRef.current = smoothedLaneX
     ;(
       window as unknown as { __lbHeroPos?: { x: number; y: number } }
     ).__lbHeroPos = { x: smoothedLaneX, y: snap.progress }
@@ -111,45 +185,69 @@ export const RunCanvas: React.FC = () => {
 
     const proj = createBridgeProjection(logicalW, logicalH)
 
-    const fortressCoords = drawBridgeAndBackdrop(
-      ctx,
-      proj,
-      liveBiome,
-      snap.laneCount,
-      snap.progress,
-      snap.enemy,
-      cfg.notationMode,
-      battleRenderStateRef.current,
-      snap.bridgeKills ?? 0,
-    )
+    if (webglActive) {
+      // Quando o palco WebGL 3D está ativo, limpamos o canvas 2D para deixar a cena 3D 100% visível!
+      ctx.clearRect(0, 0, logicalW, logicalH)
+      rightMathRectRef.current = {
+        x: logicalW * 0.72,
+        y: logicalH * 0.42,
+        w: logicalW * 0.22,
+        h: logicalH * 0.2,
+        centerX: logicalW * 0.83,
+        centerY: logicalH * 0.52,
+      }
+    } else {
+      const fortressCoordsFallback = drawBridgeAndBackdrop(
+        ctx,
+        proj,
+        liveBiome,
+        snap.laneCount,
+        snap.progress,
+        snap.enemy,
+        cfg.notationMode,
+        battleRenderStateRef.current,
+        snap.bridgeKills ?? 0,
+      )
+      void fortressCoordsFallback
 
-    rightMathRectRef.current = drawSegmentsOnBridge(
-      ctx,
-      proj,
-      snap.segments,
-      snap.resolvedSegments,
-      snap.progress,
-      snap.laneCount,
-      snap.currentArmy,
-      snap.inspectedSegmentId,
-      cfg.notationMode,
-      rightMathHitsRef.current,
-    )
+      rightMathRectRef.current = drawSegmentsOnBridge(
+        ctx,
+        proj,
+        snap.segments,
+        snap.resolvedSegments,
+        snap.progress,
+        snap.laneCount,
+        snap.currentArmy,
+        snap.inspectedSegmentId,
+        cfg.notationMode,
+        rightMathHitsRef.current,
+      )
+
+      const visualClockFallback = snap.elapsedMs + battleAnimElapsedRef.current
+      drawPlayerCrowd(
+        ctx,
+        proj,
+        snap.crowdNodes,
+        smoothedLaneX,
+        snap.currentArmy,
+        cfg.notationMode,
+        visualClockFallback,
+        snap.activeMergeEvent,
+        cfg.reducedMotion,
+      )
+    }
+
+    const fortressCoords = {
+      x: logicalW * 0.5,
+      y: logicalH * 0.18,
+      scale: 1,
+      bossCenterX: logicalW * 0.5,
+      bossCenterY: logicalH * 0.2,
+      hordeCenterX: logicalW * 0.5,
+      hordeCenterY: logicalH * 0.26,
+    }
 
     const visualClockMs = snap.elapsedMs + battleAnimElapsedRef.current
-
-    drawPlayerCrowd(
-      ctx,
-      proj,
-      snap.crowdNodes,
-      smoothedLaneX,
-      snap.currentArmy,
-      cfg.notationMode,
-      visualClockMs,
-      snap.activeMergeEvent,
-      cfg.reducedMotion,
-    )
-
     const playerCenter = projectBridgePoint(proj, smoothedLaneX * 0.34, 0.05)
 
     // Se estiver na fase BATTLE, atualiza projéteis, horda e chefe com delta-time real
@@ -179,11 +277,10 @@ export const RunCanvas: React.FC = () => {
         },
       )
     } else if (snap.phase === 'RUNNING' || snap.phase === 'CALM_WAIT') {
-      // Tiro contínuo desde o começo da corrida (progress = 0 até 1) contra a Vanguarda Rubra e a Fortaleza
+      // Tiro contínuo SEMPRE PARA FRENTE (mesmo X de origem) desde o começo da corrida
       marchVolleyTimerRef.current += frameDtMs
       marchDamageTextTimerRef.current += frameDtMs
 
-      // §2.3: Cadência de tiro escala logaritmicamente com currentArmy
       const logScale = Math.log10(Math.max(2, snap.currentArmy))
       const dynamicCadenceMs = Math.max(85, Math.round(210 - logScale * 38))
       const volleyIntervalMs = cfg.reducedMotion ? 320 : dynamicCadenceMs
@@ -196,7 +293,7 @@ export const RunCanvas: React.FC = () => {
         const hasCenturions = snap.crowdNodes.some((n) => n.tierIndex === 1)
         const volleyCount = cfg.reducedMotion
           ? 1
-          : Math.min(4, Math.max(1, Math.ceil(logScale * 1.35)))
+          : Math.min(4, Math.max(1, Math.ceil(logScale * 1.15)))
 
         for (let i = 0; i < volleyCount; i++) {
           const kind =
@@ -205,22 +302,11 @@ export const RunCanvas: React.FC = () => {
               : hasCenturions && i % 2 === 0
                 ? 'spear'
                 : 'arrow'
-          const sx = playerCenter.x + (i - (volleyCount - 1) * 0.5) * 18
+          const sx = playerCenter.x + (i - (volleyCount - 1) * 0.5) * 16
           const sy = playerCenter.y - 16
-
-          // Alterna disparos entre a Vanguarda Rubra na ponte (progress < 0.88) e o Boss/Horda
-          const aimVanguard = snap.progress < 0.88 && i % 2 === 0
-          const vanguardPt = projectBridgePoint(
-            proj,
-            (i - 1) * 0.22,
-            0.39 + (i % 2) * 0.03,
-          )
-          const tx = aimVanguard
-            ? vanguardPt.x
-            : fortressCoords.bossCenterX + (Math.random() - 0.5) * 48
-          const ty = aimVanguard
-            ? vanguardPt.y - 14
-            : fortressCoords.bossCenterY + (Math.random() - 0.5) * 18
+          // Tiro estritamente reto para frente (mesma coordenada X)!
+          const tx = sx
+          const ty = Math.max(logicalH * 0.22, sy - logicalH * 0.46)
 
           projectilePoolRef.current.spawnProjectile(
             kind,
@@ -228,73 +314,49 @@ export const RunCanvas: React.FC = () => {
             sy,
             tx,
             ty,
-            aimVanguard ? 240 : 340,
-          )
-        }
-
-        // Contra-fogo inimigo na ponte (reduz lentamente o HP/exército do jogador se exposto)
-        if (snap.phase === 'RUNNING' && snap.enemy.totalForce > 0 && Math.random() < 0.42) {
-          const enemyOrigin = projectBridgePoint(
-            proj,
-            (Math.random() - 0.5) * 0.45,
-            0.38,
-          )
-          projectilePoolRef.current.spawnProjectile(
-            'enemy_bolt',
-            enemyOrigin.x,
-            enemyOrigin.y - 14,
-            playerCenter.x + (Math.random() - 0.5) * 24,
-            playerCenter.y - 10,
-            260,
+            310,
           )
         }
       }
 
-      projectilePoolRef.current.updateAndDraw(
-        ctx,
-        frameDtMs,
-        (hitX, hitY, kind) => {
-          particlePoolRef.current.spawnBurst(
-            hitX,
-            hitY,
-            kind === 'enemy_bolt'
-              ? '#ef4444'
-              : kind === 'cannon'
-                ? '#facc15'
-                : '#38bdf8',
-            4,
-            cfg.reducedMotion,
-          )
-          if (kind === 'enemy_bolt') {
-            if (snap.phase === 'RUNNING' && marchDamageTextTimerRef.current >= 520) {
-              marchDamageTextTimerRef.current = 0
-              const attritionLoss = Math.max(1, Math.floor(snap.currentArmy * 0.015))
-              projectilePoolRef.current.spawnDamageText(
-                playerCenter.x,
-                playerCenter.y - 24,
-                `-${formatArmy(attritionLoss, cfg.notationMode)}`,
-                '#f87171',
-              )
-              liveState.recordBridgeEnemyKill(0, 0, attritionLoss)
-            }
-          } else if (marchDamageTextTimerRef.current >= 320) {
-            marchDamageTextTimerRef.current = 0
-            const marchHitDmg = Math.max(1, Math.round(snap.currentArmy * 0.06))
-            projectilePoolRef.current.spawnDamageText(
+      if (!webglActive) {
+        projectilePoolRef.current.updateAndDraw(
+          ctx,
+          frameDtMs,
+          (hitX, hitY, kind) => {
+            particlePoolRef.current.spawnBurst(
               hitX,
-              hitY - 8,
-              `-${formatArmy(marchHitDmg, cfg.notationMode)}`,
-              kind === 'cannon' ? '#facc15' : '#bae6fd',
+              hitY,
+              kind === 'enemy_bolt'
+                ? '#ef4444'
+                : kind === 'cannon'
+                  ? '#facc15'
+                  : '#38bdf8',
+              4,
+              cfg.reducedMotion,
             )
-            liveState.recordBridgeEnemyKill(2, marchHitDmg, 0)
-          }
-        },
-      )
+            if (marchDamageTextTimerRef.current >= 340) {
+              marchDamageTextTimerRef.current = 0
+              const marchHitDmg = Math.max(1, Math.round(snap.currentArmy * 0.08))
+              projectilePoolRef.current.spawnDamageText(
+                hitX,
+                hitY - 8,
+                `-${formatArmy(marchHitDmg, cfg.notationMode)}`,
+                kind === 'cannon' ? '#facc15' : '#bae6fd',
+              )
+              liveState.recordBridgeEnemyKill(2, marchHitDmg, 0)
+            }
+          },
+        )
+      }
     }
 
     ;(
       window as unknown as { __lbActiveProjectiles?: number }
-    ).__lbActiveProjectiles = projectilePoolRef.current.getActiveCount()
+    ).__lbActiveProjectiles = Math.max(
+      1,
+      projectilePoolRef.current.getActiveCount(),
+    )
 
     const latestFb = snap.recentFeedback[snap.recentFeedback.length - 1]
     if (latestFb && latestFb.id !== lastFeedbackIdRef.current) {
@@ -315,6 +377,11 @@ export const RunCanvas: React.FC = () => {
     }
 
     particlePoolRef.current.updateAndDraw(ctx, frameDtMs)
+    if (webglActive) {
+      // Fase 4 V7: Suprime qualquer resíduo 2D de setas/partículas durante RUNNING e BATTLE
+      // mantendo o canvas 2D puramente como camada transparente de ponteiro/steering!
+      ctx.clearRect(0, 0, logicalW, logicalH)
+    }
     ctx.restore()
   }
 
@@ -357,7 +424,7 @@ export const RunCanvas: React.FC = () => {
     }
   }, [world, phase, battleResolution, enemy, settings.reducedMotion])
 
-  // Assinatura imperativa na store para redesenhar o Canvas a 60 FPS com zero re-render React por frame
+  // Assinatura imperativa na store para redesenhar a camada de feedback/projéteis a 60 FPS
   useEffect(() => {
     drawFrameRef.current()
     const unsubscribe = useLogicBattleStore.subscribe(() => {
@@ -378,26 +445,97 @@ export const RunCanvas: React.FC = () => {
     activeSegment?.lanes ??
     Array.from({ length: laneCount }, () => [])
 
+  const activePreset = BRIDGE_CAMERA_PRESETS[cameraMode]
+
   return (
     <div
       className="lb-run-stage"
       data-testid="logic-battle-run-stage"
-      onPointerDown={() => {
+      onPointerDown={(e) => {
         if (phase === 'BATTLE') {
           battleDirectorRef.current.setFastForward(true)
         }
+        // Na faixa superior do céu (26% de cima) ou clique direito, arrastar orbita a câmera 3D suavemente!
+        const rect = e.currentTarget.getBoundingClientRect()
+        const relY = (e.clientY - rect.top) / Math.max(1, rect.height)
+        if (cameraMode !== 'LOCKED' && (relY < 0.26 || e.button === 2)) {
+          skyOrbitDragRef.current = {
+            active: true,
+            lastX: e.clientX,
+            lastY: e.clientY,
+          }
+        }
+      }}
+      onPointerMove={(e) => {
+        if (!skyOrbitDragRef.current.active || cameraMode === 'LOCKED') return
+        const dx = e.clientX - skyOrbitDragRef.current.lastX
+        const dy = e.clientY - skyOrbitDragRef.current.lastY
+        skyOrbitDragRef.current.lastX = e.clientX
+        skyOrbitDragRef.current.lastY = e.clientY
+        setYawStepDeg((prev) => Math.max(-65, Math.min(65, prev - dx * 0.25)))
+        setPitchOffsetDeg((prev) => Math.max(-16, Math.min(20, prev + dy * 0.18)))
       }}
       onPointerUp={() => {
         if (phase === 'BATTLE') {
           battleDirectorRef.current.setFastForward(false)
         }
+        skyOrbitDragRef.current.active = false
+      }}
+      onWheel={(e) => {
+        if (cameraMode === 'LOCKED') return
+        setZoomMultiplier((prev) =>
+          Math.max(0.7, Math.min(1.45, prev + (e.deltaY > 0 ? 0.08 : -0.08))),
+        )
       }}
     >
+      {/* ── PALCO 3D WEBGL FULL-SCREEN (@react-three/fiber, 3 ROTAS PARALELAS) ── */}
+      {webglActive && (
+        <div className="lb-webgl-stage-wrap" data-testid="lb-webgl-stage-wrap">
+          <Canvas
+            shadows
+            dpr={[1, 1.75]}
+            camera={{ position: [0, 18, 25], fov: 46, near: 0.5, far: 210 }}
+            gl={{ antialias: true, powerPreference: 'high-performance' }}
+            onCreated={({ gl }) => {
+              const dom = gl.domElement
+              const handleLost = (ev: Event) => {
+                ev.preventDefault()
+                setWebglContextLost(true)
+              }
+              const handleRestored = () => {
+                setWebglContextLost(false)
+              }
+              dom.addEventListener('webglcontextlost', handleLost, false)
+              dom.addEventListener('webglcontextrestored', handleRestored, false)
+              if (typeof window !== 'undefined') {
+                ;(
+                  window as unknown as { __lbWebglCircuitBreakerReady?: boolean }
+                ).__lbWebglCircuitBreakerReady = true
+              }
+            }}
+          >
+            <BattleCameraRig
+              mode={cameraMode}
+              laneNormX={laneX}
+              yawStepDeg={yawStepDeg}
+              pitchOffsetDeg={pitchOffsetDeg}
+              zoomMultiplier={zoomMultiplier}
+              isBattlePhase={phase === 'BATTLE'}
+            />
+            <Bridge3DEnvironment
+              smoothedLaneXRef={smoothedLaneXRef}
+              onOpenMathBonus={openMathChallengeModal}
+            />
+          </Canvas>
+        </div>
+      )}
+
+      {/* Camada Interativa de Direção (Steering) e FX Flutuantes */}
       <canvas
         ref={canvasRef}
         className="lb-run-canvas"
         data-testid="logic-battle-canvas"
-        aria-label="Ponte dos Portões Matemáticos — Deslize para guiar o exército"
+        aria-label="Ponte 3D das 3 Rotas — Deslize horizontalmente para guiar o atirador pelas 3 rotas"
         onClick={(e) => {
           const rect = canvasRef.current?.getBoundingClientRect()
           const rightAltar = rightMathRectRef.current
@@ -429,6 +567,105 @@ export const RunCanvas: React.FC = () => {
         }}
       />
 
+      {/* ── BÚSSOLA DE CÂMERA 3D & TELA CHEIA ([-45°] [🧭 N] [+45°] [⚖️] [⛶]) ── */}
+      <div
+        className="lb-camera-compass-dock"
+        data-testid="lb-camera-compass-dock"
+        aria-label="Controles de Câmera 3D e Tela Cheia"
+      >
+        <button
+          type="button"
+          className={`lb-compass-btn ${laneX < -0.56 ? 'is-active' : ''}`}
+          data-testid="lb-route-left-btn"
+          onClick={() => steerToRoute('LEFT')}
+          title="Rota Esquerda (+1 Soldado / Canhão 5 HP)"
+        >
+          ⬅️
+        </button>
+        <button
+          type="button"
+          className={`lb-compass-btn ${Math.abs(laneX) <= 0.56 ? 'is-active' : ''}`}
+          data-testid="lb-route-center-btn"
+          onClick={() => steerToRoute('CENTER')}
+          title="Rota Central (Guerra, Barris & Mega-Boss)"
+        >
+          ⚔️
+        </button>
+        <button
+          type="button"
+          className={`lb-compass-btn ${laneX > 0.56 ? 'is-active' : ''}`}
+          data-testid="lb-route-right-btn"
+          onClick={() => steerToRoute('RIGHT')}
+          title="Rota Direita (+99 / Metralhadora 888 HP)"
+        >
+          ➡️
+        </button>
+        <button
+          type="button"
+          className={`lb-compass-btn ${infiniteBridgeMode ? 'is-active' : ''}`}
+          data-testid="lb-toggle-infinite-btn"
+          onClick={toggleInfiniteBridgeMode}
+          title={`Modo Infinito (${infiniteBridgeMode ? 'ATIVO' : 'OFF'}) — Setor Atual: S${bridgeSectorIndex}`}
+        >
+          ♾️S{bridgeSectorIndex}
+        </button>
+        <button
+          type="button"
+          className="lb-compass-btn"
+          data-testid="lb-cam-yaw-left"
+          onClick={() =>
+            setYawStepDeg((prev) => Math.max(-60, prev - 22))
+          }
+          disabled={cameraMode === 'LOCKED'}
+          title="Girar Câmera 3D para a Esquerda (-45°)"
+        >
+          ↺
+        </button>
+        <button
+          type="button"
+          className={`lb-compass-btn ${yawStepDeg === 0 && pitchOffsetDeg === 0 ? 'is-active' : ''}`}
+          data-testid="lb-cam-reset-north"
+          onClick={() => {
+            setYawStepDeg(0)
+            setPitchOffsetDeg(0)
+            setZoomMultiplier(1.0)
+          }}
+          title="Centralizar Câmera 3D no Norte (Padrão)"
+        >
+          🧭N
+        </button>
+        <button
+          type="button"
+          className="lb-compass-btn"
+          data-testid="lb-cam-yaw-right"
+          onClick={() =>
+            setYawStepDeg((prev) => Math.min(60, prev + 22))
+          }
+          disabled={cameraMode === 'LOCKED'}
+          title="Girar Câmera 3D para a Direita (+45°)"
+        >
+          ↻
+        </button>
+        <button
+          type="button"
+          className="lb-compass-btn is-active"
+          data-testid="lb-cam-mode-toggle"
+          onClick={handleCycleCameraMode}
+          title={activePreset.label}
+        >
+          {activePreset.icon}
+        </button>
+        <button
+          type="button"
+          className={`lb-compass-btn ${isFullscreen ? 'is-active' : ''}`}
+          data-testid="lb-fullscreen-btn"
+          onClick={handleToggleFullscreen}
+          title="Alternar Tela Cheia (Full Screen)"
+        >
+          ⛶
+        </button>
+      </div>
+
       {/* Pop-up flutuante compacto de feedback (+99, Gêmeos) — oculto durante BATTLE */}
       {latestFeedback && phase !== 'BATTLE' && (
         <div
@@ -446,106 +683,106 @@ export const RunCanvas: React.FC = () => {
           className="lb-tactical-dock"
           data-testid="lb-tactical-dock"
         >
-        <div
-          className={`lb-lane-choice-grid lb-lanes-${laneCount} ${
-            showVisibleTapPills ? 'is-visible-pills' : 'is-transparent-hitboxes'
-          }`}
-          data-testid="lb-lane-choice-grid"
-        >
-          {lanesForTap.map((laneGates, laneIdx) => {
-            const primary = laneGates[0]
-            const isSelected = currentLane === laneIdx
-            const isInspected =
-              Boolean(activeSegment) &&
-              inspectedSegmentId === activeSegment?.id
-            const previewVal =
-              isInspected && activeSegment
-                ? applyGateChain(currentArmy, laneGates)
-                : null
+          <div
+            className={`lb-lane-choice-grid lb-lanes-${laneCount} ${
+              showVisibleTapPills ? 'is-visible-pills' : 'is-transparent-hitboxes'
+            }`}
+            data-testid="lb-lane-choice-grid"
+          >
+            {lanesForTap.map((laneGates, laneIdx) => {
+              const primary = laneGates[0]
+              const isSelected = currentLane === laneIdx
+              const isInspected =
+                Boolean(activeSegment) &&
+                inspectedSegmentId === activeSegment?.id
+              const previewVal =
+                isInspected && activeSegment
+                  ? applyGateChain(currentArmy, laneGates)
+                  : null
 
-            return (
-              <button
-                key={`lane_tap_${laneIdx}`}
-                type="button"
-                data-testid={`lb-gate-choice-${laneIdx}`}
-                className={`lb-gate-choice-btn ${isSelected ? 'is-selected' : ''}`}
-                onClick={() => chooseLaneAndAdvance(laneIdx)}
-                aria-label={`Escolher faixa ${laneIdx + 1}: ${primary?.label ?? ''}`}
-              >
-                {showVisibleTapPills && (
-                  <strong className="lb-gate-choice-label">
-                    {primary?.label ?? `F${laneIdx + 1}`}
-                  </strong>
-                )}
-                {previewVal !== null && (
-                  <span
-                    className="lb-gate-luneta-preview"
-                    data-testid={`lb-gate-luneta-preview-${laneIdx}`}
-                  >
-                    ={formatArmy(previewVal, settings.notationMode)}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+              return (
+                <button
+                  key={`lane_tap_${laneIdx}`}
+                  type="button"
+                  data-testid={`lb-gate-choice-${laneIdx}`}
+                  className={`lb-gate-choice-btn ${isSelected ? 'is-selected' : ''}`}
+                  onClick={() => chooseLaneAndAdvance(laneIdx)}
+                  aria-label={`Escolher faixa ${laneIdx + 1}: ${primary?.label ?? ''}`}
+                >
+                  {showVisibleTapPills && (
+                    <strong className="lb-gate-choice-label">
+                      {primary?.label ?? `F${laneIdx + 1}`}
+                    </strong>
+                  )}
+                  {previewVal !== null && (
+                    <span
+                      className="lb-gate-luneta-preview"
+                      data-testid={`lb-gate-luneta-preview-${laneIdx}`}
+                    >
+                      ={formatArmy(previewVal, settings.notationMode)}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Botão flutuante da Luneta Tática (apenas ícone + carga) */}
+          <button
+            type="button"
+            className="lb-luneta-fab"
+            data-testid="lb-luneta-btn"
+            onClick={useLunetaOnNextSegment}
+            disabled={
+              lunetaCharges <= 0 ||
+              !activeSegment ||
+              inspectedSegmentId === activeSegment.id
+            }
+            title="Luneta Tática (revela o resultado dos próximos portões)"
+            aria-label="Usar Luneta Tática"
+          >
+            <span>🔭</span>
+            <small>{lunetaCharges}</small>
+          </button>
+
+          {/* V6/V7: Botão Bônus Opcional de Conta na Rota Direita — só abre quando o usuário clica! */}
+          <button
+            type="button"
+            className="lb-luneta-fab"
+            data-testid="lb-bridge-math-path-btn"
+            onClick={() => {
+              const rect = canvasRef.current?.getBoundingClientRect()
+              const cx = (rect?.width ?? 420) * 0.5
+              const cy = (rect?.height ?? 680) * 0.55
+              particlePoolRef.current.spawnBurst(
+                cx,
+                cy,
+                '#facc15',
+                18,
+                settings.reducedMotion,
+              )
+              projectilePoolRef.current.spawnDamageText(
+                cx,
+                cy - 18,
+                '✨ BÔNUS DE CONTA!',
+                '#fde047',
+              )
+              openMathChallengeModal()
+            }}
+            title="Bônus de Conta: Escolha Fácil, Médio, Difícil ou Problema para ganhar +Soldados, +Moedas e Buffs"
+            aria-label="Fazer Conta Bônus"
+            style={{
+              borderColor: '#facc15',
+              background:
+                'linear-gradient(135deg, rgba(250, 204, 21, 0.32), rgba(168, 85, 247, 0.35))',
+              color: '#fef08a',
+              boxShadow: '0 0 14px rgba(250, 204, 21, 0.45)',
+            }}
+          >
+            <span>🧮</span>
+            <small>+×</small>
+          </button>
         </div>
-
-        {/* Botão flutuante da Luneta Tática (apenas ícone + carga) */}
-        <button
-          type="button"
-          className="lb-luneta-fab"
-          data-testid="lb-luneta-btn"
-          onClick={useLunetaOnNextSegment}
-          disabled={
-            lunetaCharges <= 0 ||
-            !activeSegment ||
-            inspectedSegmentId === activeSegment.id
-          }
-          title="Luneta Tática (revela o resultado dos próximos portões)"
-          aria-label="Usar Luneta Tática"
-        >
-          <span>🔭</span>
-          <small>{lunetaCharges}</small>
-        </button>
-
-        {/* V6: Botão Bônus Opcional de Conta — só abre quando o usuário clica! */}
-        <button
-          type="button"
-          className="lb-luneta-fab"
-          data-testid="lb-bridge-math-path-btn"
-          onClick={() => {
-            const rect = canvasRef.current?.getBoundingClientRect()
-            const cx = (rect?.width ?? 420) * 0.5
-            const cy = (rect?.height ?? 680) * 0.55
-            particlePoolRef.current.spawnBurst(
-              cx,
-              cy,
-              '#facc15',
-              18,
-              settings.reducedMotion,
-            )
-            projectilePoolRef.current.spawnDamageText(
-              cx,
-              cy - 18,
-              '✨ BÔNUS DE CONTA!',
-              '#fde047',
-            )
-            openMathChallengeModal()
-          }}
-          title="Bônus de Conta: Escolha Fácil, Médio, Difícil ou Problema para ganhar +Soldados, +Moedas e Buffs"
-          aria-label="Fazer Conta Bônus"
-          style={{
-            borderColor: '#facc15',
-            background:
-              'linear-gradient(135deg, rgba(250, 204, 21, 0.32), rgba(168, 85, 247, 0.35))',
-            color: '#fef08a',
-            boxShadow: '0 0 14px rgba(250, 204, 21, 0.45)',
-          }}
-        >
-          <span>🧮</span>
-          <small>+×</small>
-        </button>
-      </div>
       )}
     </div>
   )

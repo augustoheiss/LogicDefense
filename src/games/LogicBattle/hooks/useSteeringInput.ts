@@ -89,8 +89,11 @@ export function useSteeringInput(canvasRef: RefObject<HTMLCanvasElement | null>)
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
+    const stageEl = el.parentElement ?? el
 
     let isDragging = false
+    let downOnGateChoice = false
+    let downClientX = 0
 
     const mapClientX = (clientX: number) => {
       const rect = el.getBoundingClientRect()
@@ -107,26 +110,53 @@ export function useSteeringInput(canvasRef: RefObject<HTMLCanvasElement | null>)
     }
 
     const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return
+      const rect = el.getBoundingClientRect()
+      if (rect.height <= 0) return
+      const relY = (e.clientY - rect.top) / rect.height
+      // Faixa superior do céu (26%) reservada para órbita da câmera 3D
+      if (relY < 0.26) return
+
+      const targetEl = e.target as HTMLElement | null
+      if (targetEl) {
+        const btn = targetEl.closest('button')
+        if (btn) {
+          if (btn.classList.contains('lb-gate-choice-btn')) {
+            downOnGateChoice = true
+            downClientX = e.clientX
+            return
+          }
+          // Ignorar cliques nos botões da bússola 3D, Luneta e Bônus Matemático
+          return
+        }
+      }
+
       isDragging = true
+      downOnGateChoice = false
       mapClientX(e.clientX)
     }
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!isDragging && e.pointerType === 'mouse' && e.buttons === 0) return
+      if (downOnGateChoice && Math.abs(e.clientX - downClientX) > 6) {
+        isDragging = true
+        downOnGateChoice = false
+      }
+      if (!isDragging) return
       mapClientX(e.clientX)
     }
 
     const onPointerUp = () => {
       isDragging = false
+      downOnGateChoice = false
     }
 
-    el.addEventListener('pointerdown', onPointerDown)
-    el.addEventListener('pointermove', onPointerMove)
+    stageEl.addEventListener('pointerdown', onPointerDown)
+    stageEl.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
 
     return () => {
-      el.removeEventListener('pointerdown', onPointerDown)
-      el.removeEventListener('pointermove', onPointerMove)
+      stageEl.removeEventListener('pointerdown', onPointerDown)
+      stageEl.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
     }
   }, [canvasRef, setSteeringX])

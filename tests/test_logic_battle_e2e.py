@@ -83,16 +83,23 @@ def run_suite() -> dict:
                     """() => {
                         const doc = document.documentElement;
                         const canvas = document.querySelector('[data-testid="logic-battle-canvas"]');
+                        const webglWrap = document.querySelector('[data-testid="lb-webgl-stage-wrap"]');
+                        const compass = document.querySelector('[data-testid="lb-camera-compass-dock"]');
                         const hud = document.querySelector('[data-testid="logic-battle-hud"]');
                         const dock = document.querySelector('[data-testid="lb-tactical-dock"]');
                         const cRect = canvas ? canvas.getBoundingClientRect() : null;
+                        const wRect = webglWrap ? webglWrap.getBoundingClientRect() : null;
                         const hudText = hud ? hud.innerText.replace(/\\s+/g, '') : '';
                         const dockText = dock ? dock.innerText.replace(/\\s+/g, '') : '';
                         return {
                             scrollWidth: doc.scrollWidth,
                             innerWidth: window.innerWidth,
+                            innerHeight: window.innerHeight,
                             horizontalOverflowPx: Math.max(0, doc.scrollWidth - window.innerWidth),
                             canvasVisible: Boolean(cRect && cRect.width >= 200 && cRect.height >= 200),
+                            canvasFullWidth: Boolean(cRect && Math.abs(cRect.width - window.innerWidth) <= 2),
+                            webglStageMounted: Boolean(wRect && Math.abs(wRect.width - window.innerWidth) <= 2),
+                            compassVisible: Boolean(compass),
                             hudVisible: Boolean(hud),
                             dockVisible: Boolean(dock),
                             hudTextLen: hudText.length,
@@ -102,6 +109,8 @@ def run_suite() -> dict:
                 )
                 assert layout_metrics["horizontalOverflowPx"] <= 2, f"Overflow horizontal em {vp_name}: {layout_metrics}"
                 assert layout_metrics["canvasVisible"], f"Canvas invisivel em {vp_name}"
+                assert layout_metrics["canvasFullWidth"], f"V7 Fase 1: Canvas deve ocupar 100% da largura (full-screen widescreen) em {vp_name}: {layout_metrics}"
+                assert layout_metrics["compassVisible"], f"V7 Fase 1: Bussola 3D ausente em {vp_name}: {layout_metrics}"
                 assert layout_metrics["hudTextLen"] <= 45, f"HUD excedeu orcamento de texto V2 em {vp_name}: {layout_metrics}"
                 assert layout_metrics["dockTextLen"] <= 15, f"Dock excedeu orcamento de texto V2 em {vp_name}: {layout_metrics}"
                 results["viewports"][vp_name] = layout_metrics
@@ -141,7 +150,12 @@ def run_suite() -> dict:
             page.goto(f"{BASE_URL}/jogos/logic-battle?seed=42", wait_until="domcontentloaded", timeout=30000)
             page.wait_for_selector('[data-testid="logic-battle-game"]', timeout=15000)
 
-            # 2.3 Alternar Pausa, Modo Calmo e Notação Científica
+            # 2.3 Usar Luneta Tática no primeiro segmento e validar prévia nos botões da Barra Tática
+            page.click('[data-testid="lb-luneta-btn"]')
+            page.wait_for_selector('[data-testid="lb-gate-luneta-preview-0"]', timeout=5000)
+            results["functional"]["lunetaTatica"] = "PASS"
+
+            # 2.4 Alternar Pausa, Modo Calmo, Notação Científica e Bússola de Câmera 3D (V7 Fase 1 & Fase 2)
             page.click('[data-testid="lb-toggle-pause"]')
             assert "Retomar" in page.locator('[data-testid="lb-toggle-pause"]').inner_text()
             page.click('[data-testid="lb-toggle-pause"]')
@@ -150,12 +164,68 @@ def run_suite() -> dict:
             page.click('[data-testid="lb-toggle-calm"]')
             page.click('[data-testid="lb-toggle-notation"]')
             page.click('[data-testid="lb-toggle-notation"]')
-            results["functional"]["hudToggles"] = "PASS"
+            page.click('[data-testid="lb-cam-yaw-left"]')
+            page.click('[data-testid="lb-cam-yaw-right"]')
+            page.click('[data-testid="lb-cam-reset-north"]')
+            page.click('[data-testid="lb-cam-mode-toggle"]')
+            page.click('[data-testid="lb-cam-mode-toggle"]')
+            page.click('[data-testid="lb-cam-mode-toggle"]')
+            # V7 Fase 2 & Fase 3: Navegação pelas 3 Rotas (Esquerda, Direita, Central), Renderizadores 3D Modulares e Modo Infinito
+            t0_telemetry = page.evaluate("() => window.__lbBridge3DTelemetry || null")
+            assert t0_telemetry is not None, "V7 Fase 3: Telemetria __lbBridge3DTelemetry ausente no palco 3D"
+            assert t0_telemetry.get("enemiesCount") == 16, f"V7 Fase 3: Esperados 16 inimigos 3D na horda, obtido {t0_telemetry}"
 
-            # 2.4 Usar Luneta Tática no primeiro segmento e validar prévia nos botões da Barra Tática
-            page.click('[data-testid="lb-luneta-btn"]')
-            page.wait_for_selector('[data-testid="lb-gate-luneta-preview-0"]', timeout=5000)
-            results["functional"]["lunetaTatica"] = "PASS"
+            page.click('[data-testid="lb-route-left-btn"]')
+            time.sleep(0.32)
+            left_x = page.evaluate("() => window.__lbHeroPos ? window.__lbHeroPos.x : 0")
+            left_tel = page.evaluate("() => window.__lbBridge3DTelemetry || {}")
+            assert left_x < -0.5, f"V7 Fase 2: lb-route-left-btn deve mover heroi para Rota Esquerda (x={left_x})"
+            assert left_tel.get("activeRoute") == "LEFT", f"V7 Fase 3: Rota ativa no motor 3D deve ser LEFT: {left_tel}"
+
+            page.click('[data-testid="lb-route-right-btn"]')
+            time.sleep(0.32)
+            right_x = page.evaluate("() => window.__lbHeroPos ? window.__lbHeroPos.x : 0")
+            right_tel = page.evaluate("() => window.__lbBridge3DTelemetry || {}")
+            assert right_x > 0.5, f"V7 Fase 2: lb-route-right-btn deve mover heroi para Rota Direita (x={right_x})"
+            assert right_tel.get("activeRoute") == "RIGHT", f"V7 Fase 3: Rota ativa no motor 3D deve ser RIGHT: {right_tel}"
+
+            page.click('[data-testid="lb-route-center-btn"]')
+            time.sleep(0.28)
+            center_x = page.evaluate("() => window.__lbHeroPos ? window.__lbHeroPos.x : 0")
+            center_tel = page.evaluate("() => window.__lbBridge3DTelemetry || {}")
+            assert abs(center_x) < 0.55, f"V7 Fase 2: lb-route-center-btn deve mover heroi para Rota Central (x={center_x})"
+            assert center_tel.get("activeRoute") == "CENTER", f"V7 Fase 3: Rota ativa no motor 3D deve ser CENTER: {center_tel}"
+
+            page.click('[data-testid="lb-toggle-infinite-btn"]')
+            assert "is-active" in (page.locator('[data-testid="lb-toggle-infinite-btn"]').get_attribute("class") or ""), (
+                "V7 Fase 2: lb-toggle-infinite-btn deve ativar classe is-active"
+            )
+            page.click('[data-testid="lb-toggle-infinite-btn"]')
+
+            # V7 Fase 4: Verificar Circuit Breaker de WebGL Context Loss e botão de Tela Cheia (⛶)
+            cb_ready = page.evaluate("() => Boolean(window.__lbWebglCircuitBreakerReady)")
+            assert cb_ready, "V7 Fase 4: Circuit Breaker de WebGL (__lbWebglCircuitBreakerReady) nao inicializado no <Canvas>"
+            assert page.locator('[data-testid="lb-fullscreen-btn"]').count() == 1, (
+                "V7 Fase 4: lb-fullscreen-btn ausente na Ponte 3D"
+            )
+            page.click('[data-testid="lb-fullscreen-btn"]')
+
+            results["functional"]["hudToggles"] = "PASS"
+            results["functional"]["v7CameraCompassAnd3DStage"] = "PASS (BALANCED/FREE/LOCKED + Yaw Left/Right/North + Full-Screen 100vw)"
+            results["functional"]["v7Fase2ThreeRoutesAndInfiniteSim"] = (
+                f"PASS (LEFT x={left_x:.2f} / RIGHT x={right_x:.2f} / CENTER x={center_x:.2f} + 60Hz bridge3dSim + Infinite Sector Mode)"
+            )
+            results["functional"]["v7Fase3Modular3DRenderers"] = {
+                "status": "PASS",
+                "leftRouteWorldX": left_tel.get("heroWorldX"),
+                "rightRouteWorldX": right_tel.get("heroWorldX"),
+                "centerRouteWorldX": center_tel.get("heroWorldX"),
+                "enemiesCount": center_tel.get("enemiesCount"),
+                "barrelsActive": center_tel.get("barrelsActive"),
+            }
+            results["functional"]["v7Fase4WidescreenFullscreenAndCircuitBreaker"] = (
+                "PASS (WebGL Context Loss Circuit Breaker + 100% 3D Battle Stage Clean + Fullscreen Toggle across all 6 Engines)"
+            )
 
             # 2.5 Abrir Álbum de Pegadinhas (20 Pegadinhas + 6 Gêmeos) e Códice Heiss-Lab
             page.click('[data-testid="lb-open-album"]')
@@ -288,13 +358,15 @@ def run_suite() -> dict:
                     page.screenshot(path=legion_shot)
                     results["screenshots"].append(legion_shot)
                     legion_shot_saved = True
+                if page.locator('[data-testid="lb-tactical-dock"]').count() == 0:
+                    break
                 gate1 = page.locator('[data-testid="lb-gate-choice-1"]')
                 if gate1.count() > 0 and gate1.is_visible():
                     gate1.click(force=True)
                     time.sleep(0.08)
 
             # Aguardar o Combate Visível (Fase BATTLE) concluir (com fast-forward 3x via pointerdown)
-            time.sleep(0.35)
+            time.sleep(0.25)
             battle_shot = os.path.join(evid_dir, "v2_mundo1_combate_visivel.png")
             page.screenshot(path=battle_shot)
             results["screenshots"].append(battle_shot)
@@ -314,6 +386,9 @@ def run_suite() -> dict:
                 or page.locator('[data-testid="lb-battle-overlay-defeat"]').count() > 0
             )
             assert battle_reached, "Nao alcancou o overlay de Batalha Final apos o Combate Visivel"
+            assert page.locator('[data-testid="lb-infinite-next-sector-btn"]').count() == 1, (
+                "V7 Fase 2: Botao lb-infinite-next-sector-btn ausente no BattleOverlay"
+            )
             # SIT-06: lb-tactical-dock deve estar desmontado quando o resultado aparece
             assert page.locator('[data-testid="lb-tactical-dock"]').count() == 0, (
                 "SIT-06: lb-tactical-dock nao deve continuar montado sob o modal de resultado"
@@ -378,6 +453,10 @@ def run_suite() -> dict:
                 # V6: Botão sempre disponível de Fazer Conta presente em todas as engines!
                 assert page.locator('[data-testid="lb-open-math-challenge-btn"]').count() == 1, (
                     f"V6: lb-open-math-challenge-btn ausente na engine {eng_id}"
+                )
+                # V7 Fase 4: Botão Widescreen de Tela Cheia (⛶) harmonizado em todas as 6 engines!
+                assert page.locator('[data-testid="lb-fullscreen-btn"]').count() == 1, (
+                    f"V7 Fase 4: lb-fullscreen-btn ausente na engine {eng_id}"
                 )
                 if eng_id == "forte_bandeira":
                     page.click('[data-testid="lb-open-math-challenge-btn"]')

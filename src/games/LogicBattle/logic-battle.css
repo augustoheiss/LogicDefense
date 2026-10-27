@@ -57,8 +57,10 @@
 }
 
 .lb-minimal-hud.is-run-world {
-  max-width: 500px;
+  max-width: 100%;
+  padding: 0 8px;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .lb-minimal-hud__main-row {
@@ -294,35 +296,105 @@
   pointer-events: none;
 }
 
-/* ── MUNDO 1: PALCO DA PONTE (COLUNA RETRATO 9:16 NO DESKTOP, FULL NO MOBILE) ── */
+/* ── MUNDO 1: PALCO DA PONTE 3D FULL-SCREEN WIDESCREEN (100vw x 100dvh) ───── */
 .lb-run-stage {
   position: relative;
   width: 100%;
-  max-width: 520px;
+  max-width: 100%;
   height: 100%;
-  margin: 0 auto;
+  margin: 0;
   display: flex;
   flex-direction: column;
   flex: 1;
-  box-shadow: 0 0 60px rgba(2, 6, 23, 0.8);
   overflow: hidden;
 }
 
+.lb-webgl-stage-wrap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: auto;
+}
+
 @media (max-width: 600px) {
-  .lb-run-stage {
-    max-width: 100%;
-  }
   .lb-hud-biome-dots {
     display: none;
   }
 }
 
 .lb-run-canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
   touch-action: pan-y;
   cursor: grab;
+  z-index: 4;
+}
+
+/* ── BÚSSOLA DE CÂMERA 3D EQUILIBRADA & TELA CHEIA (ESTILO LOGIC FRICTION) ── */
+.lb-camera-compass-dock {
+  position: absolute;
+  top: 56px;
+  right: 12px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1.5px solid rgba(56, 189, 248, 0.45);
+  backdrop-filter: blur(6px);
+  padding: 4px 7px;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(2, 6, 23, 0.55);
+  pointer-events: auto;
+}
+
+.lb-compass-btn {
+  height: 28px;
+  min-width: 30px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(30, 41, 59, 0.9);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease;
+}
+
+.lb-compass-btn:hover {
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.lb-compass-btn.is-active {
+  background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%);
+  border-color: #7dd3fc;
+  color: #ffffff;
+}
+
+@media (max-width: 520px) {
+  .lb-camera-compass-dock {
+    top: 52px;
+    right: 6px;
+    padding: 3px 5px;
+    gap: 3px;
+  }
+  .lb-compass-btn {
+    height: 24px;
+    min-width: 26px;
+    padding: 0 5px;
+    font-size: 0.65rem;
+  }
 }
 
 .lb-floating-feedback {

@@ -775,6 +775,32 @@ export const SerpentCanvas: React.FC = () => {
         }}
       />
 
+      {/* Fase 4 V7: Controle Widescreen de Tela Cheia (⛶) na Engine Serpente */}
+      <div
+        className="lb-camera-compass-dock"
+        data-testid="lb-camera-compass-dock"
+        aria-label="Controle Widescreen de Tela Cheia"
+        style={{ right: '82px', top: '54px' }}
+      >
+        <button
+          type="button"
+          className="lb-compass-btn"
+          data-testid="lb-fullscreen-btn"
+          onClick={() => {
+            const shell =
+              document.querySelector('.lb-page-fullscreen') ?? document.documentElement
+            if (!document.fullscreenElement) {
+              shell.requestFullscreen?.().catch(() => undefined)
+            } else {
+              document.exitFullscreen?.().catch(() => undefined)
+            }
+          }}
+          title="Alternar Tela Cheia (Full Screen)"
+        >
+          ⛶
+        </button>
+      </div>
+
       {/* SIT-06: Desmontar controles e botões quando aparecer o resultado */}
       {showControls && (
         <>
