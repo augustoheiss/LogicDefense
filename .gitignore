@@ -67,3 +67,7 @@ backend/rotate_keys.py
 # PR Lens writes its previews here. They are rebuilt on demand.
 .pr-lens/
 **/.pr-lens/
+
+# Playwright & QA Artifacts
+artifacts/
+**/artifacts/
