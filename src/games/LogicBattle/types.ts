@@ -375,6 +375,41 @@ export interface LogicBattleSettings {
   fpsCap: 30 | 60
 }
 
+/**
+ * V8: Checkpoint automático da campanha/marcha na Ponte (Setor, Exército, Pontuação e Armas)
+ * persistido em tempo real no IndexedDB e no cache do navegador.
+ */
+export interface ActiveBridgeRunCheckpoint {
+  sectorIndex: number
+  currentArmy: ArmyCount
+  bridgeCoinsEarned: number
+  bridgeKills: number
+  leftCannonLevel: number
+  rightWeaponLevel: number
+  mathChallengesSolved: number
+  seed: number
+  /** Marco de tropas/pontos já transferidos para a Base nesta corrida (evita duplicação ao ir e voltar) */
+  bankedScoreMark: number
+  updatedAt: string
+}
+
+/**
+ * V8: Cache rápido de pontuação e progresso do jogador no navegador (`logicBattle.score.cache.v1`)
+ * e espelhado no IndexedDB (`logicBattle_db`).
+ */
+export interface PlayerScoreCacheV1 {
+  version: 1
+  playerScore: ArmyCount
+  highestSectorReached: number
+  currentSector: number
+  currentArmy: ArmyCount
+  reserveTroops: ArmyCount
+  wisdomStars: number
+  coinsEarned: number
+  killsTotal: number
+  updatedAt: string
+}
+
 export interface SaveV1 {
   version: 1
   updatedAt: string
@@ -392,6 +427,8 @@ export interface SaveV1 {
   coachMarksSeen?: boolean
   /** V6: Janela de assinaturas paramétricas de desafios matemáticos já vistos para zero repetição entre rodadas */
   recentMathSignatures?: string[]
+  /** V8: Checkpoint automático da marcha na Ponte para continuar do mesmo Setor/Exército após F5 ou retorno à Base */
+  activeRunCheckpoint?: ActiveBridgeRunCheckpoint | null
   settings: LogicBattleSettings
   stats: {
     runsPlayed: number
@@ -399,5 +436,7 @@ export interface SaveV1 {
     surgicalPrecisions: number
     trapsTamedTotal: number
     highestArmyReached: ArmyCount
+    highestSectorReached?: number
+    totalPlayerScore?: ArmyCount
   }
 }

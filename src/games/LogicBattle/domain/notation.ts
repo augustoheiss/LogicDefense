@@ -40,6 +40,9 @@ export function formatExponentialPtBr(val: number): string {
   if (mantissa >= 10) {
     mantissa /= 10
     exp += 1
+  } else if (mantissa < 1 && mantissa > 0) {
+    mantissa *= 10
+    exp -= 1
   }
   // Duas casas decimais depois da vírgula (ex.: 3,35e+52, 9,00e+15) sem casas infinitas
   const scaled = Math.min(999, Math.max(100, Math.floor(mantissa * 100 + 1e-7)))

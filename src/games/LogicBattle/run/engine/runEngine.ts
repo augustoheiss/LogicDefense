@@ -4,8 +4,8 @@
 import { getLaneCenterNormX, resolveLaneIndexFromNormX } from '../renderer/perspective'
 
 export class RunEngine {
-  public laneX = -0.48
-  public targetLaneX = -0.48
+  public laneX = -0.24
+  public targetLaneX = -0.24
 
   public syncFromStore(storeLaneX: number): void {
     this.laneX = storeLaneX
@@ -13,7 +13,7 @@ export class RunEngine {
   }
 
   public setTargetNormX(normX: number): void {
-    this.targetLaneX = Math.max(-0.88, Math.min(0.88, normX))
+    this.targetLaneX = Math.max(-1.0, Math.min(1.0, normX))
   }
 
   public snapToLaneIndex(laneIdx: number, laneCount: 2 | 3): void {

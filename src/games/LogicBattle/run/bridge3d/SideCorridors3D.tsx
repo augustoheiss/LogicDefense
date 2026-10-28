@@ -33,6 +33,7 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
   const rightIceShellRef = useRef<THREE.Mesh | null>(null)
   const leftBlockPlaqueMatRef = useRef<THREE.MeshBasicMaterial | null>(null)
   const rightWeaponPlaqueMatRef = useRef<THREE.MeshBasicMaterial | null>(null)
+  const mathAltarPlaqueMatRef = useRef<THREE.MeshBasicMaterial | null>(null)
   const mathCrystalRef = useRef<THREE.Mesh | null>(null)
 
   const leftBlockTex = useMemo(
@@ -40,11 +41,11 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
     [],
   )
   const rightWeaponTex = useMemo(
-    () => getPlaqueTexture('🔥 888', '#b91c1c', '#facc15', '#fef08a', '🧮 FAZER CONTA'),
+    () => getPlaqueTexture('🔒 888', '#334155', '#94a3b8', '#cbd5e1', '🔒 FAÇA CONTA 🧮'),
     [],
   )
   const mathAltarTex = useMemo(
-    () => getPlaqueTexture('🧮 BÔNUS', '#6d28d9', '#facc15', '#fef08a', 'FAZER CONTA'),
+    () => getPlaqueTexture('🧮 BÔNUS', '#6d28d9', '#facc15', '#fef08a', '🧮 ATIVAR DIREITA'),
     [],
   )
   const leftGatePlus1Tex = useMemo(
@@ -60,15 +61,15 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
     [],
   )
   const rightGatePlus10Tex = useMemo(
-    () => getPlaqueTexture('+10', '#047857', '#34d399', '#ecfdf5', '🧮 FAZER CONTA'),
+    () => getPlaqueTexture('+10', '#334155', '#94a3b8', '#cbd5e1', '🔒 CONGELADO · 🧮'),
     [],
   )
   const rightGatePlus50Tex = useMemo(
-    () => getPlaqueTexture('+50', '#0d9488', '#5eead4', '#ffffff', '🧮 FAZER CONTA'),
+    () => getPlaqueTexture('+50', '#334155', '#94a3b8', '#cbd5e1', '🔒 CONGELADO · 🧮'),
     [],
   )
   const rightGatePlus99Tex = useMemo(
-    () => getPlaqueTexture('+99', '#ca8a04', '#fde047', '#ffffff', '🧮 FAZER CONTA'),
+    () => getPlaqueTexture('+99', '#334155', '#94a3b8', '#cbd5e1', '🔒 CONGELADO · 🧮'),
     [],
   )
 
@@ -115,32 +116,61 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
       }
     }
 
+    const isRightActive = sim.rightBuffActiveTimerMs > 0
+    const remSec = Math.max(1, Math.ceil(sim.rightBuffActiveTimerMs / 1000))
+
     if (rightCorridorFlowRef.current) {
       const children = rightCorridorFlowRef.current.children
-      const hasMathCharge = sim.rightMathBonusCharges > 0
-      const rightSubLabel = hasMathCharge ? '⚡ CONTA OK!' : '🧮 FAZER CONTA'
+      const rightSubLabel = isRightActive
+        ? `⚡ ATIVO ${remSec}s!`
+        : '🔒 CONGELADO · 🧮'
       for (let i = 0; i < sim.rightGates.length; i++) {
         const grp = children[i] as THREE.Group | undefined
         const gate = sim.rightGates[i]
         if (grp && gate) {
           grp.position.z = gate.z
           grp.visible = !gate.collectedInPass
+
+          // Pilares laterais e painel translúcido: cinza/gelo desativado quando !isRightActive
+          const leftPillar = grp.children[0] as THREE.Mesh | undefined
+          const rightPillar = grp.children[1] as THREE.Mesh | undefined
+          const panelBox = grp.children[2] as THREE.Mesh | undefined
+          const pillarColorHex = isRightActive ? 0xfacc15 : 0x64748b
+          const leftPillarMat = leftPillar?.material as THREE.MeshStandardMaterial | undefined
+          if (leftPillarMat && leftPillarMat.color.getHex() !== pillarColorHex) {
+            leftPillarMat.color.setHex(pillarColorHex)
+          }
+          const rightPillarMat = rightPillar?.material as THREE.MeshStandardMaterial | undefined
+          if (rightPillarMat && rightPillarMat.color.getHex() !== pillarColorHex) {
+            rightPillarMat.color.setHex(pillarColorHex)
+          }
+          const panelMat = panelBox?.material as THREE.MeshStandardMaterial | undefined
+          if (panelMat) {
+            const targetPanelHex = isRightActive ? 0xca8a04 : 0x334155
+            const targetEmissiveHex = isRightActive ? 0xeab308 : 0x1e293b
+            if (panelMat.color.getHex() !== targetPanelHex) {
+              panelMat.color.setHex(targetPanelHex)
+              panelMat.emissive.setHex(targetEmissiveHex)
+              panelMat.opacity = isRightActive ? 0.62 : 0.36
+              panelMat.emissiveIntensity = isRightActive ? 0.5 : 0.05
+            }
+          }
+
           const plaqueMesh = grp.children[3] as THREE.Mesh | undefined
           const mat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
           if (mat) {
-            const bg = hasMathCharge
-              ? '#15803d'
+            const bg = !isRightActive
+              ? '#334155'
               : i >= 2
                 ? '#ca8a04'
-                : i === 1
-                  ? '#0d9488'
-                  : '#047857'
-            const brd = hasMathCharge ? '#86efac' : '#fde047'
+                : '#15803d'
+            const brd = !isRightActive ? '#94a3b8' : '#fde047'
+            const txtColor = !isRightActive ? '#cbd5e1' : '#ffffff'
             const nextTex = getPlaqueTexture(
               gate.label,
               bg,
               brd,
-              '#ffffff',
+              txtColor,
               rightSubLabel,
             )
             if (mat.map !== nextTex) {
@@ -159,11 +189,19 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
       leftIceShellRef.current.scale.set(sLeft, sLeft, sLeft)
     }
 
-    // 4. Casulo de gelo da Rota Direita (desaparece ao desbloquear e pulsa ao receber tiro)
+    // 4. Casulo de gelo/cinza da Rota Direita (permanece visível quando congelado/desativado)
     if (rightIceShellRef.current) {
-      rightIceShellRef.current.visible = !sim.rightFrozenWeapon.unlocked
+      rightIceShellRef.current.visible =
+        !isRightActive || !sim.rightFrozenWeapon.unlocked
       const sRight = sim.rightFrozenWeapon.hitFlashMs > 0 ? 1.06 : 1.0
       rightIceShellRef.current.scale.set(sRight, sRight, sRight)
+      const iceMat = rightIceShellRef.current.material as THREE.MeshPhysicalMaterial | undefined
+      if (iceMat) {
+        const targetIceHex = isRightActive ? 0x67e8f9 : 0x94a3b8
+        if (iceMat.color.getHex() !== targetIceHex) {
+          iceMat.color.setHex(targetIceHex)
+        }
+      }
     }
 
     // 5. Girar cristal do Altar Matemático 🧮
@@ -172,7 +210,7 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
       mathCrystalRef.current.position.y = 1.75 + Math.sin(clockSec * 3.2) * 0.12
     }
 
-    // 6. Atualizar texturas cacheadas de HP dos blocos congelados Esquerdo e Direito
+    // 6. Atualizar texturas cacheadas de HP dos blocos congelados Esquerdo, Direito e Altar
     if (leftBlockPlaqueMatRef.current) {
       const cannonLvl = sim.leftFrozenBlock.level ?? sim.leftCannonLevel + 1
       const lbl = sim.leftFrozenBlock.unlocked
@@ -193,23 +231,48 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
 
     if (rightWeaponPlaqueMatRef.current) {
       const wepLvl = sim.rightFrozenWeapon.level ?? sim.rightWeaponLevel + 1
-      const lbl = sim.rightFrozenWeapon.unlocked
-        ? `✅ NV.${wepLvl}`
-        : `🔥 ${formatArmy(sim.rightFrozenWeapon.hp, 'compact')}`
-      const sub =
-        sim.rightFrozenWeapon.unlocked || sim.rightMathBonusCharges > 0
-          ? `METRALHADORA NV.${wepLvl}`
-          : '🧮 FAZER CONTA'
+      const lbl = !isRightActive
+        ? sim.rightFrozenWeapon.unlocked
+          ? `🔒 NV.${wepLvl}`
+          : `🔒 ${formatArmy(sim.rightFrozenWeapon.hp, 'compact')}`
+        : sim.rightFrozenWeapon.unlocked
+          ? `⚡ NV.${wepLvl}`
+          : `🔥 ${formatArmy(sim.rightFrozenWeapon.hp, 'compact')}`
+      const sub = !isRightActive
+        ? '🔒 FAÇA CONTA 🧮'
+        : `⚡ ATIVO ${remSec}s!`
       const nextTex = getPlaqueTexture(
         lbl,
-        sim.rightFrozenWeapon.unlocked ? '#047857' : '#b91c1c',
-        '#facc15',
-        '#fef08a',
+        !isRightActive ? '#334155' : '#047857',
+        !isRightActive ? '#94a3b8' : '#fde047',
+        !isRightActive ? '#cbd5e1' : '#ffffff',
         sub,
       )
       if (rightWeaponPlaqueMatRef.current.map !== nextTex) {
         rightWeaponPlaqueMatRef.current.map = nextTex
         rightWeaponPlaqueMatRef.current.needsUpdate = true
+      }
+    }
+
+    if (mathAltarPlaqueMatRef.current) {
+      const altarNextTex = isRightActive
+        ? getPlaqueTexture(
+            `⚡ ${remSec}s`,
+            '#047857',
+            '#fde047',
+            '#ffffff',
+            'DIREITA ATIVA!',
+          )
+        : getPlaqueTexture(
+            '🧮 BÔNUS',
+            '#6d28d9',
+            '#facc15',
+            '#fef08a',
+            '🧮 ATIVAR DIREITA',
+          )
+      if (mathAltarPlaqueMatRef.current.map !== altarNextTex) {
+        mathAltarPlaqueMatRef.current.map = altarNextTex
+        mathAltarPlaqueMatRef.current.needsUpdate = true
       }
     }
   })
@@ -394,7 +457,11 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
           </mesh>
           <mesh position={[0, 2.85, 0]}>
             <planeGeometry args={[3.5, 1.75]} />
-            <meshBasicMaterial map={mathAltarTex} transparent />
+            <meshBasicMaterial
+              ref={mathAltarPlaqueMatRef}
+              map={mathAltarTex}
+              transparent
+            />
           </mesh>
         </group>
 

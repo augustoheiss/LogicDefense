@@ -1,25 +1,33 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // src/games/LogicBattle/components/hud/SettingsPopover.tsx — Popover de Ajustes (⚙)
+// V8: Bioma Único da Ponte (Sem Reset) + Auto-Save IndexedDB/Cache + Extração para a Base
 // ──────────────────────────────────────────────────────────────────────────────
 import React from 'react'
-import { BIOME_LIST } from '../../config/biomes'
+import { formatArmy } from '../../domain/notation'
+import { buildScoreCacheFromSave } from '../../state/persistence'
 import { useLogicBattleStore } from '../../state/useLogicBattleStore'
 
 export const SettingsPopover: React.FC = () => {
   const settingsPopoverOpen = useLogicBattleStore((s) => s.settingsPopoverOpen)
   const toggleSettingsPopover = useLogicBattleStore((s) => s.toggleSettingsPopover)
   const save = useLogicBattleStore((s) => s.save)
-  const runPlan = useLogicBattleStore((s) => s.runPlan)
+  const bridgeSectorIndex = useLogicBattleStore((s) => s.bridgeSectorIndex)
+  const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
   const recoveredFromBackup = useLogicBattleStore((s) => s.recoveredFromBackup)
   const toggleNotationMode = useLogicBattleStore((s) => s.toggleNotationMode)
   const toggleCalmMode = useLogicBattleStore((s) => s.toggleCalmMode)
   const toggleSimpleTapMode = useLogicBattleStore((s) => s.toggleSimpleTapMode)
   const toggleSound = useLogicBattleStore((s) => s.toggleSound)
   const toggleReducedMotion = useLogicBattleStore((s) => s.toggleReducedMotion)
-  const startNewRun = useLogicBattleStore((s) => s.startNewRun)
+  const extractRunToBase = useLogicBattleStore((s) => s.extractRunToBase)
   const openAlbumDrawer = useLogicBattleStore((s) => s.openAlbumDrawer)
 
   if (!settingsPopoverOpen) return null
+
+  const scoreCache = buildScoreCacheFromSave(save)
+  const notation = save.settings.notationMode
+  const liveScore = Math.max(scoreCache.playerScore, save.reserveTroops + currentArmy)
+  const highestSector = Math.max(scoreCache.highestSectorReached, bridgeSectorIndex)
 
   return (
     <div
@@ -30,7 +38,7 @@ export const SettingsPopover: React.FC = () => {
     >
       <div className="lb-settings-popover" data-testid="lb-settings-popover">
         <div className="lb-settings-popover__header">
-          <strong>⚙ Opções de Jogo</strong>
+          <strong>⚙ Opções & Progresso Salvo</strong>
           <button
             type="button"
             className="lb-settings-popover__close"
@@ -105,23 +113,66 @@ export const SettingsPopover: React.FC = () => {
           </button>
         </div>
 
-        <div className="lb-settings-popover__biomes">
-          <span className="lb-settings-popover__label">Bioma da Ponte:</span>
-          <div className="lb-settings-popover__biome-list">
-            {BIOME_LIST.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                data-testid={`lb-biome-btn-${b.id}`}
-                className={`lb-settings-biome-pill ${runPlan.biomeId === b.id ? 'is-active' : ''}`}
-                onClick={() => {
-                  startNewRun({ biomeId: b.id })
-                  toggleSettingsPopover(false)
-                }}
+        <div
+          className="lb-settings-popover__biomes"
+          data-testid="lb-single-biome-persistence-panel"
+        >
+          <span
+            className="lb-settings-popover__label"
+            data-testid="lb-biome-btn-planicie_pedra"
+          >
+            🌉 Bioma Único da Ponte: <strong>Planície de Pedra (Progresso Contínuo)</strong>
+          </span>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              marginTop: '6px',
+              padding: '8px 10px',
+              borderRadius: '10px',
+              background: 'rgba(15, 23, 42, 0.65)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              fontSize: '0.82rem',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>💾 Auto-Save (IndexedDB + Cache):</span>
+              <strong style={{ color: '#34d399' }}>ATIVO</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>🏆 Pontuação Salva no Cache:</span>
+              <strong
+                data-testid="lb-cached-player-score"
+                style={{ color: '#facc15' }}
               >
-                B{b.order} · {b.name.split(' ')[0]}
-              </button>
-            ))}
+                {formatArmy(liveScore, notation)} pts
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>♾️ Setor Atual / Recorde:</span>
+              <strong>
+                S{bridgeSectorIndex} / S{highestSector}
+              </strong>
+            </div>
+            <button
+              type="button"
+              data-testid="lb-settings-extract-base-btn"
+              className="lb-settings-biome-pill is-active"
+              style={{
+                marginTop: '4px',
+                width: '100%',
+                padding: '8px 12px',
+                fontWeight: 800,
+                textAlign: 'center',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                extractRunToBase()
+              }}
+            >
+              🏰 Salvar & Voltar para a Base com Pontuação
+            </button>
           </div>
         </div>
 

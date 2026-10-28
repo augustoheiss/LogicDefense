@@ -48,6 +48,7 @@ import {
   getLaneCenterNormX,
   resolveLaneIndexFromNormX,
 } from '../run/renderer/perspective'
+import { computeSectorBossSpec } from '../run/bridge3d/bridge3dPolicies'
 import {
   ENGINE_CATALOG,
   EngineId,
@@ -55,6 +56,7 @@ import {
   getComboMultiplier,
 } from '../engines/engineContract'
 import {
+  ActiveBridgeRunCheckpoint,
   ArmyCount,
   BattleResolution,
   BiomeId,
@@ -71,9 +73,107 @@ import {
 } from '../types'
 import { SaveRepository } from './persistence'
 
+/** V8: Bioma único e contínuo do Modo Ponte (evita reset destrutivo ao trocar de bioma) */
+export const CANONICAL_BRIDGE_BIOME_ID: BiomeId = 'planicie_pedra'
+
 export interface CaptainSpeech {
   mood: 'proud' | 'curious' | 'excited' | 'calm'
   text: string
+}
+
+function readLiveBridgeWeaponLevels(): {
+  leftCannonLevel?: number
+  rightWeaponLevel?: number
+} {
+  if (typeof window === 'undefined') return {}
+  const tel = (
+    window as unknown as {
+      __lbBridge3DTelemetry?: {
+        leftCannonLevel?: number
+        rightWeaponLevel?: number
+      }
+    }
+  ).__lbBridge3DTelemetry
+  if (!tel) return {}
+  return {
+    leftCannonLevel:
+      typeof tel.leftCannonLevel === 'number' && Number.isFinite(tel.leftCannonLevel)
+        ? Math.max(1, Math.floor(tel.leftCannonLevel))
+        : undefined,
+    rightWeaponLevel:
+      typeof tel.rightWeaponLevel === 'number' && Number.isFinite(tel.rightWeaponLevel)
+        ? Math.max(0, Math.floor(tel.rightWeaponLevel))
+        : undefined,
+  }
+}
+
+function buildSaveWithCheckpoint(
+  baseSave: SaveV1,
+  params: {
+    sectorIndex: number
+    currentArmy: ArmyCount
+    bridgeCoinsEarned: number
+    bridgeKills: number
+    mathChallengesSolved: number
+    seed: number
+    leftCannonLevel?: number
+    rightWeaponLevel?: number
+    bankedScoreMark?: number
+  },
+): SaveV1 {
+  const prevCp = baseSave.activeRunCheckpoint
+  const liveWep = readLiveBridgeWeaponLevels()
+  const sectorIndex = Math.max(1, Math.floor(params.sectorIndex))
+  const currentArmy = clampArmy(Math.max(0, Math.floor(params.currentArmy)))
+  const bridgeCoinsEarned = Math.max(0, Math.floor(params.bridgeCoinsEarned))
+  const bridgeKills = Math.max(0, Math.floor(params.bridgeKills))
+  const bankedScoreMark =
+    params.bankedScoreMark !== undefined
+      ? Math.max(0, Math.floor(params.bankedScoreMark))
+      : prevCp?.bankedScoreMark ?? 5
+
+  const nextCheckpoint: ActiveBridgeRunCheckpoint = {
+    sectorIndex,
+    currentArmy,
+    bridgeCoinsEarned,
+    bridgeKills,
+    leftCannonLevel:
+      params.leftCannonLevel ?? liveWep.leftCannonLevel ?? prevCp?.leftCannonLevel ?? 1,
+    rightWeaponLevel:
+      params.rightWeaponLevel ?? liveWep.rightWeaponLevel ?? prevCp?.rightWeaponLevel ?? 0,
+    mathChallengesSolved: params.mathChallengesSolved,
+    seed: params.seed,
+    bankedScoreMark,
+    updatedAt: new Date().toISOString(),
+  }
+
+  const highestSectorReached = Math.max(
+    1,
+    baseSave.stats.highestSectorReached ?? 1,
+    sectorIndex,
+  )
+  const highestArmyReached = Math.max(
+    baseSave.stats.highestArmyReached,
+    currentArmy,
+  )
+  const totalPlayerScore = Math.max(
+    baseSave.stats.totalPlayerScore ?? 0,
+    baseSave.reserveTroops +
+      Math.max(0, currentArmy - bankedScoreMark) +
+      bridgeCoinsEarned * 5 +
+      (highestSectorReached - 1) * 50,
+  )
+
+  return {
+    ...baseSave,
+    activeRunCheckpoint: nextCheckpoint,
+    stats: {
+      ...baseSave.stats,
+      highestArmyReached,
+      highestSectorReached,
+      totalPlayerScore,
+    },
+  }
 }
 
 function readUrlParams(): {
@@ -185,6 +285,9 @@ export interface LogicBattleStoreState {
   // Actions
   toggleInfiniteBridgeMode: () => void
   advanceInfiniteBridgeSector: () => void
+  extractRunToBase: () => void
+  switchBridgeBiomeWithoutReset: (biomeId: BiomeId) => void
+  resumeCheckpointFromSave: () => void
   applySideRouteReward: (
     route: 'LEFT' | 'RIGHT',
     soldiersDelta: number,
@@ -242,28 +345,70 @@ hydrateSeenMathSignatures(initialLoad.save.recentMathSignatures)
 const urlCfg = readUrlParams()
 soundEngine.setEnabled(initialLoad.save.settings.soundEnabled)
 
+const initialCheckpoint =
+  urlCfg.seed === undefined ? initialLoad.save.activeRunCheckpoint ?? null : null
 const initialRegion =
   REGIONS[initialLoad.save.selectedRegionId] ?? REGIONS.r01_ponte_aurora
-const initialBiomeId = urlCfg.biome ?? initialRegion.biomeId
+// V8: Bioma único no Modo Ponte (sempre 'planicie_pedra')
+const initialBiomeId: BiomeId = CANONICAL_BRIDGE_BIOME_ID
 const initialSeed =
-  urlCfg.seed ?? ((Date.now() % 1_000_000) + initialLoad.save.stats.runsPlayed * 137)
-const initialN0 = Math.max(
+  urlCfg.seed ??
+  initialCheckpoint?.seed ??
+  ((Date.now() % 1_000_000) + initialLoad.save.stats.runsPlayed * 137)
+const baseQuartelN0 = Math.max(
   5,
   getInitialArmyFromQuartel(initialLoad.save.citadelLevels.quartel ?? 1),
 )
+const initialN0 =
+  initialCheckpoint && initialCheckpoint.currentArmy > 0
+    ? clampArmy(initialCheckpoint.currentArmy)
+    : baseQuartelN0
+const initialSectorIndex =
+  initialCheckpoint && initialCheckpoint.sectorIndex >= 1
+    ? initialCheckpoint.sectorIndex
+    : 1
+
+function buildSectorScaledEnemy(
+  baseEnemy: {
+    garrison: ArmyCount
+    bossHp: ArmyCount
+    bossName: string
+    bossTitle: string
+  },
+  sectorIndex: number,
+  _currentArmy?: ArmyCount,
+) {
+  if (sectorIndex <= 1) {
+    return {
+      horde: baseEnemy.garrison,
+      bossHp: baseEnemy.bossHp,
+      bossName: baseEnemy.bossName,
+      bossTitle: baseEnemy.bossTitle,
+      totalForce: baseEnemy.garrison + baseEnemy.bossHp,
+    }
+  }
+  const spec = computeSectorBossSpec(sectorIndex)
+  const scaledBossHp = clampArmy(spec.bossHp)
+  const scaledHorde = clampArmy(spec.hordeHp)
+  return {
+    horde: scaledHorde,
+    bossHp: scaledBossHp,
+    bossName: `${spec.archetype.namePt} S${sectorIndex}`,
+    bossTitle: `${spec.archetype.titlePt} · Setor ${sectorIndex}`,
+    totalForce: clampArmy(scaledHorde + scaledBossHp),
+  }
+}
 
 const initialPlan = generateRun({
   seed: initialSeed,
   biomeId: initialBiomeId,
   regionId: initialRegion.id,
-  n0: initialN0,
-  enemy: {
-    horde: initialRegion.garrison,
-    bossHp: initialRegion.bossHp,
-    bossName: initialRegion.bossName,
-    bossTitle: initialRegion.bossTitle,
-    totalForce: initialRegion.garrison + initialRegion.bossHp,
-  },
+  n0: urlCfg.seed !== undefined ? baseQuartelN0 : initialN0,
+  enemy: buildSectorScaledEnemy(
+    initialRegion,
+    urlCfg.seed !== undefined ? 1 : initialSectorIndex,
+    initialN0,
+  ),
   mastery: initialLoad.save.mastery,
   observatoryLevel: initialLoad.save.citadelLevels.observatorio ?? 1,
   trapAlertSeenCount: initialLoad.save.trapAlertSeenCount,
@@ -272,6 +417,20 @@ const initialPlan = generateRun({
 const initialOracle = pathOracle(initialPlan)
 const initialForjaLevel = initialLoad.save.citadelLevels.forja ?? 0
 const initialLunetas = CITADEL_BUILDINGS.forja.levelEffects[initialForjaLevel] ?? 1
+const initialSnapBase = createInitialSnapshotFromPlan(
+  initialPlan,
+  initialLoad.save.settings.calmMode,
+)
+const initialSnapshot: RunSnapshot =
+  initialCheckpoint && urlCfg.seed === undefined
+    ? {
+        ...initialSnapBase,
+        currentArmy: initialN0,
+        crowdNodes: buildCrowdNodes(initialN0),
+        bridgeCoinsEarned: initialCheckpoint.bridgeCoinsEarned,
+        bridgeKills: initialCheckpoint.bridgeKills,
+      }
+    : initialSnapBase
 
 export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => ({
   world: urlCfg.world,
@@ -281,10 +440,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   recoveredFromBackup: initialLoad.recoveredFromBackup,
   runPlan: initialPlan,
   oracle: initialOracle,
-  snapshot: createInitialSnapshotFromPlan(
-    initialPlan,
-    initialLoad.save.settings.calmMode,
-  ),
+  snapshot: initialSnapshot,
   activeTrapHit: null,
   trapHistoryInRun: [],
   activeRedemptionTokenId: null,
@@ -301,13 +457,167 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   activeMathChallenge: null,
   activeMathChallengeScaffold: 1,
   activeMathChallengeDiagnostic: null,
-  mathChallengesSolvedInRun: 0,
+  mathChallengesSolvedInRun: initialCheckpoint?.mathChallengesSolved ?? 0,
   lastSolvedMathRewardAt: null,
-  bridgeSectorIndex: 1,
-  infiniteBridgeMode: false,
+  bridgeSectorIndex: initialSectorIndex,
+  infiniteBridgeMode: initialSectorIndex > 1,
   captainSpeech: {
     mood: 'excited',
-    text: 'Capitã Vírgula a postos! Deslize o exército pelos portões e cuidado com as pegadinhas da intuição!',
+    text:
+      initialSectorIndex > 1
+        ? `Progresso restaurado do IndexedDB/Cache! Continuando no Setor ${initialSectorIndex} com ${formatArmy(initialN0, initialLoad.save.settings.notationMode)} soldados!`
+        : 'Capitã Vírgula a postos! Deslize o exército pelos portões e cuidado com as pegadinhas da intuição!',
+  },
+
+  extractRunToBase: () => {
+    const state = get()
+    const { save, snapshot, bridgeSectorIndex, runPlan, mathChallengesSolvedInRun } = state
+    const prevBankedMark = save.activeRunCheckpoint?.bankedScoreMark ?? runPlan.n0
+    const coinsBonus = Math.max(0, snapshot.bridgeCoinsEarned ?? 0)
+    const sectorBonus = bridgeSectorIndex > 1 ? (bridgeSectorIndex - 1) * 15 : 0
+    const totalRunContribution = snapshot.currentArmy + coinsBonus + sectorBonus
+    const extractedTroops = clampArmy(Math.max(0, totalRunContribution - prevBankedMark))
+    const nextReserveTroops = clampArmy(save.reserveTroops + extractedTroops)
+    const nextTotalScore = Math.max(
+      save.stats.totalPlayerScore ?? 0,
+      nextReserveTroops + (bridgeSectorIndex - 1) * 50 + (snapshot.bridgeKills ?? 0),
+    )
+
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...save,
+        reserveTroops: nextReserveTroops,
+        stats: {
+          ...save.stats,
+          totalPlayerScore: nextTotalScore,
+        },
+      },
+      {
+        sectorIndex: bridgeSectorIndex,
+        currentArmy: snapshot.currentArmy,
+        bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+        bridgeKills: snapshot.bridgeKills ?? 0,
+        mathChallengesSolved: mathChallengesSolvedInRun,
+        seed: runPlan.seed,
+        bankedScoreMark: Math.max(prevBankedMark, totalRunContribution),
+      },
+    )
+    SaveRepository.save(nextSave)
+
+    set({
+      save: nextSave,
+      world: 'realm',
+      lastDirectAttackResult: null,
+      battleResolution: null,
+      activeTrapHit: null,
+      activeRedemptionTokenId: null,
+      activeMathChallenge: null,
+      activeMathChallengeDiagnostic: null,
+      settingsPopoverOpen: false,
+      activeRealmSheet: 'none',
+      captainSpeech: {
+        mood: 'proud',
+        text: `🏰 Progresso salvo no IndexedDB e Cache! Setor S${bridgeSectorIndex} preservado e Reserva do Reino agora em ${formatArmy(nextReserveTroops, nextSave.settings.notationMode)} soldados!`,
+      },
+    })
+  },
+
+  switchBridgeBiomeWithoutReset: (biomeId) => {
+    const state = get()
+    const targetLaneCount: 2 | 3 = BIOMES[biomeId]?.laneCount ?? 2
+    const currentSnap = state.snapshot
+
+    // Ajustar quantidade de faixas dos segmentos sem perder exército, setor, moedas ou progresso!
+    const adaptedSegments = currentSnap.segments.map((seg) => {
+      if (seg.lanes.length === targetLaneCount) return seg
+      if (targetLaneCount === 3 && seg.lanes.length === 2) {
+        return {
+          ...seg,
+          lanes: [seg.lanes[0], seg.lanes[1], seg.lanes[0]],
+        }
+      }
+      return {
+        ...seg,
+        lanes: seg.lanes.slice(0, targetLaneCount),
+      }
+    })
+
+    const shouldRecycleSegments =
+      currentSnap.phase === 'VICTORY' ||
+      currentSnap.phase === 'DEFEAT' ||
+      currentSnap.activeSegmentIndex >= adaptedSegments.length
+    const preservedArmy =
+      currentSnap.currentArmy > 0
+        ? currentSnap.currentArmy
+        : Math.max(5, state.runPlan.n0)
+
+    const nextSave = buildSaveWithCheckpoint(state.save, {
+      sectorIndex: state.bridgeSectorIndex,
+      currentArmy: preservedArmy,
+      bridgeCoinsEarned: currentSnap.bridgeCoinsEarned ?? 0,
+      bridgeKills: currentSnap.bridgeKills ?? 0,
+      mathChallengesSolved: state.mathChallengesSolvedInRun,
+      seed: state.runPlan.seed,
+    })
+    SaveRepository.save(nextSave)
+
+    set({
+      world: 'run',
+      activeEngineId: 'ponte_portoes',
+      save: nextSave,
+      battleResolution: null,
+      redemptionContract: null,
+      activeTrapHit: null,
+      runPlan: {
+        ...state.runPlan,
+        // V8: Mantém o bioma único da ponte sem reiniciar do zero!
+        biomeId: CANONICAL_BRIDGE_BIOME_ID,
+        laneCount: targetLaneCount,
+        segments: adaptedSegments,
+      },
+      snapshot: {
+        ...currentSnap,
+        runId:
+          currentSnap.phase === 'DEFEAT'
+            ? `${currentSnap.runId}_rematch_${Date.now()}`
+            : currentSnap.runId,
+        currentArmy: preservedArmy,
+        crowdNodes: buildCrowdNodes(preservedArmy),
+        progress: shouldRecycleSegments ? 0 : currentSnap.progress,
+        activeSegmentIndex: shouldRecycleSegments ? 0 : currentSnap.activeSegmentIndex,
+        resolvedSegments: shouldRecycleSegments ? {} : currentSnap.resolvedSegments,
+        phase:
+          currentSnap.phase === 'VICTORY' ||
+          currentSnap.phase === 'DEFEAT' ||
+          currentSnap.phase === 'BATTLE'
+            ? nextSave.settings.calmMode
+              ? 'CALM_WAIT'
+              : 'RUNNING'
+            : currentSnap.phase,
+        laneCount: targetLaneCount,
+        currentLane: Math.min(targetLaneCount - 1, currentSnap.currentLane),
+        segments: adaptedSegments,
+      },
+    })
+  },
+
+  resumeCheckpointFromSave: () => {
+    const state = get()
+    const cp = state.save.activeRunCheckpoint
+    if (!cp || cp.currentArmy <= 0) return
+    const nextArmy = clampArmy(cp.currentArmy)
+    set({
+      bridgeSectorIndex: Math.max(1, cp.sectorIndex),
+      infiniteBridgeMode: cp.sectorIndex > 1 || state.infiniteBridgeMode,
+      mathChallengesSolvedInRun: cp.mathChallengesSolved,
+      snapshot: {
+        ...state.snapshot,
+        currentArmy: nextArmy,
+        crowdNodes: buildCrowdNodes(nextArmy),
+        bridgeCoinsEarned: cp.bridgeCoinsEarned,
+        bridgeKills: cp.bridgeKills,
+      },
+    })
   },
 
   toggleInfiniteBridgeMode: () => {
@@ -354,8 +664,18 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       tone: 'reinforcement',
       createdAtMs: snap.elapsedMs,
     }
+    const nextSave = buildSaveWithCheckpoint(state.save, {
+      sectorIndex: state.bridgeSectorIndex,
+      currentArmy: nextArmy,
+      bridgeCoinsEarned: snap.bridgeCoinsEarned ?? 0,
+      bridgeKills: snap.bridgeKills ?? 0,
+      mathChallengesSolved: state.mathChallengesSolvedInRun,
+      seed: state.runPlan.seed,
+    })
+    SaveRepository.save(nextSave)
     soundEngine.playGatePass(nextArmy, true)
     set({
+      save: nextSave,
       snapshot: {
         ...snap,
         currentArmy: nextArmy,
@@ -370,26 +690,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const snap = state.snapshot
     if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
     const nextArmy = clampArmy(snap.currentArmy + bonusSoldiers)
-    const isInfinite = state.infiniteBridgeMode
-    const scaledBossHp = isInfinite
-      ? clampArmy(
-          Math.max(
-            150,
-            Math.min(
-              Math.round(150 * Math.pow(1.85, newSector - 1)),
-              Math.round(nextArmy * 12),
-            ),
-            Math.round(nextArmy * 1.85),
-          ),
-        )
-      : Math.max(5, Math.floor(snap.enemy.bossHp * 0.5))
-    const scaledHorde = isInfinite
-      ? clampArmy(Math.max(25, Math.round(scaledBossHp * 0.25)))
-      : Math.max(0, Math.floor(snap.enemy.horde * 0.5))
+    const spec = computeSectorBossSpec(newSector)
+    const scaledBossHp = clampArmy(spec.bossHp)
+    const scaledHorde = clampArmy(spec.hordeHp)
+    const coinsReward = spec.sectorClearRewardCoins
     const bonusStr = formatArmy(bonusSoldiers, state.save.settings.notationMode)
     const fb: FloatingFeedbackItem = {
       id: `fb_sector_boss_${newSector}_${Date.now()}`,
-      text: `👹 BOSS ABATIDO! +${bonusStr} 🛡️ · Setor ${newSector}`,
+      text: `👹 BOSS ABATIDO! +${bonusStr} 🛡️ · +${coinsReward}🪙 · Setor ${newSector}`,
       tone: 'optimal',
       createdAtMs: snap.elapsedMs,
     }
@@ -404,7 +712,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
                   if (g.op === '+') {
                     const scaledNum = Math.max(
                       g.operand.value,
-                      Math.round(nextArmy * (0.14 + (idx % 3) * 0.06)),
+                      Math.round(nextArmy * (0.12 + idx * 0.035)),
                     )
                     return {
                       ...g,
@@ -415,7 +723,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
                   if (g.op === '−') {
                     const scaledSub = Math.max(
                       g.operand.value,
-                      Math.round(nextArmy * (0.12 + (idx % 3) * 0.05)),
+                      Math.round(nextArmy * (0.1 + idx * 0.03)),
                     )
                     return {
                       ...g,
@@ -429,16 +737,39 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
             }
           })
         : snap.segments
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...state.save,
+        reserveTroops: clampArmy(
+          state.save.reserveTroops + Math.max(10, Math.round(bonusSoldiers * 0.6)),
+        ),
+        wisdomStars: state.save.wisdomStars + 1,
+      },
+      {
+        sectorIndex: newSector,
+        currentArmy: nextArmy,
+        bridgeCoinsEarned: (snap.bridgeCoinsEarned ?? 0) + coinsReward,
+        bridgeKills: (snap.bridgeKills ?? 0) + 1,
+        mathChallengesSolved: state.mathChallengesSolvedInRun,
+        seed: state.runPlan.seed,
+      },
+    )
+    SaveRepository.save(nextSave)
     soundEngine.playVictoryFanfare()
     set({
+      save: nextSave,
       bridgeSectorIndex: newSector,
       snapshot: {
         ...snap,
         currentArmy: nextArmy,
         crowdNodes: buildCrowdNodes(nextArmy),
+        bridgeCoinsEarned: (snap.bridgeCoinsEarned ?? 0) + coinsReward,
+        bridgeKills: (snap.bridgeKills ?? 0) + 1,
         segments: updatedSegments,
         enemy: {
           ...snap.enemy,
+          bossName: `${spec.archetype.namePt} S${newSector}`,
+          bossTitle: `${spec.archetype.titlePt} · Setor ${newSector}`,
           horde: scaledHorde,
           bossHp: scaledBossHp,
           totalForce: clampArmy(scaledHorde + scaledBossHp),
@@ -447,7 +778,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       },
       captainSpeech: {
         mood: 'proud',
-        text: `Mega-Boss derrotado! Avançando para o Setor ${newSector} com +${bonusStr} soldados e poder de tiro ampliado!`,
+        text: `Mega-Boss derrotado! Caravana Dourada liberada na ponte (+${bonusStr} soldados e +${coinsReward} moedas)! Próximo Boss (${spec.archetype.namePt}) em 7,5s!`,
       },
     })
   },
@@ -456,31 +787,26 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const state = get()
     const { save, runPlan, snapshot } = state
     const nextSector = state.bridgeSectorIndex + 1
-    const sectorBonus = Math.max(10 * nextSector, Math.round(snapshot.currentArmy * 0.15))
+    const spec = computeSectorBossSpec(nextSector)
+    const sectorBonus = Math.max(
+      spec.sectorClearRewardSoldiers,
+      Math.round(snapshot.currentArmy * 0.15),
+    )
     const carryArmy = clampArmy(Math.max(5, snapshot.currentArmy + sectorBonus))
     const nextSeed = runPlan.seed + nextSector * 997
-    const baseBossCurve = 150 * Math.pow(1.85, nextSector - 1)
-    const scaledBossHp = clampArmy(
-      Math.max(
-        150,
-        Math.min(baseBossCurve, carryArmy * 12),
-        carryArmy * 1.65,
-      ),
-    )
-    const scaledHorde = clampArmy(
-      Math.max(25, Math.round(scaledBossHp * 0.25)),
-    )
+    const scaledBossHp = clampArmy(spec.bossHp)
+    const scaledHorde = clampArmy(spec.hordeHp)
 
     const nextPlan = generateRun({
       seed: nextSeed,
-      biomeId: runPlan.biomeId,
+      biomeId: CANONICAL_BRIDGE_BIOME_ID,
       regionId: runPlan.regionId,
       n0: carryArmy,
       enemy: {
         horde: scaledHorde,
         bossHp: scaledBossHp,
-        bossName: `${runPlan.enemy.bossName.replace(/ S\d+$/u, '')} S${nextSector}`,
-        bossTitle: `Titã do Setor ${nextSector}`,
+        bossName: `${spec.archetype.namePt} S${nextSector}`,
+        bossTitle: `${spec.archetype.titlePt} · Setor ${nextSector}`,
         totalForce: clampArmy(scaledHorde + scaledBossHp),
       },
       mastery: save.mastery,
@@ -495,9 +821,28 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       tone: 'optimal',
       createdAtMs: snapshot.elapsedMs,
     }
+    const nextCoins = (snapshot.bridgeCoinsEarned ?? 0) + spec.sectorClearRewardCoins
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...save,
+        reserveTroops: clampArmy(
+          save.reserveTroops + Math.max(10, Math.round(sectorBonus * 0.5)),
+        ),
+      },
+      {
+        sectorIndex: nextSector,
+        currentArmy: carryArmy,
+        bridgeCoinsEarned: nextCoins,
+        bridgeKills: snapshot.bridgeKills ?? 0,
+        mathChallengesSolved: state.mathChallengesSolvedInRun,
+        seed: nextSeed,
+      },
+    )
+    SaveRepository.save(nextSave)
     soundEngine.playVictoryFanfare()
 
     set({
+      save: nextSave,
       infiniteBridgeMode: true,
       bridgeSectorIndex: nextSector,
       runPlan: nextPlan,
@@ -512,6 +857,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         progress: 0.02,
         currentArmy: carryArmy,
         crowdNodes: buildCrowdNodes(carryArmy),
+        bridgeCoinsEarned: nextCoins,
         activeSegmentIndex: 0,
         segments: nextPlan.segments,
         resolvedSegments: {},
@@ -520,7 +866,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       },
       captainSpeech: {
         mood: 'excited',
-        text: `♾️ Setor ${nextSector} iniciado! Novo Mega-Boss (${formatArmy(scaledBossHp, save.settings.notationMode)} HP) e novas placas na ponte!`,
+        text: `♾️ Setor ${nextSector} salvo automaticamente no IndexedDB e Cache! Novo Mega-Boss: ${spec.archetype.namePt} (${formatArmy(scaledBossHp, save.settings.notationMode)} HP)!`,
       },
     })
   },
@@ -622,18 +968,21 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       createdAtMs: snap.elapsedMs,
     }
 
-    const nextSave: SaveV1 = {
-      ...state.save,
-      wisdomStars: state.save.wisdomStars + (challenge.tier >= 3 ? 2 : 1),
-      recentMathSignatures: getRecentMathSignaturesSnapshot(),
-      stats: {
-        ...state.save.stats,
-        highestArmyReached: Math.max(
-          state.save.stats.highestArmyReached,
-          nextArmy,
-        ),
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...state.save,
+        wisdomStars: state.save.wisdomStars + (challenge.tier >= 3 ? 2 : 1),
+        recentMathSignatures: getRecentMathSignaturesSnapshot(),
       },
-    }
+      {
+        sectorIndex: state.bridgeSectorIndex,
+        currentArmy: nextArmy,
+        bridgeCoinsEarned: nextCoins,
+        bridgeKills: snap.bridgeKills ?? 0,
+        mathChallengesSolved: nextSeq,
+        seed: state.runPlan.seed,
+      },
+    )
     SaveRepository.save(nextSave)
 
     set({
@@ -675,6 +1024,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   },
 
   switchWorld: (world) => {
+    if (world === 'realm' && get().world === 'run') {
+      get().extractRunToBase()
+      return
+    }
     set({
       world,
       lastDirectAttackResult: null,
@@ -704,14 +1057,20 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   ) => {
     const state = get()
     const snap = state.snapshot
-    if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
+    if (
+      snap.phase !== 'RUNNING' &&
+      snap.phase !== 'CALM_WAIT' &&
+      snap.phase !== 'BATTLE'
+    ) {
+      return
+    }
 
     const safeDmg = Math.max(0, Math.round(damageDealt))
     const hordeDmg = Math.min(snap.enemy.horde, Math.ceil(safeDmg * 0.65))
     const nextHorde = Math.max(0, snap.enemy.horde - hordeDmg)
     const minMarchBossHp = Math.max(
       8,
-      Math.round(state.runPlan.enemy.bossHp * 0.42),
+      Math.round(state.runPlan.enemy.bossHp * 0.2),
     )
     const bossOverflowDmg =
       snap.progress >= 0.45 || nextHorde === 0
@@ -723,14 +1082,81 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     )
     const nextTotalForce = nextHorde + nextBossHp
 
-    const minSafePlayerArmy = Math.max(2, Math.floor(state.runPlan.n0 * 0.4))
+    // V8 Fase 3: Fim da Imortalidade AFK! Monstros e o Boss podem zerar o exército e causar DEFEAT real!
     const nextPlayerArmy =
       playerAttritionLoss > 0
-        ? Math.max(
-            minSafePlayerArmy,
-            clampArmy(snap.currentArmy - Math.round(playerAttritionLoss)),
-          )
+        ? clampArmy(snap.currentArmy - Math.round(playerAttritionLoss))
         : snap.currentArmy
+
+    const updatedKills = (snap.bridgeKills ?? 0) + (safeDmg > 0 ? Math.max(1, safeDmg) : 0)
+    const updatedCoins = (snap.bridgeCoinsEarned ?? 0) + Math.max(0, coinsDelta)
+
+    if (nextPlayerArmy <= 0) {
+      soundEngine.playDefeatRegroup()
+      const liveBridgeBossHp =
+        typeof window !== 'undefined'
+          ? Math.round(
+              (
+                window as unknown as {
+                  __lbBridge3DTelemetry?: { bossHp?: number }
+                }
+              ).__lbBridge3DTelemetry?.bossHp ?? 0,
+            )
+          : 0
+      const effectiveEnemyForce = Math.max(1, nextTotalForce, liveBridgeBossHp)
+      const defeatResolution: BattleResolution = {
+        outcome: 'DEFEAT',
+        playerArmy: 0,
+        enemyForce: effectiveEnemyForce,
+        survivors: 0,
+        deficit: effectiveEnemyForce,
+        durationMs: snap.elapsedMs,
+      }
+      const contract = evaluateRedemptionContract(
+        0,
+        effectiveEnemyForce,
+        state.tokensInRun,
+      )
+      const nextSaveDefeat = buildSaveWithCheckpoint(
+        {
+          ...state.save,
+          remainderVault: state.save.remainderVault + snap.remainderBankInRun,
+          stats: {
+            ...state.save.stats,
+            runsPlayed: state.save.stats.runsPlayed + 1,
+          },
+        },
+        {
+          sectorIndex: state.bridgeSectorIndex,
+          currentArmy: Math.max(5, state.runPlan.n0),
+          bridgeCoinsEarned: updatedCoins,
+          bridgeKills: updatedKills,
+          mathChallengesSolved: state.mathChallengesSolvedInRun,
+          seed: state.runPlan.seed,
+        },
+      )
+      SaveRepository.save(nextSaveDefeat)
+      set({
+        save: nextSaveDefeat,
+        activeTrapHit: null,
+        battleResolution: defeatResolution,
+        redemptionContract: contract,
+        snapshot: {
+          ...snap,
+          currentArmy: 0,
+          crowdNodes: [],
+          activeMergeEvent: null,
+          phase: 'DEFEAT',
+          bridgeKills: updatedKills,
+          bridgeCoinsEarned: updatedCoins,
+        },
+        captainSpeech: {
+          mood: 'curious',
+          text: `Nosso batalhão foi dizimado no Setor ${state.bridgeSectorIndex}! Pontuação e progresso salvos automaticamente no IndexedDB e Cache!`,
+        },
+      })
+      return
+    }
 
     set({
       snapshot: {
@@ -746,9 +1172,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           bossHp: nextBossHp,
           totalForce: nextTotalForce,
         },
-        bridgeKills: (snap.bridgeKills ?? 0) + Math.max(1, safeDmg),
-        bridgeCoinsEarned:
-          (snap.bridgeCoinsEarned ?? 0) + Math.max(0, coinsDelta),
+        bridgeKills: updatedKills,
+        bridgeCoinsEarned: updatedCoins,
       },
     })
   },
@@ -866,33 +1291,53 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   },
 
   startNewRun: (opts) => {
+    // V8: Se chamado apenas com biomeId (ex.: atalho legado de bioma), NUNCA reinicia o progresso!
+    if (
+      opts?.biomeId &&
+      opts.regionId === undefined &&
+      opts.seed === undefined &&
+      opts.engineId === undefined
+    ) {
+      get().switchBridgeBiomeWithoutReset(opts.biomeId)
+      return
+    }
+
     const state = get()
     const targetRegionId = opts?.regionId ?? state.save.selectedRegionId
     const region = REGIONS[targetRegionId] ?? REGIONS.r01_ponte_aurora
-    const biomeId = opts?.biomeId ?? region.biomeId
+    // V8: Bioma único no modo Ponte ('planicie_pedra')
+    const biomeId: BiomeId = CANONICAL_BRIDGE_BIOME_ID
     const engineId = opts?.engineId ?? state.activeEngineId ?? 'ponte_portoes'
     const seed =
       opts?.seed ??
       urlCfg.seed ??
       ((Date.now() % 1_000_000) + (state.save.stats.runsPlayed + 1) * 313)
 
-    const n0 = Math.max(
+    const baseQuartelArmy = Math.max(
       5,
       getInitialArmyFromQuartel(state.save.citadelLevels.quartel ?? 1),
     )
+    // V8: Se não for um seed explícito de teste e o jogador já estiver num Setor > 1 na Ponte,
+    // preserva o progresso da campanha contínua ao voltar do Reino ("Atacar ▶")!
+    const preserveActiveBridgeCampaign =
+      opts?.seed === undefined &&
+      urlCfg.seed === undefined &&
+      engineId === 'ponte_portoes' &&
+      (state.bridgeSectorIndex > 1 || (state.save.activeRunCheckpoint?.sectorIndex ?? 1) > 1)
+    const activeCp = state.save.activeRunCheckpoint
+    const preservedSector = preserveActiveBridgeCampaign
+      ? Math.max(state.bridgeSectorIndex, activeCp?.sectorIndex ?? 1)
+      : 1
+    const n0 = preserveActiveBridgeCampaign
+      ? clampArmy(Math.max(baseQuartelArmy, state.snapshot.currentArmy, activeCp?.currentArmy ?? 0))
+      : baseQuartelArmy
 
     const plan = generateRun({
       seed,
       biomeId,
       regionId: region.id,
       n0,
-      enemy: {
-        horde: region.garrison,
-        bossHp: region.bossHp,
-        bossName: region.bossName,
-        bossTitle: region.bossTitle,
-        totalForce: region.garrison + region.bossHp,
-      },
+      enemy: buildSectorScaledEnemy(region, preservedSector, n0),
       mastery: state.save.mastery,
       observatoryLevel: state.save.citadelLevels.observatorio ?? 1,
       trapAlertSeenCount: state.save.trapAlertSeenCount,
@@ -901,12 +1346,45 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const nextOracle = pathOracle(plan)
     const forjaLvl = state.save.citadelLevels.forja ?? 0
     const lunetas = CITADEL_BUILDINGS.forja.levelEffects[forjaLvl] ?? 1
+    const preservedCoins = preserveActiveBridgeCampaign
+      ? Math.max(state.snapshot.bridgeCoinsEarned ?? 0, activeCp?.bridgeCoinsEarned ?? 0)
+      : 0
+    const preservedKills = preserveActiveBridgeCampaign
+      ? Math.max(state.snapshot.bridgeKills ?? 0, activeCp?.bridgeKills ?? 0)
+      : 0
+    const preservedMathSolved = preserveActiveBridgeCampaign
+      ? Math.max(state.mathChallengesSolvedInRun, activeCp?.mathChallengesSolved ?? 0)
+      : 0
 
-    const nextSave: SaveV1 = {
-      ...state.save,
-      selectedRegionId: region.id,
-    }
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...state.save,
+        selectedRegionId: region.id,
+      },
+      {
+        sectorIndex: preservedSector,
+        currentArmy: n0,
+        bridgeCoinsEarned: preservedCoins,
+        bridgeKills: preservedKills,
+        mathChallengesSolved: preservedMathSolved,
+        seed,
+        bankedScoreMark: preserveActiveBridgeCampaign
+          ? activeCp?.bankedScoreMark ?? n0
+          : n0,
+      },
+    )
     SaveRepository.save(nextSave)
+
+    const baseSnap = createInitialSnapshotFromPlan(plan, nextSave.settings.calmMode)
+    const nextSnapshot: RunSnapshot = preserveActiveBridgeCampaign
+      ? {
+          ...baseSnap,
+          currentArmy: n0,
+          crowdNodes: buildCrowdNodes(n0),
+          bridgeCoinsEarned: preservedCoins,
+          bridgeKills: preservedKills,
+        }
+      : baseSnap
 
     set({
       world: 'run',
@@ -914,7 +1392,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       save: nextSave,
       runPlan: plan,
       oracle: nextOracle,
-      snapshot: createInitialSnapshotFromPlan(plan, nextSave.settings.calmMode),
+      snapshot: nextSnapshot,
       activeTrapHit: null,
       trapHistoryInRun: [],
       activeRedemptionTokenId: null,
@@ -925,20 +1403,26 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       activeMathChallenge: null,
       activeMathChallengeScaffold: 1,
       activeMathChallengeDiagnostic: null,
-      mathChallengesSolvedInRun: 0,
+      mathChallengesSolvedInRun: preservedMathSolved,
       lastSolvedMathRewardAt: null,
-      bridgeSectorIndex: 1,
+      bridgeSectorIndex: preservedSector,
+      infiniteBridgeMode: preserveActiveBridgeCampaign
+        ? preservedSector > 1 || state.infiniteBridgeMode
+        : false,
       lunetaChargesRemaining: lunetas,
       captainSpeech: {
         mood: 'excited',
-        text: `Marchando rumo a ${region.name}! Meta para vencer ${region.bossName}: ${formatArmy(plan.enemy.totalForce, nextSave.settings.notationMode)} soldados.`,
+        text:
+          preservedSector > 1
+            ? `Retomando a Grande Ponte no Setor S${preservedSector} com ${formatArmy(n0, nextSave.settings.notationMode)} soldados!`
+            : `Marchando rumo a ${region.name}! Meta para vencer ${region.bossName}: ${formatArmy(plan.enemy.totalForce, nextSave.settings.notationMode)} soldados.`,
       },
     })
   },
 
   setSteeringX: (laneNormX) => {
     const state = get()
-    const clampedX = Math.max(-0.9, Math.min(0.9, laneNormX))
+    const clampedX = Math.max(-1.0, Math.min(1.0, laneNormX))
     const laneIdx = resolveLaneIndexFromNormX(clampedX, state.snapshot.laneCount)
     set({
       snapshot: {
@@ -951,11 +1435,11 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
   stepLane: (delta) => {
     const state = get()
-    // Passo suave horizontal (0.24 por toque) para mover o esquadrão gradualmente pela ponte sem teletransportar
-    const stepSize = state.snapshot.laneCount === 3 ? 0.22 : 0.26
+    // Passo suave horizontal contínuo (0.08) sem pulinhos para mover o esquadrão livremente pelas 3 rotas
+    const stepSize = 0.08
     const nextX = Math.max(
-      -0.86,
-      Math.min(0.86, state.snapshot.laneX + delta * stepSize),
+      -0.96,
+      Math.min(0.96, state.snapshot.laneX + delta * stepSize),
     )
     const nextLane = resolveLaneIndexFromNormX(nextX, state.snapshot.laneCount)
     if (nextLane !== state.snapshot.currentLane) {
@@ -983,13 +1467,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const clampedLane = Math.max(0, Math.min(snapshot.laneCount - 1, laneIndex))
     const targetLaneX = getLaneCenterNormX(clampedLane, snapshot.laneCount)
 
-    // Movimento suave em passos na tela: NUNCA teletransporta de um canto ao outro!
+    // Movimento livre e contínuo até o alvo selecionado
     const dx = targetLaneX - snapshot.laneX
-    const maxHorizStep = 0.28
-    const steppedLaneX =
-      Math.abs(dx) <= maxHorizStep
-        ? targetLaneX
-        : snapshot.laneX + Math.sign(dx) * maxHorizStep
+    const steppedLaneX = targetLaneX
 
     if (clampedLane !== snapshot.currentLane) {
       soundEngine.playLaneSwitch(clampedLane)
@@ -1072,9 +1552,37 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       !snapshot.resolvedSegments[activeSeg.id] &&
       nextProgress >= activeSeg.zPosition
     ) {
+      // V8: Se o jogador estiver fisicamente nos Corredores Laterais (|laneX| > 0.52) fora do Modo Calmo,
+      // ele NÃO colide com os portões da Rota Central (pois está passando pela esteira lateral Esquerda/Direita)!
+      if (!save.settings.calmMode && Math.abs(snapshot.laneX) > 0.52) {
+        const resolvedMap = {
+          ...snapshot.resolvedSegments,
+          [activeSeg.id]: { chosenLane: -1, resultArmy: snapshot.currentArmy },
+        }
+        const isFinalBypass =
+          snapshot.activeSegmentIndex + 1 >= snapshot.segments.length
+        set({
+          snapshot: {
+            ...snapshot,
+            elapsedMs: nextElapsed,
+            progress: isFinalBypass ? 1 : nextProgress,
+            activeSegmentIndex: snapshot.activeSegmentIndex + 1,
+            resolvedSegments: resolvedMap,
+          },
+        })
+        if (isFinalBypass) {
+          get().tickRun(16)
+        }
+        return
+      }
+
+      const resolvedCenterLane = resolveLaneIndexFromNormX(
+        snapshot.laneX,
+        activeSeg.lanes.length === 3 ? 3 : 2,
+      )
       const chosenLane = Math.max(
         0,
-        Math.min(activeSeg.lanes.length - 1, snapshot.currentLane),
+        Math.min(activeSeg.lanes.length - 1, resolvedCenterLane),
       )
       const chosenGates = activeSeg.lanes[chosenLane] ?? []
 
@@ -1184,16 +1692,26 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           : [...save.twinsDiscovered, activeSeg.twinId]
         const academiaBonus =
           CITADEL_BUILDINGS.academia.levelEffects[save.citadelLevels.academia ?? 0] ?? 1
-        const nextSaveTwins: SaveV1 = {
-          ...save,
-          wisdomStars: save.wisdomStars + academiaBonus,
-          twinsDiscovered: nextTwins,
-          mergeTutorialSeenCount: nextMergeSeenCount,
-          stats: {
-            ...save.stats,
-            highestArmyReached: Math.max(save.stats.highestArmyReached, nextArmy),
+        const nextSaveTwins = buildSaveWithCheckpoint(
+          {
+            ...save,
+            wisdomStars: save.wisdomStars + academiaBonus,
+            twinsDiscovered: nextTwins,
+            mergeTutorialSeenCount: nextMergeSeenCount,
+            stats: {
+              ...save.stats,
+              highestArmyReached: Math.max(save.stats.highestArmyReached, nextArmy),
+            },
           },
-        }
+          {
+            sectorIndex: state.bridgeSectorIndex,
+            currentArmy: nextArmy,
+            bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+            bridgeKills: snapshot.bridgeKills ?? 0,
+            mathChallengesSolved: state.mathChallengesSolvedInRun,
+            seed: runPlan.seed,
+          },
+        )
         SaveRepository.save(nextSaveTwins)
 
         const fbItem: FloatingFeedbackItem = {
@@ -1251,29 +1769,39 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           : undefined
 
         const nextSeenCount = (save.trapAlertSeenCount[trapHit.trapId] ?? 0) + 1
-        const safeTrapArmy = clampArmy(nextArmy)
-        const nextSaveTrap: SaveV1 = {
-          ...save,
-          mergeTutorialSeenCount: nextMergeSeenCount,
-          album: {
-            ...save.album,
-            [trapHit.trapId]: {
-              ...prevAlbumEntry,
-              encounteredCount: prevAlbumEntry.encounteredCount + 1,
+        const safeTrapArmy = Math.max(1, clampArmy(nextArmy))
+        const nextSaveTrap = buildSaveWithCheckpoint(
+          {
+            ...save,
+            mergeTutorialSeenCount: nextMergeSeenCount,
+            album: {
+              ...save.album,
+              [trapHit.trapId]: {
+                ...prevAlbumEntry,
+                encounteredCount: prevAlbumEntry.encounteredCount + 1,
+              },
+            },
+            mastery: nextConcept
+              ? { ...save.mastery, [trapHit.conceptId]: nextConcept }
+              : save.mastery,
+            trapAlertSeenCount: {
+              ...save.trapAlertSeenCount,
+              [trapHit.trapId]: nextSeenCount,
+            },
+            stats: {
+              ...save.stats,
+              highestArmyReached: Math.max(save.stats.highestArmyReached, safeTrapArmy),
             },
           },
-          mastery: nextConcept
-            ? { ...save.mastery, [trapHit.conceptId]: nextConcept }
-            : save.mastery,
-          trapAlertSeenCount: {
-            ...save.trapAlertSeenCount,
-            [trapHit.trapId]: nextSeenCount,
+          {
+            sectorIndex: state.bridgeSectorIndex,
+            currentArmy: safeTrapArmy,
+            bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+            bridgeKills: snapshot.bridgeKills ?? 0,
+            mathChallengesSolved: state.mathChallengesSolvedInRun,
+            seed: runPlan.seed,
           },
-          stats: {
-            ...save.stats,
-            highestArmyReached: Math.max(save.stats.highestArmyReached, safeTrapArmy),
-          },
-        }
+        )
         SaveRepository.save(nextSaveTrap)
 
         const fbTrap: FloatingFeedbackItem = {
@@ -1317,7 +1845,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           },
           captainSpeech: {
             mood: 'curious',
-            text: `+1 Ficha Bônus (+${trapHit.loss}) guardada para o final!`,
+            text: `+1 Ficha Bônus (+${formatArmy(trapHit.loss, save.settings.notationMode)}) guardada para o final!`,
           },
         })
         if (isFinalAfterTrap) {
@@ -1341,15 +1869,25 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       }
 
       const safePassArmy = clampArmy(nextArmy)
-      const nextSavePass: SaveV1 = {
-        ...save,
-        mergeTutorialSeenCount: nextMergeSeenCount,
-        mastery: nextMastery,
-        stats: {
-          ...save.stats,
-          highestArmyReached: Math.max(save.stats.highestArmyReached, safePassArmy),
+      const nextSavePass = buildSaveWithCheckpoint(
+        {
+          ...save,
+          mergeTutorialSeenCount: nextMergeSeenCount,
+          mastery: nextMastery,
+          stats: {
+            ...save.stats,
+            highestArmyReached: Math.max(save.stats.highestArmyReached, safePassArmy),
+          },
         },
-      }
+        {
+          sectorIndex: state.bridgeSectorIndex,
+          currentArmy: safePassArmy,
+          bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+          bridgeKills: snapshot.bridgeKills ?? 0,
+          mathChallengesSolved: state.mathChallengesSolvedInRun,
+          seed: runPlan.seed,
+        },
+      )
       SaveRepository.save(nextSavePass)
 
       const deltaArmy = safePassArmy - armyBefore
@@ -1413,8 +1951,55 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     }
 
     // Se terminou todos os segmentos: no Modo Infinito avança automaticamente para o próximo Setor;
-    // no Modo Campanha inicia o Combate Visível (fase 'BATTLE')!
+    // se currentArmy <= 0 (zerado por portões negativos), aciona DEFEAT imediato!
     if (snapshot.activeSegmentIndex >= snapshot.segments.length) {
+      if (snapshot.currentArmy <= 0) {
+        soundEngine.playDefeatRegroup()
+        const defeatRes = resolveBattle(0, snapshot.enemy)
+        const defeatContract = evaluateRedemptionContract(
+          0,
+          snapshot.enemy.totalForce,
+          state.tokensInRun,
+        )
+        const nextSaveDefeat = buildSaveWithCheckpoint(
+          {
+            ...save,
+            remainderVault: save.remainderVault + snapshot.remainderBankInRun,
+            stats: {
+              ...save.stats,
+              runsPlayed: save.stats.runsPlayed + 1,
+            },
+          },
+          {
+            sectorIndex: state.bridgeSectorIndex,
+            currentArmy: Math.max(5, runPlan.n0),
+            bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+            bridgeKills: snapshot.bridgeKills ?? 0,
+            mathChallengesSolved: state.mathChallengesSolvedInRun,
+            seed: runPlan.seed,
+          },
+        )
+        SaveRepository.save(nextSaveDefeat)
+        set({
+          save: nextSaveDefeat,
+          activeTrapHit: null,
+          battleResolution: defeatRes,
+          redemptionContract: defeatContract,
+          snapshot: {
+            ...snapshot,
+            currentArmy: 0,
+            crowdNodes: [],
+            elapsedMs: nextElapsed,
+            progress: 1,
+            phase: 'DEFEAT',
+          },
+          captainSpeech: {
+            mood: 'curious',
+            text: `Nosso exército caiu a zero no Setor ${state.bridgeSectorIndex}! Progresso e pontuação salvos no IndexedDB e Cache!`,
+          },
+        })
+        return
+      }
       if (state.infiniteBridgeMode && snapshot.currentArmy > 0) {
         get().advanceInfiniteBridgeSector()
         return
@@ -1582,8 +2167,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         captainSpeech: {
           mood: 'curious',
           text: contract.canGuaranteeVictory
-            ? `Faltaram ${resolution.deficit} soldados! Mas suas Fichas de Resgate somam +${contract.totalRecoverableLoss} e garantem a virada!`
-            : `Faltaram ${resolution.deficit} soldados! Vamos tentar uma Revanche Tática com o Detector da Cidadela!`,
+            ? `Faltaram ${formatArmy(resolution.deficit, save.settings.notationMode)} soldados! Mas suas Fichas de Resgate somam +${formatArmy(contract.totalRecoverableLoss, save.settings.notationMode)} e garantem a virada!`
+            : `Faltaram ${formatArmy(resolution.deficit, save.settings.notationMode)} soldados! Vamos tentar uma Revanche Tática com o Detector da Cidadela!`,
         },
       })
     }
@@ -2085,7 +2670,12 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
   resetSaveData: () => {
     const fresh = SaveRepository.reset()
-    set({ save: fresh })
+    set({
+      save: fresh,
+      bridgeSectorIndex: 1,
+      infiniteBridgeMode: false,
+      mathChallengesSolvedInRun: 0,
+    })
     get().startNewRun({ regionId: 'r01_ponte_aurora' })
   },
 }))
@@ -2093,4 +2683,68 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 if (typeof window !== 'undefined') {
   ;(window as unknown as { __lbStore?: typeof useLogicBattleStore }).__lbStore =
     useLogicBattleStore
+
+  // V8: Hidratação assíncrona resiliente a partir do IndexedDB ('logicBattle_db')
+  if (!initialLoad.recoveredFromBackup) {
+    void SaveRepository.hydrateFromIndexedDB((hydratedSave) => {
+      const st = useLogicBattleStore.getState()
+      if (st.recoveredFromBackup) return
+      const cp = hydratedSave.activeRunCheckpoint
+      if (urlCfg.seed === undefined && cp && cp.currentArmy > 0) {
+        const nextArmy = clampArmy(cp.currentArmy)
+        const nextSector = Math.max(1, cp.sectorIndex)
+        const region = REGIONS[hydratedSave.selectedRegionId] ?? REGIONS.r01_ponte_aurora
+        const scaledEnemy = buildSectorScaledEnemy(region, nextSector, nextArmy)
+        useLogicBattleStore.setState({
+          save: hydratedSave,
+          bridgeSectorIndex: nextSector,
+          infiniteBridgeMode: nextSector > 1 || st.infiniteBridgeMode,
+          mathChallengesSolvedInRun: cp.mathChallengesSolved,
+          snapshot: {
+            ...st.snapshot,
+            currentArmy: nextArmy,
+            crowdNodes: buildCrowdNodes(nextArmy),
+            bridgeCoinsEarned: cp.bridgeCoinsEarned,
+            bridgeKills: cp.bridgeKills,
+            enemy: scaledEnemy,
+          },
+        })
+      } else {
+        useLogicBattleStore.setState({ save: hydratedSave })
+      }
+    })
+  }
+
+  // V8: Auto-save imediato em visibilitychange / pagehide para nunca perder o Setor/Pontuação ao fechar ou trocar de aba
+  const flushCheckpointOnPageLifecycle = () => {
+    try {
+      const rawCurrent = window.localStorage.getItem('logicBattle.save.v1')
+      if (rawCurrent !== null) {
+        const parsed = JSON.parse(rawCurrent)
+        if (!parsed || typeof parsed !== 'object' || parsed.version !== 1) {
+          return
+        }
+      }
+    } catch {
+      // Se o save primário no localStorage estiver corrompido, preservar para que o reload acione a recuperação via .bak!
+      return
+    }
+    const st = useLogicBattleStore.getState()
+    if (st.snapshot.currentArmy <= 0 && st.bridgeSectorIndex <= 1) return
+    const nextSave = buildSaveWithCheckpoint(st.save, {
+      sectorIndex: st.bridgeSectorIndex,
+      currentArmy: st.snapshot.currentArmy,
+      bridgeCoinsEarned: st.snapshot.bridgeCoinsEarned ?? 0,
+      bridgeKills: st.snapshot.bridgeKills ?? 0,
+      mathChallengesSolved: st.mathChallengesSolvedInRun,
+      seed: st.runPlan.seed,
+    })
+    SaveRepository.save(nextSave)
+  }
+  window.addEventListener('pagehide', flushCheckpointOnPageLifecycle)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushCheckpointOnPageLifecycle()
+    }
+  })
 }

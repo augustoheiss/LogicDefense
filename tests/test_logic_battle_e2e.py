@@ -519,6 +519,12 @@ def run_suite() -> dict:
                 assert "e+" in lbl and "," in lbl and len(lbl) <= 10, (
                     f"Teste01 Req 1: Placas laterais 3D acima de 9000T devem usar XX,XXe+YY sem 15 casas decimais, obtido: {lbl}"
                 )
+            assert len(set(high_tel.get("leftGateLabels", []))) == 5, (
+                f"Teste01 Req 3: Os 5 portoes da Rota Esquerda devem ter valores distintos: {high_tel.get('leftGateLabels')}"
+            )
+            assert len(set(high_tel.get("rightGateLabels", []))) == 4, (
+                f"Teste01 Req 4: Os 4 portoes da Rota Direita devem ter valores distintos: {high_tel.get('rightGateLabels')}"
+            )
             assert any(lbl != "− 1" for lbl in teste01_audit.get("negLabelsSector3", [])), (
                 f"Teste01 Req 2: Portoes negativos centrais devem evoluir acima de '- 1': {teste01_audit}"
             )
@@ -667,6 +673,51 @@ def run_suite() -> dict:
             recovered_obj = json.loads(recovered_raw)
             assert recovered_obj["version"] == 1, "Falha ao restaurar save v1 a partir do .bak"
             results["functional"]["corruptedSaveRecovery"] = "PASS"
+
+            # 2.9 Master Plan V8: IndexedDB + Cache, Fim do Rubber-Banding, 5 Arquetipos, Intermission 7.5s e Combate Mortal
+            v8_audit = page.evaluate(
+                """async () => {
+                    const st = window.__lbStore.getState();
+                    // 1. Verificar ausencia de rubber-banding: Setor 4 com 50 soldados vs Setor 4 com 500.000 soldados deve ter EXATAMENTE o mesmo bossHp!
+                    window.__lbStore.setState((prev) => ({
+                        bridgeSectorIndex: 3,
+                        snapshot: { ...prev.snapshot, currentArmy: 50 },
+                    }));
+                    window.__lbStore.getState().advanceInfiniteBridgeSector();
+                    const bossHpLowArmy = window.__lbStore.getState().snapshot.enemy.bossHp;
+
+                    window.__lbStore.setState((prev) => ({
+                        bridgeSectorIndex: 3,
+                        snapshot: { ...prev.snapshot, currentArmy: 500000 },
+                    }));
+                    window.__lbStore.getState().advanceInfiniteBridgeSector();
+                    const bossHpHighArmy = window.__lbStore.getState().snapshot.enemy.bossHp;
+
+                    // 2. Verificar que dano letal (playerAttritionLoss >= currentArmy) reduz exército a 0 e aciona DEFEAT real
+                    const currentBeforeLethal = window.__lbStore.getState().snapshot.currentArmy;
+                    window.__lbStore.getState().recordBridgeEnemyKill(0, 0, currentBeforeLethal + 50);
+                    const afterLethalSnap = window.__lbStore.getState().snapshot;
+
+                    // 3. Verificar cache de pontuacao no localStorage
+                    const scoreCacheRaw = localStorage.getItem('logicBattle.score.cache.v1');
+                    const scoreCache = scoreCacheRaw ? JSON.parse(scoreCacheRaw) : null;
+
+                    return {
+                        bossHpLowArmy,
+                        bossHpHighArmy,
+                        zeroRubberBanding: bossHpLowArmy === bossHpHighArmy && bossHpLowArmy > 150,
+                        lethalPhase: afterLethalSnap.phase,
+                        lethalArmy: afterLethalSnap.currentArmy,
+                        hasScoreCache: Boolean(scoreCache && scoreCache.highestSectorReached >= 4),
+                    };
+                }"""
+            )
+            assert v8_audit.get("zeroRubberBanding"), f"V8 Fase 3: Boss HP nao pode sofrer rubber-banding com currentArmy: {v8_audit}"
+            assert v8_audit.get("lethalPhase") == "DEFEAT" and v8_audit.get("lethalArmy") == 0, (
+                f"V8 Fase 3: Dano letal deve zerar currentArmy e acionar DEFEAT real: {v8_audit}"
+            )
+            assert v8_audit.get("hasScoreCache"), f"V8 Fase 1: Cache de pontuacao logicBattle.score.cache.v1 ausente: {v8_audit}"
+            results["functional"]["v8FullCombatAndPersistence"] = v8_audit
 
             ctx.close()
             browser.close()

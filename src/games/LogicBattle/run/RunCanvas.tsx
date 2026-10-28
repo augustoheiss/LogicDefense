@@ -48,7 +48,9 @@ function detectWebGLAvailable(): boolean {
 export const RunCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const runEngineRef = useRef<RunEngine>(new RunEngine())
-  const smoothedLaneXRef = useRef<number>(0)
+  const smoothedLaneXRef = useRef<number>(
+    useLogicBattleStore.getState().snapshot.laneX,
+  )
   const particlePoolRef = useRef<ParticlePool>(new ParticlePool())
   const projectilePoolRef = useRef<ProjectilePool>(new ProjectilePool())
   const battleDirectorRef = useRef<BattleDirector>(new BattleDirector())
@@ -93,7 +95,6 @@ export const RunCanvas: React.FC = () => {
   const latestFeedback = useLogicBattleStore(
     (s) => s.snapshot.recentFeedback[s.snapshot.recentFeedback.length - 1] ?? null,
   )
-  const enemy = useLogicBattleStore((s) => s.snapshot.enemy)
   const battleResolution = useLogicBattleStore((s) => s.battleResolution)
   const settings = useLogicBattleStore((s) => s.save.settings)
   const lunetaCharges = useLogicBattleStore((s) => s.lunetaChargesRemaining)
@@ -106,6 +107,7 @@ export const RunCanvas: React.FC = () => {
   const bridgeSectorIndex = useLogicBattleStore((s) => s.bridgeSectorIndex)
   const infiniteBridgeMode = useLogicBattleStore((s) => s.infiniteBridgeMode)
   const toggleInfiniteBridgeMode = useLogicBattleStore((s) => s.toggleInfiniteBridgeMode)
+  const extractRunToBase = useLogicBattleStore((s) => s.extractRunToBase)
   const steerToRoute = useLogicBattleStore((s) => s.steerToRoute)
 
   useRunLoop(world === 'run' && phase === 'RUNNING' && activeMathChallenge === null)
@@ -172,13 +174,19 @@ export const RunCanvas: React.FC = () => {
         : 16
     lastFramePerfRef.current = nowPerf
 
-    // Interpolação suave do movimento horizontal via RunEngine cobrindo as 3 Rotas
-    runEngineRef.current.setTargetNormX(snap.laneX)
-    const smoothedLaneX = runEngineRef.current.stepSteering(frameDtMs)
-    smoothedLaneXRef.current = smoothedLaneX
-    ;(
-      window as unknown as { __lbHeroPos?: { x: number; y: number } }
-    ).__lbHeroPos = { x: smoothedLaneX, y: snap.progress }
+    // Interpolação suave do movimento horizontal cobrindo as 3 Rotas
+    let smoothedLaneX = smoothedLaneXRef.current
+    if (webglActive) {
+      // No palco WebGL 3D, Bridge3DEnvironment (useFrame 60Hz) é o único dono de smoothedLaneXRef
+      runEngineRef.current.syncFromStore(smoothedLaneXRef.current)
+    } else {
+      runEngineRef.current.setTargetNormX(snap.laneX)
+      smoothedLaneX = runEngineRef.current.stepSteering(frameDtMs)
+      smoothedLaneXRef.current = smoothedLaneX
+      ;(
+        window as unknown as { __lbHeroPos?: { x: number; y: number } }
+      ).__lbHeroPos = { x: smoothedLaneX, y: snap.progress }
+    }
 
     ctx.save()
     ctx.scale(dpr, dpr)
@@ -186,16 +194,10 @@ export const RunCanvas: React.FC = () => {
     const proj = createBridgeProjection(logicalW, logicalH)
 
     if (webglActive) {
-      // Quando o palco WebGL 3D está ativo, limpamos o canvas 2D para deixar a cena 3D 100% visível!
+      // Quando o palco WebGL 3D está ativo, limpamos o canvas 2D para deixar a cena 3D 100% visível,
+      // e desativamos a hitbox invisível 2D para que arrastar/clicar na Rota Direita não abra modal sozinho!
       ctx.clearRect(0, 0, logicalW, logicalH)
-      rightMathRectRef.current = {
-        x: logicalW * 0.72,
-        y: logicalH * 0.42,
-        w: logicalW * 0.22,
-        h: logicalH * 0.2,
-        centerX: logicalW * 0.83,
-        centerY: logicalH * 0.52,
-      }
+      rightMathRectRef.current = null
     } else {
       const fortressCoordsFallback = drawBridgeAndBackdrop(
         ctx,
@@ -396,7 +398,7 @@ export const RunCanvas: React.FC = () => {
 
     battleDirectorRef.current.start(
       battleResolution,
-      enemy,
+      useLogicBattleStore.getState().snapshot.enemy,
       settings.reducedMotion,
       projectilePoolRef.current,
     )
@@ -422,7 +424,7 @@ export const RunCanvas: React.FC = () => {
       lastBattlePerfRef.current = null
       battleDirectorRef.current.stop(projectilePoolRef.current)
     }
-  }, [world, phase, battleResolution, enemy, settings.reducedMotion])
+  }, [world, phase, battleResolution, settings.reducedMotion])
 
   // Assinatura imperativa na store para redesenhar a camada de feedback/projéteis a 60 FPS
   useEffect(() => {
@@ -602,6 +604,16 @@ export const RunCanvas: React.FC = () => {
           title={`Modo Infinito (${infiniteBridgeMode ? 'ATIVO' : 'OFF'}) — Setor Atual: S${bridgeSectorIndex}`}
         >
           ♾️S{bridgeSectorIndex}
+        </button>
+        <button
+          type="button"
+          className="lb-compass-btn"
+          data-testid="lb-extract-to-base-btn"
+          onClick={extractRunToBase}
+          title="Salvar Progresso no IndexedDB + Cache e Voltar para a Base com a Pontuação"
+          aria-label="Voltar para a Base com a Pontuação"
+        >
+          🏰
         </button>
         <button
           type="button"

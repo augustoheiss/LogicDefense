@@ -5,7 +5,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three'
 
-const MAX_CACHED_PLAQUE_TEXTURES = 320
+const MAX_CACHED_PLAQUE_TEXTURES = 640
 const plaqueTextureCache = new Map<string, THREE.CanvasTexture>()
 
 export function getPlaqueTexture(
@@ -17,7 +17,12 @@ export function getPlaqueTexture(
 ): THREE.CanvasTexture {
   const key = `${text}|${bgHex}|${borderHex}|${textHex}|${subText}`
   const cached = plaqueTextureCache.get(key)
-  if (cached) return cached
+  if (cached) {
+    // Promover para MRU (LRU real) para nunca descartar texturas estáticas de useMemo em uso
+    plaqueTextureCache.delete(key)
+    plaqueTextureCache.set(key, cached)
+    return cached
+  }
 
   if (plaqueTextureCache.size >= MAX_CACHED_PLAQUE_TEXTURES) {
     const oldestKey = plaqueTextureCache.keys().next().value
@@ -70,7 +75,7 @@ export function getPlaqueTexture(
       const subFontSize =
         subText.length > 18 ? 17 : subText.length > 13 ? 20 : 23
       ctx.font = `800 ${subFontSize}px "Inter", system-ui, sans-serif`
-      ctx.fillStyle = '#fde047'
+      ctx.fillStyle = bgHex === '#334155' ? '#cbd5e1' : '#fde047'
       ctx.lineWidth = 5
       ctx.strokeText(subText, 128, 97, 216)
       ctx.fillText(subText, 128, 97, 216)

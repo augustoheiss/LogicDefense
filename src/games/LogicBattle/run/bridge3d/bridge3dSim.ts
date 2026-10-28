@@ -12,12 +12,26 @@ import {
   BRIDGE_3D_DIMENSIONS,
   BRIDGE_3D_ROUTES,
   BridgeRouteId,
+  computeSectorBossSpec,
   computeShotProfile,
   DynamicShotProfile,
   laneNormToWorldX,
   resolveRouteFromWorldX,
+  RIGHT_CORRIDOR_TIMED_POLICIES,
 } from './bridge3dPolicies'
 import { formatArmy } from '../../domain/notation'
+
+export type BossLifecycleState = 'MARCHING' | 'MELEE_CLASH' | 'INTERMISSION'
+
+export interface SupplyCaravan3DState {
+  active: boolean
+  x: number
+  z: number
+  hp: number
+  maxHp: number
+  hitFlashMs: number
+  rewardsGrantedCount: number
+}
 
 export interface Bolt3DEntity {
   id: number
@@ -97,6 +111,9 @@ export interface Bridge3DSimState {
   rightAltarZ: number
   rightAltarCollectedInPass: boolean
   rightMathBonusCharges: number
+  /** V8 Fase 2: Cronômetro ativo em ms para os buffs e cores da Rota Direita após resolver conta (0 = cinza/congelado) */
+  rightBuffActiveTimerMs: number
+  rightBuffMaxTimerMs: number
   mathChallengesSolved: number
   pendingRightGateBonus: number
   timeInRightRouteSec: number
@@ -111,6 +128,13 @@ export interface Bridge3DSimState {
   bossMaxHp: number
   bossZ: number
   bossHitFlashMs: number
+  bossLifecycle: BossLifecycleState
+  bossRespawnTimerMs: number
+  bossMeleeCooldownMs: number
+  bossArchetypeIndex: 0 | 1 | 2 | 3 | 4
+  bossArchetypeId: string
+  bossArchetypeName: string
+  supplyCaravan: SupplyCaravan3DState
   bolts: Bolt3DEntity[]
 }
 
@@ -144,18 +168,18 @@ export function createInitialBridge3DSimState(
   const baseBossHp = Math.max(150, initialBossHp)
   const initialRngState = (Math.floor(seed) ^ 0x9e3779b9) >>> 0 || 42
   const enemies: Enemy3DEntity[] = Array.from({ length: INITIAL_ENEMY_COUNT }, (_, idx) => {
-    const isMiniBoss = idx % 5 === 0
+    const isMiniBoss = idx === 7 || idx === 14
     const row = Math.floor(idx / 4)
     const col = (idx % 4) - 1.5
-    const maxHp = isMiniBoss ? 176 : 18
+    const maxHp = isMiniBoss ? 176 : 14
     return {
       id: idx + 1,
       x: col * 1.6,
-      z: -29 - row * 10.5 - (idx % 3) * 1.8,
+      z: -35 - row * 10.5 - (idx % 3) * 1.8,
       hp: maxHp,
       maxHp,
       isMiniBoss,
-      speedZ: isMiniBoss ? 2.45 : 3.45 + (idx % 3) * 0.4,
+      speedZ: isMiniBoss ? 2.15 : 2.55 + (idx % 3) * 0.25,
       contactDamage: isMiniBoss ? 3 : 1,
       hitFlashMs: 0,
     }
@@ -178,8 +202,8 @@ export function createInitialBridge3DSimState(
 
   const rightGates: SideRouteGate3DEntity[] = [
     { id: 'rg_0', route: 'RIGHT', z: -12, bonusSoldiers: 10, label: '+10', collectedInPass: false },
-    { id: 'rg_1', route: 'RIGHT', z: -28, bonusSoldiers: 50, label: '+50', collectedInPass: false },
-    { id: 'rg_2', route: 'RIGHT', z: -48, bonusSoldiers: 99, label: '+99', collectedInPass: false },
+    { id: 'rg_1', route: 'RIGHT', z: -28, bonusSoldiers: 25, label: '+25', collectedInPass: false },
+    { id: 'rg_2', route: 'RIGHT', z: -48, bonusSoldiers: 50, label: '+50', collectedInPass: false },
     { id: 'rg_3', route: 'RIGHT', z: -58, bonusSoldiers: 99, label: '+99', collectedInPass: false },
   ]
 
@@ -197,7 +221,7 @@ export function createInitialBridge3DSimState(
   return {
     rngState: initialRngState,
     sectorIndex: 1,
-    heroWorldX: laneNormToWorldX(-0.48),
+    heroWorldX: laneNormToWorldX(-0.24),
     activeRoute: 'CENTER',
     shotProfile: computeShotProfile(5),
     fireCooldownSec: 0,
@@ -209,6 +233,8 @@ export function createInitialBridge3DSimState(
     rightAltarZ: -18.0,
     rightAltarCollectedInPass: false,
     rightMathBonusCharges: 0,
+    rightBuffActiveTimerMs: 0,
+    rightBuffMaxTimerMs: 15000,
     mathChallengesSolved: 0,
     pendingRightGateBonus: 0,
     timeInRightRouteSec: 0,
@@ -237,22 +263,41 @@ export function createInitialBridge3DSimState(
     enemies,
     bossHp: baseBossHp,
     bossMaxHp: baseBossHp,
-    bossZ: -66,
+    bossZ: -68,
     bossHitFlashMs: 0,
+    bossLifecycle: 'MARCHING',
+    bossRespawnTimerMs: 0,
+    bossMeleeCooldownMs: 1000,
+    bossArchetypeIndex: 0,
+    bossArchetypeId: 'colosso_rubro',
+    bossArchetypeName: 'Brutus, Colosso Rubro',
+    supplyCaravan: {
+      active: false,
+      x: 0,
+      z: -48,
+      hp: 100,
+      maxHp: 100,
+      hitFlashMs: 0,
+      rewardsGrantedCount: 0,
+    },
     bolts,
   }
 }
 
 /**
- * Aplica dano de cerco ao bloco congelado da Rota Direita (888 HP) e libera cargas
- * para os buffs mais potentes da Rota Direita quando o jogador resolve um Desafio Matemático (🧮 BÔNUS).
+ * V8 Fase 2: Ativa por alguns segundos (12s a 24s conforme o grau da conta) as cores,
+ * os buffs e a Metralhadora da Rota Direita quando o jogador resolve um Desafio Matemático (🧮).
  */
 export function applyMathBonusToRightWeapon(
   sim: Bridge3DSimState,
   siegeDamage = 296,
-): { unlockedWeapon: boolean; bonusSoldiersFromPendingGate: number } {
+  tier: 1 | 2 | 3 | 4 = 2,
+): { unlockedWeapon: boolean; bonusSoldiersFromPendingGate: number; activeDurationMs: number } {
   sim.mathChallengesSolved += 1
-  sim.rightMathBonusCharges += 2
+  const durationMs = RIGHT_CORRIDOR_TIMED_POLICIES.durationMsByTier[tier] ?? 15000
+  sim.rightBuffActiveTimerMs = durationMs
+  sim.rightBuffMaxTimerMs = durationMs
+  sim.rightMathBonusCharges = Math.max(2, Math.ceil(durationMs / 4000))
 
   const pendingBonus = sim.pendingRightGateBonus
   sim.pendingRightGateBonus = 0
@@ -261,20 +306,35 @@ export function applyMathBonusToRightWeapon(
   if (!sim.rightFrozenWeapon.unlocked) {
     sim.rightFrozenWeapon.hp = Math.max(0, sim.rightFrozenWeapon.hp - siegeDamage)
     sim.rightFrozenWeapon.hitFlashMs = 260
-    if (sim.rightFrozenWeapon.hp <= 0) {
-      sim.rightFrozenWeapon.unlocked = true
-      sim.rightWeaponLevel += 1
-      unlockedWeapon = true
-    }
+    sim.rightFrozenWeapon.unlocked = true
+    sim.rightWeaponLevel += 1
+    unlockedWeapon = true
   } else {
     sim.rightWeaponLevel += 1
     sim.rightFrozenWeapon.hitFlashMs = 260
     unlockedWeapon = true
   }
 
+  // Garantir que portões/arma da direita ainda na ponte possam ser coletados na janela ativa
+  if (sim.leftFrozenBlock.z <= -7.5) {
+    sim.leftFrozenBlock.z = -5.5
+  }
+  if (sim.rightFrozenWeapon.z <= -37.5) {
+    sim.rightFrozenWeapon.z = -24.0
+  }
+  if (sim.rightFrozenWeapon.z <= BRIDGE_3D_DIMENSIONS.zPlayerLine + 1.25) {
+    sim.rightFrozenWeapon.collectedInPass = false
+  }
+  for (const g of sim.rightGates) {
+    if (g.z <= BRIDGE_3D_DIMENSIONS.zPlayerLine + 1.25) {
+      g.collectedInPass = false
+    }
+  }
+
   return {
     unlockedWeapon,
     bonusSoldiersFromPendingGate: pendingBonus,
+    activeDurationMs: durationMs,
   }
 }
 
@@ -296,11 +356,27 @@ export function stepBridge3DSim(
 ): void {
   const clampedDt = Math.min(0.05, Math.max(0.001, dtSec))
   const dtMs = clampedDt * 1000
+  const timerDtMs = Math.min(250, Math.max(1, dtSec * 1000))
 
   // 1. Posição 3D horizontal livre do Herói e rota ativa (LEFT, CENTER, RIGHT)
   const targetWorldX = laneNormToWorldX(input.laneNormX)
-  sim.heroWorldX += (targetWorldX - sim.heroWorldX) * Math.min(1, clampedDt * 15)
+  sim.heroWorldX += (targetWorldX - sim.heroWorldX) * Math.min(1, clampedDt * 18)
   sim.activeRoute = resolveRouteFromWorldX(sim.heroWorldX)
+
+  // V8 Fase 2: Decrementar janela ativa da Rota Direita em tempo real (timerDtMs). Quando zera, volta para gelo/cinza desativado!
+  if (input.isRunningOrBattle && sim.rightBuffActiveTimerMs > 0) {
+    sim.rightBuffActiveTimerMs = Math.max(0, sim.rightBuffActiveTimerMs - timerDtMs)
+    sim.rightMathBonusCharges =
+      sim.rightBuffActiveTimerMs > 0
+        ? Math.max(1, Math.ceil(sim.rightBuffActiveTimerMs / 4000))
+        : 0
+    if (sim.rightBuffActiveTimerMs <= 0) {
+      sim.rightFrozenWeapon.unlocked = false
+    }
+  } else if (sim.rightBuffActiveTimerMs <= 0) {
+    sim.rightMathBonusCharges = 0
+    sim.rightFrozenWeapon.unlocked = false
+  }
 
   if (sim.activeRoute === 'RIGHT') {
     sim.timeInRightRouteSec += clampedDt
@@ -314,7 +390,7 @@ export function stepBridge3DSim(
   // 2. Perfil dinâmico de tiro escalado pelos pontos atuais + bônus de armas coletadas nas rotas laterais
   const baseProfile = computeShotProfile(input.currentArmy)
   const hasLeftBoost = sim.leftFrozenBlock.unlocked || sim.leftCannonLevel > 0
-  const hasRightBoost = sim.rightFrozenWeapon.unlocked || sim.rightWeaponLevel > 0
+  const hasRightBoost = sim.rightBuffActiveTimerMs > 0 && (sim.rightFrozenWeapon.unlocked || sim.rightWeaponLevel > 0)
   const extraBarrels = (hasLeftBoost ? 1 : 0) + (hasRightBoost ? 1 : 0)
   const dmgMult =
     (hasRightBoost ? 2.0 + sim.rightWeaponLevel * 0.45 : 1.0) *
@@ -347,12 +423,95 @@ export function stepBridge3DSim(
       en.hitFlashMs = Math.max(0, en.hitFlashMs - dtMs)
     }
   }
-
-  // Posição Z do Mega-Boss (aproxima-se no final da corrida ou no modo combate)
-  sim.bossZ = -68 + input.progress * 42
+  if (sim.supplyCaravan.hitFlashMs > 0) {
+    sim.supplyCaravan.hitFlashMs = Math.max(0, sim.supplyCaravan.hitFlashMs - dtMs)
+  }
 
   if (!input.isRunningOrBattle) {
     return
+  }
+
+  let attritionLossThisFrame = 0
+  let coinsEarnedThisFrame = 0
+  let damageDealtThisFrame = 0
+
+  // V8 Fase 3: Ciclo de Vida Real do Mega-Boss (MARCHING -> MELEE_CLASH -> INTERMISSION 7.5s com Caravana Dourada)
+  const currentSectorSpec = computeSectorBossSpec(sim.sectorIndex)
+  const meleeLineZ = BRIDGE_3D_DIMENSIONS.zPlayerLine - 2.8 // Z = +7.7 (frente do esquadrão)
+  const marchDt = timerDtMs / 1000
+
+  if (sim.bossLifecycle === 'INTERMISSION') {
+    sim.bossHp = 0
+    sim.bossRespawnTimerMs = Math.max(0, sim.bossRespawnTimerMs - timerDtMs)
+
+    // Avançar Caravana / Baú de Suprimentos Dourado na Rota Central durante os 7.5s sem Boss
+    if (sim.supplyCaravan.active) {
+      sim.supplyCaravan.z += 2.4 * marchDt
+      if (
+        Math.abs(sim.supplyCaravan.z - BRIDGE_3D_DIMENSIONS.zPlayerLine) <= 1.8 &&
+        sim.activeRoute === 'CENTER'
+      ) {
+        sim.supplyCaravan.active = false
+        const chestBonus = Math.max(
+          15,
+          Math.round(currentSectorSpec.sectorClearRewardSoldiers * 0.45),
+        )
+        coinsEarnedThisFrame += 20
+        callbacks.onSideRouteReward(
+          'LEFT',
+          chestBonus,
+          `🎁 Baú do Setor Coletado! +${formatArmy(chestBonus, 'compact')} 🛡️`,
+        )
+      } else if (sim.supplyCaravan.z > BRIDGE_3D_DIMENSIONS.zPlayerLine + 3.0) {
+        sim.supplyCaravan.active = false
+      }
+    }
+
+    // Quando o intermission de 7.5s termina, nasce o próximo Boss na Fortaleza Norte com arquétipo novo!
+    if (sim.bossRespawnTimerMs <= 0) {
+      sim.supplyCaravan.active = false
+      sim.bossLifecycle = 'MARCHING'
+      const nextSpec = computeSectorBossSpec(sim.sectorIndex)
+      sim.bossMaxHp = nextSpec.bossHp
+      sim.bossHp = nextSpec.bossHp
+      sim.bossZ = -72
+      sim.bossMeleeCooldownMs = 1000
+      sim.bossArchetypeIndex = nextSpec.archetype.index
+      sim.bossArchetypeId = nextSpec.archetype.id
+      sim.bossArchetypeName = nextSpec.archetype.namePt
+      for (const b of sim.bolts) {
+        if (b.z < -45) {
+          b.active = false
+        }
+      }
+    }
+  } else {
+    // Boss vivo: caminha continuamente em direção ao jogador (+Z) e golpeia pesado ao encostar!
+    sim.bossArchetypeIndex = currentSectorSpec.archetype.index
+    sim.bossArchetypeId = currentSectorSpec.archetype.id
+    sim.bossArchetypeName = currentSectorSpec.archetype.namePt
+
+    if (sim.bossZ < meleeLineZ) {
+      sim.bossLifecycle = 'MARCHING'
+      sim.bossZ = Math.min(
+        meleeLineZ,
+        sim.bossZ + currentSectorSpec.marchSpeedZ * marchDt,
+      )
+    } else {
+      sim.bossZ = meleeLineZ
+      sim.bossLifecycle = 'MELEE_CLASH'
+      sim.bossMeleeCooldownMs -= timerDtMs
+      if (sim.bossMeleeCooldownMs <= 0) {
+        sim.bossMeleeCooldownMs = 1000
+        const isPlayerInCenter = sim.activeRoute === 'CENTER'
+        const strikeDmg = isPlayerInCenter
+          ? currentSectorSpec.meleeDamagePerStrike
+          : Math.max(3, Math.round(currentSectorSpec.meleeDamagePerStrike * 0.65))
+        attritionLossThisFrame += strikeDmg
+        sim.playerHitFlashMs = 360
+        sim.bossHitFlashMs = 220
+      }
+    }
   }
 
   // 3. Disparo contínuo 100% reto para frente (-Z) a partir da posição X do Herói
@@ -396,7 +555,7 @@ export function stepBridge3DSim(
       const g = sim.leftGates[i]
       const evolvedLeft = Math.max(
         baseLeftVals[i] ?? 1,
-        Math.round(leftScaleBase * (0.65 + (i % 3) * 0.35)),
+        Math.round(leftScaleBase * (0.6 + i * 0.28)),
       )
       g.bonusSoldiers = evolvedLeft
       g.label = `+${formatArmy(evolvedLeft, 'compact')}`
@@ -461,28 +620,34 @@ export function stepBridge3DSim(
     }
   }
 
-  // 4b. Rota Direita: Buffs SEMPRE evoluem ainda mais que os buffs normais da Rota Central,
-  // todos trazem 🧮 FAZER CONTA, e o jogador SÓ ganha se resolver a conta matemática!
-  const baseRightVals = [10, 50, 99, 99]
+  // 4b. Rota Direita: Buffs evoluem de forma equilibrada sem efeito composto explosivo intra-passagem!
+  const baseRightVals = [10, 25, 50, 99]
   const shouldScaleRight =
     input.currentArmy > 5 || sim.sectorIndex > 1 || sim.mathChallengesSolved > 0
   if (shouldScaleRight) {
     const refForce = Math.max(input.currentArmy, sim.bossMaxHp * 0.85, 25)
-    const mathEvolutionMult = Math.pow(1.45, Math.min(25, sim.mathChallengesSolved))
+    const mathEvolutionMult = 1 + Math.min(12, sim.mathChallengesSolved) * 0.18
     for (let i = 0; i < sim.rightGates.length; i++) {
       const g = sim.rightGates[i]
-      // Escala de 1.85x a 4.4x acima da referência para ser sempre mais potente que os portões centrais!
-      const potencyMult = (1.85 + i * 0.85) * mathEvolutionMult
-      const evolvedRight = Math.max(
+      const potencyMult = (0.35 + i * 0.22) * mathEvolutionMult
+      const targetRightVal = Math.max(
         baseRightVals[i] ?? 99,
-        refForce * potencyMult,
+        Math.round(refForce * potencyMult),
       )
-      g.bonusSoldiers = evolvedRight
-      g.label = `+${formatArmy(evolvedRight, 'compact')}`
+      // Evitar que coletar o portão i multiplique instantaneamente o portão i+1 no mesmo passe ativo,
+      // a menos que a escala do exército tenha mudado em mais de 4x (ex: novo setor ou salto exponencial).
+      const isCollectingActiveRight =
+        sim.activeRoute === 'RIGHT' && sim.rightBuffActiveTimerMs > 0
+      const ratioChange =
+        g.bonusSoldiers > 0 ? targetRightVal / g.bonusSoldiers : 999
+      if (!isCollectingActiveRight || ratioChange > 4.0 || ratioChange < 0.25) {
+        g.bonusSoldiers = targetRightVal
+        g.label = `+${formatArmy(targetRightVal, 'compact')}`
+      }
     }
   }
 
-  // Avançar Altar 🧮 FAZER CONTA e Metralhadora 888 na Rota Direita (+Z) para não ficarem parados!
+  // Avançar Altar 🧮 FAZER CONTA e Metralhadora 888 na Rota Direita (+Z)
   sim.rightAltarZ += sideScrollSpeed * clampedDt
   if (
     !sim.rightAltarCollectedInPass &&
@@ -492,10 +657,6 @@ export function stepBridge3DSim(
     sim.rightAltarCollectedInPass = true
     const targetBonus = sim.rightGates[2]?.bonusSoldiers ?? 99
     sim.pendingRightGateBonus = Math.max(sim.pendingRightGateBonus, targetBonus)
-    if (sim.timeInRightRouteSec >= 0.85 && sim.rightRoutePromptCooldownMs <= 0) {
-      sim.rightRoutePromptCooldownMs = 4500
-      callbacks.onRequireMathChallenge?.(sim.pendingRightGateBonus, '🧮 BÔNUS FAZER CONTA')
-    }
   }
   if (sim.rightAltarZ > BRIDGE_3D_DIMENSIONS.zPlayerLine + 3.0) {
     sim.rightAltarZ -= 60.0
@@ -508,11 +669,8 @@ export function stepBridge3DSim(
     sim.activeRoute === 'RIGHT' &&
     Math.abs(sim.rightFrozenWeapon.z - BRIDGE_3D_DIMENSIONS.zPlayerLine) <= 1.65
   ) {
-    sim.rightFrozenWeapon.collectedInPass = true
-    if (sim.rightFrozenWeapon.unlocked || sim.rightMathBonusCharges > 0) {
-      if (sim.rightMathBonusCharges > 0 && !sim.rightFrozenWeapon.unlocked) {
-        sim.rightMathBonusCharges -= 1
-      }
+    if (sim.rightBuffActiveTimerMs > 0) {
+      sim.rightFrozenWeapon.collectedInPass = true
       sim.rightFrozenWeapon.unlocked = true
       sim.rightWeaponLevel += 1
       const weaponBonus = Math.max(
@@ -525,16 +683,12 @@ export function stepBridge3DSim(
         `🔥 Metralhadora Nv.${sim.rightWeaponLevel} Coletada! +${formatArmy(weaponBonus, 'compact')}`,
       )
     } else {
-      // Sem fazer conta: não ganha a arma de graça, abre o Desafio Matemático!
+      // V8 Fase 2: Rota Direita cinza/congelada por padrão — permanece visível/congelada sem coletar nem abrir modal!
       const weaponPending = Math.max(
         sim.rightGates[2]?.bonusSoldiers ?? 99,
         input.currentArmy * 1.8,
       )
       sim.pendingRightGateBonus = Math.max(sim.pendingRightGateBonus, weaponPending)
-      if (sim.timeInRightRouteSec >= 0.85 && sim.rightRoutePromptCooldownMs <= 0) {
-        sim.rightRoutePromptCooldownMs = 4500
-        callbacks.onRequireMathChallenge?.(sim.pendingRightGateBonus, '🔥 METRALHADORA 888')
-      }
     }
   }
   if (sim.rightFrozenWeapon.z > BRIDGE_3D_DIMENSIONS.zPlayerLine + 3.0) {
@@ -547,7 +701,7 @@ export function stepBridge3DSim(
     sim.rightFrozenWeapon.level = nextWepLvl
     sim.rightFrozenWeapon.maxHp = nextWepHp
     sim.rightFrozenWeapon.hp = nextWepHp
-    sim.rightFrozenWeapon.unlocked = false
+    sim.rightFrozenWeapon.unlocked = sim.rightBuffActiveTimerMs > 0
     sim.rightFrozenWeapon.collectedInPass = false
   }
 
@@ -558,22 +712,18 @@ export function stepBridge3DSim(
       sim.activeRoute === 'RIGHT' &&
       Math.abs(g.z - BRIDGE_3D_DIMENSIONS.zPlayerLine) <= 1.25
     ) {
-      g.collectedInPass = true
-      // REGRA DE OURO DO USUÁRIO: Na Rota Direita, você SÓ ganha os buffs potentes se fizer a conta matemática!
-      if (sim.rightMathBonusCharges > 0) {
-        sim.rightMathBonusCharges -= 1
+      // V8 Fase 2: Os buffs da Rota Direita só são coletados e concedem soldados quando a janela temporizada pós-conta está ativa!
+      if (sim.rightBuffActiveTimerMs > 0) {
+        g.collectedInPass = true
+        const remSec = Math.max(1, Math.ceil(sim.rightBuffActiveTimerMs / 1000))
         callbacks.onSideRouteReward(
           'RIGHT',
           g.bonusSoldiers,
-          `🧮 Super Buff ${g.label} (Conta Resolvida!)`,
+          `⚡ Super Buff ${g.label} (${remSec}s Ativo!)`,
         )
       } else {
-        // Sem carga de conta resolvida: 0 soldados grátis, guarda o super-buff pendente e abre a conta!
+        // Quando cinza/congelado: permanece visível como bloqueado, 0 soldados grátis e zero modal intrusivo automático!
         sim.pendingRightGateBonus = Math.max(sim.pendingRightGateBonus, g.bonusSoldiers)
-        if (sim.timeInRightRouteSec >= 0.85 && sim.rightRoutePromptCooldownMs <= 0) {
-          sim.rightRoutePromptCooldownMs = 4500
-          callbacks.onRequireMathChallenge?.(sim.pendingRightGateBonus, g.label)
-        }
       }
     }
     if (g.z > BRIDGE_3D_DIMENSIONS.zPlayerLine + 3.0) {
@@ -582,26 +732,8 @@ export function stepBridge3DSim(
     }
   }
 
-  // Se o jogador tocou em algum buff/altar/metralhadora da Rota Direita antes de completar 0.85s na rota,
-  // dispara o Desafio Matemático assim que o jogador permanecer >= 0.85s na rota.
-  if (
-    sim.activeRoute === 'RIGHT' &&
-    sim.pendingRightGateBonus > 0 &&
-    sim.rightMathBonusCharges === 0 &&
-    sim.timeInRightRouteSec >= 0.85 &&
-    sim.rightRoutePromptCooldownMs <= 0
-  ) {
-    sim.rightRoutePromptCooldownMs = 4500
-    callbacks.onRequireMathChallenge?.(
-      sim.pendingRightGateBonus,
-      `+${formatArmy(sim.pendingRightGateBonus, 'compact')}`,
-    )
-  }
-
   // 5. Movimento dos Projéteis Retos (-Z) e Colisões 3D nas 3 Rotas
   let activeCount = 0
-  let coinsEarnedThisFrame = 0
-  let damageDealtThisFrame = 0
 
   for (const bolt of sim.bolts) {
     if (!bolt.active) continue
@@ -649,7 +781,7 @@ export function stepBridge3DSim(
       sim.rightFrozenWeapon.hitFlashMs = 160
       bolt.active = false
       if (sim.rightFrozenWeapon.hp <= 0) {
-        if (sim.rightMathBonusCharges > 0) {
+        if (sim.rightBuffActiveTimerMs > 0) {
           sim.rightFrozenWeapon.unlocked = true
           const unlockWepBonus = Math.max(15, Math.round(input.currentArmy * 0.5))
           callbacks.onSideRouteReward(
@@ -658,16 +790,8 @@ export function stepBridge3DSim(
             `🔥 Metralhadora 888 Desbloqueada! +${formatArmy(unlockWepBonus, 'compact')}`,
           )
         } else {
-          // Precisa resolver a conta para destravar definitivamente a Metralhadora da Rota Direita!
+          // Permanece congelada em 1 HP até que o jogador resolva uma conta matemática (🧮)!
           sim.rightFrozenWeapon.hp = 1
-          if (sim.timeInRightRouteSec >= 0.5 && sim.rightRoutePromptCooldownMs <= 0) {
-            sim.rightRoutePromptCooldownMs = 4500
-            sim.pendingRightGateBonus = Math.max(
-              sim.pendingRightGateBonus,
-              sim.rightGates[2]?.bonusSoldiers ?? 99,
-            )
-            callbacks.onRequireMathChallenge?.(sim.pendingRightGateBonus, '🔥 METRALHADORA 888')
-          }
         }
       }
       continue
@@ -738,49 +862,88 @@ export function stepBridge3DSim(
       }
       if (hitEnemy) continue
 
-      // 5e. Colisão com o Mega-Boss do Setor
-      if (Math.abs(bolt.z - sim.bossZ) < 3.4 && Math.abs(bolt.x) < 3.4) {
-        const effectiveBossDmg =
-          input.progress >= 0.45 || input.isBattlePhase
-            ? bolt.damage
-            : Math.max(1, Math.ceil(bolt.damage * 0.25))
-        // No Modo Campanha (!infiniteBridgeMode) ou durante a fase BATTLE,
-        // o Mega-Boss mantém uma reserva blindada (20% HP) para o embate final na muralha,
-        // garantindo que sim.sectorIndex nunca dessincronize do HUD!
-        const minBossHpFloor =
-          !input.infiniteBridgeMode || input.isBattlePhase
-            ? Math.max(18, Math.round(sim.bossMaxHp * 0.2))
-            : 0
+      // 5e. Colisão com a Caravana / Baú de Suprimentos Dourado durante o INTERMISSION (7.5s sem Boss)
+      if (
+        sim.bossLifecycle === 'INTERMISSION' &&
+        sim.supplyCaravan.active &&
+        Math.abs(bolt.z - sim.supplyCaravan.z) < 2.4 &&
+        Math.abs(bolt.x - sim.supplyCaravan.x) < 2.4
+      ) {
+        sim.supplyCaravan.hp = Math.max(10, sim.supplyCaravan.hp - bolt.damage)
+        sim.supplyCaravan.hitFlashMs = 200
+        bolt.active = false
+        coinsEarnedThisFrame += 4
+        if (
+          sim.supplyCaravan.rewardsGrantedCount < 6 &&
+          sim.boltSeq % 5 === 0
+        ) {
+          sim.supplyCaravan.rewardsGrantedCount += 1
+          const caravanSoldiers = Math.max(
+            6,
+            Math.round(currentSectorSpec.sectorClearRewardSoldiers * 0.18),
+          )
+          callbacks.onSideRouteReward(
+            'LEFT',
+            caravanSoldiers,
+            `🎁 Suprimento Real +${formatArmy(caravanSoldiers, 'compact')} 🛡️`,
+          )
+        }
+        continue
+      }
+
+      // 5f. Colisão com o Mega-Boss do Setor (somente quando vivo e já emergiu do portão norte: z > -68.5)
+      if (
+        sim.bossLifecycle !== 'INTERMISSION' &&
+        sim.bossZ > -68.5 &&
+        Math.abs(bolt.z - sim.bossZ) < 3.4 &&
+        Math.abs(bolt.x) < 3.4
+      ) {
+        const effectiveBossDmg = Math.max(1, bolt.damage)
+        const minBossHpFloor = input.isBattlePhase
+          ? Math.max(18, Math.round(sim.bossMaxHp * 0.2))
+          : 0
         sim.bossHp = Math.max(minBossHpFloor, sim.bossHp - effectiveBossDmg)
         sim.bossHitFlashMs = 160
         bolt.active = false
         damageDealtThisFrame += Math.min(effectiveBossDmg, 6)
         if (sim.bossHp <= 0 && !input.isBattlePhase) {
+          // V8 Fase 3: O Boss MORRE de verdade e desaparece por 7.5s (INTERMISSION)!
+          // Sem curar instantaneamente no mesmo frame e sem rubber-banding com currentArmy!
+          const defeatedSpec = computeSectorBossSpec(sim.sectorIndex)
+          sim.bossHp = 0
           sim.sectorIndex += 1
-          const nextBossMax = Math.max(
-            150,
-            Math.min(
-              Math.round(150 * Math.pow(1.85, sim.sectorIndex - 1)),
-              Math.round(input.currentArmy * 12),
-            ),
-            Math.round(input.currentArmy * 1.85),
-          )
-          sim.bossMaxHp = nextBossMax
-          sim.bossHp = nextBossMax
+          const nextSpec = computeSectorBossSpec(sim.sectorIndex)
+          sim.bossLifecycle = 'INTERMISSION'
+          sim.bossRespawnTimerMs = 7500
+          sim.bossArchetypeIndex = nextSpec.archetype.index
+          sim.bossArchetypeId = nextSpec.archetype.id
+          sim.bossArchetypeName = nextSpec.archetype.namePt
+
+          // Spawnar Caravana / Baú Dourado de Recompensa bem visível na Rota Central durante os 7.5s de Intermission
+          sim.supplyCaravan = {
+            active: true,
+            x: 0,
+            z: Math.max(-24, Math.min(-14, sim.bossZ - 2)),
+            hp: Math.max(100, Math.round(defeatedSpec.bossHp * 0.5)),
+            maxHp: Math.max(100, Math.round(defeatedSpec.bossHp * 0.5)),
+            hitFlashMs: 260,
+            rewardsGrantedCount: 0,
+          }
+
           const sectorReward = Math.max(
-            10 + sim.sectorIndex * 5,
-            Math.round(input.currentArmy * 0.12),
+            defeatedSpec.sectorClearRewardSoldiers,
+            Math.round(input.currentArmy * 0.22),
           )
+          coinsEarnedThisFrame += defeatedSpec.sectorClearRewardCoins
+
           // Reativar barris para o novo setor
           for (const barrel of sim.barrels) {
             barrel.active = true
-            barrel.maxHp = Math.max(
-              112 + (sim.sectorIndex - 1) * 45,
-              Math.round(nextBossMax * 0.08),
-            )
+            barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
             barrel.hp = barrel.maxHp
           }
           callbacks.onSectorBossDefeated(sim.sectorIndex, sectorReward)
+          break
         }
         continue
       }
@@ -794,7 +957,7 @@ export function stepBridge3DSim(
   sim.activeBoltsCount = activeCount
 
   // 6. Avanço da Horda e Mini-Bosses (+Z) e Dano Real de Contato nos Soldados do Jogador
-  let attritionLossThisFrame = 0
+  let hordeContactLoss = 0
   for (const en of sim.enemies) {
     en.z += en.speedZ * clampedDt
     if (en.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.6) {
@@ -804,7 +967,7 @@ export function stepBridge3DSim(
       const contactDmg = isDirectHitOnHero
         ? en.contactDamage
         : Math.max(1, Math.floor(en.contactDamage * 0.5))
-      attritionLossThisFrame += contactDmg
+      hordeContactLoss += contactDmg
       sim.playerHitFlashMs = 280
       // Respawn lá no fundo da ponte perto do castelo
       en.z = -84 - nextSimRandom(sim) * 14
@@ -814,6 +977,15 @@ export function stepBridge3DSim(
       en.hp = en.maxHp
     }
   }
+  if (hordeContactLoss > 0) {
+    // Enquanto o Boss ainda está marchando (antes do MELEE_CLASH), a Horda drena o exército até o piso de 3 soldados,
+    // permitindo que o Boss alcance a linha do jogador (+7.7) e desfira o golpe corpo a corpo fatal!
+    const effectiveHordeLoss =
+      sim.bossLifecycle === 'MELEE_CLASH'
+        ? hordeContactLoss
+        : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 3))
+    attritionLossThisFrame += effectiveHordeLoss
+  }
 
   if (
     coinsEarnedThisFrame > 0 ||
@@ -822,7 +994,7 @@ export function stepBridge3DSim(
   ) {
     callbacks.onEnemyKilled(
       coinsEarnedThisFrame,
-      Math.max(1, damageDealtThisFrame),
+      damageDealtThisFrame,
       attritionLossThisFrame,
     )
   }

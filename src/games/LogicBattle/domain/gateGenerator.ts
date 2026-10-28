@@ -81,13 +81,22 @@ function buildFairPairSegment(
   const remainingGap = Math.max(4, enemyTotalForce - currentBestArmy)
   const rawAddGood = isAlreadyAboveEnemy
     ? currentBestArmy > 30
-      ? Math.max(4, Math.round(currentBestArmy * (0.1 + (index % 3) * 0.04)))
+      ? Math.max(
+          4,
+          Math.round(
+            currentBestArmy *
+              (enemyTotalForce > 120
+                ? 0.045 + index * 0.012
+                : 0.1 + (index % 3) * 0.04),
+          ),
+        )
       : rng.nextInt(2, 5)
     : Math.max(
         4,
         Math.min(
           Math.max(10, Math.ceil(remainingGap * 0.25)),
-          Math.round(currentBestArmy * 0.28) + rng.nextInt(3, 8),
+          Math.round(currentBestArmy * (enemyTotalForce > 120 ? 0.16 + index * 0.015 : 0.28)) +
+            rng.nextInt(3, 8),
         ),
       )
   // Evita repetir exatamente a mesma placa '+ X' em segmentos consecutivos
@@ -95,8 +104,8 @@ function buildFairPairSegment(
   if (usedLabels && usedLabels.has(`+ ${fmtGateVal(addGood)}`)) {
     const jitter =
       rawAddGood >= 1000
-        ? Math.max(10, Math.round(rawAddGood * 0.12 * ((index % 3) + 1)))
-        : (index % 3) + 1
+        ? Math.max(10, Math.round(rawAddGood * (0.09 + index * 0.045)))
+        : index + 1
     addGood = rawAddGood + jitter
   }
   const addModest = Math.max(1, Math.floor(addGood * 0.35) + (index % 2))
@@ -112,12 +121,15 @@ function buildFairPairSegment(
       altGate = makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
     } else {
       bestGate = makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
-      const subAmt =
+      let subAmt =
         currentBestArmy <= 90 && enemyTotalForce <= 120
           ? Math.max(1, Math.min(Math.floor(currentBestArmy * 0.16), 8))
-          : Math.max(2, Math.floor(currentBestArmy * (0.18 + (index % 3) * 0.06)))
+          : Math.max(2, Math.floor(currentBestArmy * (0.12 + index * 0.032)))
+      if (usedLabels && usedLabels.has(`− ${fmtGateVal(subAmt)}`)) {
+        subAmt = Math.max(2, Math.round(subAmt * (1.14 + index * 0.05)) + index + 1)
+      }
       altGate =
-        currentBestArmy > 6 && rng.nextFloat() < 0.5
+        currentBestArmy > 6 && (enemyTotalForce > 120 || rng.nextFloat() < 0.5)
           ? makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
           : makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
     }
@@ -186,7 +198,9 @@ function buildCalibratedFinalSegment(
   )
   const neededDelta =
     runningBestBeforeFinal >= minBestTarget
-      ? rng.nextInt(3, 6)
+      ? enemyTotalForce > 120
+        ? Math.max(6, Math.round(runningBestBeforeFinal * 0.06))
+        : rng.nextInt(3, 6)
       : Math.max(6, minBestTarget - runningBestBeforeFinal)
 
   const bestGate = makeSimpleGate(
@@ -320,6 +334,7 @@ function tryBuildRunWithSeed(
   const twinTargetIndex = 2
   let maxBestAllowed = Math.max(
     Math.ceil(enemy.totalForce * GATE_POLICIES.oracleMaxBestRatio),
+    enemy.totalForce > 120 ? Math.ceil(n0 * 5.5) : 0,
     n0 + 95,
   )
 
@@ -523,10 +538,10 @@ export function generateRun(params: GenerateRunParams): RunPlan {
     { length: biome.segmentCount },
     (_, idx) => {
       const zPosition = Number(((idx + 1) / (biome.segmentCount + 1)).toFixed(4))
-      const segAdd = Math.max(5, Math.round(stepAdd * (0.8 + (idx % 3) * 0.2)))
+      const segAdd = Math.max(5, Math.round(stepAdd * (0.72 + idx * 0.07)))
       const subPenalty = Math.max(
         1,
-        Math.round(Math.max(n0, segAdd) * (0.22 + (idx % 4) * 0.1)),
+        Math.round(Math.max(n0, segAdd) * (0.14 + idx * 0.035)),
       )
       const gBest =
         idx % 3 === 1 && n0 >= 10

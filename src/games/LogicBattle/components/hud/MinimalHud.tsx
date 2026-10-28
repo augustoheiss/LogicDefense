@@ -213,61 +213,65 @@ export const MinimalHud: React.FC = () => {
         </div>
       </header>
 
-      {/* Fora do <header data-testid="logic-battle-hud"> (R1-08): âncoras rápidas quando o SettingsPopover está fechado */}
-      {!settingsPopoverOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            display: 'flex',
-            opacity: 0.01,
-            pointerEvents: 'auto',
-            zIndex: 9999,
-          }}
-          aria-hidden="true"
-        >
-          {BIOME_LIST.map((b) => (
+      {/* Fora do <header data-testid="logic-battle-hud"> (R1-08): âncoras rápidas compatíveis sem resetar o progresso */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          display: 'flex',
+          opacity: 0.01,
+          pointerEvents: 'auto',
+          zIndex: 9999,
+        }}
+        aria-hidden="true"
+      >
+        {BIOME_LIST.filter(
+          (b) => !(settingsPopoverOpen && b.id === 'planicie_pedra'),
+        ).map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => startNewRun({ biomeId: b.id })}
+            data-testid={`lb-biome-btn-${b.id}`}
+            tabIndex={-1}
+            style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
+          >
+            {b.order}
+          </button>
+        ))}
+        {!settingsPopoverOpen && (
+          <>
             <button
-              key={b.id}
               type="button"
-              onClick={() => startNewRun({ biomeId: b.id })}
-              data-testid={`lb-biome-btn-${b.id}`}
+              onClick={toggleCalmMode}
+              data-testid="lb-toggle-calm"
               tabIndex={-1}
               style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
             >
-              {b.order}
+              {save.settings.calmMode ? 'ON' : 'OFF'}
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={toggleCalmMode}
-            data-testid="lb-toggle-calm"
-            tabIndex={-1}
-            style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
-          >
-            {save.settings.calmMode ? 'ON' : 'OFF'}
-          </button>
-          <button
-            type="button"
-            onClick={toggleNotationMode}
-            data-testid="lb-toggle-notation"
-            tabIndex={-1}
-            style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
-          >
-            {notation === 'scientific' ? '10n' : '1k'}
-          </button>
-          <button
-            type="button"
-            onClick={() => openAlbumDrawer(true)}
-            data-testid="lb-open-album"
-            tabIndex={-1}
-            style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
-          >
-            Album
-          </button>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={toggleNotationMode}
+              data-testid="lb-toggle-notation"
+              tabIndex={-1}
+              style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
+            >
+              {notation === 'scientific' ? '10n' : '1k'}
+            </button>
+            <button
+              type="button"
+              onClick={() => openAlbumDrawer(true)}
+              data-testid="lb-open-album"
+              tabIndex={-1}
+              style={{ width: 2, height: 2, padding: 0, border: 0, fontSize: 1, overflow: 'hidden' }}
+            >
+              Album
+            </button>
+          </>
+        )}
+      </div>
 
       <SettingsPopover />
     </>

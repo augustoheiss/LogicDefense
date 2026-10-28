@@ -68,11 +68,11 @@ export function projectBridgePoint(
  */
 export function getLaneCenterNormX(laneIndex: number, laneCount: 2 | 3): number {
   if (laneCount === 2) {
-    return laneIndex === 0 ? -0.48 : 0.48
+    return laneIndex === 0 ? -0.24 : 0.24
   }
-  if (laneIndex === 0) return -0.64
+  if (laneIndex === 0) return -0.32
   if (laneIndex === 1) return 0
-  return 0.64
+  return 0.32
 }
 
 /**
@@ -82,7 +82,7 @@ export function resolveLaneIndexFromNormX(laneNormX: number, laneCount: 2 | 3): 
   if (laneCount === 2) {
     return laneNormX < 0 ? 0 : 1
   }
-  if (laneNormX < -0.22) return 0
-  if (laneNormX > 0.22) return 2
+  if (laneNormX < -0.14) return 0
+  if (laneNormX > 0.14) return 2
   return 1
 }

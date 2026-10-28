@@ -156,7 +156,9 @@ export function computeShotProfile(armyPoints: number): DynamicShotProfile {
     1,
     netGain >= 1e12
       ? netGain * 0.14
-      : Math.round(1 + netGain * 0.14 + Math.pow(logPower, 1.85) * 4),
+      : safePts < 35
+        ? Math.max(1, Math.round(1 + netGain * 0.03))
+        : Math.round(1 + netGain * 0.14 + Math.pow(logPower, 1.85) * 4),
   )
 
   const shotsPerSecond = Math.min(
@@ -171,9 +173,9 @@ export function computeShotProfile(armyPoints: number): DynamicShotProfile {
         ? 5
         : safePts >= 100
           ? 4
-          : safePts >= 30
+          : safePts >= 45
             ? 3
-            : safePts >= 10
+            : safePts >= 25
               ? 2
               : 1
 
@@ -210,22 +212,30 @@ export function computeShotProfile(armyPoints: number): DynamicShotProfile {
 }
 
 /**
+ * Políticas de ativação temporizada da Rota Direita (V8 Fase 2):
+ * Os buffs e armas da Rota Direita ficam congelados/cinzas por padrão e só
+ * ativam por alguns segundos após o jogador resolver uma conta matemática (🧮).
+ */
+export const RIGHT_CORRIDOR_TIMED_POLICIES = {
+  durationMsByTier: {
+    1: 12000, // Fácil: 12s de Rota Direita ativa
+    2: 15000, // Médio: 15s de Rota Direita ativa
+    3: 18000, // Difícil: 18s de Rota Direita ativa
+    4: 24000, // Problema: 24s de Rota Direita ativa
+  } as Record<1 | 2 | 3 | 4, number>,
+} as const
+
+/**
  * Converte a posição normalizada do jogador (`laneX` ∈ [-1, +1])
- * para coordenada 3D real no eixo X cobrindo as 3 Rotas (`[-10.4, +10.4]`),
- * alinhando as faixas centrais (`±0.48`) exatamente com os portões da Rota Central (`X = ±2.4`)
- * e evitando que o herói fique em cima das muretas divisórias (`X = ±5.5`).
+ * para coordenada 3D real no eixo X cobrindo as 3 Rotas (`[-10.6, +10.6]`)
+ * através de uma bijeção linear C^∞ 100% contínua e livre (ZERO pulinhos/degraus!).
  */
 export function laneNormToWorldX(laneNormX: number): number {
-  const clamped = Math.max(-1, Math.min(1, laneNormX))
-  const abs = Math.abs(clamped)
-  const sign = Math.sign(clamped)
-  if (abs <= 0.55) {
-    // Faixa Central: ±0.48 mapeia exatamente para X = ±2.40 (centro dos portões da Rota Central)
-    return clamped * 5.0
-  }
-  // Rotas Laterais (Esquerda X ≈ -8.65 e Direita X ≈ +8.65), saltando a mureta em ±5.5
-  const sideT = (abs - 0.55) / 0.45
-  return sign * (6.4 + sideT * 3.9)
+  const clamped = Math.max(
+    -1,
+    Math.min(1, Number.isFinite(laneNormX) ? laneNormX : 0),
+  )
+  return clamped * 10.6
 }
 
 /**
@@ -235,4 +245,147 @@ export function resolveRouteFromWorldX(worldX: number): BridgeRouteId {
   if (worldX < BRIDGE_3D_DIMENSIONS.parapetLeftDividerX) return 'LEFT'
   if (worldX > BRIDGE_3D_DIMENSIONS.parapetRightDividerX) return 'RIGHT'
   return 'CENTER'
+}
+
+export interface BossArchetype3DSpec {
+  readonly index: 0 | 1 | 2 | 3 | 4
+  readonly id:
+    | 'colosso_rubro'
+    | 'tita_crio_gelido'
+    | 'senhor_magma'
+    | 'aracno_mecha'
+    | 'imperador_quiliarca'
+  readonly namePt: string
+  readonly titlePt: string
+  readonly primaryColor: string
+  readonly secondaryColor: string
+  readonly accentColor: string
+  readonly plaqueBgColor: string
+  readonly weaponType:
+    | 'WARHAMMER'
+    | 'ICE_TRIDENT'
+    | 'MAGMA_DUAL_CLUB'
+    | 'SPIDER_CANNONS'
+    | 'SOLAR_LONGSWORD'
+}
+
+/**
+ * V8 Fase 3: Os 5 Arquétipos 3D Distintos de Mega-Boss que ciclam a cada Setor.
+ */
+export const BOSS_ARCHETYPES_3D: readonly BossArchetype3DSpec[] = [
+  {
+    index: 0,
+    id: 'colosso_rubro',
+    namePt: 'Brutus, Colosso Rubro',
+    titlePt: 'Titã da Muralha',
+    primaryColor: '#7f1d1d',
+    secondaryColor: '#ca8a04',
+    accentColor: '#fef08a',
+    plaqueBgColor: '#991b1b',
+    weaponType: 'WARHAMMER',
+  },
+  {
+    index: 1,
+    id: 'tita_crio_gelido',
+    namePt: 'Vórtex, Titã Crio-Gélido',
+    titlePt: 'Senhor da Geada',
+    primaryColor: '#0e7490',
+    secondaryColor: '#38bdf8',
+    accentColor: '#e0f2fe',
+    plaqueBgColor: '#155e75',
+    weaponType: 'ICE_TRIDENT',
+  },
+  {
+    index: 2,
+    id: 'senhor_magma',
+    namePt: 'Ignis, Senhor de Magma',
+    titlePt: 'Forja Abissal',
+    primaryColor: '#1c1917',
+    secondaryColor: '#ea580c',
+    accentColor: '#fde047',
+    plaqueBgColor: '#9a3412',
+    weaponType: 'MAGMA_DUAL_CLUB',
+  },
+  {
+    index: 3,
+    id: 'aracno_mecha',
+    namePt: 'Aracno-Mecha Imperial',
+    titlePt: 'Autômato Blindado',
+    primaryColor: '#0f172a',
+    secondaryColor: '#10b981',
+    accentColor: '#6ee7b7',
+    plaqueBgColor: '#065f46',
+    weaponType: 'SPIDER_CANNONS',
+  },
+  {
+    index: 4,
+    id: 'imperador_quiliarca',
+    namePt: 'Imperador Quiliarca Dourado',
+    titlePt: 'Soberano Solar',
+    primaryColor: '#713f12',
+    secondaryColor: '#eab308',
+    accentColor: '#c084fc',
+    plaqueBgColor: '#6b21a8',
+    weaponType: 'SOLAR_LONGSWORD',
+  },
+] as const
+
+/**
+ * V8 Fase 3: Curva pura de HP do Boss 100% determinada pelo Setor (`sectorIndex`)
+ * e 0% dependente de `currentArmy` (Fim do Rubber-Banding!).
+ * Fazer contas na Rota Direita agora torna o jogador genuinamente mais forte que o Boss!
+ */
+export function computeSectorBossHp(sectorIndex: number): number {
+  const s = Math.max(
+    1,
+    Math.floor(Number.isFinite(sectorIndex) ? sectorIndex : 1),
+  )
+  if (s === 1) return 150
+  return Math.round(
+    150 * Math.pow(s, 1.45) * Math.pow(1.22, Math.min(s - 1, 25)),
+  )
+}
+
+export interface SectorBossDeterministicSpec {
+  readonly sectorIndex: number
+  readonly bossHp: number
+  readonly hordeHp: number
+  readonly totalForce: number
+  readonly archetype: BossArchetype3DSpec
+  readonly marchSpeedZ: number
+  readonly meleeDamagePerStrike: number
+  readonly sectorClearRewardSoldiers: number
+  readonly sectorClearRewardCoins: number
+}
+
+export function computeSectorBossSpec(
+  sectorIndex: number,
+): SectorBossDeterministicSpec {
+  const s = Math.max(
+    1,
+    Math.floor(Number.isFinite(sectorIndex) ? sectorIndex : 1),
+  )
+  const bossHp = computeSectorBossHp(s)
+  const hordeHp = s === 1 ? 30 : Math.max(25, Math.round(bossHp * 0.25))
+  const archetype =
+    BOSS_ARCHETYPES_3D[(s - 1) % BOSS_ARCHETYPES_3D.length] ??
+    BOSS_ARCHETYPES_3D[0]
+  const marchSpeedZ = Number(Math.min(4.2, 2.75 + (s - 1) * 0.16).toFixed(2))
+  const meleeDamagePerStrike = Math.max(4, Math.round(bossHp * 0.15))
+  const sectorClearRewardSoldiers = Math.max(
+    24,
+    Math.round(bossHp * 0.32 + s * 15),
+  )
+  const sectorClearRewardCoins = 25 + s * 20
+  return {
+    sectorIndex: s,
+    bossHp,
+    hordeHp,
+    totalForce: bossHp + hordeHp,
+    archetype,
+    marchSpeedZ,
+    meleeDamagePerStrike,
+    sectorClearRewardSoldiers,
+    sectorClearRewardCoins,
+  }
 }

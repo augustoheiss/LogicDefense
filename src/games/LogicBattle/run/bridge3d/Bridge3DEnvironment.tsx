@@ -14,8 +14,10 @@ import { BIOMES } from '../../config/biomes'
 import { formatArmy } from '../../domain/notation'
 import { useLogicBattleStore } from '../../state/useLogicBattleStore'
 import {
+  BOSS_ARCHETYPES_3D,
   BRIDGE_3D_DIMENSIONS,
   BRIDGE_3D_ROUTES,
+  computeSectorBossSpec,
 } from './bridge3dPolicies'
 import {
   applyMathBonusToRightWeapon,
@@ -56,12 +58,32 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   const waterRibsRef = useRef<THREE.Group | null>(null)
   const centerSegmentsGroupRef = useRef<THREE.Group | null>(null)
 
-  // Motor de Simulação 3D Determinístico (Fase 2: bridge3dSim.ts)
+  // Motor de Simulação 3D Determinístico (Fase 2: bridge3dSim.ts) hidratado com Checkpoint V8
   const simRef = useRef(
-    createInitialBridge3DSimState(
-      Math.max(150, enemy.totalForce),
-      useLogicBattleStore.getState().runPlan.seed,
-    ),
+    (() => {
+      const initStore = useLogicBattleStore.getState()
+      const hasExplicitSeed =
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).has('seed')
+      const cp = hasExplicitSeed ? null : initStore.save.activeRunCheckpoint
+      const initSpec = computeSectorBossSpec(Math.max(1, initStore.bridgeSectorIndex))
+      const sim = createInitialBridge3DSimState(
+        initSpec.bossHp,
+        initStore.runPlan.seed,
+      )
+      sim.sectorIndex = Math.max(1, initStore.bridgeSectorIndex)
+      sim.bossArchetypeIndex = initSpec.archetype.index
+      sim.bossArchetypeId = initSpec.archetype.id
+      sim.bossArchetypeName = initSpec.archetype.namePt
+      if (cp) {
+        sim.leftCannonLevel = Math.max(1, cp.leftCannonLevel ?? 1)
+        sim.rightWeaponLevel = Math.max(0, cp.rightWeaponLevel ?? 0)
+        sim.mathChallengesSolved = Math.max(0, cp.mathChallengesSolved ?? 0)
+        // V8 Fase 2: Rota Direita permanece congelada/cinza por padrão até ativar via conta (🧮)
+        sim.rightFrozenWeapon.unlocked = false
+      }
+      return sim
+    })(),
   )
   const lastMathSeqRef = useRef<number>(mathSolvedSeq)
   const lastRunIdRef = useRef<string>(useLogicBattleStore.getState().snapshot.runId)
@@ -81,7 +103,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   }, [])
 
   useFrame((state, delta) => {
-    const dt = Math.min(0.05, Math.max(0.004, delta))
+    const dt = Math.min(0.25, Math.max(0.004, delta))
     const live = useLogicBattleStore.getState()
     const snap = live.snapshot
 
@@ -90,26 +112,54 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       lastRunIdRef.current = snap.runId
       if (live.bridgeSectorIndex <= 1) {
         simRef.current = createInitialBridge3DSimState(
-          Math.max(150, snap.enemy.totalForce),
+          computeSectorBossSpec(1).bossHp,
           live.runPlan.seed,
         )
         lastMathSeqRef.current = live.lastSolvedMathRewardAt?.seq ?? 0
       } else {
         const nextSim = simRef.current
         nextSim.sectorIndex = live.bridgeSectorIndex
-        const nextBossMax = Math.max(150, snap.enemy.totalForce)
-        nextSim.bossMaxHp = nextBossMax
-        nextSim.bossHp = nextBossMax
+        const nextSpec = computeSectorBossSpec(live.bridgeSectorIndex)
+        nextSim.bossMaxHp = nextSpec.bossHp
+        nextSim.bossHp = nextSpec.bossHp
+        nextSim.bossLifecycle = 'MARCHING'
+        nextSim.bossRespawnTimerMs = 0
+        nextSim.bossZ = -72
+        nextSim.bossArchetypeIndex = nextSpec.archetype.index
+        nextSim.bossArchetypeId = nextSpec.archetype.id
+        nextSim.bossArchetypeName = nextSpec.archetype.namePt
+        nextSim.supplyCaravan.active = false
         for (const barrel of nextSim.barrels) {
           barrel.active = true
           barrel.maxHp = 112 + (live.bridgeSectorIndex - 1) * 45
           barrel.hp = barrel.maxHp
         }
       }
+    } else if (simRef.current.sectorIndex !== live.bridgeSectorIndex) {
+      const nextSim = simRef.current
+      nextSim.sectorIndex = live.bridgeSectorIndex
+      const nextSpec = computeSectorBossSpec(live.bridgeSectorIndex)
+      nextSim.bossMaxHp = nextSpec.bossHp
+      if (nextSim.bossLifecycle !== 'INTERMISSION') {
+        nextSim.bossHp = nextSpec.bossHp
+      }
+      nextSim.bossArchetypeIndex = nextSpec.archetype.index
+      nextSim.bossArchetypeId = nextSpec.archetype.id
+      nextSim.bossArchetypeName = nextSpec.archetype.namePt
+      const cp = live.save.activeRunCheckpoint
+      if (cp) {
+        nextSim.leftCannonLevel = Math.max(1, cp.leftCannonLevel ?? 1)
+        nextSim.rightWeaponLevel = Math.max(0, cp.rightWeaponLevel ?? 0)
+        nextSim.mathChallengesSolved = Math.max(0, cp.mathChallengesSolved ?? 0)
+      }
     }
 
     const isModalOpen =
-      live.activeMathChallenge !== null || live.activeRedemptionTokenId !== null
+      live.activeMathChallenge !== null ||
+      live.activeRedemptionTokenId !== null ||
+      live.albumDrawerOpen ||
+      live.codexDrawerSlug !== null ||
+      live.settingsPopoverOpen
     const isRunning = snap.phase === 'RUNNING' || snap.phase === 'CALM_WAIT'
     const isRunningOrBattle =
       !isModalOpen && (isRunning || snap.phase === 'BATTLE')
@@ -125,11 +175,12 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       ).__lbHeroPos = { x: smoothedLaneXRef.current, y: snap.progress }
     }
 
-    // Se o jogador resolveu uma conta no Altar 🧮 da Rota Direita, libera o Super Buff e destrava/evolui a Metralhadora!
+    // Se o jogador resolveu uma conta no Altar 🧮 da Rota Direita, libera o Super Buff temporizado e destrava/evolui a Metralhadora!
     const currentMathSeq = live.lastSolvedMathRewardAt?.seq ?? 0
     if (currentMathSeq > lastMathSeqRef.current) {
       lastMathSeqRef.current = currentMathSeq
-      const mathOutcome = applyMathBonusToRightWeapon(sim, 296)
+      const solvedTier = live.lastSolvedMathRewardAt?.tier ?? 2
+      const mathOutcome = applyMathBonusToRightWeapon(sim, 296, solvedTier)
       if (mathOutcome.bonusSoldiersFromPendingGate > 0) {
         live.applySideRouteReward(
           'RIGHT',
@@ -184,6 +235,10 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       const win = window as unknown as {
         __lbActiveProjectiles?: number
         __lbBridge3DTelemetry?: Record<string, unknown>
+        __lbSetBossZForAudit?: (z: number) => void
+      }
+      win.__lbSetBossZForAudit = (z: number) => {
+        sim.bossZ = z
       }
       win.__lbActiveProjectiles = Math.max(1, sim.activeBoltsCount)
       win.__lbBridge3DTelemetry = {
@@ -202,10 +257,24 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         rightWeaponUnlocked: sim.rightFrozenWeapon.unlocked,
         rightWeaponLevel: sim.rightWeaponLevel,
         rightMathBonusCharges: sim.rightMathBonusCharges,
+        rightBuffActiveTimerMs: Math.round(sim.rightBuffActiveTimerMs),
+        rightBuffMaxTimerMs: Math.round(sim.rightBuffMaxTimerMs),
+        rightCorridorState:
+          sim.rightBuffActiveTimerMs > 0 ? 'ACTIVE_TIMED' : 'LOCKED_FROSTED',
         leftGateLabels: sim.leftGates.map((g) => g.label),
         rightGateLabels: sim.rightGates.map((g) => g.label),
         bossHp: sim.bossHp,
         bossMaxHp: sim.bossMaxHp,
+        bossZ: Number(sim.bossZ.toFixed(2)),
+        bossLifecycle: sim.bossLifecycle,
+        bossRespawnTimerMs: Math.round(sim.bossRespawnTimerMs),
+        bossArchetypeIndex: sim.bossArchetypeIndex,
+        bossArchetypeId: sim.bossArchetypeId,
+        bossArchetypeName: sim.bossArchetypeName,
+        bossWeaponType:
+          BOSS_ARCHETYPES_3D[sim.bossArchetypeIndex]?.weaponType ?? 'WARHAMMER',
+        supplyCaravanActive: sim.supplyCaravan.active,
+        supplyCaravanZ: Number(sim.supplyCaravan.z.toFixed(2)),
         enemiesCount: sim.enemies.length,
         barrelsActive: sim.barrels.filter((b) => b.active).length,
         extraSoldiersCount:
@@ -381,30 +450,28 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
           />
         </mesh>
 
-        {/* Muretas Divisórias 3D entre as Rotas (X = -5.5 e X = +5.5) */}
+        {/* Faixas Guias Niveladas no Piso entre as Rotas (X = -5.5 e X = +5.5, zero obstáculo físico) */}
         <mesh
-          position={[BRIDGE_3D_DIMENSIONS.parapetLeftDividerX, 0.48, -42]}
-          castShadow
+          position={[BRIDGE_3D_DIMENSIONS.parapetLeftDividerX, 0.09, -42]}
           receiveShadow
         >
-          <boxGeometry args={[0.42, 0.82, 138]} />
+          <boxGeometry args={[0.38, 0.06, 138]} />
           <meshStandardMaterial color="#475569" roughness={0.7} />
         </mesh>
-        <mesh position={[BRIDGE_3D_DIMENSIONS.parapetLeftDividerX, 0.92, -42]}>
-          <boxGeometry args={[0.26, 0.08, 138]} />
+        <mesh position={[BRIDGE_3D_DIMENSIONS.parapetLeftDividerX, 0.13, -42]}>
+          <boxGeometry args={[0.24, 0.03, 138]} />
           <meshBasicMaterial color="#38bdf8" />
         </mesh>
 
         <mesh
-          position={[BRIDGE_3D_DIMENSIONS.parapetRightDividerX, 0.48, -42]}
-          castShadow
+          position={[BRIDGE_3D_DIMENSIONS.parapetRightDividerX, 0.09, -42]}
           receiveShadow
         >
-          <boxGeometry args={[0.42, 0.82, 138]} />
+          <boxGeometry args={[0.38, 0.06, 138]} />
           <meshStandardMaterial color="#475569" roughness={0.7} />
         </mesh>
-        <mesh position={[BRIDGE_3D_DIMENSIONS.parapetRightDividerX, 0.92, -42]}>
-          <boxGeometry args={[0.26, 0.08, 138]} />
+        <mesh position={[BRIDGE_3D_DIMENSIONS.parapetRightDividerX, 0.13, -42]}>
+          <boxGeometry args={[0.24, 0.03, 138]} />
           <meshBasicMaterial color="#facc15" />
         </mesh>
 
@@ -454,9 +521,9 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       {/* ── COMPONENTE MODULAR 1 (FASE 3): CORREDORES LATERAIS 3D (ESQUERDA & DIREITA) ── */}
       <SideCorridors3D simRef={simRef} onOpenMathBonus={onOpenMathBonus} />
 
-      {/* ── PORTÕES MATEMÁTICOS DA ROTA CENTRAL 3D ───────────────────────────── */}
+      {/* ── PORTÕES MATEMÁTICOS DA ROTA CENTRAL 3D (MÁX 2 PARES VISÍVEIS POR VEZ) ── */}
       <group ref={centerSegmentsGroupRef} name="CenterRouteSegments3D">
-        {segments.slice(activeSegmentIndex, activeSegmentIndex + 4).map((seg) => {
+        {segments.slice(activeSegmentIndex, activeSegmentIndex + 2).map((seg) => {
           const zSeg = computeSegmentWorldZ(seg.zPosition, 0)
           const isInspected = inspectedSegmentId === seg.id
           const cols = seg.lanes.length
