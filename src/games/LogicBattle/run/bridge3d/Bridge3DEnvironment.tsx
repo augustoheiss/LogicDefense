@@ -103,7 +103,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   }, [])
 
   useFrame((state, delta) => {
-    const dt = Math.min(0.25, Math.max(0.004, delta))
+    const dt = Math.min(0.5, Math.max(0.004, delta))
     const live = useLogicBattleStore.getState()
     const snap = live.snapshot
 
@@ -147,7 +147,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       nextSim.bossArchetypeId = nextSpec.archetype.id
       nextSim.bossArchetypeName = nextSpec.archetype.namePt
       const cp = live.save.activeRunCheckpoint
-      if (cp) {
+      if (cp && live.bridgeSectorIndex > 1) {
         nextSim.leftCannonLevel = Math.max(1, cp.leftCannonLevel ?? 1)
         nextSim.rightWeaponLevel = Math.max(0, cp.rightWeaponLevel ?? 0)
         nextSim.mathChallengesSolved = Math.max(0, cp.mathChallengesSolved ?? 0)
@@ -242,7 +242,10 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         __lbSetBossZForAudit?: (z: number) => void
       }
       win.__lbSetBossZForAudit = (z: number) => {
-        sim.bossZ = z
+        simRef.current.bossZ = z
+        if (win.__lbBridge3DTelemetry) {
+          win.__lbBridge3DTelemetry.bossZ = Number(z.toFixed(2))
+        }
       }
       win.__lbActiveProjectiles = Math.max(1, sim.activeBoltsCount)
       win.__lbBridge3DTelemetry = {

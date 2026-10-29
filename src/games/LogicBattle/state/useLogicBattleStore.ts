@@ -78,6 +78,7 @@ export const CANONICAL_BRIDGE_BIOME_ID: BiomeId = 'planicie_pedra'
 
 /** Controla se o avanço do último segmento veio de clique explícito nos botões de faixa (Modo 2D/Dock) */
 let lastAdvanceViaTapButton = false
+let runInstanceSeq = 0
 
 export interface CaptainSpeech {
   mood: 'proud' | 'curious' | 'excited' | 'calm'
@@ -315,7 +316,12 @@ export interface LogicBattleStoreState {
   toggleDebugMode: () => void
   toggleSettingsPopover: (open?: boolean) => void
   setActiveRealmSheet: (sheet: 'none' | 'region' | 'citadel') => void
-  startNewRun: (opts?: { regionId?: string; biomeId?: BiomeId; seed?: number; engineId?: EngineId }) => void
+  startNewRun: (
+    opts?:
+      | { regionId?: string; biomeId?: BiomeId; seed?: number; engineId?: EngineId }
+      | BiomeId,
+    legacySeed?: number,
+  ) => void
   setSteeringX: (laneNormX: number) => void
   stepLane: (delta: -1 | 1) => void
   chooseLaneAndAdvance: (laneIndex: number) => void
@@ -861,7 +867,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       activeTrapHit: null,
       snapshot: {
         ...snapshot,
-        runId: nextPlan.runId,
+        runId: `${nextPlan.runId}_s${nextSector}_${++runInstanceSeq}`,
         phase: save.settings.calmMode ? 'CALM_WAIT' : 'RUNNING',
         progress: 0.02,
         currentArmy: carryArmy,
@@ -1309,7 +1315,11 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     set({ activeRealmSheet: sheet })
   },
 
-  startNewRun: (opts) => {
+  startNewRun: (rawOpts, legacySeed) => {
+    const opts =
+      typeof rawOpts === 'string'
+        ? { biomeId: rawOpts as BiomeId, seed: legacySeed }
+        : rawOpts
     // V8: Se chamado apenas com biomeId (ex.: atalho legado de bioma), NUNCA reinicia o progresso!
     if (
       opts?.biomeId &&
@@ -1394,7 +1404,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     )
     SaveRepository.save(nextSave)
 
-    const baseSnap = createInitialSnapshotFromPlan(plan, nextSave.settings.calmMode)
+    const baseSnap = {
+      ...createInitialSnapshotFromPlan(plan, nextSave.settings.calmMode),
+      runId: `${plan.runId}_r${++runInstanceSeq}`,
+    }
     const nextSnapshot: RunSnapshot = preserveActiveBridgeCampaign
       ? {
           ...baseSnap,
