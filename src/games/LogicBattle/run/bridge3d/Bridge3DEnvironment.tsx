@@ -180,7 +180,11 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
     if (currentMathSeq > lastMathSeqRef.current) {
       lastMathSeqRef.current = currentMathSeq
       const solvedTier = live.lastSolvedMathRewardAt?.tier ?? 2
-      const mathOutcome = applyMathBonusToRightWeapon(sim, 296, solvedTier)
+      const mathOutcome = applyMathBonusToRightWeapon(sim, 296, solvedTier, {
+        correctValue: live.lastSolvedMathRewardAt?.correctValue,
+        expressionBadge: live.lastSolvedMathRewardAt?.expressionBadge,
+        currentArmy: snap.currentArmy,
+      })
       if (mathOutcome.bonusSoldiersFromPendingGate > 0) {
         live.applySideRouteReward(
           'RIGHT',
@@ -230,7 +234,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       },
     )
 
-    // Expor contagem real de projéteis 3D ativos e telemetria modular 3D para auditoria E2E (Fase 3)
+    // Expor contagem real de projéteis 3D ativos e telemetria modular 3D para auditoria E2E (Fase 3 / V9)
     if (typeof window !== 'undefined') {
       const win = window as unknown as {
         __lbActiveProjectiles?: number
@@ -247,6 +251,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         heroWorldX: Number(sim.heroWorldX.toFixed(2)),
         parallelBarrels: sim.shotProfile.parallelBarrels,
         damagePerShot: sim.shotProfile.damagePerShot,
+        shotsPerSecond: sim.shotProfile.shotsPerSecond,
         leftBlockHp: sim.leftFrozenBlock.hp,
         leftBlockZ: Number(sim.leftFrozenBlock.z.toFixed(2)),
         leftBlockUnlocked: sim.leftFrozenBlock.unlocked,
@@ -259,10 +264,27 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         rightMathBonusCharges: sim.rightMathBonusCharges,
         rightBuffActiveTimerMs: Math.round(sim.rightBuffActiveTimerMs),
         rightBuffMaxTimerMs: Math.round(sim.rightBuffMaxTimerMs),
+        rightActiveTier: sim.rightActiveTier,
+        rightActiveQuestionValue: sim.rightActiveQuestionValue,
+        rightActiveExpressionBadge: sim.rightActiveExpressionBadge,
+        rightActiveBuffLabel: sim.rightActiveBuffLabel,
+        rightPiercingShots: sim.rightPiercingShots,
+        mathChallengesSolved: sim.mathChallengesSolved,
         rightCorridorState:
           sim.rightBuffActiveTimerMs > 0 ? 'ACTIVE_TIMED' : 'LOCKED_FROSTED',
         leftGateLabels: sim.leftGates.map((g) => g.label),
+        leftGateSubLabels: sim.leftGates.map((g) => g.subLabel ?? ''),
         rightGateLabels: sim.rightGates.map((g) => g.label),
+        rightGateSubLabels: sim.rightGates.map((g) => g.subLabel ?? ''),
+        centerSegmentsCount: snap.segments.length,
+        centerProgress: Number(snap.progress.toFixed(4)),
+        centerActiveSegmentIndex: snap.activeSegmentIndex,
+        centerFirstVisibleGateZ: Number(
+          computeSegmentWorldZ(
+            snap.segments[snap.activeSegmentIndex]?.zPosition ?? 0.1429,
+            snap.progress,
+          ).toFixed(2),
+        ),
         bossHp: sim.bossHp,
         bossMaxHp: sim.bossMaxHp,
         bossZ: Number(sim.bossZ.toFixed(2)),

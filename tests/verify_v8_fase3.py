@@ -28,7 +28,7 @@ from playwright.sync_api import sync_playwright
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-PORT = 5173
+PORT = 4193
 BASE_URL = f"http://127.0.0.1:{PORT}"
 
 

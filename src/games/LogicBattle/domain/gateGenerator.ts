@@ -48,11 +48,13 @@ function makeSimpleGate(
   den: number,
   label: string,
   complex = false,
+  exprKind?: Gate['operand']['exprKind'],
+  secondaryValue?: number,
 ): Gate {
   return {
     id,
     op,
-    operand: { value: num / den, num, den },
+    operand: { value: num / den, num, den, exprKind, secondaryValue },
     label,
     readingTimeMs:
       GATE_POLICIES.baseReadingTimeMs +
@@ -61,103 +63,137 @@ function makeSimpleGate(
 }
 
 /**
- * Constrói um segmento justo de progressão (sem pegadinha catalogada) onde:
- * - A melhor faixa sempre cresce o exército (`>= armyBefore + 1`).
- * - A faixa alternativa cresce menos ou reduz moderadamente (para que o caminho ótimo importe),
- *   sem nunca violar a Regra do Portão Justo (sempre há pelo menos 1 faixa boa).
+ * V9 Pilar 2 & 4: Constrói um segmento justo e variado de progressão (sem pegadinha catalogada) onde:
+ * - Os valores são 100% ancorados na força dos monstros do Setor (`enemyTotalForce`), nunca inflando com a Rota Direita.
+ * - As decisões rotacionam entre 5 famílias matemáticas distintas (Frações, Porcentagens, Duplo Sinal/PEMDAS,
+ *   Decimais e Multiplicação/Soma), evitando a repetição monótona de `+` e `−`.
  */
 function buildFairPairSegment(
   segId: string,
   index: number,
   zPosition: number,
-  biomeId: BiomeId,
+  _biomeId: BiomeId,
   laneCount: 2 | 3,
   currentBestArmy: ArmyCount,
   enemyTotalForce: ArmyCount,
   rng: SeededRng,
   usedLabels?: Set<string>,
 ): LaneSegment {
-  const isAlreadyAboveEnemy = currentBestArmy >= enemyTotalForce
-  const remainingGap = Math.max(4, enemyTotalForce - currentBestArmy)
-  const rawAddGood = isAlreadyAboveEnemy
-    ? currentBestArmy > 30
+  const remainingSteps = Math.max(1, 5 - index)
+  const targetBest = Math.ceil(enemyTotalForce * 1.22)
+  const remainingGap = Math.max(6, targetBest - currentBestArmy)
+  const stepTargetAdd = Math.max(6, Math.ceil(remainingGap / remainingSteps))
+
+  const rawAddGood =
+    currentBestArmy >= enemyTotalForce
       ? Math.max(
           4,
-          Math.round(
-            currentBestArmy *
-              (enemyTotalForce > 120
-                ? 0.045 + index * 0.012
-                : 0.1 + (index % 3) * 0.04),
-          ),
+          Math.round(enemyTotalForce * (0.08 + index * 0.025)) + rng.nextInt(2, 5),
         )
-      : rng.nextInt(2, 5)
-    : Math.max(
-        4,
-        Math.min(
-          Math.max(10, Math.ceil(remainingGap * 0.25)),
-          Math.round(currentBestArmy * (enemyTotalForce > 120 ? 0.16 + index * 0.015 : 0.28)) +
-            rng.nextInt(3, 8),
-        ),
-      )
+      : Math.max(
+          stepTargetAdd,
+          Math.round(currentBestArmy * 0.24) + rng.nextInt(3, 7),
+        )
+
   // Evita repetir exatamente a mesma placa '+ X' em segmentos consecutivos
   let addGood = rawAddGood
   if (usedLabels && usedLabels.has(`+ ${fmtGateVal(addGood)}`)) {
     const jitter =
       rawAddGood >= 1000
         ? Math.max(10, Math.round(rawAddGood * (0.09 + index * 0.045)))
-        : index + 1
+        : index + 2
     addGood = rawAddGood + jitter
   }
-  const addModest = Math.max(1, Math.floor(addGood * 0.35) + (index % 2))
-  const canMultiplySafely = currentBestArmy * 2 <= enemyTotalForce * 1.15
+  const addModest = Math.max(2, Math.floor(addGood * 0.35) + (index % 2))
+  const canMultiplySafely = currentBestArmy * 2 <= enemyTotalForce * 1.38
 
+  let subAmt =
+    currentBestArmy <= 90 && enemyTotalForce <= 120
+      ? Math.max(2, Math.min(Math.floor(currentBestArmy * 0.2), 10))
+      : Math.max(3, Math.floor(Math.max(currentBestArmy, enemyTotalForce * 0.2) * (0.14 + index * 0.03)))
+  if (usedLabels && usedLabels.has(`− ${fmtGateVal(subAmt)}`)) {
+    subAmt = Math.max(2, Math.round(subAmt * (1.15 + index * 0.05)) + index + 1)
+  }
+
+  const familyIdx = (index * 2 + rng.nextInt(0, 4)) % 5
   let bestGate: Gate
   let altGate: Gate
 
-  if (biomeId === 'planicie_pedra') {
-    const useMul = currentBestArmy >= 8 && canMultiplySafely && rng.nextFloat() < 0.4
-    if (useMul) {
-      bestGate = makeSimpleGate(`${segId}_best`, '×', 2, 1, '× 2')
-      altGate = makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
+  if (familyIdx === 0) {
+    // Família 0: Frações & Divisão por Fração (× 3/2, ÷ 1/2 vs × 1/2)
+    if (canMultiplySafely && currentBestArmy >= 8) {
+      bestGate =
+        rng.nextFloat() < 0.5
+          ? makeSimpleGate(`${segId}_best`, '÷', 1, 2, '÷ 1/2', true)
+          : makeSimpleGate(`${segId}_best`, '×', 3, 2, '× 3/2', true)
     } else {
-      bestGate = makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
-      let subAmt =
-        currentBestArmy <= 90 && enemyTotalForce <= 120
-          ? Math.max(1, Math.min(Math.floor(currentBestArmy * 0.16), 8))
-          : Math.max(2, Math.floor(currentBestArmy * (0.12 + index * 0.032)))
-      if (usedLabels && usedLabels.has(`− ${fmtGateVal(subAmt)}`)) {
-        subAmt = Math.max(2, Math.round(subAmt * (1.14 + index * 0.05)) + index + 1)
-      }
-      altGate =
-        currentBestArmy > 6 && (enemyTotalForce > 120 || rng.nextFloat() < 0.5)
-          ? makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
-          : makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
+      bestGate = makeSimpleGate(
+        `${segId}_best`,
+        '+',
+        addGood,
+        1,
+        `+ ${fmtGateVal(addGood)}`,
+      )
     }
-  } else if (biomeId === 'fiorde_gelado') {
-    bestGate =
-      canMultiplySafely && rng.nextFloat() < 0.5
-        ? makeSimpleGate(`${segId}_best`, '×', 3, 2, '× 3/2', true)
-        : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
     altGate =
-      index >= 4
-        ? makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
-        : makeSimpleGate(`${segId}_alt`, '÷', 2, 1, '÷ 2', true)
-  } else if (biomeId === 'deserto_decimais') {
+      currentBestArmy >= 10
+        ? makeSimpleGate(`${segId}_alt`, '×', 1, 2, '× 1/2', true)
+        : makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
+  } else if (familyIdx === 1) {
+    // Família 1: Porcentagens (+ 50% vs − 20%)
     bestGate =
-      canMultiplySafely && rng.nextFloat() < 0.5
+      canMultiplySafely && currentBestArmy >= 8
         ? makeSimpleGate(`${segId}_best`, '%+', 50, 1, '+ 50%', true)
         : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
-    altGate = makeSimpleGate(`${segId}_alt`, '%−', 20, 1, '− 20%', true)
-  } else if (biomeId === 'vulcao_negativos') {
-    bestGate = makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
-    const subAmt = Math.max(1, Math.floor(currentBestArmy * 0.2))
+    altGate =
+      currentBestArmy >= 10
+        ? makeSimpleGate(`${segId}_alt`, '%−', 20, 1, '− 20%', true)
+        : makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
+  } else if (familyIdx === 2) {
+    // Família 2: Duplo Sinal −(−A) ou Expressão Composta PEMDAS (+ k × k)
+    const k = Math.max(2, Math.round(Math.sqrt(addGood)))
+    if (rng.nextFloat() < 0.55) {
+      bestGate = makeSimpleGate(
+        `${segId}_best`,
+        'expr',
+        addGood,
+        1,
+        `− (−${fmtGateVal(addGood)})`,
+        true,
+        'sub_neg',
+      )
+    } else {
+      bestGate = makeSimpleGate(
+        `${segId}_best`,
+        'expr',
+        k * k,
+        1,
+        `+ ${fmtGateVal(k)} × ${fmtGateVal(k)}`,
+        true,
+        'add_mul',
+        k,
+      )
+    }
     altGate = makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
-  } else {
+  } else if (familyIdx === 3) {
+    // Família 3: Decimais (× 1,5 ou ÷ 0,5 vs × 0,8)
     bestGate =
-      canMultiplySafely && currentBestArmy < 250 && rng.nextFloat() < 0.45
-        ? makeSimpleGate(`${segId}_best`, '×', 2, 1, '× 2')
+      canMultiplySafely && currentBestArmy >= 8
+        ? rng.nextFloat() < 0.5
+          ? makeSimpleGate(`${segId}_best`, '×', 3, 2, '× 1,5', true)
+          : makeSimpleGate(`${segId}_best`, '÷', 1, 2, '÷ 0,5', true)
         : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
-    altGate = makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
+    altGate =
+      currentBestArmy >= 10
+        ? makeSimpleGate(`${segId}_alt`, '×', 4, 5, '× 0,8', true)
+        : makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
+  } else {
+    // Família 4: Multiplicação Direta vs Soma/Subtração
+    const useMul = currentBestArmy >= 8 && canMultiplySafely && rng.nextFloat() < 0.5
+    bestGate = useMul
+      ? makeSimpleGate(`${segId}_best`, '×', 2, 1, '× 2')
+      : makeSimpleGate(`${segId}_best`, '+', addGood, 1, `+ ${fmtGateVal(addGood)}`)
+    altGate = makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
   }
 
   const lanes: Gate[][] =
@@ -316,11 +352,20 @@ function tryBuildRunWithSeed(
   const biome = BIOMES[params.biomeId]
   const laneCount = biome.laneCount
   const segmentCount = biome.segmentCount
-  const n0 = clampArmy(params.n0 ?? 5)
+  const rawInputN0 = clampArmy(params.n0 ?? 5)
   const mastery = params.mastery ?? createInitialMastery()
   const observatoryLevel = params.observatoryLevel ?? 1
   const trapAlertSeenCount = params.trapAlertSeenCount ?? ({} as Record<TrapId, number>)
-  const enemy = params.enemy ?? createDefaultEnemyForBiome(params.biomeId, n0)
+  const enemy =
+    params.enemy ?? createDefaultEnemyForBiome(params.biomeId, rawInputN0)
+
+  // V9 Pilar 2: Ancorar a referência de geração da Rota Central na força dos monstros do Setor (`enemy.totalForce`),
+  // impedindo que soldados exponenciais da Rota Direita inflem os portões centrais!
+  const monsterBaselineN0 =
+    enemy.totalForce <= 120
+      ? 5
+      : Math.max(10, Math.round(enemy.totalForce * 0.18))
+  const n0 = params.enemy ? monsterBaselineN0 : rawInputN0
 
   const segments: LaneSegment[] = []
   const usedTraps = new Set<TrapId>()
@@ -398,22 +443,26 @@ function tryBuildRunWithSeed(
       }
     }
 
-    // Verificar se é hora de inserir uma Pegadinha Matemática (~1 a cada 4 segmentos, nunca consecutivas)
+    // Verificar se é hora de inserir uma Pegadinha Matemática (V9: 2 pegadinhas por corrida de 6 segmentos)
     const canPlaceTrap =
       i >= 1 &&
-      i < segmentCount - 2 &&
+      i < segmentCount - 1 &&
       i - lastTrapIndex >= GATE_POLICIES.baseTrapEveryNSegments
 
     if (canPlaceTrap) {
-      const chosenTrapId = selectNextTrapForBiome(
-        params.biomeId,
-        runningBest,
-        mastery,
-        rng.nextFloat,
-        usedTraps,
-      )
+      const triedInSegment = new Set<TrapId>(usedTraps)
+      let trapPlaced = false
+      for (let trapAttempt = 0; trapAttempt < 10; trapAttempt++) {
+        const chosenTrapId = selectNextTrapForBiome(
+          params.biomeId,
+          runningBest,
+          mastery,
+          rng.nextFloat,
+          triedInSegment,
+        )
+        if (!chosenTrapId || triedInSegment.has(chosenTrapId)) break
+        triedInSegment.add(chosenTrapId)
 
-      if (chosenTrapId) {
         const entry = TRAP_CATALOG[chosenTrapId]
         const built = entry.buildSegment(runningBest, rng.nextFloat, laneCount)
         const showWarning = shouldShowObservatoryDetector(
@@ -424,13 +473,24 @@ function tryBuildRunWithSeed(
           detectorAlertsUsed,
         )
 
+        let trapLanes = built.lanes
+        let trapIntuitiveLane = built.intuitiveLane
+        if (
+          usedTraps.size === 0 &&
+          built.intuitiveLane === 1 &&
+          built.lanes.length >= 2
+        ) {
+          trapLanes = [built.lanes[1], built.lanes[0], ...built.lanes.slice(2)]
+          trapIntuitiveLane = 0
+        }
+
         const candidateSeg: LaneSegment = {
           id: segId,
           index: i,
           kind: built.kind,
-          lanes: built.lanes,
+          lanes: trapLanes,
           trapId: chosenTrapId,
-          intuitiveLane: built.intuitiveLane,
+          intuitiveLane: trapIntuitiveLane,
           showDetectorWarning: showWarning,
           zPosition,
         }
@@ -449,9 +509,11 @@ function tryBuildRunWithSeed(
           usedTraps.add(chosenTrapId)
           lastTrapIndex = i
           if (showWarning) detectorAlertsUsed++
-          continue
+          trapPlaced = true
+          break
         }
       }
+      if (trapPlaced) continue
     }
 
     // Segmento normal justo
@@ -500,7 +562,9 @@ function tryBuildRunWithSeed(
   if (
     oracle.best >= minRequiredBest &&
     oracle.best <= maxBestAllowed + 15 &&
-    oracle.worst < enemy.totalForce
+    oracle.worst < enemy.totalForce &&
+    usedTraps.size >= 1 &&
+    placedTwins
   ) {
     return candidatePlan
   }
@@ -529,8 +593,14 @@ export function generateRun(params: GenerateRunParams): RunPlan {
 
   // Fallback autoral infalível caso todas as tentativas aleatórias falhem
   const biome = BIOMES[params.biomeId]
-  const n0 = clampArmy(params.n0 ?? 5)
-  const enemy = params.enemy ?? createDefaultEnemyForBiome(params.biomeId, n0)
+  const rawInputN0 = clampArmy(params.n0 ?? 5)
+  const enemy =
+    params.enemy ?? createDefaultEnemyForBiome(params.biomeId, rawInputN0)
+  const monsterBaselineN0 =
+    enemy.totalForce <= 120
+      ? 5
+      : Math.max(10, Math.round(enemy.totalForce * 0.18))
+  const n0 = params.enemy ? monsterBaselineN0 : rawInputN0
   const targetBest = Math.ceil(enemy.totalForce * 1.35)
   const stepAdd = Math.max(5, Math.ceil((targetBest - n0) / biome.segmentCount))
 

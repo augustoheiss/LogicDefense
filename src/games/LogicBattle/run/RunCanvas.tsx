@@ -110,7 +110,11 @@ export const RunCanvas: React.FC = () => {
   const extractRunToBase = useLogicBattleStore((s) => s.extractRunToBase)
   const steerToRoute = useLogicBattleStore((s) => s.steerToRoute)
 
-  useRunLoop(world === 'run' && phase === 'RUNNING' && activeMathChallenge === null)
+  useRunLoop(
+    world === 'run' &&
+      (phase === 'RUNNING' || phase === 'CALM_WAIT') &&
+      activeMathChallenge === null,
+  )
   useSteeringInput(canvasRef)
 
   const biome = BIOMES[biomeId] ?? BIOMES.planicie_pedra
@@ -454,6 +458,7 @@ export const RunCanvas: React.FC = () => {
       className="lb-run-stage"
       data-testid="logic-battle-run-stage"
       onPointerDown={(e) => {
+        battleDirectorRef.current.setFastForward(true)
         // Na faixa superior do céu (26% de cima) ou clique direito, arrastar orbita a câmera 3D suavemente!
         const rect = e.currentTarget.getBoundingClientRect()
         const relY = (e.clientY - rect.top) / Math.max(1, rect.height)
@@ -475,6 +480,7 @@ export const RunCanvas: React.FC = () => {
         setPitchOffsetDeg((prev) => Math.max(-16, Math.min(20, prev + dy * 0.18)))
       }}
       onPointerUp={() => {
+        battleDirectorRef.current.setFastForward(false)
         skyOrbitDragRef.current.active = false
       }}
       onWheel={(e) => {

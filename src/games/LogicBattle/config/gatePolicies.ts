@@ -3,12 +3,12 @@
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const GATE_POLICIES = {
-  /** Frequência base de pegadinhas: ~1 a cada 4 segmentos */
-  baseTrapEveryNSegments: 4,
+  /** V9: Frequência base de pegadinhas em corridas de 6 segmentos: 1 a cada 2 segmentos (~2 por setor) */
+  baseTrapEveryNSegments: 2,
   /** Perda máxima permitida em uma pegadinha comum (60%) */
   maxStandardTrapLossRatio: 0.6,
   /** Distância máxima (em segmentos) para surgir o Portão do Resgate após uma pegadinha */
-  maxSegmentsUntilRedemptionGate: 3,
+  maxSegmentsUntilRedemptionGate: 2,
   /** Margem mínima exigida pelo Oráculo: melhor caminho >= inimigo * (1 + 0.15) */
   oracleBestMarginRatio: 0.15,
   /** Teto harmônico do Oráculo para evitar inflação exponencial em corridas iniciais */

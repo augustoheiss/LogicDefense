@@ -212,9 +212,12 @@ export function computeShotProfile(armyPoints: number): DynamicShotProfile {
 }
 
 /**
- * Políticas de ativação temporizada da Rota Direita (V8 Fase 2):
+ * Políticas de ativação temporizada e Buffs Dinâmicos da Rota Direita (V9):
  * Os buffs e armas da Rota Direita ficam congelados/cinzas por padrão e só
  * ativam por alguns segundos após o jogador resolver uma conta matemática (🧮).
+ * Quando ativa, os 2 Super-Portões e a Arma da Rota Direita mudam dinamicamente
+ * conforme o Grau (1..4), o valor da questão resolvida e o benefício descrito no modal,
+ * sendo a ÚNICA rota com crescimento exponencial.
  */
 export const RIGHT_CORRIDOR_TIMED_POLICIES = {
   durationMsByTier: {
@@ -223,6 +226,108 @@ export const RIGHT_CORRIDOR_TIMED_POLICIES = {
     3: 18000, // Difícil: 18s de Rota Direita ativa
     4: 24000, // Problema: 24s de Rota Direita ativa
   } as Record<1 | 2 | 3 | 4, number>,
+} as const
+
+export interface RightTierBuffPolicySpec {
+  readonly tier: 1 | 2 | 3 | 4
+  readonly icon: string
+  readonly badgePt: string
+  readonly durationMs: number
+  readonly armyBonusRatio: number
+  readonly minFlatSoldiers: number
+  readonly weaponDmgMult: number
+  readonly fireRateMult: number
+  readonly extraParallelBarrels: number
+  readonly piercingShots: boolean
+  readonly bossRoyalVolleyRatio: number
+  readonly gate0SubLabelPt: string
+  readonly gate1SubLabelPt: string
+  readonly gate1RatioLabelPt: string
+  readonly activeHudSummaryPt: string
+  readonly plaqueBorderColor: string
+  readonly plaqueAccentColor: string
+}
+
+export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
+  1 | 2 | 3 | 4,
+  RightTierBuffPolicySpec
+> = {
+  1: {
+    tier: 1,
+    icon: '🟢',
+    badgePt: '🟢 Fácil',
+    durationMs: 12000,
+    armyBonusRatio: 0.2,
+    minFlatSoldiers: 8,
+    weaponDmgMult: 1.35,
+    fireRateMult: 1.15,
+    extraParallelBarrels: 1,
+    piercingShots: false,
+    bossRoyalVolleyRatio: 0,
+    gate0SubLabelPt: '🟢 CONTA · CADÊNCIA +15%',
+    gate1SubLabelPt: '🟢 +20% EXÉRCITO',
+    gate1RatioLabelPt: '+20%',
+    activeHudSummaryPt: '🟢 +20% Soldados e +15% Cadência',
+    plaqueBorderColor: '#4ade80',
+    plaqueAccentColor: '#bbf7d0',
+  },
+  2: {
+    tier: 2,
+    icon: '🔵',
+    badgePt: '🔵 Médio',
+    durationMs: 15000,
+    armyBonusRatio: 0.45,
+    minFlatSoldiers: 18,
+    weaponDmgMult: 1.65,
+    fireRateMult: 1.2,
+    extraParallelBarrels: 2,
+    piercingShots: false,
+    bossRoyalVolleyRatio: 0,
+    gate0SubLabelPt: '🔵 CONTA · TIRO DUPLO',
+    gate1SubLabelPt: '🔵 +45% · TIRO DUPLO',
+    gate1RatioLabelPt: '+45%',
+    activeHudSummaryPt: '🔵 +45% Soldados e Tiro Duplo',
+    plaqueBorderColor: '#38bdf8',
+    plaqueAccentColor: '#bae6fd',
+  },
+  3: {
+    tier: 3,
+    icon: '🟣',
+    badgePt: '🟣 Difícil',
+    durationMs: 18000,
+    armyBonusRatio: 0.75,
+    minFlatSoldiers: 32,
+    weaponDmgMult: 2.1,
+    fireRateMult: 1.25,
+    extraParallelBarrels: 2,
+    piercingShots: true,
+    bossRoyalVolleyRatio: 0,
+    gate0SubLabelPt: '🟣 CONTA · PERFURANTE',
+    gate1SubLabelPt: '🟣 +75% · PERFURANTE',
+    gate1RatioLabelPt: '+75%',
+    activeHudSummaryPt: '🟣 +75% Soldados e Canhão Perfurante',
+    plaqueBorderColor: '#c084fc',
+    plaqueAccentColor: '#e9d5ff',
+  },
+  4: {
+    tier: 4,
+    icon: '👑',
+    badgePt: '👑 Problema',
+    durationMs: 24000,
+    armyBonusRatio: 1.0,
+    minFlatSoldiers: 55,
+    weaponDmgMult: 2.6,
+    fireRateMult: 1.35,
+    extraParallelBarrels: 3,
+    piercingShots: true,
+    bossRoyalVolleyRatio: 0.25,
+    gate0SubLabelPt: '👑 PROBLEMA · SALVA REAL',
+    gate1SubLabelPt: '👑 DOBRA ×2 · SALVA REAL',
+    gate1RatioLabelPt: '×2 DOBRA',
+    activeHudSummaryPt: '👑 DOBRA EXÉRCITO (×2) e Salva Real',
+    plaqueBorderColor: '#facc15',
+    plaqueAccentColor: '#fef08a',
+  },
 } as const
 
 /**
@@ -387,5 +492,95 @@ export function computeSectorBossSpec(
     meleeDamagePerStrike,
     sectorClearRewardSoldiers,
     sectorClearRewardCoins,
+  }
+}
+
+export interface LeftCorridorMonsterScaleSpec {
+  readonly sectorIndex: number
+  readonly gate0Soldiers: number
+  readonly gate1Soldiers: number
+  readonly cannonHp: number
+  readonly cannonUnlockBonus: number
+  readonly cannonCollectBonus: number
+}
+
+/**
+ * V9 Pilar 2: Escala da Rota Esquerda 100% ancorada no Nível dos Monstros do Setor (`computeSectorBossSpec(S)`).
+ * Zero dependência de `currentArmy` ou `mathChallengesSolved`!
+ */
+export function computeLeftCorridorMonsterScaling(
+  sectorIndex: number,
+): LeftCorridorMonsterScaleSpec {
+  const spec = computeSectorBossSpec(sectorIndex)
+  const gate0Soldiers = Math.max(2, Math.round(spec.bossHp * 0.02))
+  const gate1Soldiers = Math.max(
+    gate0Soldiers + 2,
+    Math.round(spec.bossHp * 0.045),
+  )
+  const cannonHp = Math.max(5, Math.round(spec.bossHp * 0.035))
+  const cannonUnlockBonus = Math.max(3, Math.round(spec.bossHp * 0.03))
+  const cannonCollectBonus = Math.max(5, Math.round(spec.bossHp * 0.05))
+  return {
+    sectorIndex: spec.sectorIndex,
+    gate0Soldiers,
+    gate1Soldiers,
+    cannonHp,
+    cannonUnlockBonus,
+    cannonCollectBonus,
+  }
+}
+
+/**
+ * V9 Pilar 1: Escala Exponencial Exclusiva da Rota Direita vinculada ao Grau (1..4)
+ * e à resposta da questão resolvida (`solvedQuestionValue`).
+ */
+export function computeRightCorridorExponentialGates(params: {
+  sectorIndex: number
+  currentArmy: number
+  mathChallengesSolved: number
+  activeTier: 1 | 2 | 3 | 4
+  solvedQuestionValue: number
+}): {
+  gate0Soldiers: number
+  gate1Soldiers: number
+  gate0SubLabel: string
+  gate1SubLabel: string
+  exponentialFactor: number
+} {
+  const tierSpec =
+    RIGHT_CORRIDOR_TIER_BUFF_POLICIES[params.activeTier] ??
+    RIGHT_CORRIDOR_TIER_BUFF_POLICIES[2]
+  const k = Math.max(0, Math.floor(params.mathChallengesSolved))
+  const expBase = 1.38 + params.activeTier * 0.12
+  const exponentialFactor = Math.pow(expBase, Math.min(k, 40))
+  const qVal = Math.max(
+    4,
+    Math.min(100000, Math.abs(Math.round(params.solvedQuestionValue || 15))),
+  )
+  const monsterSpec = computeSectorBossSpec(params.sectorIndex)
+  const safeArmy = Number.isFinite(params.currentArmy) ? params.currentArmy : 5
+  const armyRef = Math.max(safeArmy, monsterSpec.bossHp * 0.5, 20)
+
+  const raw0 = Math.round(
+    qVal * exponentialFactor +
+      armyRef * tierSpec.armyBonusRatio * 0.65 * Math.pow(1.22, Math.min(k, 25)),
+  )
+  const gate0Soldiers = Math.max(tierSpec.minFlatSoldiers, raw0)
+
+  const raw1 = Math.round(
+    armyRef * tierSpec.armyBonusRatio * Math.pow(1.35, Math.min(k, 25)) +
+      qVal * 1.8 * exponentialFactor,
+  )
+  const gate1Soldiers = Math.max(
+    gate0Soldiers + 8,
+    Math.round(Math.max(raw1, gate0Soldiers * 1.65)),
+  )
+
+  return {
+    gate0Soldiers,
+    gate1Soldiers,
+    gate0SubLabel: tierSpec.gate0SubLabelPt,
+    gate1SubLabel: tierSpec.gate1SubLabelPt,
+    exponentialFactor,
   }
 }

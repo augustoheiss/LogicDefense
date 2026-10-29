@@ -12,11 +12,14 @@ import {
   BRIDGE_3D_DIMENSIONS,
   BRIDGE_3D_ROUTES,
   BridgeRouteId,
+  computeLeftCorridorMonsterScaling,
+  computeRightCorridorExponentialGates,
   computeSectorBossSpec,
   computeShotProfile,
   DynamicShotProfile,
   laneNormToWorldX,
   resolveRouteFromWorldX,
+  RIGHT_CORRIDOR_TIER_BUFF_POLICIES,
   RIGHT_CORRIDOR_TIMED_POLICIES,
 } from './bridge3dPolicies'
 import { formatArmy } from '../../domain/notation'
@@ -42,6 +45,7 @@ export interface Bolt3DEntity {
   damage: number
   scale: number
   active: boolean
+  pierceRemaining?: number
 }
 
 export interface Enemy3DEntity {
@@ -72,6 +76,7 @@ export interface SideRouteGate3DEntity {
   z: number
   bonusSoldiers: number
   label: string
+  subLabel?: string
   collectedInPass: boolean
 }
 
@@ -114,6 +119,12 @@ export interface Bridge3DSimState {
   /** V8 Fase 2: Cronômetro ativo em ms para os buffs e cores da Rota Direita após resolver conta (0 = cinza/congelado) */
   rightBuffActiveTimerMs: number
   rightBuffMaxTimerMs: number
+  /** V9 Pilar 1: Grau ativo (1..4), valor da questão resolvida e benefícios da janela na Rota Direita */
+  rightActiveTier: 1 | 2 | 3 | 4
+  rightActiveQuestionValue: number
+  rightActiveExpressionBadge: string
+  rightActiveBuffLabel: string
+  rightPiercingShots: boolean
   mathChallengesSolved: number
   pendingRightGateBonus: number
   timeInRightRouteSec: number
@@ -192,19 +203,56 @@ export function createInitialBridge3DSimState(
     { id: 4, x: 2.2, z: -62, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
   ]
 
+  // V9 Pilar 2 & 3: Apenas 2 portões espaçados na Rota Esquerda, 100% ancorados no Nível dos Monstros do Setor
+  const initLeftMonsterScale = computeLeftCorridorMonsterScaling(1)
   const leftGates: SideRouteGate3DEntity[] = [
-    { id: 'lg_0', route: 'LEFT', z: -18, bonusSoldiers: 1, label: '+1', collectedInPass: false },
-    { id: 'lg_1', route: 'LEFT', z: -28, bonusSoldiers: 2, label: '+2', collectedInPass: false },
-    { id: 'lg_2', route: 'LEFT', z: -38, bonusSoldiers: 1, label: '+1', collectedInPass: false },
-    { id: 'lg_3', route: 'LEFT', z: -48, bonusSoldiers: 2, label: '+2', collectedInPass: false },
-    { id: 'lg_4', route: 'LEFT', z: -58, bonusSoldiers: 3, label: '+3', collectedInPass: false },
+    {
+      id: 'lg_0',
+      route: 'LEFT',
+      z: -24,
+      bonusSoldiers: initLeftMonsterScale.gate0Soldiers,
+      label: `+${formatArmy(initLeftMonsterScale.gate0Soldiers, 'compact')}`,
+      subLabel: 'MONSTROS S1',
+      collectedInPass: false,
+    },
+    {
+      id: 'lg_1',
+      route: 'LEFT',
+      z: -48,
+      bonusSoldiers: initLeftMonsterScale.gate1Soldiers,
+      label: `+${formatArmy(initLeftMonsterScale.gate1Soldiers, 'compact')}`,
+      subLabel: 'REFORÇO S1',
+      collectedInPass: false,
+    },
   ]
 
+  // V9 Pilar 1 & 3: Apenas 2 Super-Portões espaçados na Rota Direita (Exponencial + Vinculados à Questão)
+  const initRightSpec = computeRightCorridorExponentialGates({
+    sectorIndex: 1,
+    currentArmy: 5,
+    mathChallengesSolved: 0,
+    activeTier: 2,
+    solvedQuestionValue: 18,
+  })
   const rightGates: SideRouteGate3DEntity[] = [
-    { id: 'rg_0', route: 'RIGHT', z: -12, bonusSoldiers: 10, label: '+10', collectedInPass: false },
-    { id: 'rg_1', route: 'RIGHT', z: -28, bonusSoldiers: 25, label: '+25', collectedInPass: false },
-    { id: 'rg_2', route: 'RIGHT', z: -48, bonusSoldiers: 50, label: '+50', collectedInPass: false },
-    { id: 'rg_3', route: 'RIGHT', z: -58, bonusSoldiers: 99, label: '+99', collectedInPass: false },
+    {
+      id: 'rg_0',
+      route: 'RIGHT',
+      z: -14,
+      bonusSoldiers: initRightSpec.gate0Soldiers,
+      label: `+${formatArmy(initRightSpec.gate0Soldiers, 'compact')}`,
+      subLabel: initRightSpec.gate0SubLabel,
+      collectedInPass: false,
+    },
+    {
+      id: 'rg_1',
+      route: 'RIGHT',
+      z: -46,
+      bonusSoldiers: initRightSpec.gate1Soldiers,
+      label: `+${formatArmy(initRightSpec.gate1Soldiers, 'compact')}`,
+      subLabel: initRightSpec.gate1SubLabel,
+      collectedInPass: false,
+    },
   ]
 
   const bolts: Bolt3DEntity[] = Array.from({ length: MAX_SIM_BOLTS }, (_, idx) => ({
@@ -216,6 +264,7 @@ export function createInitialBridge3DSimState(
     damage: 1,
     scale: 0.8,
     active: false,
+    pierceRemaining: 0,
   }))
 
   return {
@@ -230,18 +279,23 @@ export function createInitialBridge3DSimState(
     playerHitFlashMs: 0,
     leftCannonLevel: 0,
     rightWeaponLevel: 0,
-    rightAltarZ: -18.0,
+    rightAltarZ: -26.0,
     rightAltarCollectedInPass: false,
     rightMathBonusCharges: 0,
     rightBuffActiveTimerMs: 0,
     rightBuffMaxTimerMs: 15000,
+    rightActiveTier: 2,
+    rightActiveQuestionValue: 18,
+    rightActiveExpressionBadge: '',
+    rightActiveBuffLabel: RIGHT_CORRIDOR_TIER_BUFF_POLICIES[2].activeHudSummaryPt,
+    rightPiercingShots: false,
     mathChallengesSolved: 0,
     pendingRightGateBonus: 0,
     timeInRightRouteSec: 0,
     rightRoutePromptCooldownMs: 0,
     leftFrozenBlock: {
-      hp: 5,
-      maxHp: 5,
+      hp: initLeftMonsterScale.cannonHp,
+      maxHp: initLeftMonsterScale.cannonHp,
       z: -8.0,
       unlocked: false,
       hitFlashMs: 0,
@@ -285,19 +339,79 @@ export function createInitialBridge3DSimState(
 }
 
 /**
- * V8 Fase 2: Ativa por alguns segundos (12s a 24s conforme o grau da conta) as cores,
- * os buffs e a Metralhadora da Rota Direita quando o jogador resolve um Desafio Matemático (🧮).
+ * V9 Pilar 1: Ativa por alguns segundos (12s a 24s conforme o grau da conta) as cores,
+ * os 2 Super-Portões exponenciais e os benefícios de arma prometidos no modal:
+ * - Grau I (🟢 12s): +20% Soldados e +15% Cadência na Ponte
+ * - Grau II (🔵 15s): +45% Soldados e Tiro Duplo na Ponte
+ * - Grau III (🟣 18s): +75% Soldados e Canhão Perfurante
+ * - Grau IV (👑 24s): DOBRA O EXÉRCITO (×2 + 55) e Salva Real contra o Boss
  */
 export function applyMathBonusToRightWeapon(
   sim: Bridge3DSimState,
   siegeDamage = 296,
   tier: 1 | 2 | 3 | 4 = 2,
-): { unlockedWeapon: boolean; bonusSoldiersFromPendingGate: number; activeDurationMs: number } {
+  rewardMeta?: {
+    correctValue?: number
+    expressionBadge?: string
+    currentArmy?: number
+  },
+): {
+  unlockedWeapon: boolean
+  bonusSoldiersFromPendingGate: number
+  activeDurationMs: number
+  royalVolleyBossDamage: number
+} {
   sim.mathChallengesSolved += 1
-  const durationMs = RIGHT_CORRIDOR_TIMED_POLICIES.durationMsByTier[tier] ?? 15000
+  const tierSpec =
+    RIGHT_CORRIDOR_TIER_BUFF_POLICIES[tier] ??
+    RIGHT_CORRIDOR_TIER_BUFF_POLICIES[2]
+  const durationMs =
+    RIGHT_CORRIDOR_TIMED_POLICIES.durationMsByTier[tier] ?? tierSpec.durationMs
   sim.rightBuffActiveTimerMs = durationMs
   sim.rightBuffMaxTimerMs = durationMs
   sim.rightMathBonusCharges = Math.max(2, Math.ceil(durationMs / 4000))
+  sim.rightActiveTier = tier
+  sim.rightActiveQuestionValue =
+    rewardMeta?.correctValue !== undefined
+      ? rewardMeta.correctValue
+      : tier * 15
+  sim.rightActiveExpressionBadge = rewardMeta?.expressionBadge ?? ''
+  sim.rightActiveBuffLabel = tierSpec.activeHudSummaryPt
+  sim.rightPiercingShots = tierSpec.piercingShots
+
+  // Salva Real contra o Boss (Grau IV): dispara rajada imediata que drena 25% do HP máximo do Boss!
+  let royalVolleyBossDamage = 0
+  if (
+    tierSpec.bossRoyalVolleyRatio > 0 &&
+    sim.bossLifecycle !== 'INTERMISSION' &&
+    sim.bossHp > 1
+  ) {
+    royalVolleyBossDamage = Math.max(
+      25,
+      Math.round(sim.bossMaxHp * tierSpec.bossRoyalVolleyRatio),
+    )
+    sim.bossHp = Math.max(1, sim.bossHp - royalVolleyBossDamage)
+    sim.bossHitFlashMs = 420
+  }
+
+  // Atualizar imediatamente os 2 Super-Portões da Rota Direita conforme a questão resolvida e o Grau!
+  const rightGateSpec = computeRightCorridorExponentialGates({
+    sectorIndex: sim.sectorIndex,
+    currentArmy: rewardMeta?.currentArmy ?? 25,
+    mathChallengesSolved: sim.mathChallengesSolved,
+    activeTier: tier,
+    solvedQuestionValue: sim.rightActiveQuestionValue,
+  })
+  if (sim.rightGates[0]) {
+    sim.rightGates[0].bonusSoldiers = rightGateSpec.gate0Soldiers
+    sim.rightGates[0].label = `+${formatArmy(rightGateSpec.gate0Soldiers, 'compact')}`
+    sim.rightGates[0].subLabel = rightGateSpec.gate0SubLabel
+  }
+  if (sim.rightGates[1]) {
+    sim.rightGates[1].bonusSoldiers = rightGateSpec.gate1Soldiers
+    sim.rightGates[1].label = `+${formatArmy(rightGateSpec.gate1Soldiers, 'compact')}`
+    sim.rightGates[1].subLabel = rightGateSpec.gate1SubLabel
+  }
 
   const pendingBonus = sim.pendingRightGateBonus
   sim.pendingRightGateBonus = 0
@@ -330,11 +444,21 @@ export function applyMathBonusToRightWeapon(
       g.collectedInPass = false
     }
   }
+  if (
+    sim.rightGates.length > 0 &&
+    sim.rightGates.every(
+      (g) => g.z < -2.0 || g.z > BRIDGE_3D_DIMENSIONS.zPlayerLine,
+    )
+  ) {
+    sim.rightGates[0].z = -2.5
+    sim.rightGates[0].collectedInPass = false
+  }
 
   return {
     unlockedWeapon,
     bonusSoldiersFromPendingGate: pendingBonus,
     activeDurationMs: durationMs,
+    royalVolleyBossDamage,
   }
 }
 
@@ -363,7 +487,7 @@ export function stepBridge3DSim(
   sim.heroWorldX += (targetWorldX - sim.heroWorldX) * Math.min(1, clampedDt * 18)
   sim.activeRoute = resolveRouteFromWorldX(sim.heroWorldX)
 
-  // V8 Fase 2: Decrementar janela ativa da Rota Direita em tempo real (timerDtMs). Quando zera, volta para gelo/cinza desativado!
+  // V8 Fase 2 / V9: Decrementar janela ativa da Rota Direita em tempo real (timerDtMs). Quando zera, volta para gelo/cinza desativado!
   if (input.isRunningOrBattle && sim.rightBuffActiveTimerMs > 0) {
     sim.rightBuffActiveTimerMs = Math.max(0, sim.rightBuffActiveTimerMs - timerDtMs)
     sim.rightMathBonusCharges =
@@ -372,10 +496,12 @@ export function stepBridge3DSim(
         : 0
     if (sim.rightBuffActiveTimerMs <= 0) {
       sim.rightFrozenWeapon.unlocked = false
+      sim.rightPiercingShots = false
     }
   } else if (sim.rightBuffActiveTimerMs <= 0) {
     sim.rightMathBonusCharges = 0
     sim.rightFrozenWeapon.unlocked = false
+    sim.rightPiercingShots = false
   }
 
   if (sim.activeRoute === 'RIGHT') {
@@ -387,20 +513,36 @@ export function stepBridge3DSim(
     sim.rightRoutePromptCooldownMs = Math.max(0, sim.rightRoutePromptCooldownMs - dtMs)
   }
 
-  // 2. Perfil dinâmico de tiro escalado pelos pontos atuais + bônus de armas coletadas nas rotas laterais
+  // 2. Perfil dinâmico de tiro escalado pelos pontos atuais + bônus de armas coletadas nas rotas laterais (V9 Tier Buffs)
   const baseProfile = computeShotProfile(input.currentArmy)
   const hasLeftBoost = sim.leftFrozenBlock.unlocked || sim.leftCannonLevel > 0
-  const hasRightBoost = sim.rightBuffActiveTimerMs > 0 && (sim.rightFrozenWeapon.unlocked || sim.rightWeaponLevel > 0)
-  const extraBarrels = (hasLeftBoost ? 1 : 0) + (hasRightBoost ? 1 : 0)
+  const hasRightBoost =
+    sim.rightBuffActiveTimerMs > 0 &&
+    (sim.rightFrozenWeapon.unlocked || sim.rightWeaponLevel > 0)
+  const activeTierSpec =
+    RIGHT_CORRIDOR_TIER_BUFF_POLICIES[sim.rightActiveTier] ??
+    RIGHT_CORRIDOR_TIER_BUFF_POLICIES[2]
+  const extraBarrels =
+    (hasLeftBoost ? 1 : 0) +
+    (hasRightBoost ? activeTierSpec.extraParallelBarrels : 0)
   const dmgMult =
-    (hasRightBoost ? 2.0 + sim.rightWeaponLevel * 0.45 : 1.0) *
-    (hasLeftBoost ? 1.15 + sim.leftCannonLevel * 0.15 : 1.0)
-  const fireRateBonus = hasLeftBoost ? 1.6 + Math.min(2.4, sim.leftCannonLevel * 0.35) : 0
+    (hasRightBoost
+      ? activeTierSpec.weaponDmgMult + sim.rightWeaponLevel * 0.45
+      : 1.0) * (hasLeftBoost ? 1.15 + sim.leftCannonLevel * 0.12 : 1.0)
+  const fireRateBonus = hasLeftBoost
+    ? 1.4 + Math.min(2.0, sim.leftCannonLevel * 0.3)
+    : 0
+  const rightFireRateMult = hasRightBoost ? activeTierSpec.fireRateMult : 1.0
 
   sim.shotProfile = {
     ...baseProfile,
     damagePerShot: Math.max(1, baseProfile.damagePerShot * dmgMult),
-    shotsPerSecond: Math.min(18, baseProfile.shotsPerSecond + fireRateBonus),
+    shotsPerSecond: Math.min(
+      20,
+      Number(
+        ((baseProfile.shotsPerSecond + fireRateBonus) * rightFireRateMult).toFixed(2),
+      ),
+    ),
     parallelBarrels: Math.min(6, baseProfile.parallelBarrels + extraBarrels),
   }
 
@@ -534,32 +676,26 @@ export function stepBridge3DSim(
       slot.damage = sim.shotProfile.damagePerShot
       slot.scale = sim.shotProfile.projectileScale
       slot.active = true
+      slot.pierceRemaining =
+        sim.rightBuffActiveTimerMs > 0 && sim.rightPiercingShots ? 1 : 0
     }
   }
 
   // 4. Evolução Dinâmica & Movimento da Esteira nas Rotas Laterais (Esquerda e Direita)
   const sideScrollSpeed = 7.2
 
-  // 4a. Rota Esquerda: Evoluir valores dos portões conforme exército/setor/canhão cresce
-  const baseLeftVals = [1, 2, 1, 2, 3]
-  const shouldScaleLeft =
-    input.currentArmy > 5 || sim.sectorIndex > 1 || sim.leftCannonLevel > 0
-  if (shouldScaleLeft) {
-    const leftScaleBase = Math.max(
-      2,
-      input.currentArmy * (0.14 + sim.leftCannonLevel * 0.06) +
-        (sim.sectorIndex - 1) * 5 +
-        sim.leftCannonLevel * 3,
-    )
-    for (let i = 0; i < sim.leftGates.length; i++) {
-      const g = sim.leftGates[i]
-      const evolvedLeft = Math.max(
-        baseLeftVals[i] ?? 1,
-        Math.round(leftScaleBase * (0.6 + i * 0.28)),
-      )
-      g.bonusSoldiers = evolvedLeft
-      g.label = `+${formatArmy(evolvedLeft, 'compact')}`
-    }
+  // 4a. Rota Esquerda (V9 Pilar 2): 100% ancorada no Nível dos Monstros do Setor (computeLeftCorridorMonsterScaling)!
+  // Zero dependência de input.currentArmy ou sim.mathChallengesSolved!
+  const leftMonsterScale = computeLeftCorridorMonsterScaling(sim.sectorIndex)
+  if (sim.leftGates[0]) {
+    sim.leftGates[0].bonusSoldiers = leftMonsterScale.gate0Soldiers
+    sim.leftGates[0].label = `+${formatArmy(leftMonsterScale.gate0Soldiers, 'compact')}`
+    sim.leftGates[0].subLabel = `MONSTROS S${sim.sectorIndex}`
+  }
+  if (sim.leftGates[1]) {
+    sim.leftGates[1].bonusSoldiers = leftMonsterScale.gate1Soldiers
+    sim.leftGates[1].label = `+${formatArmy(leftMonsterScale.gate1Soldiers, 'compact')}`
+    sim.leftGates[1].subLabel = `REFORÇO S${sim.sectorIndex}`
   }
 
   // Avançar Canhão Gélido da Rota Esquerda (+Z) para o jogador coletar!
@@ -572,10 +708,7 @@ export function stepBridge3DSim(
     sim.leftFrozenBlock.collectedInPass = true
     sim.leftFrozenBlock.unlocked = true
     sim.leftCannonLevel += 1
-    const cannonSoldiers = Math.max(
-      3 + sim.leftCannonLevel * 2,
-      Math.round(input.currentArmy * 0.22),
-    )
+    const cannonSoldiers = leftMonsterScale.cannonCollectBonus
     callbacks.onSideRouteReward(
       'LEFT',
       cannonSoldiers,
@@ -585,10 +718,7 @@ export function stepBridge3DSim(
   if (sim.leftFrozenBlock.z > BRIDGE_3D_DIMENSIONS.zPlayerLine + 3.0) {
     sim.leftFrozenBlock.z -= 60.0
     const nextLvl = sim.leftCannonLevel + 1
-    const nextMaxHp = Math.max(
-      5,
-      Math.round(5 * nextLvl + input.currentArmy * 0.35),
-    )
+    const nextMaxHp = leftMonsterScale.cannonHp
     sim.leftFrozenBlock.level = nextLvl
     sim.leftFrozenBlock.maxHp = nextMaxHp
     sim.leftFrozenBlock.hp = nextMaxHp
@@ -604,10 +734,7 @@ export function stepBridge3DSim(
       Math.abs(g.z - BRIDGE_3D_DIMENSIONS.zPlayerLine) <= 1.25
     ) {
       g.collectedInPass = true
-      const effectiveBonus =
-        sim.leftFrozenBlock.unlocked || sim.leftCannonLevel > 0
-          ? Math.max(g.bonusSoldiers + 1, Math.round(g.bonusSoldiers * (1 + sim.leftCannonLevel * 0.25)))
-          : g.bonusSoldiers
+      const effectiveBonus = g.bonusSoldiers
       callbacks.onSideRouteReward(
         'LEFT',
         effectiveBonus,
@@ -620,30 +747,27 @@ export function stepBridge3DSim(
     }
   }
 
-  // 4b. Rota Direita: Buffs evoluem de forma equilibrada sem efeito composto explosivo intra-passagem!
-  const baseRightVals = [10, 25, 50, 99]
-  const shouldScaleRight =
-    input.currentArmy > 5 || sim.sectorIndex > 1 || sim.mathChallengesSolved > 0
-  if (shouldScaleRight) {
-    const refForce = Math.max(input.currentArmy, sim.bossMaxHp * 0.85, 25)
-    const mathEvolutionMult = 1 + Math.min(12, sim.mathChallengesSolved) * 0.18
-    for (let i = 0; i < sim.rightGates.length; i++) {
-      const g = sim.rightGates[i]
-      const potencyMult = (0.35 + i * 0.22) * mathEvolutionMult
-      const targetRightVal = Math.max(
-        baseRightVals[i] ?? 99,
-        Math.round(refForce * potencyMult),
-      )
-      // Evitar que coletar o portão i multiplique instantaneamente o portão i+1 no mesmo passe ativo,
-      // a menos que a escala do exército tenha mudado em mais de 4x (ex: novo setor ou salto exponencial).
-      const isCollectingActiveRight =
-        sim.activeRoute === 'RIGHT' && sim.rightBuffActiveTimerMs > 0
-      const ratioChange =
-        g.bonusSoldiers > 0 ? targetRightVal / g.bonusSoldiers : 999
-      if (!isCollectingActiveRight || ratioChange > 4.0 || ratioChange < 0.25) {
-        g.bonusSoldiers = targetRightVal
-        g.label = `+${formatArmy(targetRightVal, 'compact')}`
-      }
+  // 4b. Rota Direita (V9 Pilar 1): ÚNICA rota com crescimento exponencial, vinculada ao Grau (1..4) e à questão resolvida!
+  const rightExpSpec = computeRightCorridorExponentialGates({
+    sectorIndex: sim.sectorIndex,
+    currentArmy: input.currentArmy,
+    mathChallengesSolved: sim.mathChallengesSolved,
+    activeTier: sim.rightActiveTier,
+    solvedQuestionValue: sim.rightActiveQuestionValue,
+  })
+  const targetRightVals = [rightExpSpec.gate0Soldiers, rightExpSpec.gate1Soldiers]
+  const targetRightSubs = [rightExpSpec.gate0SubLabel, rightExpSpec.gate1SubLabel]
+  for (let i = 0; i < sim.rightGates.length; i++) {
+    const g = sim.rightGates[i]
+    const targetRightVal = targetRightVals[i] ?? rightExpSpec.gate1Soldiers
+    const isCollectingActiveRight =
+      sim.activeRoute === 'RIGHT' && sim.rightBuffActiveTimerMs > 0
+    const ratioChange =
+      g.bonusSoldiers > 0 ? targetRightVal / g.bonusSoldiers : 999
+    if (!isCollectingActiveRight || ratioChange > 3.5 || ratioChange < 0.25) {
+      g.bonusSoldiers = targetRightVal
+      g.label = `+${formatArmy(targetRightVal, 'compact')}`
+      g.subLabel = targetRightSubs[i] ?? rightExpSpec.gate1SubLabel
     }
   }
 
@@ -655,7 +779,7 @@ export function stepBridge3DSim(
     Math.abs(sim.rightAltarZ - BRIDGE_3D_DIMENSIONS.zPlayerLine) <= 1.5
   ) {
     sim.rightAltarCollectedInPass = true
-    const targetBonus = sim.rightGates[2]?.bonusSoldiers ?? 99
+    const targetBonus = sim.rightGates[1]?.bonusSoldiers ?? 99
     sim.pendingRightGateBonus = Math.max(sim.pendingRightGateBonus, targetBonus)
   }
   if (sim.rightAltarZ > BRIDGE_3D_DIMENSIONS.zPlayerLine + 3.0) {
@@ -675,17 +799,17 @@ export function stepBridge3DSim(
       sim.rightWeaponLevel += 1
       const weaponBonus = Math.max(
         25 * sim.rightWeaponLevel,
-        input.currentArmy * 1.5,
+        Math.round(input.currentArmy * activeTierSpec.armyBonusRatio),
       )
       callbacks.onSideRouteReward(
         'RIGHT',
         weaponBonus,
-        `🔥 Metralhadora Nv.${sim.rightWeaponLevel} Coletada! +${formatArmy(weaponBonus, 'compact')}`,
+        `🔥 ${activeTierSpec.activeHudSummaryPt} Nv.${sim.rightWeaponLevel}! +${formatArmy(weaponBonus, 'compact')}`,
       )
     } else {
       // V8 Fase 2: Rota Direita cinza/congelada por padrão — permanece visível/congelada sem coletar nem abrir modal!
       const weaponPending = Math.max(
-        sim.rightGates[2]?.bonusSoldiers ?? 99,
+        sim.rightGates[1]?.bonusSoldiers ?? 99,
         input.currentArmy * 1.8,
       )
       sim.pendingRightGateBonus = Math.max(sim.pendingRightGateBonus, weaponPending)
@@ -719,7 +843,7 @@ export function stepBridge3DSim(
         callbacks.onSideRouteReward(
           'RIGHT',
           g.bonusSoldiers,
-          `⚡ Super Buff ${g.label} (${remSec}s Ativo!)`,
+          `⚡ Super Buff ${g.label} · ${g.subLabel ?? activeTierSpec.badgePt} (${remSec}s Ativo!)`,
         )
       } else {
         // Quando cinza/congelado: permanece visível como bloqueado, 0 soldados grátis e zero modal intrusivo automático!
@@ -746,7 +870,7 @@ export function stepBridge3DSim(
 
     const boltRoute = resolveRouteFromWorldX(bolt.x)
 
-    // 5a. Colisão na Rota Esquerda: Pedestal/Canhão Congelado
+    // 5a. Colisão na Rota Esquerda: Pedestal/Canhão Congelado (V9: Recompensa 100% ancorada no nível dos monstros!)
     if (
       boltRoute === 'LEFT' &&
       !sim.leftFrozenBlock.unlocked &&
@@ -759,7 +883,7 @@ export function stepBridge3DSim(
       bolt.active = false
       if (sim.leftFrozenBlock.hp <= 0) {
         sim.leftFrozenBlock.unlocked = true
-        const unlockBonus = Math.max(3, Math.round(input.currentArmy * 0.12))
+        const unlockBonus = leftMonsterScale.cannonUnlockBonus
         callbacks.onSideRouteReward(
           'LEFT',
           unlockBonus,
@@ -834,7 +958,7 @@ export function stepBridge3DSim(
       }
       if (hitBarrel) continue
 
-      // 5d. Colisão na Rota Central: Horda Rubra e Mini-Bosses (176 HP)
+      // 5d. Colisão na Rota Central: Horda Rubra e Mini-Bosses (176 HP) — Suporta Canhão Perfurante (Grau III/IV)
       let hitEnemy = false
       for (const en of sim.enemies) {
         const hitRadiusX = en.isMiniBoss ? 1.55 : 0.98
@@ -845,8 +969,12 @@ export function stepBridge3DSim(
         ) {
           en.hp -= bolt.damage
           en.hitFlashMs = 150
-          bolt.active = false
-          hitEnemy = true
+          if ((bolt.pierceRemaining ?? 0) > 0) {
+            bolt.pierceRemaining = (bolt.pierceRemaining ?? 0) - 1
+          } else {
+            bolt.active = false
+          }
+          hitEnemy = !bolt.active
           damageDealtThisFrame += Math.min(bolt.damage, 4)
           if (en.hp <= 0) {
             coinsEarnedThisFrame += en.isMiniBoss ? 5 : 1

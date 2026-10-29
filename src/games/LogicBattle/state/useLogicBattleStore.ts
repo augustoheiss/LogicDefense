@@ -76,6 +76,9 @@ import { SaveRepository } from './persistence'
 /** V8: Bioma único e contínuo do Modo Ponte (evita reset destrutivo ao trocar de bioma) */
 export const CANONICAL_BRIDGE_BIOME_ID: BiomeId = 'planicie_pedra'
 
+/** Controla se o avanço do último segmento veio de clique explícito nos botões de faixa (Modo 2D/Dock) */
+let lastAdvanceViaTapButton = false
+
 export interface CaptainSpeech {
   mood: 'proud' | 'curious' | 'excited' | 'calm'
   text: string
@@ -276,6 +279,8 @@ export interface LogicBattleStoreState {
     armyMultiplier: number
     weaponDmgMultiplier: number
     summaryPt: string
+    correctValue: number
+    expressionBadge: string
   } | null
 
   // V7: Modo Infinito por Setores & 3 Rotas Reais na Ponte 3D
@@ -701,42 +706,43 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       tone: 'optimal',
       createdAtMs: snap.elapsedMs,
     }
+    // V9 (Pilar 2): Escala Ortogonal — Rota Central escala apenas com o Nível dos Monstros (spec.totalForce)
+    const monsterScale = Math.max(25, Math.round(spec.totalForce * 0.22))
     const updatedSegments =
       newSector > 1
-        ? snap.segments.map((seg, idx) => {
-            if (idx < snap.activeSegmentIndex) return seg
-            return {
-              ...seg,
-              lanes: seg.lanes.map((laneGates) =>
-                laneGates.map((g) => {
-                  if (g.op === '+') {
-                    const scaledNum = Math.max(
-                      g.operand.value,
-                      Math.round(nextArmy * (0.12 + idx * 0.035)),
-                    )
-                    return {
-                      ...g,
-                      label: `+ ${formatArmy(scaledNum, 'compact')}`,
-                      operand: { value: scaledNum, num: scaledNum, den: 1 },
-                    }
+        ? snap.segments.map((seg, idx) => ({
+            ...seg,
+            lanes: seg.lanes.map((laneGates) =>
+              laneGates.map((g) => {
+                if (g.op === '+') {
+                  const scaledNum = Math.max(
+                    g.operand.value,
+                    Math.round(monsterScale * (0.25 + idx * 0.06)),
+                  )
+                  return {
+                    ...g,
+                    label: `+ ${formatArmy(scaledNum, 'compact')}`,
+                    operand: { value: scaledNum, num: scaledNum, den: 1 },
                   }
-                  if (g.op === '−') {
-                    const scaledSub = Math.max(
-                      g.operand.value,
-                      Math.round(nextArmy * (0.1 + idx * 0.03)),
-                    )
-                    return {
-                      ...g,
-                      label: `− ${formatArmy(scaledSub, 'compact')}`,
-                      operand: { value: scaledSub, num: scaledSub, den: 1 },
-                    }
+                }
+                if (g.op === '−') {
+                  const scaledSub = Math.max(
+                    g.operand.value,
+                    Math.round(monsterScale * (0.18 + idx * 0.04)),
+                  )
+                  return {
+                    ...g,
+                    label: `− ${formatArmy(scaledSub, 'compact')}`,
+                    operand: { value: scaledSub, num: scaledSub, den: 1 },
                   }
-                  return g
-                }),
-              ),
-            }
-          })
+                }
+                return g
+              }),
+            ),
+          }))
         : snap.segments
+    const shouldRecycleCenterWave =
+      snap.activeSegmentIndex >= updatedSegments.length || snap.progress >= 0.85
     const nextSave = buildSaveWithCheckpoint(
       {
         ...state.save,
@@ -765,6 +771,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         crowdNodes: buildCrowdNodes(nextArmy),
         bridgeCoinsEarned: (snap.bridgeCoinsEarned ?? 0) + coinsReward,
         bridgeKills: (snap.bridgeKills ?? 0) + 1,
+        progress: shouldRecycleCenterWave ? 0.01 : snap.progress,
+        activeSegmentIndex: shouldRecycleCenterWave ? 0 : snap.activeSegmentIndex,
+        resolvedSegments: shouldRecycleCenterWave ? {} : snap.resolvedSegments,
         segments: updatedSegments,
         enemy: {
           ...snap.enemy,
@@ -947,9 +956,17 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       0,
       Math.round(snap.currentArmy * (policy.armyMultiplier - 1)),
     )
-    const soldiersAdded = Math.max(
+    const baseSoldiersAdded = Math.max(
       policy.flatSoldiersBonus,
       multBonus + Math.round(policy.flatSoldiersBonus * 0.5),
+    )
+    const expStreakFactor =
+      state.activeEngineId === 'ponte_portoes'
+        ? Math.pow(1.25, Math.min(state.mathChallengesSolvedInRun, 20))
+        : 1
+    const soldiersAdded = Math.max(
+      policy.flatSoldiersBonus,
+      Math.round(baseSoldiersAdded * expStreakFactor),
     )
     const nextArmy = clampArmy(snap.currentArmy + soldiersAdded)
     const nextCoins = (snap.bridgeCoinsEarned ?? 0) + policy.coinsBonus
@@ -999,6 +1016,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         armyMultiplier: policy.armyMultiplier,
         weaponDmgMultiplier: policy.weaponDmgMultiplier,
         summaryPt: rewardSummary,
+        correctValue: challenge.correctValue,
+        expressionBadge: challenge.expressionBadge ?? '',
       },
       snapshot: {
         ...snap,
@@ -1502,49 +1521,34 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         progress: Math.max(snapshot.progress, nextProgress),
       },
     })
-    get().tickRun(16)
+    lastAdvanceViaTapButton = true
+    try {
+      get().tickRun(16)
+    } finally {
+      lastAdvanceViaTapButton = false
+    }
   },
 
   tickRun: (dtMs) => {
     const state = get()
     const { snapshot, runPlan, save } = state
 
-    if (snapshot.phase !== 'RUNNING' || state.activeMathChallenge !== null) {
+    if (
+      (snapshot.phase !== 'RUNNING' && snapshot.phase !== 'CALM_WAIT') ||
+      state.activeMathChallenge !== null
+    ) {
       return
     }
 
     const safeDt = Math.min(80, Math.max(0, dtMs))
     const nextElapsed = snapshot.elapsedMs + safeDt
 
-    // Velocidade da marcha: percorre 0 -> 1 em ~48 segundos de corrida tática contínua
-    const speedPerMs = 1 / 48000
-    let nextProgress = Math.min(1, snapshot.progress + safeDt * speedPerMs)
+    // V9: Velocidade da esteira central sincronizada com as rotas laterais (~5.88 m/s em modo normal, ~3.92 m/s em modo calmo),
+    // nunca travando a Rota Central enquanto as rotas Esquerda e Direita se movem!
+    const speedPerMs = save.settings.calmMode ? 1 / 24000 : 1 / 16000
+    const nextProgress = Math.min(1, snapshot.progress + safeDt * speedPerMs)
 
     const activeSeg = snapshot.segments[snapshot.activeSegmentIndex]
-
-    // Em Modo Calmo, para diante do segmento ativo até o jogador escolher a faixa!
-    if (
-      save.settings.calmMode &&
-      activeSeg &&
-      !snapshot.resolvedSegments[activeSeg.id] &&
-      nextProgress >= activeSeg.zPosition - 0.018 &&
-      snapshot.progress < activeSeg.zPosition - 0.018
-    ) {
-      nextProgress = activeSeg.zPosition - 0.018
-      set({
-        snapshot: {
-          ...snapshot,
-          elapsedMs: nextElapsed,
-          progress: nextProgress,
-          phase: 'CALM_WAIT',
-        },
-        captainSpeech: {
-          mood: 'calm',
-          text: 'Modo Calmo ativo: compare as placas sem pressa e clique no portão escolhido!',
-        },
-      })
-      return
-    }
 
     // Verifica se o exército acabou de cruzar o segmento ativo
     if (
@@ -1552,9 +1556,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       !snapshot.resolvedSegments[activeSeg.id] &&
       nextProgress >= activeSeg.zPosition
     ) {
-      // V8: Se o jogador estiver fisicamente nos Corredores Laterais (|laneX| > 0.52) fora do Modo Calmo,
+      // V8/V9: Se o jogador estiver fisicamente nos Corredores Laterais (|laneX| > 0.52),
       // ele NÃO colide com os portões da Rota Central (pois está passando pela esteira lateral Esquerda/Direita)!
-      if (!save.settings.calmMode && Math.abs(snapshot.laneX) > 0.52) {
+      if (Math.abs(snapshot.laneX) > 0.52) {
         const resolvedMap = {
           ...snapshot.resolvedSegments,
           [activeSeg.id]: { chosenLane: -1, resultArmy: snapshot.currentArmy },
@@ -1641,11 +1645,21 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       }
 
       const armyBefore = clampArmy(snapshot.currentArmy)
-      const cf = evaluateSegmentCounterfactual(activeSeg, armyBefore)
-      const appResult = applyGateChainWithRemainder(armyBefore, chosenGates)
-      const rawNextArmy = clampArmy(appResult.nextArmy)
+      // V9 (Pilar 2): Escala Ortogonal — Rota Central ancorada no Nível dos Monstros do Setor,
+      // sem multiplicar exponencialmente o exército inflado pela Rota da Direita.
+      const monsterEvalCap = Math.max(105, Math.round(snapshot.enemy.totalForce * 1.5))
+      const effectiveEvalBase =
+        armyBefore > monsterEvalCap
+          ? Math.max(25, Math.round(snapshot.enemy.totalForce * 0.85))
+          : armyBefore
+      const cf = evaluateSegmentCounterfactual(activeSeg, effectiveEvalBase)
+      const appResult = applyGateChainWithRemainder(effectiveEvalBase, chosenGates)
+      const rawNextArmy =
+        armyBefore > monsterEvalCap
+          ? clampArmy(armyBefore + (appResult.nextArmy - effectiveEvalBase))
+          : clampArmy(appResult.nextArmy)
       const nextRemainderBank = snapshot.remainderBankInRun + appResult.remainder
-      const wasOptimal = rawNextArmy >= cf.bestValue
+      const wasOptimal = appResult.nextArmy >= cf.bestValue
 
       // Combo de Cálculo V3 (§2.2): escolher o portão ótimo sobe o multiplicador (×1 -> ×1,5 -> ×2 -> ×3)
       const nextComboStreak = wasOptimal ? (snapshot.calcComboStreak ?? 0) + 1 : 0
@@ -1746,7 +1760,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       }
 
       // Verificar se disparou Pegadinha Matemática catalogada (R1: NUNCA pausa a corrida!)
-      const trapHit = detectTrap(activeSeg, armyBefore, chosenLane)
+      const trapHit = detectTrap(activeSeg, effectiveEvalBase, chosenLane)
       if (trapHit) {
         soundEngine.playTrapOpaAlert()
         const rng = createRng(runPlan.seed + snapshot.activeSegmentIndex * 97)
@@ -1868,7 +1882,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         }
       }
 
-      const safePassArmy = clampArmy(nextArmy)
+      const safePassArmy = Math.max(1, clampArmy(nextArmy))
       const nextSavePass = buildSaveWithCheckpoint(
         {
           ...save,
@@ -2000,8 +2014,41 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         })
         return
       }
-      if (state.infiniteBridgeMode && snapshot.currentArmy > 0) {
+      if (state.infiniteBridgeMode && snapshot.currentArmy > 0 && lastAdvanceViaTapButton) {
         get().advanceInfiniteBridgeSector()
+        return
+      }
+      // V9: Na Ponte 3D em tempo real (sem clique manual de salto final), reciclar continuamente a esteira
+      // de 6 segmentos da Rota Central no mesmo nível dos monstros, igual às esteiras da Esquerda e da Direita!
+      const isLive3DBridge =
+        typeof window !== 'undefined' &&
+        Boolean(
+          (window as unknown as { __lbBridge3DTelemetry?: unknown })
+            .__lbBridge3DTelemetry,
+        )
+      if (isLive3DBridge && !lastAdvanceViaTapButton && snapshot.currentArmy > 0) {
+        const nextWaveSeed = (runPlan.seed + Math.floor(nextElapsed) + 997) >>> 0
+        const recycledPlan = generateRun({
+          seed: nextWaveSeed,
+          biomeId: runPlan.biomeId,
+          regionId: runPlan.regionId,
+          n0: snapshot.currentArmy,
+          enemy: snapshot.enemy,
+          mastery: save.mastery,
+          observatoryLevel: save.citadelLevels.observatorio ?? 1,
+          trapAlertSeenCount: save.trapAlertSeenCount,
+        })
+        set({
+          snapshot: {
+            ...snapshot,
+            elapsedMs: nextElapsed,
+            progress: 0.01,
+            activeSegmentIndex: 0,
+            segments: recycledPlan.segments,
+            resolvedSegments: {},
+            phase: save.settings.calmMode ? 'CALM_WAIT' : 'RUNNING',
+          },
+        })
         return
       }
       const safeFinalArmy = clampArmy(snapshot.currentArmy)

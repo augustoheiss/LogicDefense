@@ -103,9 +103,10 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
           const plaqueMesh = grp.children[3] as THREE.Mesh | undefined
           const mat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
           if (mat) {
-            const bg = i % 3 === 2 ? '#0d9488' : i % 2 === 1 ? '#0284c7' : '#0369a1'
-            const brd = i % 3 === 2 ? '#5eead4' : '#7dd3fc'
-            const sub = gate.bonusSoldiers > 1 ? 'SOLDADOS' : 'SOLDADO'
+            const bg = i % 2 === 1 ? '#0284c7' : '#0369a1'
+            const brd = '#7dd3fc'
+            const sub =
+              gate.subLabel ?? (gate.bonusSoldiers > 1 ? 'SOLDADOS' : 'SOLDADO')
             const nextTex = getPlaqueTexture(gate.label, bg, brd, '#ffffff', sub)
             if (mat.map !== nextTex) {
               mat.map = nextTex
@@ -121,9 +122,6 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
 
     if (rightCorridorFlowRef.current) {
       const children = rightCorridorFlowRef.current.children
-      const rightSubLabel = isRightActive
-        ? `⚡ ATIVO ${remSec}s!`
-        : '🔒 CONGELADO · 🧮'
       for (let i = 0; i < sim.rightGates.length; i++) {
         const grp = children[i] as THREE.Group | undefined
         const gate = sim.rightGates[i]
@@ -161,11 +159,20 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
           if (mat) {
             const bg = !isRightActive
               ? '#334155'
-              : i >= 2
+              : sim.rightActiveTier === 4
                 ? '#ca8a04'
-                : '#15803d'
+                : sim.rightActiveTier === 3
+                  ? '#6d28d9'
+                  : sim.rightActiveTier === 2
+                    ? '#0369a1'
+                    : '#15803d'
             const brd = !isRightActive ? '#94a3b8' : '#fde047'
             const txtColor = !isRightActive ? '#cbd5e1' : '#ffffff'
+            const rightSubLabel = isRightActive
+              ? gate.subLabel
+                ? `${gate.subLabel} · ${remSec}s`
+                : `⚡ ATIVO ${remSec}s!`
+              : '🔒 CONGELADO · 🧮'
             const nextTex = getPlaqueTexture(
               gate.label,
               bg,

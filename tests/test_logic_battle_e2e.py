@@ -255,8 +255,8 @@ def run_suite() -> dict:
             results["functional"]["continuousShootingFromStart"] = f"PASS ({active_projectiles_start} active projectiles)"
 
             # 2.5.2 MASTER PLAN V6: 3º Caminho na Direita da Ponte + 4 Graus de Dificuldade + Zero Repetição
-            army_before_math = int(
-                page.locator('[data-testid="lb-current-army-value"]').inner_text().strip()
+            army_before_math = page.evaluate(
+                "() => window.__lbStore.getState().snapshot.currentArmy"
             )
             page.click('[data-testid="lb-bridge-math-path-btn"]')
             page.wait_for_selector('[data-testid="lb-math-challenge-modal"]', timeout=5000)
@@ -290,8 +290,8 @@ def run_suite() -> dict:
             assert page.locator('[data-testid="lb-math-challenge-modal"]').count() == 0, (
                 "V6: MathChallengeModal deve fechar ao acertar a conta"
             )
-            army_after_math = int(
-                page.locator('[data-testid="lb-current-army-value"]').inner_text().strip()
+            army_after_math = page.evaluate(
+                "() => window.__lbStore.getState().snapshot.currentArmy"
             )
             assert army_after_math > army_before_math, (
                 f"V6: Resolver conta no 3º Caminho deve aumentar soldados ({army_before_math} -> {army_after_math})"
@@ -386,7 +386,6 @@ def run_suite() -> dict:
                 if gate1.count() > 0 and gate1.is_visible():
                     g1_txt = gate1.get_attribute("aria-label") or ""
                     if ("−" in g1_txt or "÷" in g1_txt) and gate0.count() > 0 and gate0.is_visible():
-                        gate0.click(force=True)
                         gate0.click(force=True)
                     else:
                         gate1.click(force=True)
@@ -515,15 +514,19 @@ def run_suite() -> dict:
             assert "e+52" in hud_high_text and "," in hud_high_text and len(hud_high_text) <= 9, (
                 f"Teste01 Req 1: Acima de 9000T o HUD deve exibir exponencial limpa com 2 casas decimais (XX,XXe+YY), obtido: {hud_high_text}"
             )
-            for lbl in high_tel.get("rightGateLabels", []) + high_tel.get("leftGateLabels", []):
+            for lbl in high_tel.get("rightGateLabels", []):
                 assert "e+" in lbl and "," in lbl and len(lbl) <= 10, (
-                    f"Teste01 Req 1: Placas laterais 3D acima de 9000T devem usar XX,XXe+YY sem 15 casas decimais, obtido: {lbl}"
+                    f"Teste01 Req 1: Placas da Rota Direita acima de 9000T devem usar XX,XXe+YY sem 15 casas decimais, obtido: {lbl}"
                 )
-            assert len(set(high_tel.get("leftGateLabels", []))) == 5, (
-                f"Teste01 Req 3: Os 5 portoes da Rota Esquerda devem ter valores distintos: {high_tel.get('leftGateLabels')}"
+            for lbl in high_tel.get("leftGateLabels", []):
+                assert "e+" not in lbl, (
+                    f"V9 Pilar 2: Placas da Rota Esquerda devem escalar com Nivel dos Monstros e NAO inflar para e+52: {lbl}"
+                )
+            assert len(set(high_tel.get("leftGateLabels", []))) == 2, (
+                f"V9 Pilar 3: Os 2 portoes da Rota Esquerda devem ter valores distintos: {high_tel.get('leftGateLabels')}"
             )
-            assert len(set(high_tel.get("rightGateLabels", []))) == 4, (
-                f"Teste01 Req 4: Os 4 portoes da Rota Direita devem ter valores distintos: {high_tel.get('rightGateLabels')}"
+            assert len(set(high_tel.get("rightGateLabels", []))) == 2, (
+                f"V9 Pilar 3: Os 2 super-portoes da Rota Direita devem ter valores distintos: {high_tel.get('rightGateLabels')}"
             )
             assert any(lbl != "− 1" for lbl in teste01_audit.get("negLabelsSector3", [])), (
                 f"Teste01 Req 2: Portoes negativos centrais devem evoluir acima de '- 1': {teste01_audit}"

@@ -9,6 +9,10 @@ import {
   MathDifficultyTier,
 } from '../domain/infiniteMathEngine'
 import { ENGINE_CATALOG } from '../engines/engineContract'
+import {
+  computeRightCorridorExponentialGates,
+  RIGHT_CORRIDOR_TIER_BUFF_POLICIES,
+} from '../run/bridge3d/bridge3dPolicies'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
 
 const TIER_ORDER: MathDifficultyTier[] = [1, 2, 3, 4]
@@ -19,6 +23,8 @@ export const MathChallengeModal: React.FC = () => {
   const diagnostic = useLogicBattleStore((s) => s.activeMathChallengeDiagnostic)
   const activeEngineId = useLogicBattleStore((s) => s.activeEngineId)
   const solvedCount = useLogicBattleStore((s) => s.mathChallengesSolvedInRun)
+  const bridgeSectorIndex = useLogicBattleStore((s) => s.bridgeSectorIndex)
+  const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
   const switchTier = useLogicBattleStore((s) => s.switchMathChallengeTier)
   const submitChoice = useLogicBattleStore((s) => s.submitMathChallengeChoice)
   const closeModal = useLogicBattleStore((s) => s.closeMathChallengeModal)
@@ -29,6 +35,14 @@ export const MathChallengeModal: React.FC = () => {
   if (!challenge) return null
 
   const activePolicy = MATH_CHALLENGE_TIER_POLICIES[challenge.tier]
+  const rightTierSpec = RIGHT_CORRIDOR_TIER_BUFF_POLICIES[challenge.tier]
+  const rightPreview = computeRightCorridorExponentialGates({
+    sectorIndex: bridgeSectorIndex,
+    currentArmy,
+    mathChallengesSolved: solvedCount + 1,
+    activeTier: challenge.tier,
+    solvedQuestionValue: challenge.correctValue,
+  })
   const engineMeta = ENGINE_CATALOG[activeEngineId] ?? ENGINE_CATALOG.ponte_portoes
   const rewardForEngine =
     activePolicy.engineRewardSummary[activeEngineId] ?? activePolicy.titlePt
@@ -119,6 +133,20 @@ export const MathChallengeModal: React.FC = () => {
           >
             🎁 {engineMeta.icon} {rewardForEngine}
           </span>
+          {activeEngineId === 'ponte_portoes' && (
+            <span
+              className="lb-badge-reward"
+              data-testid="lb-math-right-corridor-preview"
+              style={{
+                background: 'rgba(30, 41, 59, 0.9)',
+                borderColor: rightTierSpec.plaqueBorderColor,
+                color: rightTierSpec.plaqueAccentColor,
+                fontWeight: 800,
+              }}
+            >
+              ⚡ Rota Direita (2 Super-Portões): +{rightPreview.gate0Soldiers} ({rightPreview.gate0SubLabel}) · +{rightPreview.gate1Soldiers} ({rightPreview.gate1SubLabel})
+            </span>
+          )}
         </div>
 
         <div
