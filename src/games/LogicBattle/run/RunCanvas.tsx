@@ -99,6 +99,10 @@ export const RunCanvas: React.FC = () => {
   const settings = useLogicBattleStore((s) => s.save.settings)
   const lunetaCharges = useLogicBattleStore((s) => s.lunetaChargesRemaining)
   const activeMathChallenge = useLogicBattleStore((s) => s.activeMathChallenge)
+  const activeRedemptionTokenId = useLogicBattleStore((s) => s.activeRedemptionTokenId)
+  const albumDrawerOpen = useLogicBattleStore((s) => s.albumDrawerOpen)
+  const codexDrawerSlug = useLogicBattleStore((s) => s.codexDrawerSlug)
+  const settingsPopoverOpen = useLogicBattleStore((s) => s.settingsPopoverOpen)
   const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
   const chooseLaneAndAdvance = useLogicBattleStore((s) => s.chooseLaneAndAdvance)
   const useLunetaOnNextSegment = useLogicBattleStore((s) => s.useLunetaOnNextSegment)
@@ -110,10 +114,17 @@ export const RunCanvas: React.FC = () => {
   const extractRunToBase = useLogicBattleStore((s) => s.extractRunToBase)
   const steerToRoute = useLogicBattleStore((s) => s.steerToRoute)
 
+  const isAnyModalOrDrawerOpen =
+    activeMathChallenge !== null ||
+    activeRedemptionTokenId !== null ||
+    albumDrawerOpen ||
+    codexDrawerSlug !== null ||
+    settingsPopoverOpen
+
   useRunLoop(
     world === 'run' &&
       (phase === 'RUNNING' || phase === 'CALM_WAIT') &&
-      activeMathChallenge === null,
+      !isAnyModalOrDrawerOpen,
   )
   useSteeringInput(canvasRef)
 

@@ -1556,9 +1556,16 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const state = get()
     const { snapshot, runPlan, save } = state
 
+    const isModalOpen =
+      state.activeMathChallenge !== null ||
+      state.activeRedemptionTokenId !== null ||
+      state.albumDrawerOpen ||
+      state.codexDrawerSlug !== null ||
+      state.settingsPopoverOpen
+
     if (
       (snapshot.phase !== 'RUNNING' && snapshot.phase !== 'CALM_WAIT') ||
-      state.activeMathChallenge !== null
+      isModalOpen
     ) {
       return
     }
@@ -1669,18 +1676,23 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
       const armyBefore = clampArmy(snapshot.currentArmy)
       // V9 (Pilar 2): Escala Ortogonal — Rota Central ancorada no Nível dos Monstros do Setor,
-      // sem multiplicar exponencialmente o exército inflado pela Rota da Direita.
+      // sem multiplicar nem dividir exponencialmente o exército inflado pela Rota da Direita.
       const monsterEvalCap = Math.max(105, Math.round(snapshot.enemy.totalForce * 1.5))
-      const effectiveEvalBase =
-        armyBefore > monsterEvalCap
-          ? Math.max(25, Math.round(snapshot.enemy.totalForce * 0.85))
-          : armyBefore
+      const monsterRefBase = Math.max(
+        25,
+        Math.min(120, Math.round(snapshot.enemy.totalForce * 0.35)),
+      )
+      const useOrthogonalMonsterBase =
+        armyBefore > monsterEvalCap ||
+        (state.mathChallengesSolvedInRun > 0 && armyBefore > monsterRefBase)
+      const effectiveEvalBase = useOrthogonalMonsterBase
+        ? monsterRefBase
+        : armyBefore
       const cf = evaluateSegmentCounterfactual(activeSeg, effectiveEvalBase)
       const appResult = applyGateChainWithRemainder(effectiveEvalBase, chosenGates)
-      const rawNextArmy =
-        armyBefore > monsterEvalCap
-          ? clampArmy(armyBefore + (appResult.nextArmy - effectiveEvalBase))
-          : clampArmy(appResult.nextArmy)
+      const rawNextArmy = useOrthogonalMonsterBase
+        ? clampArmy(armyBefore + (appResult.nextArmy - effectiveEvalBase))
+        : clampArmy(appResult.nextArmy)
       const nextRemainderBank = snapshot.remainderBankInRun + appResult.remainder
       const wasOptimal = appResult.nextArmy >= cf.bestValue
 
