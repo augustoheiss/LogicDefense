@@ -1726,11 +1726,12 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         nextMergeSeenCount += 1
       }
 
+      const safeNextGateArmy = Math.max(1, clampArmy(nextArmy))
       const resolvedMap = {
         ...snapshot.resolvedSegments,
-        [activeSeg.id]: { chosenLane, resultArmy: nextArmy },
+        [activeSeg.id]: { chosenLane, resultArmy: safeNextGateArmy },
       }
-      const nextCrowdNodes = buildCrowdNodes(nextArmy)
+      const nextCrowdNodes = buildCrowdNodes(safeNextGateArmy)
 
       // Verificar se é segmento de Portões Gêmeos
       if (activeSeg.kind === 'twins' && activeSeg.twinId) {
@@ -1749,12 +1750,12 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
             mergeTutorialSeenCount: nextMergeSeenCount,
             stats: {
               ...save.stats,
-              highestArmyReached: Math.max(save.stats.highestArmyReached, nextArmy),
+              highestArmyReached: Math.max(save.stats.highestArmyReached, safeNextGateArmy),
             },
           },
           {
             sectorIndex: state.bridgeSectorIndex,
-            currentArmy: nextArmy,
+            currentArmy: safeNextGateArmy,
             bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
             bridgeKills: snapshot.bridgeKills ?? 0,
             mathChallengesSolved: state.mathChallengesSolvedInRun,
@@ -1777,7 +1778,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
             ...snapshot,
             elapsedMs: nextElapsed,
             progress: nextProgress,
-            currentArmy: nextArmy,
+            currentArmy: safeNextGateArmy,
             remainderBankInRun: nextRemainderBank,
             activeSegmentIndex: snapshot.activeSegmentIndex + 1,
             resolvedSegments: resolvedMap,
