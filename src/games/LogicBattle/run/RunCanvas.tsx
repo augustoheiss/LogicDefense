@@ -495,7 +495,7 @@ export const RunCanvas: React.FC = () => {
         <div className="lb-webgl-stage-wrap" data-testid="lb-webgl-stage-wrap">
           <Canvas
             shadows
-            dpr={[1, 1.75]}
+            dpr={1}
             camera={{ position: [0, 18, 25], fov: 46, near: 0.5, far: 210 }}
             gl={{ antialias: true, powerPreference: 'high-performance' }}
             onCreated={({ gl }) => {

@@ -78,6 +78,7 @@ export const CANONICAL_BRIDGE_BIOME_ID: BiomeId = 'planicie_pedra'
 
 /** Controla se o avanço do último segmento veio de clique explícito nos botões de faixa (Modo 2D/Dock) */
 let lastAdvanceViaTapButton = false
+let tapAdvanceUsedInCurrentWave = false
 let runInstanceSeq = 0
 
 export interface CaptainSpeech {
@@ -768,6 +769,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     )
     SaveRepository.save(nextSave)
     soundEngine.playVictoryFanfare()
+    if (shouldRecycleCenterWave) {
+      tapAdvanceUsedInCurrentWave = false
+    }
     set({
       save: nextSave,
       bridgeSectorIndex: newSector,
@@ -855,6 +859,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     )
     SaveRepository.save(nextSave)
     soundEngine.playVictoryFanfare()
+    tapAdvanceUsedInCurrentWave = false
 
     set({
       save: nextSave,
@@ -1332,6 +1337,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     }
 
     const state = get()
+    tapAdvanceUsedInCurrentWave = false
     const targetRegionId = opts?.regionId ?? state.save.selectedRegionId
     const region = REGIONS[targetRegionId] ?? REGIONS.r01_ponte_aurora
     // V8: Bioma único no modo Ponte ('planicie_pedra')
@@ -1535,6 +1541,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       },
     })
     lastAdvanceViaTapButton = true
+    tapAdvanceUsedInCurrentWave = true
     try {
       get().tickRun(16)
     } finally {
@@ -1543,6 +1550,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   },
 
   tickRun: (dtMs) => {
+    if (dtMs >= 1000) {
+      tapAdvanceUsedInCurrentWave = false
+    }
     const state = get()
     const { snapshot, runPlan, save } = state
 
@@ -2027,7 +2037,11 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         })
         return
       }
-      if (state.infiniteBridgeMode && snapshot.currentArmy > 0 && lastAdvanceViaTapButton) {
+      if (
+        state.infiniteBridgeMode &&
+        snapshot.currentArmy > 0 &&
+        (lastAdvanceViaTapButton || tapAdvanceUsedInCurrentWave)
+      ) {
         get().advanceInfiniteBridgeSector()
         return
       }
@@ -2039,7 +2053,12 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
           (window as unknown as { __lbBridge3DTelemetry?: unknown })
             .__lbBridge3DTelemetry,
         )
-      if (isLive3DBridge && !lastAdvanceViaTapButton && snapshot.currentArmy > 0) {
+      if (
+        isLive3DBridge &&
+        !lastAdvanceViaTapButton &&
+        !tapAdvanceUsedInCurrentWave &&
+        snapshot.currentArmy > 0
+      ) {
         const nextWaveSeed = (runPlan.seed + Math.floor(nextElapsed) + 997) >>> 0
         const recycledPlan = generateRun({
           seed: nextWaveSeed,

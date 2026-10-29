@@ -475,6 +475,7 @@ export function stepBridge3DSim(
     isRunningOrBattle: boolean
     isBattlePhase?: boolean
     infiniteBridgeMode?: boolean
+    allSegmentsResolved?: boolean
   },
   callbacks: Bridge3DSimCallbacks,
 ): void {
@@ -649,7 +650,12 @@ export function stepBridge3DSim(
         const strikeDmg = isPlayerInCenter
           ? currentSectorSpec.meleeDamagePerStrike
           : Math.max(3, Math.round(currentSectorSpec.meleeDamagePerStrike * 0.65))
-        attritionLossThisFrame += strikeDmg
+        const effectiveStrikeLoss = input.isBattlePhase
+          ? 0
+          : input.allSegmentsResolved
+            ? strikeDmg
+            : Math.min(strikeDmg, Math.max(0, input.currentArmy - 3))
+        attritionLossThisFrame += effectiveStrikeLoss
         sim.playerHitFlashMs = 360
         sim.bossHitFlashMs = 220
       }
@@ -1105,11 +1111,11 @@ export function stepBridge3DSim(
       en.hp = en.maxHp
     }
   }
-  if (hordeContactLoss > 0) {
-    // Enquanto o Boss ainda está marchando (antes do MELEE_CLASH), a Horda drena o exército até o piso de 3 soldados,
+  if (hordeContactLoss > 0 && !input.isBattlePhase) {
+    // Enquanto o Boss ainda está marchando (antes do MELEE_CLASH com segmentos encerrados), a Horda drena o exército até o piso de 3 soldados,
     // permitindo que o Boss alcance a linha do jogador (+7.7) e desfira o golpe corpo a corpo fatal!
     const effectiveHordeLoss =
-      sim.bossLifecycle === 'MELEE_CLASH'
+      sim.bossLifecycle === 'MELEE_CLASH' && input.allSegmentsResolved
         ? hordeContactLoss
         : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 3))
     attritionLossThisFrame += effectiveHordeLoss

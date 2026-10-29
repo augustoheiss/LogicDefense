@@ -212,6 +212,9 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         isRunningOrBattle,
         isBattlePhase: snap.phase === 'BATTLE',
         infiniteBridgeMode: live.infiniteBridgeMode,
+        allSegmentsResolved:
+          snap.segments.length > 0 &&
+          Object.keys(snap.resolvedSegments).length >= snap.segments.length,
       },
       {
         onEnemyKilled: (coinsDelta, damageDealt, attritionLoss) => {
