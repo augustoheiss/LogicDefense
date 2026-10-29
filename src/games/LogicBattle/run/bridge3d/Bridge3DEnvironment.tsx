@@ -129,6 +129,11 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         nextSim.bossArchetypeId = nextSpec.archetype.id
         nextSim.bossArchetypeName = nextSpec.archetype.namePt
         nextSim.supplyCaravan.active = false
+        nextSim.fireCooldownSec = 0
+        nextSim.activeBoltsCount = 0
+        for (const bolt of nextSim.bolts) {
+          bolt.active = false
+        }
         for (const barrel of nextSim.barrels) {
           barrel.active = true
           barrel.maxHp = 112 + (live.bridgeSectorIndex - 1) * 45
