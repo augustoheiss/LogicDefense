@@ -20,6 +20,7 @@ import {
   computeShotProfile,
   DynamicShotProfile,
   ENEMY_LIVING_BASE_POLICY,
+  getBridgeTowerMaxHp,
   laneNormToWorldX,
   PLAYER_BRIDGE_BASE_POLICY,
   resolveRouteFromWorldX,
@@ -142,6 +143,18 @@ export interface Bridge3DSimCallbacks {
   onEnemyBaseEvolved?: (newLevel: number, activeTowers: number) => void
   onEnemyDebuffTowerHit?: (lossRatio: number, label: string) => void
   onDebuffBoltIntercepted?: (label: string) => void
+  onAlliedTowerDamaged?: (
+    slotIndex: 0 | 1 | 2 | 3,
+    remainingHp: number,
+    maxHp: number,
+    damage: number,
+  ) => void
+  onAlliedTowerDestroyed?: (
+    slotIndex: 0 | 1 | 2 | 3,
+    newLevel: number,
+    towerNamePt: string,
+  ) => void
+  onBossStrikeHero?: (damage: number, bossNamePt: string) => void
 }
 
 export interface Bridge3DSimState {
@@ -204,6 +217,18 @@ export interface Bridge3DSimState {
   towerFireCooldownsMs: [number, number, number, number]
   towerShotsFiredCount: number
   towerKillsCount: number
+  /** V11: Vida estrutural das 4 Torres Aliadas da Ponte, rotação de mira 3D, recuo e Cerco do Boss */
+  lastSyncedTowerLevels: [number, number, number, number]
+  playerBridgeTowerHp: [number, number, number, number]
+  playerBridgeTowerMaxHp: [number, number, number, number]
+  playerBridgeTowerHitFlashMs: [number, number, number, number]
+  playerBridgeTowerRuinedTimerMs: [number, number, number, number]
+  towerTargetYawRad: [number, number, number, number]
+  towerRecoilAmount: [number, number, number, number]
+  bossVanguardShieldActive: boolean
+  bossTowerAttacksCount: number
+  bossHeroStrikesCount: number
+  playerBridgeTowerDestroyedCount: number
 }
 
 export const MAX_SIM_BOLTS = 72
@@ -424,6 +449,13 @@ export function createInitialBridge3DSimState(
     debuffBoltsDodgedCount: 0,
     debuffBoltsInterceptedCount: 0,
     playerBridgeTowerLevels: [1, 0, 0, 0],
+    lastSyncedTowerLevels: [1, 0, 0, 0],
+    playerBridgeTowerHp: [getBridgeTowerMaxHp(1), 0, 0, 0],
+    playerBridgeTowerMaxHp: [getBridgeTowerMaxHp(1), 0, 0, 0],
+    playerBridgeTowerHitFlashMs: [0, 0, 0, 0],
+    playerBridgeTowerRuinedTimerMs: [0, 0, 0, 0],
+    towerTargetYawRad: [0, 0, 0, 0],
+    towerRecoilAmount: [0, 0, 0, 0],
     playerTowerShieldCooldownMs: 0,
     alliedTowerBolts: Array.from({ length: 16 }, (_, idx) => ({
       id: idx + 1,
@@ -439,6 +471,10 @@ export function createInitialBridge3DSimState(
     towerFireCooldownsMs: [450, 650, 850, 1050],
     towerShotsFiredCount: 0,
     towerKillsCount: 0,
+    bossVanguardShieldActive: true,
+    bossTowerAttacksCount: 0,
+    bossHeroStrikesCount: 0,
+    playerBridgeTowerDestroyedCount: 0,
   }
 }
 
@@ -566,7 +602,14 @@ export function applyMathBonusToRightWeapon(
       25,
       Math.round(sim.bossMaxHp * tierSpec.bossRoyalVolleyRatio),
     )
-    sim.bossHp = Math.max(1, sim.bossHp - royalVolleyBossDamage)
+    const vanguardFloor =
+      sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
+        ? Math.max(
+            18,
+            Math.round(sim.bossMaxHp * PLAYER_BRIDGE_BASE_POLICY.bossVanguardMinHpRatio),
+          )
+        : 1
+    sim.bossHp = Math.max(vanguardFloor, sim.bossHp - royalVolleyBossDamage)
     sim.bossHitFlashMs = 420
   }
 
@@ -661,7 +704,23 @@ export function stepBridge3DSim(
   const timerDtMs = Math.min(250, Math.max(1, dtSec * 1000))
 
   if (input.playerBridgeTowerLevels) {
-    sim.playerBridgeTowerLevels = [...input.playerBridgeTowerLevels]
+    for (let i = 0; i < 4; i++) {
+      const incomingLvl = input.playerBridgeTowerLevels[i] ?? 0
+      const prevSyncedLvl = sim.lastSyncedTowerLevels[i] ?? 0
+      if (incomingLvl !== prevSyncedLvl) {
+        sim.playerBridgeTowerLevels[i] = incomingLvl
+        sim.lastSyncedTowerLevels[i] = incomingLvl
+        const newMaxHp = getBridgeTowerMaxHp(incomingLvl)
+        sim.playerBridgeTowerMaxHp[i] = newMaxHp
+        if (incomingLvl > prevSyncedLvl) {
+          // Jogador construiu ou evoluiu a torre: restaura HP estrutural cheio
+          sim.playerBridgeTowerHp[i] = newMaxHp
+          sim.playerBridgeTowerRuinedTimerMs[i] = 0
+        } else {
+          sim.playerBridgeTowerHp[i] = Math.min(sim.playerBridgeTowerHp[i], newMaxHp)
+        }
+      }
+    }
   }
   const alliedTowerStats = computeAlliedBridgeTowerStats(sim.playerBridgeTowerLevels)
 
@@ -756,6 +815,23 @@ export function stepBridge3DSim(
   if (sim.supplyCaravan.hitFlashMs > 0) {
     sim.supplyCaravan.hitFlashMs = Math.max(0, sim.supplyCaravan.hitFlashMs - dtMs)
   }
+  for (let i = 0; i < 4; i++) {
+    if (sim.playerBridgeTowerHitFlashMs[i] > 0) {
+      sim.playerBridgeTowerHitFlashMs[i] = Math.max(
+        0,
+        sim.playerBridgeTowerHitFlashMs[i] - dtMs,
+      )
+    }
+    if (sim.playerBridgeTowerRuinedTimerMs[i] > 0) {
+      sim.playerBridgeTowerRuinedTimerMs[i] = Math.max(
+        0,
+        sim.playerBridgeTowerRuinedTimerMs[i] - dtMs,
+      )
+    }
+    if (sim.towerRecoilAmount[i] > 0) {
+      sim.towerRecoilAmount[i] = Math.max(0, sim.towerRecoilAmount[i] - clampedDt * 2.8)
+    }
+  }
 
   if (!input.isRunningOrBattle) {
     return
@@ -765,13 +841,14 @@ export function stepBridge3DSim(
   let coinsEarnedThisFrame = 0
   let damageDealtThisFrame = 0
 
-  // V8 Fase 3: Ciclo de Vida Real do Mega-Boss (MARCHING -> MELEE_CLASH -> INTERMISSION 7.5s com Caravana Dourada)
+  // V8 Fase 3 + V11 Fase 3: Ciclo de Vida Real do Mega-Boss (MARCHING -> CERCO NAS TORRES -> MELEE_CLASH -> INTERMISSION 7.5s)
   const currentSectorSpec = computeSectorBossSpec(sim.sectorIndex)
-  const meleeLineZ = BRIDGE_3D_DIMENSIONS.zPlayerLine - 2.8 // Z = +7.7 (frente do esquadrão)
+  const meleeLineZ = BRIDGE_3D_DIMENSIONS.zPlayerLine - 2.8 // Z = +7.7 (frente do esquadrão e das torres aliadas)
   const marchDt = timerDtMs / 1000
 
   if (sim.bossLifecycle === 'INTERMISSION') {
     sim.bossHp = 0
+    sim.bossVanguardShieldActive = false
     sim.bossRespawnTimerMs = Math.max(0, sim.bossRespawnTimerMs - timerDtMs)
 
     // Avançar Caravana / Baú de Suprimentos Dourado na Rota Central durante os 7.5s sem Boss
@@ -805,6 +882,7 @@ export function stepBridge3DSim(
       sim.bossMaxHp = nextSpec.bossHp
       sim.bossHp = nextSpec.bossHp
       sim.bossZ = -72
+      sim.bossVanguardShieldActive = true
       sim.bossMeleeCooldownMs = 1000
       sim.bossArchetypeIndex = nextSpec.archetype.index
       sim.bossArchetypeId = nextSpec.archetype.id
@@ -816,10 +894,12 @@ export function stepBridge3DSim(
       }
     }
   } else {
-    // Boss vivo: caminha continuamente em direção ao jogador (+Z) e golpeia pesado ao encostar!
+    // Boss vivo: caminha continuamente em direção ao jogador (+Z), ataca as Torres Aliadas ao se aproximar e golpeia o Herói!
     sim.bossArchetypeIndex = currentSectorSpec.archetype.index
     sim.bossArchetypeId = currentSectorSpec.archetype.id
     sim.bossArchetypeName = currentSectorSpec.archetype.namePt
+    sim.bossVanguardShieldActive =
+      sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
 
     if (sim.bossZ < meleeLineZ) {
       sim.bossLifecycle = 'MARCHING'
@@ -830,22 +910,82 @@ export function stepBridge3DSim(
     } else {
       sim.bossZ = meleeLineZ
       sim.bossLifecycle = 'MELEE_CLASH'
+    }
+
+    // V11 Fase 3: Cerco do Boss contra as Torres Aliadas (Z >= -6.0) e Dano Corpo a Corpo Real no Herói (Z >= +4.5)
+    if (sim.bossZ >= PLAYER_BRIDGE_BASE_POLICY.bossSiegeStartZ) {
       sim.bossMeleeCooldownMs -= timerDtMs
       if (sim.bossMeleeCooldownMs <= 0) {
-        sim.bossMeleeCooldownMs = 1000
-        // O golpe corpo a corpo do Boss só acerta se o jogador estiver no alcance frontal do Boss (permite desviar para as laterais!)
+        sim.bossMeleeCooldownMs = 950
+        sim.bossHitFlashMs = 240
+
+        // 1. Verificar se existem Torres Aliadas ativas (Lv >= 1) no Bastião Sul para o Boss atacar e destruir!
+        const activeTowerSlots: number[] = []
+        for (let sIdx = 0; sIdx < 4; sIdx++) {
+          if ((sim.playerBridgeTowerLevels[sIdx] ?? 0) > 0) {
+            activeTowerSlots.push(sIdx)
+          }
+        }
+
+        if (activeTowerSlots.length > 0) {
+          // Escolhe a torre aliada mais próxima do centro ou com menor HP para demolir
+          activeTowerSlots.sort((a, b) => {
+            const distA = Math.abs(PLAYER_BRIDGE_BASE_POLICY.slots[a]?.x ?? 5)
+            const distB = Math.abs(PLAYER_BRIDGE_BASE_POLICY.slots[b]?.x ?? 5)
+            return distA - distB
+          })
+          const targetSlot = activeTowerSlots[0] as 0 | 1 | 2 | 3
+          const prevLevel = sim.playerBridgeTowerLevels[targetSlot] ?? 1
+          const towerNamePt =
+            PLAYER_BRIDGE_BASE_POLICY.slots[targetSlot]?.namePt ?? 'Torre Aliada'
+          const towerSiegeDmg =
+            PLAYER_BRIDGE_BASE_POLICY.bossTowerStrikeDamageBase +
+            (sim.sectorIndex - 1) * 18
+          const currentTowerHp =
+            sim.playerBridgeTowerHp[targetSlot] > 0
+              ? sim.playerBridgeTowerHp[targetSlot]
+              : getBridgeTowerMaxHp(prevLevel)
+          const nextTowerHp = Math.max(0, currentTowerHp - towerSiegeDmg)
+          sim.playerBridgeTowerHp[targetSlot] = nextTowerHp
+          sim.playerBridgeTowerHitFlashMs[targetSlot] = 450
+          sim.bossTowerAttacksCount += 1
+
+          if (nextTowerHp <= 0) {
+            // A Torre Aliada foi DESTRUÍDA / REBAIXADA pelo golpe de cerco do Boss!
+            const newLevel = Math.max(0, prevLevel - 1)
+            sim.playerBridgeTowerLevels[targetSlot] = newLevel
+            sim.lastSyncedTowerLevels[targetSlot] = newLevel
+            const newMax = getBridgeTowerMaxHp(newLevel)
+            sim.playerBridgeTowerMaxHp[targetSlot] = newMax
+            sim.playerBridgeTowerHp[targetSlot] = newMax
+            sim.playerBridgeTowerRuinedTimerMs[targetSlot] = 6500
+            sim.playerBridgeTowerDestroyedCount += 1
+            callbacks.onAlliedTowerDestroyed?.(
+              targetSlot,
+              newLevel,
+              towerNamePt,
+            )
+          } else {
+            callbacks.onAlliedTowerDamaged?.(
+              targetSlot,
+              nextTowerHp,
+              sim.playerBridgeTowerMaxHp[targetSlot] || getBridgeTowerMaxHp(prevLevel),
+              towerSiegeDmg,
+            )
+          }
+        }
+
+        // 2. Quando o Boss chega na linha corpo a corpo (Z >= +4.5) e o Herói está na frente dele, causa dano real SEM trava artificial de 3 soldados!
         const isHeroInBossReach =
-          sim.activeRoute === 'CENTER' && Math.abs(sim.heroWorldX) <= 3.1
-        if (isHeroInBossReach) {
-          const strikeDmg = currentSectorSpec.meleeDamagePerStrike
-          const effectiveStrikeLoss = input.isBattlePhase
-            ? 0
-            : input.allSegmentsResolved
-              ? strikeDmg
-              : Math.min(strikeDmg, Math.max(0, input.currentArmy - 3))
-          attritionLossThisFrame += effectiveStrikeLoss
-          sim.playerHitFlashMs = 360
-          sim.bossHitFlashMs = 220
+          sim.bossZ >= meleeLineZ - 3.2 &&
+          sim.activeRoute === 'CENTER' &&
+          Math.abs(sim.heroWorldX) <= 3.3
+        if (isHeroInBossReach && !input.isBattlePhase) {
+          const strikeDmg = Math.max(3, currentSectorSpec.meleeDamagePerStrike)
+          attritionLossThisFrame += strikeDmg
+          sim.bossHeroStrikesCount += 1
+          sim.playerHitFlashMs = 420
+          callbacks.onBossStrikeHero?.(strikeDmg, sim.bossArchetypeName)
         }
       }
     }
@@ -1226,10 +1366,30 @@ export function stepBridge3DSim(
         Math.abs(bolt.z - sim.bossZ) < 3.4 &&
         Math.abs(bolt.x) < 3.4
       ) {
-        const effectiveBossDmg = Math.max(1, bolt.damage)
+        const isVanguardShielded =
+          sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
+        const rawBossDmg = Math.max(1, bolt.damage)
+        const effectiveBossDmg = isVanguardShielded
+          ? Math.max(
+              1,
+              Math.round(
+                rawBossDmg *
+                  PLAYER_BRIDGE_BASE_POLICY.bossVanguardDamageMultiplier,
+              ),
+            )
+          : rawBossDmg
+        const vanguardHpFloor = isVanguardShielded
+          ? Math.max(
+              18,
+              Math.round(
+                sim.bossMaxHp *
+                  PLAYER_BRIDGE_BASE_POLICY.bossVanguardMinHpRatio,
+              ),
+            )
+          : 0
         const minBossHpFloor = input.isBattlePhase
           ? Math.max(18, Math.round(sim.bossMaxHp * 0.2))
-          : 0
+          : vanguardHpFloor
         sim.bossHp = Math.max(minBossHpFloor, sim.bossHp - effectiveBossDmg)
         sim.bossHitFlashMs = 160
         bolt.active = false
@@ -1372,6 +1532,18 @@ export function stepBridge3DSim(
             targetX = 0
             targetZ = sim.bossZ
           }
+          // Se o Boss está em distância de cerco (Z >= -16), prioriza mirar no Boss!
+          if (
+            sim.bossLifecycle !== 'INTERMISSION' &&
+            sim.bossZ >= PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
+          ) {
+            targetX = 0
+            targetZ = sim.bossZ
+          }
+          const dxAim = targetX - spawnX
+          const dzAim = targetZ - spawnZ
+          sim.towerTargetYawRad[slotIdx] = Math.atan2(dxAim, -dzAim)
+          sim.towerRecoilAmount[slotIdx] = 0.28
           const vz = -38
           const travelTime = Math.max(0.18, Math.abs(targetZ - spawnZ) / Math.abs(vz))
           freeTurretBolt.active = true
@@ -1468,13 +1640,33 @@ export function stepBridge3DSim(
         Math.abs(tBolt.z - sim.bossZ) < 3.6 &&
         Math.abs(tBolt.x) < 3.6
       ) {
+        const isVanguardShielded =
+          sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
+        const effectiveTowerBossDmg = isVanguardShielded
+          ? Math.max(
+              1,
+              Math.round(
+                tBolt.damage *
+                  PLAYER_BRIDGE_BASE_POLICY.bossVanguardDamageMultiplier,
+              ),
+            )
+          : tBolt.damage
+        const vanguardHpFloor = isVanguardShielded
+          ? Math.max(
+              18,
+              Math.round(
+                sim.bossMaxHp *
+                  PLAYER_BRIDGE_BASE_POLICY.bossVanguardMinHpRatio,
+              ),
+            )
+          : 1
         const minBossHpFloor = input.isBattlePhase
           ? Math.max(18, Math.round(sim.bossMaxHp * 0.2))
-          : 1
-        sim.bossHp = Math.max(minBossHpFloor, sim.bossHp - tBolt.damage)
+          : vanguardHpFloor
+        sim.bossHp = Math.max(minBossHpFloor, sim.bossHp - effectiveTowerBossDmg)
         sim.bossHitFlashMs = 150
         tBolt.active = false
-        damageDealtThisFrame += Math.min(tBolt.damage, 6)
+        damageDealtThisFrame += Math.min(effectiveTowerBossDmg, 6)
       }
     }
   }

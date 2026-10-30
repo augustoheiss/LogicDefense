@@ -36,6 +36,7 @@ import { EnemyHordeAndBoss3D } from './EnemyHordeAndBoss3D'
 import { getPlaqueTexture } from './plaqueTextureCache'
 import { PlayerBattalion3D } from './PlayerBattalion3D'
 import { SideCorridors3D } from './SideCorridors3D'
+import { getSpriteAtlasCacheStats, getUnitSpriteTexture } from './spriteAtlasCache3D'
 
 export interface Bridge3DEnvironmentProps {
   readonly smoothedLaneXRef: React.MutableRefObject<number>
@@ -72,6 +73,20 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   const bridgeDeckGroupRef = useRef<THREE.Group | null>(null)
   const enemyDebuffBoltsGroupRef = useRef<THREE.Group | null>(null)
   const alliedTowerBoltsGroupRef = useRef<THREE.Group | null>(null)
+  const alliedTowersGroupRef = useRef<THREE.Group | null>(null)
+
+  const towerIntactSpriteTex = useMemo(
+    () => getUnitSpriteTexture('TOWER_EMBLEM_INTACT'),
+    [],
+  )
+  const towerDamagedSpriteTex = useMemo(
+    () => getUnitSpriteTexture('TOWER_EMBLEM_DAMAGED'),
+    [],
+  )
+  const towerRuinedSpriteTex = useMemo(
+    () => getUnitSpriteTexture('TOWER_EMBLEM_RUINED'),
+    [],
+  )
 
   // Motor de Simulação 3D Determinístico (Fase 2: bridge3dSim.ts) hidratado com Checkpoint V8
   const simRef = useRef(
@@ -273,6 +288,24 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         onDebuffBoltIntercepted: (label) => {
           live.recordDebuffBoltIntercepted(label)
         },
+        onAlliedTowerDamaged: (slotIndex, remainingHp, maxHp, damage) => {
+          live.applyBossDamageToBridgeTower(
+            slotIndex,
+            remainingHp,
+            maxHp,
+            damage,
+          )
+        },
+        onAlliedTowerDestroyed: (slotIndex, newLevel, towerNamePt) => {
+          live.applyBossDestroyBridgeTower(
+            slotIndex,
+            newLevel,
+            towerNamePt,
+          )
+        },
+        onBossStrikeHero: (damageSoldiers, bossName) => {
+          live.recordBossStrikeHero(damageSoldiers, bossName)
+        },
       },
     )
 
@@ -384,8 +417,15 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
           ).distanceToCenter.toFixed(2),
         ),
         playerBridgeTowerLevels: [...sim.playerBridgeTowerLevels],
+        playerBridgeTowerHp: [...sim.playerBridgeTowerHp],
+        playerBridgeTowerMaxHp: [...sim.playerBridgeTowerMaxHp],
         towerShotsFiredCount: sim.towerShotsFiredCount,
         towerKillsCount: sim.towerKillsCount,
+        bossVanguardShieldActive: sim.bossVanguardShieldActive,
+        bossTowerAttacksCount: sim.bossTowerAttacksCount,
+        bossHeroStrikesCount: sim.bossHeroStrikesCount,
+        playerBridgeTowerDestroyedCount: sim.playerBridgeTowerDestroyedCount,
+        spriteAtlasCachedCount: getSpriteAtlasCacheStats().cachedTexturesCount,
         barrelPositionsZ: sim.barrels.map((b) => Number(b.z.toFixed(2))),
         miniBossPositionsZ: sim.enemies
           .filter((e) => e.isMiniBoss)
@@ -441,6 +481,50 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         mesh.visible = tBolt.active
         if (tBolt.active) {
           mesh.position.set(tBolt.x, tBolt.y, tBolt.z)
+        }
+      }
+    }
+
+    // V11: Animar rotação das torretas aliadas (atan2 em direção ao alvo), recuo de disparo, flash de dano e chamas de ruína
+    if (alliedTowersGroupRef.current) {
+      const towerNodes = alliedTowersGroupRef.current.children
+      for (let i = 0; i < 4; i++) {
+        const towerGroup = towerNodes[i] as THREE.Group | undefined
+        if (!towerGroup) continue
+        const turretHead = towerGroup.getObjectByName('TurretRotatingHead')
+        const cannonBarrel = towerGroup.getObjectByName('TurretCannonBarrel')
+        const firePlume = towerGroup.getObjectByName('TowerDamageFire')
+        const hpFill = towerGroup.getObjectByName('TowerHpBarFill')
+        const hitGlow = towerGroup.getObjectByName('TowerHitFlashGlow')
+
+        if (turretHead) {
+          const targetYaw = sim.towerTargetYawRad[i] ?? 0
+          turretHead.rotation.y += (targetYaw - turretHead.rotation.y) * Math.min(1, dt * 14)
+        }
+        if (cannonBarrel) {
+          const recoil = sim.towerRecoilAmount[i] ?? 0
+          cannonBarrel.position.z = -0.78 + recoil
+        }
+        const maxHp = Math.max(1, sim.playerBridgeTowerMaxHp[i] ?? 1)
+        const curHp = Math.max(0, sim.playerBridgeTowerHp[i] ?? 0)
+        const hpRatio = Math.max(0, Math.min(1, curHp / maxHp))
+        const isDamagedOrRuined =
+          (sim.playerBridgeTowerLevels[i] ?? 0) > 0
+            ? hpRatio < 0.75
+            : (sim.playerBridgeTowerRuinedTimerMs[i] ?? 0) > 0
+        if (firePlume) {
+          firePlume.visible = isDamagedOrRuined
+          if (isDamagedOrRuined) {
+            const flicker = 0.85 + Math.sin(clockSec * 19 + i * 2.1) * 0.22
+            firePlume.scale.set(flicker, flicker * 1.18, flicker)
+          }
+        }
+        if (hpFill) {
+          hpFill.scale.x = Math.max(0.05, hpRatio)
+          hpFill.position.x = -(1 - hpRatio) * 0.82
+        }
+        if (hitGlow) {
+          hitGlow.visible = (sim.playerBridgeTowerHitFlashMs[i] ?? 0) > 0
         }
       }
     }
@@ -829,61 +913,162 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         </group>
       </group>
 
-      {/* ── V10: BASTIÃO SUL & 4 TORRES DEFENSIVAS 3D DA BASE ALIADA DA PONTE (ATIRAM E INTERCEPTAM!) ── */}
+      {/* ── V10 + V11: BASTIÃO SUL & 4 TORRES DEFENSIVAS 3D COM TORRETA GIRATÓRIA, HP REAL E RUÍNAS EM CHAMAS ── */}
       <group name="PlayerBridgeBastion3D">
-        {PLAYER_BRIDGE_BASE_POLICY.slots.map((slot) => {
-          const lvl = playerBridgeTowerLevels[slot.slotIndex] ?? 0
-          const isBuilt = lvl > 0
-          const towerTex = getPlaqueTexture(
-            isBuilt ? `🗼 NV.${lvl}` : '🔒 SLOT',
-            isBuilt ? '#0369a1' : '#334155',
-            isBuilt ? '#38bdf8' : '#64748b',
-            '#ffffff',
-            isBuilt ? 'ATIRANDO' : 'CONSTRUIR',
-          )
-          return (
-            <group
-              key={slot.id}
-              position={[slot.x, 0.1, slot.z]}
-              scale={isBuilt ? [1 + lvl * 0.08, 1 + lvl * 0.14, 1 + lvl * 0.08] : [0.75, 0.45, 0.75]}
-            >
-              <mesh position={[0, 1.1, 0]} castShadow>
-                <cylinderGeometry args={[0.62, 0.82, 2.2, 8]} />
-                <meshStandardMaterial
-                  color={isBuilt ? '#0284c7' : '#334155'}
-                  roughness={0.45}
-                  metalness={0.4}
-                />
-              </mesh>
-              {isBuilt && (
-                <>
-                  <mesh position={[0, 2.45, -0.15]} castShadow>
-                    <coneGeometry args={[0.78, 1.25, 8]} />
+        <group ref={alliedTowersGroupRef} name="AlliedTowersSlots3D">
+          {PLAYER_BRIDGE_BASE_POLICY.slots.map((slot) => {
+            const lvl = playerBridgeTowerLevels[slot.slotIndex] ?? 0
+            const isBuilt = lvl > 0
+            const curHp = simRef.current.playerBridgeTowerHp[slot.slotIndex] ?? 0
+            const maxHp = Math.max(
+              1,
+              simRef.current.playerBridgeTowerMaxHp[slot.slotIndex] ?? 120,
+            )
+            const hpRatio = isBuilt ? Math.max(0, Math.min(1, curHp / maxHp)) : 0
+            const isRuined =
+              !isBuilt &&
+              (simRef.current.playerBridgeTowerRuinedTimerMs[slot.slotIndex] ?? 0) > 0
+            const isDamaged = isBuilt && hpRatio < 0.65
+
+            const towerTex = getPlaqueTexture(
+              isBuilt
+                ? `🗼 NV.${lvl} (${curHp}/${maxHp})`
+                : isRuined
+                  ? '🔥 DESTRUÍDA!'
+                  : '🔒 SLOT',
+              isBuilt
+                ? isDamaged
+                  ? '#b45309'
+                  : '#0369a1'
+                : isRuined
+                  ? '#991b1b'
+                  : '#334155',
+              isBuilt
+                ? isDamaged
+                  ? '#facc15'
+                  : '#38bdf8'
+                : isRuined
+                  ? '#ef4444'
+                  : '#64748b',
+              '#ffffff',
+              isBuilt
+                ? isDamaged
+                  ? 'SOB ATAQUE DO BOSS!'
+                  : 'ATIRANDO'
+                : isRuined
+                  ? 'RECONSTRUIR'
+                  : 'CONSTRUIR',
+            )
+            const bastionSpriteTex = isBuilt
+              ? isDamaged
+                ? towerDamagedSpriteTex
+                : towerIntactSpriteTex
+              : towerRuinedSpriteTex
+
+            return (
+              <group
+                key={slot.id}
+                position={[slot.x, 0.1, slot.z]}
+                scale={
+                  isBuilt
+                    ? [1 + lvl * 0.08, 1 + lvl * 0.12, 1 + lvl * 0.08]
+                    : [0.85, 0.68, 0.85]
+                }
+              >
+                {/* Pedestal octogonal de alvenaria 3D */}
+                <mesh position={[0, 0.95, 0]} castShadow receiveShadow>
+                  <cylinderGeometry args={[0.72, 0.92, 1.9, 8]} />
+                  <meshStandardMaterial
+                    color={
+                      isBuilt
+                        ? isDamaged
+                          ? '#7c2d12'
+                          : '#1e3a8a'
+                        : isRuined
+                          ? '#450a0a'
+                          : '#334155'
+                    }
+                    roughness={0.5}
+                    metalness={0.35}
+                  />
+                </mesh>
+
+                {/* Sprite 2.5D Ilustrado HD da Torre / Escombros na fachada frontal */}
+                <mesh position={[0, 1.65, -0.58]}>
+                  <planeGeometry args={[1.85, 2.25]} />
+                  <meshBasicMaterial
+                    map={bastionSpriteTex}
+                    transparent
+                    alphaTest={0.08}
+                    side={THREE.DoubleSide}
+                  />
+                </mesh>
+
+                {/* Flash de impacto quando o Boss marreta a Torre */}
+                <mesh name="TowerHitFlashGlow" position={[0, 1.6, 0]} visible={false}>
+                  <cylinderGeometry args={[1.05, 1.15, 2.6, 10]} />
+                  <meshBasicMaterial color="#ef4444" transparent opacity={0.55} />
+                </mesh>
+
+                {/* Chamas 3D animadas quando a torre está avariada ou recém-destruída pelo Boss */}
+                <group name="TowerDamageFire" position={[0, 1.85, -0.25]} visible={isDamaged || isRuined}>
+                  <mesh position={[0, 0.35, 0]}>
+                    <coneGeometry args={[0.52, 1.15, 7]} />
+                    <meshBasicMaterial color="#f97316" transparent opacity={0.88} />
+                  </mesh>
+                  <mesh position={[0.18, 0.55, 0.1]}>
+                    <coneGeometry args={[0.32, 0.85, 6]} />
+                    <meshBasicMaterial color="#facc15" />
+                  </mesh>
+                </group>
+
+                {/* Cabeça Giratória 3D da Torreta + Canhão / Balista com Recuo Real */}
+                <group name="TurretRotatingHead" position={[0, 2.05, 0]} visible={isBuilt}>
+                  <mesh position={[0, 0.35, 0]} castShadow>
+                    <coneGeometry args={[0.78, 1.15, 8]} />
                     <meshStandardMaterial
-                      color="#38bdf8"
-                      emissive="#0ea5e9"
+                      color={isDamaged ? '#f59e0b' : '#38bdf8'}
+                      emissive={isDamaged ? '#d97706' : '#0ea5e9'}
                       emissiveIntensity={0.65}
                     />
                   </mesh>
-                  {/* Canhão / Balista frontal apontado para a ponte (-Z) */}
-                  <mesh position={[0, 2.1, -0.75]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-                    <cylinderGeometry args={[0.18, 0.22, 1.35, 8]} />
+                  <mesh
+                    name="TurretCannonBarrel"
+                    position={[0, 0.12, -0.78]}
+                    rotation={[Math.PI / 2, 0, 0]}
+                    castShadow
+                  >
+                    <cylinderGeometry args={[0.18, 0.24, 1.45, 8]} />
                     <meshStandardMaterial
                       color="#facc15"
                       emissive="#eab308"
-                      emissiveIntensity={0.45}
-                      metalness={0.8}
+                      emissiveIntensity={0.5}
+                      metalness={0.85}
                     />
                   </mesh>
-                </>
-              )}
-              <mesh position={[0, 3.45, 0]}>
-                <planeGeometry args={[2.1, 1.05]} />
-                <meshBasicMaterial map={towerTex} transparent />
-              </mesh>
-            </group>
-          )
-        })}
+                </group>
+
+                {/* Barra de HP Estrutural 3D da Torre Aliada */}
+                <group position={[0, 3.05, 0]} visible={isBuilt}>
+                  <mesh>
+                    <boxGeometry args={[1.75, 0.2, 0.08]} />
+                    <meshBasicMaterial color="#0f172a" />
+                  </mesh>
+                  <mesh name="TowerHpBarFill" position={[0, 0, 0.04]}>
+                    <boxGeometry args={[1.64, 0.13, 0.06]} />
+                    <meshBasicMaterial color={isDamaged ? '#f97316' : '#22c55e'} />
+                  </mesh>
+                </group>
+
+                {/* Placa 3D Nível / HP / Ruína */}
+                <mesh position={[0, 3.68, 0]}>
+                  <planeGeometry args={[2.25, 1.05]} />
+                  <meshBasicMaterial map={towerTex} transparent />
+                </mesh>
+              </group>
+            )
+          })}
+        </group>
         <group ref={alliedTowerBoltsGroupRef} name="AlliedTowerBolts3D">
           {Array.from({ length: 16 }).map((_, idx) => (
             <mesh key={`allied_tower_bolt_${idx}`} visible={false}>

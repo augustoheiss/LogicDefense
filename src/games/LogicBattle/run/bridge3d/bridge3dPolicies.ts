@@ -632,6 +632,16 @@ export const PLAYER_BRIDGE_BASE_POLICY = {
   baseUpgradeCost: 15,
   costGrowthFactor: 1.75,
   shieldInterceptCooldownBaseMs: 3600,
+  /** V11: HP estrutural máximo de cada Torre Aliada da Ponte por nível (0..5). */
+  towerMaxHpByLevel: [0, 120, 220, 340, 480, 650] as const,
+  /** V11: Limite Z da Couraça de Vanguarda do Boss (-16m). Antes disso o Boss tem 70% redução de dano e piso de 35% HP para nunca morrer longe das torres. */
+  bossVanguardShieldEndZ: -16.0,
+  bossVanguardMinHpRatio: 0.35,
+  bossVanguardDamageMultiplier: 0.3,
+  /** V11: Zona de Cerco (-6.0m..+7.7m) onde o Boss começa a atacar e destruir as Torres Aliadas da Ponte. */
+  bossSiegeStartZ: -6.0,
+  /** V11: Dano base por golpe de cerco do Boss contra uma Torre Aliada ativa. */
+  bossTowerStrikeDamageBase: 45,
   slots: [
     {
       slotIndex: 0,
@@ -667,6 +677,17 @@ export const PLAYER_BRIDGE_BASE_POLICY = {
     },
   ] as const satisfies readonly BridgeTowerSlotSpec[],
 } as const
+
+export function getBridgeTowerMaxHp(level: number): number {
+  const safeLvl = Math.max(
+    0,
+    Math.min(
+      PLAYER_BRIDGE_BASE_POLICY.maxTowerLevel,
+      Math.floor(Number.isFinite(level) ? level : 0),
+    ),
+  )
+  return PLAYER_BRIDGE_BASE_POLICY.towerMaxHpByLevel[safeLvl] ?? 0
+}
 
 export function getBridgeTowerUpgradeCost(currentLevel: number): number {
   const safeLvl = Math.max(0, Math.floor(currentLevel))

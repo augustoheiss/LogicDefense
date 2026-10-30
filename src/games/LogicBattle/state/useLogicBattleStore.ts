@@ -327,6 +327,18 @@ export interface LogicBattleStoreState {
   evolveEnemyBaseInMatch: (targetLevel?: number) => number
   applyEnemyDebuffTowerHit: (lossRatio: number, label: string) => void
   recordDebuffBoltIntercepted: (label: string) => void
+  applyBossDamageToBridgeTower: (
+    slotIndex: 0 | 1 | 2 | 3,
+    remainingHp: number,
+    maxHp: number,
+    damage: number,
+  ) => void
+  applyBossDestroyBridgeTower: (
+    slotIndex: 0 | 1 | 2 | 3,
+    newLevel: number,
+    towerNamePt: string,
+  ) => void
+  recordBossStrikeHero: (damage: number, bossNamePt: string) => void
   triggerBridgeDeconstructionToBase: () => void
   toggleInfiniteBridgeMode: () => void
   advanceInfiniteBridgeSector: () => void
@@ -712,6 +724,101 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       snapshot: {
         ...snap,
         recentFeedback: [...snap.recentFeedback.slice(-4), fbShield],
+      },
+    })
+  },
+
+  applyBossDamageToBridgeTower: (slotIndex, remainingHp, maxHp, damage) => {
+    const state = get()
+    if (state.isDeconstructingBridge) return
+    const snap = state.snapshot
+    const slotSpec = PLAYER_BRIDGE_BASE_POLICY.slots[slotIndex]
+    const fbSiege: FloatingFeedbackItem = {
+      id: `fb_tower_dmg_${slotIndex}_${Date.now()}`,
+      text: `💥 Cerco na ${slotSpec?.namePt ?? 'Torre'} (−${damage} HP)`,
+      subText: `Integridade: ${remainingHp}/${maxHp} HP`,
+      tone: 'trap',
+      createdAtMs: snap.elapsedMs,
+    }
+    set({
+      snapshot: {
+        ...snap,
+        recentFeedback: [...snap.recentFeedback.slice(-4), fbSiege],
+      },
+    })
+  },
+
+  applyBossDestroyBridgeTower: (slotIndex, newLevel, towerNamePt) => {
+    const state = get()
+    if (state.isDeconstructingBridge) return
+    const { save, snapshot, bridgeSectorIndex, runPlan, mathChallengesSolvedInRun } = state
+    const nextLevels: [number, number, number, number] = [
+      ...state.playerBridgeTowerLevels,
+    ]
+    nextLevels[slotIndex] = Math.max(0, newLevel)
+
+    soundEngine.playGatePass(snapshot.currentArmy, false)
+    const fbDestroyed: FloatingFeedbackItem = {
+      id: `fb_tower_destroyed_${slotIndex}_${Date.now()}`,
+      text:
+        newLevel <= 0
+          ? `🔥 ${towerNamePt} DESTRUÍDA PELO BOSS!`
+          : `🔥 ${towerNamePt} Degradada para Nv.${newLevel}!`,
+      subText: `Reconstrua no painel Bastião ou abata o Boss!`,
+      tone: 'trap',
+      createdAtMs: snapshot.elapsedMs,
+    }
+
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...save,
+        playerBridgeTowerLevels: nextLevels,
+      },
+      {
+        sectorIndex: bridgeSectorIndex,
+        currentArmy: snapshot.currentArmy,
+        bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+        bridgeKills: snapshot.bridgeKills ?? 0,
+        mathChallengesSolved: mathChallengesSolvedInRun,
+        seed: runPlan.seed,
+        playerBridgeTowerLevels: nextLevels,
+        enemyBaseLevel: state.enemyBaseLevel,
+      },
+    )
+    SaveRepository.save(nextSave)
+
+    set({
+      save: nextSave,
+      playerBridgeTowerLevels: nextLevels,
+      snapshot: {
+        ...snapshot,
+        recentFeedback: [...snapshot.recentFeedback.slice(-4), fbDestroyed],
+      },
+      captainSpeech: {
+        mood: 'curious',
+        text:
+          newLevel <= 0
+            ? `🔥 O Boss esmagou nossa ${towerNamePt}! Desvie dos golpes dele ou reconstrua nossas defesas com a Carteira Compartilhada!`
+            : `🔥 O Boss danificou nossa ${towerNamePt} (caiu para Nv.${newLevel})! Abata o Boss antes que ele derrube todo o Bastião!`,
+      },
+    })
+  },
+
+  recordBossStrikeHero: (damage, bossNamePt) => {
+    const state = get()
+    if (state.isDeconstructingBridge) return
+    const snap = state.snapshot
+    const fbBossHit: FloatingFeedbackItem = {
+      id: `fb_boss_strike_${Date.now()}`,
+      text: `💥 Golpe de ${bossNamePt.slice(0, 12)}!`,
+      subText: `−${formatArmy(damage, state.save.settings.notationMode)} Soldados`,
+      tone: 'trap',
+      createdAtMs: snap.elapsedMs,
+    }
+    set({
+      snapshot: {
+        ...snap,
+        recentFeedback: [...snap.recentFeedback.slice(-4), fbBossHit],
       },
     })
   },

@@ -1,17 +1,18 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // src/games/LogicBattle/run/bridge3d/EnemyHordeAndBoss3D.tsx
-// Fase 3 V7: Renderizador 3D dedicado da Horda Inimiga Não-Ornamental,
-// Barris Explosivos (112 HP), Mini-Bosses (176 HP) e Mega-Boss Articulado do Setor.
-// 100% WebGL via THREE.CanvasTexture (zero nós DOM <Html> por frame).
+// Master Plan V11: Renderizador Híbrido 2.5D HD + Rigs 3D Articulados da Horda
+// Inimiga, Demolidores Blindados (112 HP), Mini-Bosses (176 HP) e Mega-Boss
+// com Pernas Colossais Articuladas, Couraça de Vanguarda e Golpe de Cerco.
 // ──────────────────────────────────────────────────────────────────────────────
 import React, { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { formatArmy } from '../../domain/notation'
 import { NotationMode } from '../../types'
-import { BOSS_ARCHETYPES_3D } from './bridge3dPolicies'
+import { BOSS_ARCHETYPES_3D, PLAYER_BRIDGE_BASE_POLICY } from './bridge3dPolicies'
 import { Bridge3DSimState } from './bridge3dSim'
 import { getPlaqueTexture } from './plaqueTextureCache'
+import { getUnitSpriteTexture } from './spriteAtlasCache3D'
 
 export interface EnemyHordeAndBoss3DProps {
   readonly simRef: React.MutableRefObject<Bridge3DSimState>
@@ -29,6 +30,9 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
   const barrelsGroupRef = useRef<THREE.Group | null>(null)
   const enemyHordeGroupRef = useRef<THREE.Group | null>(null)
   const bossGroupRef = useRef<THREE.Group | null>(null)
+  const bossLeftLegRef = useRef<THREE.Mesh | null>(null)
+  const bossRightLegRef = useRef<THREE.Mesh | null>(null)
+  const bossVanguardShieldRef = useRef<THREE.Mesh | null>(null)
   const bossHammerPivotRef = useRef<THREE.Group | null>(null)
   const bossPlaqueMatRef = useRef<THREE.MeshBasicMaterial | null>(null)
   const bossTorsoMatRef = useRef<THREE.MeshStandardMaterial | null>(null)
@@ -41,6 +45,18 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
   const supplyCaravanGroupRef = useRef<THREE.Group | null>(null)
   const supplyCaravanPlaqueMatRef = useRef<THREE.MeshBasicMaterial | null>(null)
   const supplyCaravanCrystalRef = useRef<THREE.Mesh | null>(null)
+
+  // Sprites 2.5D HD (512x512) cacheados em GPU
+  const raiderSpriteTex = useMemo(() => getUnitSpriteTexture('ENEMY_RAIDER'), [])
+  const miniBossSpriteTex = useMemo(() => getUnitSpriteTexture('ENEMY_MINIBOSS'), [])
+  const demolisherSpriteTex = useMemo(
+    () => getUnitSpriteTexture('ENEMY_DEMOLISHER'),
+    [],
+  )
+  const bossChestplateSpriteTex = useMemo(
+    () => getUnitSpriteTexture('BOSS_CHESTPLATE'),
+    [],
+  )
 
   const barrel112Tex = useMemo(
     () => getPlaqueTexture('💀 112 HP', '#7f1d1d', '#facc15', '#ffffff', 'MINI-BOSS'),
@@ -78,7 +94,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
     const clockSec = state.clock.elapsedTime
     const sim = simRef.current
 
-    // 1. Sincronizar Mini-Bosses Demolidores do Setor (112+ HP) em marcha contínua (+Z) sem travar nem inflar de tamanho
+    // 1. Sincronizar Demolidores Blindados do Setor (112+ HP) com pernas 3D articuladas em marcha (+Z)
     if (barrelsGroupRef.current) {
       const children = barrelsGroupRef.current.children
       for (let i = 0; i < sim.barrels.length; i++) {
@@ -87,17 +103,25 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
         if (!grp || !barrel) continue
         grp.visible = barrel.active
         grp.scale.set(1.45, 1.45, 1.45)
+        const stridePhase = clockSec * 8.5 + barrel.id * 1.1
         grp.position.set(
           barrel.x,
-          Math.abs(Math.sin(clockSec * 5.5 + barrel.id * 0.9)) * 0.2,
+          Math.abs(Math.sin(stridePhase)) * 0.16,
           barrel.z,
         )
-        const bodyMesh = grp.children[0] as THREE.Mesh | undefined
+        const legL = grp.children[0] as THREE.Mesh | undefined
+        const legR = grp.children[1] as THREE.Mesh | undefined
+        if (legL && legR) {
+          const swing = Math.sin(stridePhase) * 0.52
+          legL.rotation.x = swing
+          legR.rotation.x = -swing
+        }
+        const bodyMesh = grp.children[2] as THREE.Mesh | undefined
         const bodyMat = bodyMesh?.material as THREE.MeshStandardMaterial | undefined
         if (bodyMat) {
           bodyMat.color.set(barrel.explosionFlashMs > 0 ? '#facc15' : '#991b1b')
         }
-        const plaqueMesh = grp.children[2] as THREE.Mesh | undefined
+        const plaqueMesh = grp.children[4] as THREE.Mesh | undefined
         const plaqueMat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
         if (plaqueMat) {
           const nextTex = getPlaqueTexture(
@@ -115,19 +139,27 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
       }
     }
 
-    // 2. Sincronizar Horda Inimiga 3D + Mini-Bosses (176 HP) na Rota Central e atualizar placa de HP
+    // 2. Sincronizar Horda Inimiga 3D + Mini-Bosses (176 HP) com pernas articuladas e Sprites 2.5D HD
     if (enemyHordeGroupRef.current) {
       const children = enemyHordeGroupRef.current.children
       for (let i = 0; i < sim.enemies.length; i++) {
         const en = sim.enemies[i]
         const grp = children[i] as THREE.Group | undefined
         if (grp && en) {
+          const stridePhase = clockSec * 9.2 + en.id * 0.75
           grp.position.set(
             en.x,
-            Math.abs(Math.sin(clockSec * 6 + en.id * 0.7)) * 0.22,
+            Math.abs(Math.sin(stridePhase)) * 0.18,
             en.z,
           )
-          const bodyMesh = grp.children[0] as THREE.Mesh | undefined
+          const legL = grp.children[0] as THREE.Mesh | undefined
+          const legR = grp.children[1] as THREE.Mesh | undefined
+          if (legL && legR) {
+            const swing = Math.sin(stridePhase) * 0.55
+            legL.rotation.x = swing
+            legR.rotation.x = -swing
+          }
+          const bodyMesh = grp.children[2] as THREE.Mesh | undefined
           const bodyMat = bodyMesh?.material as THREE.MeshStandardMaterial | undefined
           if (bodyMat) {
             bodyMat.color.set(
@@ -139,7 +171,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             )
           }
           if (en.isMiniBoss) {
-            const plaqueMesh = grp.children[3] as THREE.Mesh | undefined
+            const plaqueMesh = grp.children[5] as THREE.Mesh | undefined
             const plaqueMat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
             if (plaqueMat) {
               const nextTex = getPlaqueTexture(
@@ -159,7 +191,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
       }
     }
 
-    // 3. Sincronizar Mega-Boss Articulado do Setor (visibilidade no INTERMISSION, marcha +Z, 5 arquétipos e golpe corpo a corpo)
+    // 3. Sincronizar Mega-Boss Articulado do Setor (pernas colossais, Couraça de Vanguarda e Cerco às Torres)
     const isIntermission = sim.bossLifecycle === 'INTERMISSION'
     const archSpec =
       BOSS_ARCHETYPES_3D[sim.bossArchetypeIndex] ?? BOSS_ARCHETYPES_3D[0]
@@ -180,7 +212,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
         }
         const strideBob =
           sim.bossLifecycle === 'MARCHING'
-            ? Math.abs(Math.sin(clockSec * 4.2)) * 0.35
+            ? Math.abs(Math.sin(clockSec * 5.2)) * 0.35
             : Math.abs(Math.sin(clockSec * 8.0)) * 0.18
         bossGroupRef.current.position.y = strideBob
         bossGroupRef.current.position.x = Math.sin(clockSec * 1.1) * 1.35
@@ -188,13 +220,26 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
       }
     }
 
-    // Atualizar materiais e geometrias extras dos 5 Arquétipos 3D de Boss
+    // Animar Pernas Colossais do Mega-Boss e Escudo de Couraça de Vanguarda
     if (!isIntermission) {
+      if (bossLeftLegRef.current && bossRightLegRef.current) {
+        const legSpeed = sim.bossLifecycle === 'MARCHING' ? 5.2 : 2.5
+        const legAmp = sim.bossLifecycle === 'MARCHING' ? 0.42 : 0.14
+        const legSwing = Math.sin(clockSec * legSpeed) * legAmp
+        bossLeftLegRef.current.rotation.x = legSwing
+        bossRightLegRef.current.rotation.x = -legSwing
+      }
+      if (bossVanguardShieldRef.current) {
+        bossVanguardShieldRef.current.visible = sim.bossVanguardShieldActive
+        if (sim.bossVanguardShieldActive) {
+          bossVanguardShieldRef.current.rotation.z = clockSec * 1.8
+        }
+      }
       if (bossTorsoMatRef.current) {
         bossTorsoMatRef.current.color.set(archSpec.primaryColor)
         bossTorsoMatRef.current.emissive.set(archSpec.accentColor)
         bossTorsoMatRef.current.emissiveIntensity =
-          sim.bossHitFlashMs > 0 ? 0.28 : 0.06
+          sim.bossHitFlashMs > 0 ? 0.38 : 0.08
       }
       if (bossLeftPauldronMatRef.current) {
         bossLeftPauldronMatRef.current.color.set(archSpec.secondaryColor)
@@ -223,8 +268,11 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
     }
 
     if (bossHammerPivotRef.current) {
-      const swingSpeed = sim.bossLifecycle === 'MELEE_CLASH' ? 9.5 : 3.1
-      const swingAmp = sim.bossLifecycle === 'MELEE_CLASH' ? 0.92 : 0.38
+      const isSieging =
+        sim.bossLifecycle === 'MELEE_CLASH' ||
+        sim.bossZ >= PLAYER_BRIDGE_BASE_POLICY.bossSiegeStartZ
+      const swingSpeed = isSieging ? 10.5 : 3.4
+      const swingAmp = isSieging ? 0.98 : 0.38
       bossHammerPivotRef.current.rotation.x =
         0.45 + Math.sin(clockSec * swingSpeed) * swingAmp
       const wepGroups = bossHammerPivotRef.current.children
@@ -237,13 +285,23 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
     }
 
     if (bossPlaqueMatRef.current && !isIntermission) {
-      const statusPrefix = sim.bossLifecycle === 'MELEE_CLASH' ? '⚔️' : '👹'
+      const isSieging = sim.bossZ >= PLAYER_BRIDGE_BASE_POLICY.bossSiegeStartZ
+      const statusPrefix = isSieging
+        ? '⚔️'
+        : sim.bossVanguardShieldActive
+          ? '🛡️'
+          : '👹'
+      const subText = isSieging
+        ? `🔥 CERCO TORRES · S${sim.sectorIndex}`
+        : sim.bossVanguardShieldActive
+          ? `🛡️ VANGUARDA · S${sim.sectorIndex}`
+          : `S${sim.sectorIndex} · ${archSpec.namePt.slice(0, 14).toUpperCase()}`
       const nextBossTex = getPlaqueTexture(
         `${statusPrefix} ${formatArmy(sim.bossHp, notationMode)}`,
         archSpec.plaqueBgColor,
         archSpec.accentColor,
         '#ffffff',
-        `S${sim.sectorIndex} · ${archSpec.namePt.slice(0, 14).toUpperCase()}`,
+        subText,
       )
       if (bossPlaqueMatRef.current.map !== nextBossTex) {
         bossPlaqueMatRef.current.map = nextBossTex
@@ -287,7 +345,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
 
   return (
     <group name="EnemyHordeAndBoss3D">
-      {/* 1. Mini-Bosses Demolidores do Setor (112+ HP) marchando continuamente na Rota Central */}
+      {/* 1. Demolidores Blindados do Setor (112+ HP) com Pernas 3D Articuladas e Sprite 2.5D HD */}
       <group ref={barrelsGroupRef} name="ExplosiveBarrels3D">
         {simRef.current.barrels.map((barrel) => (
           <group
@@ -295,14 +353,32 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             position={[barrel.x, 0, barrel.z]}
             scale={[1.45, 1.45, 1.45]}
           >
-            <mesh position={[0, 0.78, 0]} castShadow>
-              <capsuleGeometry args={[0.44, 0.68, 6, 10]} />
+            {/* children[0]: Perna Esquerda 3D */}
+            <mesh position={[-0.18, 0.32, 0]} castShadow>
+              <capsuleGeometry args={[0.11, 0.34, 4, 6]} />
+              <meshStandardMaterial color="#450a0a" roughness={0.6} />
+            </mesh>
+            {/* children[1]: Perna Direita 3D */}
+            <mesh position={[0.18, 0.32, 0]} castShadow>
+              <capsuleGeometry args={[0.11, 0.34, 4, 6]} />
+              <meshStandardMaterial color="#450a0a" roughness={0.6} />
+            </mesh>
+            {/* children[2]: Corpo 3D Blindado */}
+            <mesh position={[0, 0.86, 0]} castShadow>
+              <capsuleGeometry args={[0.42, 0.62, 6, 10]} />
               <meshStandardMaterial color="#991b1b" roughness={0.45} metalness={0.35} />
             </mesh>
-            <mesh position={[0, 1.56, 0]} castShadow>
-              <sphereGeometry args={[0.38, 10, 10]} />
-              <meshStandardMaterial color="#facc15" metalness={0.75} />
+            {/* children[3]: Sprite 2.5D HD Ilustrado do Demolidor */}
+            <mesh position={[0, 1.06, 0.44]} rotation={[0.06, 0, 0]}>
+              <planeGeometry args={[1.42, 1.52]} />
+              <meshBasicMaterial
+                map={demolisherSpriteTex}
+                transparent
+                alphaTest={0.45}
+                side={THREE.DoubleSide}
+              />
             </mesh>
+            {/* children[4]: Placa de HP */}
             <mesh position={[0, 2.38, 0]}>
               <planeGeometry args={[2.2, 1.1]} />
               <meshBasicMaterial map={barrel112Tex} transparent />
@@ -311,7 +387,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
         ))}
       </group>
 
-      {/* 2. Horda Inimiga 3D + Mini-Bosses (176 HP) marchando na Rota Central */}
+      {/* 2. Horda Inimiga 3D + Mini-Bosses (176 HP) com Pernas Articuladas e Sprites 2.5D HD */}
       <group ref={enemyHordeGroupRef} name="EnemyHordeAndMiniBosses3D">
         {simRef.current.enemies.map((en) => (
           <group
@@ -319,29 +395,41 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             position={[en.x, 0, en.z]}
             scale={en.isMiniBoss ? [1.75, 1.75, 1.75] : [1, 1, 1]}
           >
-            {/* Corpo 3D do guerreiro/monstro rubro */}
-            <mesh position={[0, 0.75, 0]} castShadow>
-              <capsuleGeometry args={[0.38, 0.65, 6, 10]} />
+            {/* children[0]: Perna Esquerda 3D */}
+            <mesh position={[-0.16, 0.3, 0]} castShadow>
+              <capsuleGeometry args={[0.1, 0.32, 4, 6]} />
+              <meshStandardMaterial color="#450a0a" roughness={0.55} />
+            </mesh>
+            {/* children[1]: Perna Direita 3D */}
+            <mesh position={[0.16, 0.3, 0]} castShadow>
+              <capsuleGeometry args={[0.1, 0.32, 4, 6]} />
+              <meshStandardMaterial color="#450a0a" roughness={0.55} />
+            </mesh>
+            {/* children[2]: Corpo 3D do Guerreiro/Mini-Boss */}
+            <mesh position={[0, 0.82, 0]} castShadow>
+              <capsuleGeometry args={[0.35, 0.58, 6, 10]} />
               <meshStandardMaterial
                 color={en.isMiniBoss ? '#7f1d1d' : '#dc2626'}
                 roughness={0.45}
-                metalness={en.isMiniBoss ? 0.35 : 0.1}
+                metalness={en.isMiniBoss ? 0.35 : 0.15}
               />
             </mesh>
-            {/* Cabeça / Elmo 3D */}
-            <mesh position={[0, 1.52, 0]} castShadow>
-              <sphereGeometry args={[0.34, 10, 10]} />
-              <meshStandardMaterial
-                color={en.isMiniBoss ? '#facc15' : '#450a0a'}
-                metalness={0.5}
+            {/* children[3]: Sprite 2.5D HD Ilustrado (Mini-Boss ou Guerreiro Rubro) */}
+            <mesh position={[0, 1.04, 0.38]} rotation={[0.06, 0, 0]}>
+              <planeGeometry args={[1.28, 1.38]} />
+              <meshBasicMaterial
+                map={en.isMiniBoss ? miniBossSpriteTex : raiderSpriteTex}
+                transparent
+                alphaTest={0.45}
+                side={THREE.DoubleSide}
               />
             </mesh>
-            {/* Escudo / Arma frontal */}
-            <mesh position={[0.36, 0.85, 0.25]} castShadow>
+            {/* children[4]: Machado / Escudo Frontal 3D */}
+            <mesh position={[0.38, 0.88, 0.25]} castShadow>
               <boxGeometry args={[0.22, 0.75, 0.55]} />
-              <meshStandardMaterial color="#991b1b" />
+              <meshStandardMaterial color="#991b1b" metalness={0.45} />
             </mesh>
-            {/* Placa 3D de HP nos Mini-Bosses */}
+            {/* children[5]: Placa 3D de HP nos Mini-Bosses */}
             {en.isMiniBoss && (
               <mesh position={[0, 2.45, 0]}>
                 <planeGeometry args={[2.1, 1.05]} />
@@ -352,11 +440,36 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
         ))}
       </group>
 
-      {/* 3. Mega-Boss 3D Articulado do Setor na Rota Central (5 Arquétipos Distintos) */}
+      {/* 3. Mega-Boss 3D Articulado do Setor na Rota Central (Pernas Colossais + Couraça de Vanguarda + 5 Arquétipos) */}
       <group ref={bossGroupRef} position={[0, 0, -68]} name="SectorGiantBoss3D">
+        {/* Pernas Colossais Articuladas (Esquerda e Direita) */}
+        <mesh ref={bossLeftLegRef} position={[-1.05, 1.05, 0]} castShadow>
+          <capsuleGeometry args={[0.52, 1.15, 6, 10]} />
+          <meshStandardMaterial color="#450a0a" metalness={0.5} roughness={0.35} />
+        </mesh>
+        <mesh ref={bossRightLegRef} position={[1.05, 1.05, 0]} castShadow>
+          <capsuleGeometry args={[0.52, 1.15, 6, 10]} />
+          <meshStandardMaterial color="#450a0a" metalness={0.5} roughness={0.35} />
+        </mesh>
+
+        {/* Escudo de Couraça de Vanguarda (Ativo em z < -16m para garantir chegada às torres) */}
+        <mesh
+          ref={bossVanguardShieldRef}
+          position={[0, 3.2, 2.15]}
+          name="BossVanguardShield3D"
+        >
+          <ringGeometry args={[2.1, 2.85, 6]} />
+          <meshBasicMaterial
+            color="#38bdf8"
+            transparent
+            opacity={0.72}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+
         {/* Torso Colossal 3D */}
-        <mesh position={[0, 2.9, 0]} castShadow>
-          <boxGeometry args={[3.6, 3.8, 2.4]} />
+        <mesh position={[0, 3.2, 0]} castShadow>
+          <boxGeometry args={[3.6, 3.6, 2.4]} />
           <meshStandardMaterial
             ref={bossTorsoMatRef}
             color="#7f1d1d"
@@ -364,8 +477,19 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             metalness={0.25}
           />
         </mesh>
+
+        {/* Sprite 2.5D HD de Armadura Abissal no Peitoral do Mega-Boss */}
+        <mesh position={[0, 3.35, 1.32]}>
+          <planeGeometry args={[3.4, 3.5]} />
+          <meshBasicMaterial
+            map={bossChestplateSpriteTex}
+            transparent
+            alphaTest={0.45}
+          />
+        </mesh>
+
         {/* Ombreiras Blindadas */}
-        <mesh position={[-2.3, 4.1, 0]} castShadow>
+        <mesh position={[-2.3, 4.3, 0]} castShadow>
           <sphereGeometry args={[1.05, 10, 10]} />
           <meshStandardMaterial
             ref={bossLeftPauldronMatRef}
@@ -374,7 +498,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             roughness={0.25}
           />
         </mesh>
-        <mesh position={[2.3, 4.1, 0]} castShadow>
+        <mesh position={[2.3, 4.3, 0]} castShadow>
           <sphereGeometry args={[1.05, 10, 10]} />
           <meshStandardMaterial
             ref={bossRightPauldronMatRef}
@@ -384,7 +508,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
           />
         </mesh>
         {/* Cabeça + Coroa + Chifres do Boss */}
-        <mesh position={[0, 5.4, 0]} castShadow>
+        <mesh position={[0, 5.6, 0]} castShadow>
           <sphereGeometry args={[1.15, 12, 12]} />
           <meshStandardMaterial
             ref={bossHeadMatRef}
@@ -392,7 +516,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             roughness={0.35}
           />
         </mesh>
-        <mesh position={[-0.85, 6.45, 0]} rotation={[0, 0, 0.35]}>
+        <mesh position={[-0.85, 6.65, 0]} rotation={[0, 0, 0.35]}>
           <coneGeometry args={[0.32, 1.4, 8]} />
           <meshStandardMaterial
             ref={bossLeftHornMatRef}
@@ -400,7 +524,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             metalness={0.6}
           />
         </mesh>
-        <mesh position={[0.85, 6.45, 0]} rotation={[0, 0, -0.35]}>
+        <mesh position={[0.85, 6.65, 0]} rotation={[0, 0, -0.35]}>
           <coneGeometry args={[0.32, 1.4, 8]} />
           <meshStandardMaterial
             ref={bossRightHornMatRef}
@@ -413,19 +537,19 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
         <group ref={bossArchExtrasGroupRef} name="BossArchetypeExtras3D">
           {/* Arquétipo 0: Colosso Rubro (Escudo Peitoral Imperial) */}
           <group name="Arch0_ColossoRubro">
-            <mesh position={[0, 3.0, 1.28]}>
-              <boxGeometry args={[2.2, 2.2, 0.25]} />
+            <mesh position={[0, 3.2, 1.25]}>
+              <boxGeometry args={[2.2, 2.2, 0.22]} />
               <meshStandardMaterial color="#facc15" metalness={0.8} roughness={0.2} />
             </mesh>
           </group>
 
           {/* Arquétipo 1: Titã Crio-Gélido (Espinhos de Cristal de Gelo nas Costas e Ombros) */}
           <group name="Arch1_TitaCrioGelido" visible={false}>
-            <mesh position={[-1.6, 5.2, -0.4]} rotation={[-0.3, 0, 0.4]}>
+            <mesh position={[-1.6, 5.4, -0.4]} rotation={[-0.3, 0, 0.4]}>
               <coneGeometry args={[0.55, 2.6, 6]} />
               <meshStandardMaterial color="#67e8f9" emissive="#0891b2" emissiveIntensity={0.6} />
             </mesh>
-            <mesh position={[1.6, 5.2, -0.4]} rotation={[-0.3, 0, -0.4]}>
+            <mesh position={[1.6, 5.4, -0.4]} rotation={[-0.3, 0, -0.4]}>
               <coneGeometry args={[0.55, 2.6, 6]} />
               <meshStandardMaterial color="#67e8f9" emissive="#0891b2" emissiveIntensity={0.6} />
             </mesh>
@@ -433,7 +557,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
 
           {/* Arquétipo 2: Senhor de Magma (Núcleo de Lava Incandescente + Anel Vulcânico) */}
           <group name="Arch2_SenhorMagma" visible={false}>
-            <mesh position={[0, 3.1, 1.26]}>
+            <mesh position={[0, 3.3, 1.26]}>
               <sphereGeometry args={[0.95, 12, 12]} />
               <meshStandardMaterial color="#fb923c" emissive="#ea580c" emissiveIntensity={0.95} />
             </mesh>
@@ -444,18 +568,18 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             {[-2.8, 2.8].map((lx, idx) => (
               <mesh
                 key={`spider_leg_${idx}`}
-                position={[lx, 1.6, 0.4]}
+                position={[lx, 1.8, 0.4]}
                 rotation={[0, 0, lx < 0 ? 0.55 : -0.55]}
               >
                 <cylinderGeometry args={[0.24, 0.18, 3.8, 8]} />
                 <meshStandardMaterial color="#10b981" metalness={0.85} roughness={0.2} />
               </mesh>
             ))}
-            <mesh position={[-1.9, 5.1, 0.8]} rotation={[Math.PI / 2, 0, 0]}>
+            <mesh position={[-1.9, 5.3, 0.8]} rotation={[Math.PI / 2, 0, 0]}>
               <cylinderGeometry args={[0.35, 0.35, 2.4, 10]} />
               <meshStandardMaterial color="#34d399" metalness={0.8} />
             </mesh>
-            <mesh position={[1.9, 5.1, 0.8]} rotation={[Math.PI / 2, 0, 0]}>
+            <mesh position={[1.9, 5.3, 0.8]} rotation={[Math.PI / 2, 0, 0]}>
               <cylinderGeometry args={[0.35, 0.35, 2.4, 10]} />
               <meshStandardMaterial color="#34d399" metalness={0.8} />
             </mesh>
@@ -463,11 +587,11 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
 
           {/* Arquétipo 4: Imperador Quiliarca Dourado (Asas Solares Luminosas + Halo Imperial) */}
           <group name="Arch4_ImperadorQuiliarca" visible={false}>
-            <mesh position={[-3.2, 4.2, -0.6]} rotation={[0, 0.25, 0.35]}>
+            <mesh position={[-3.2, 4.4, -0.6]} rotation={[0, 0.25, 0.35]}>
               <boxGeometry args={[2.8, 3.6, 0.18]} />
               <meshStandardMaterial color="#fde047" emissive="#eab308" emissiveIntensity={0.8} />
             </mesh>
-            <mesh position={[3.2, 4.2, -0.6]} rotation={[0, -0.25, -0.35]}>
+            <mesh position={[3.2, 4.4, -0.6]} rotation={[0, -0.25, -0.35]}>
               <boxGeometry args={[2.8, 3.6, 0.18]} />
               <meshStandardMaterial color="#fde047" emissive="#eab308" emissiveIntensity={0.8} />
             </mesh>
@@ -477,7 +601,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
         {/* Arma de Guerra 3D Articulada do Boss (5 Armas Exclusivas por Arquétipo) */}
         <group
           ref={bossHammerPivotRef}
-          position={[2.8, 3.2, 1.1]}
+          position={[2.8, 3.4, 1.1]}
           rotation={[0.4, 0, -0.25]}
         >
           {/* 0: WARHAMMER (Martelo de Guerra Imperial) */}
@@ -542,8 +666,9 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
             </mesh>
           </group>
         </group>
+
         {/* Placa 3D Gigante de Força / HP do Mega-Boss */}
-        <mesh position={[0, 8.1, 0]}>
+        <mesh position={[0, 8.3, 0]}>
           <planeGeometry args={[6.2, 3.1]} />
           <meshBasicMaterial
             ref={bossPlaqueMatRef}
