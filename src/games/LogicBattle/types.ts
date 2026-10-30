@@ -390,8 +390,12 @@ export interface ActiveBridgeRunCheckpoint {
   seed: number
   /** Marco de tropas/pontos já transferidos para a Base nesta corrida (evita duplicação ao ir e voltar) */
   bankedScoreMark: number
+  /** V10: Níveis das 4 Torres Defensivas da Base da Ponte e Nível da Base Inimiga */
+  playerBridgeTowerLevels?: [number, number, number, number]
+  enemyBaseLevel?: number
   updatedAt: string
 }
+
 
 /**
  * V8: Cache rápido de pontuação e progresso do jogador no navegador (`logicBattle.score.cache.v1`)
@@ -419,7 +423,10 @@ export interface SaveV1 {
   conqueredRegionIds: string[]
   selectedRegionId: string
   citadelLevels: Record<CitadelBuildingId, number>
+  /** V10: Níveis persistidos das 4 Torres Defensivas da Base da Ponte */
+  playerBridgeTowerLevels?: [number, number, number, number]
   album: Record<TrapId, TrapAlbumRecord>
+
   twinsDiscovered: TwinId[]
   mastery: Record<ConceptId, ConceptMasteryRecord>
   trapAlertSeenCount: Record<TrapId, number>

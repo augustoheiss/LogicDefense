@@ -75,13 +75,15 @@ export function applyGateWithRemainder(n: ArmyCount, gate: Gate): GateApplicatio
     }
     case '%+': {
       // Acréscimo percentual: safeN * (100 + pct) / 100
-      const pct = Math.max(0, operand.value)
+      const rawPct = Number.isFinite(operand.value) ? operand.value : num / den
+      const pct = Math.max(0, rawPct)
       rawNext = Math.floor((safeN * (100 + pct) + 1e-9) / 100)
       break
     }
     case '%−': {
       // Desconto percentual: safeN * (100 - pct) / 100
-      const pct = Math.min(100, Math.max(0, operand.value))
+      const rawPct = Number.isFinite(operand.value) ? operand.value : num / den
+      const pct = Math.min(100, Math.max(0, rawPct))
       rawNext = Math.floor((safeN * (100 - pct) + 1e-9) / 100)
       break
     }
@@ -150,3 +152,124 @@ export function applyGateChainWithRemainder(
 export function applyGateChain(n: ArmyCount, gates: readonly Gate[]): ArmyCount {
   return applyGateChainWithRemainder(n, gates).nextArmy
 }
+
+/**
+ * V10 (Pilar 1 — QAR1-V10-AUTHENTIC-DEBUFFS):
+ * Avalia matematicamente se um portão individual aumenta (`true` -> Azul)
+ * ou reduz (`false` -> Vermelho) o exército, sem depender de heurística textual de string.
+ * Ex.: `÷ 1/2`, `÷ 0,5`, `− (−15)`, `× 3/2`, `+ 50%` => `true` (Azul).
+ * Ex.: `× 1/2`, `× 0,8`, `× 10⁻¹`, `^ 0`, `√N`, `− 20%`, `− 8`, `÷ 2` => `false` (Vermelho).
+ */
+export function isGateBeneficial(gate: Gate, refArmy = 100): boolean {
+  const probe = Math.max(100, clampArmy(refArmy))
+  const after = applyGate(probe, gate)
+  return after > probe
+}
+
+/**
+ * Avalia se uma faixa completa de portões (1 ou 2 passos encadeados) é benéfica (`true`)
+ * ou redutora/debuff (`false`) sobre um exército de referência.
+ */
+export function isLaneBeneficial(gates: readonly Gate[], refArmy = 100): boolean {
+  if (!gates || gates.length === 0) return true
+  const probe = Math.max(100, clampArmy(refArmy))
+  const after = applyGateChain(probe, gates)
+  return after >= probe
+}
+
+export interface AuthenticCenterGatePassParams {
+  armyBefore: ArmyCount
+  chosenGates: readonly Gate[]
+  effectiveEvalBase: ArmyCount
+  useOrthogonalMonsterBase: boolean
+  wasOptimal: boolean
+  isTrapFall?: boolean
+  enemyBaseLevel?: number
+}
+
+/**
+ * V10 (Pilar 1 — QAR1-V10-AUTHENTIC-DEBUFFS):
+ * Aplica a passagem pelos portões da Rota Central garantindo que:
+ * 1. Portões benéficos preservem a Escala Ortogonal V9 (sem explodir exponencialmente o exército da Rota Direita).
+ * 2. Todo portão negativo/redutor (`isLaneBeneficial === false`) ou queda em pegadinha (`isTrapFall === true`)
+ *    reduza DE VERDADE o exército atual (`nextArmy < armyBefore`), aplicando reduções proporcionais (`− 20%`,
+ *    `× 1/2`, `× 0,8`, `÷ 2`, `^ 0`) diretamente sobre `armyBefore` e escalando subtrações quando o exército
+ *    estiver inflado.
+ */
+export function applyAuthenticCenterGatePass(
+  params: AuthenticCenterGatePassParams,
+): GateApplicationResult {
+  const {
+    armyBefore,
+    chosenGates,
+    effectiveEvalBase,
+    useOrthogonalMonsterBase,
+    isTrapFall = false,
+    enemyBaseLevel = 1,
+  } = params
+
+  const safeBefore = Math.max(1, clampArmy(armyBefore))
+  const evalApp = applyGateChainWithRemainder(effectiveEvalBase, chosenGates)
+  const laneBeneficial = isLaneBeneficial(chosenGates, effectiveEvalBase)
+
+  if (!laneBeneficial || isTrapFall) {
+    const directApp = applyGateChainWithRemainder(safeBefore, chosenGates)
+    const isSingleAdditiveSub =
+      chosenGates.length === 1 &&
+      chosenGates[0].op === '−' &&
+      chosenGates[0].operand.num > 0
+
+    if (directApp.nextArmy < safeBefore) {
+      if (isSingleAdditiveSub && useOrthogonalMonsterBase && safeBefore > effectiveEvalBase * 1.35) {
+        const evalLossRatio = Math.max(
+          0.12,
+          Math.min(0.45, (effectiveEvalBase - evalApp.nextArmy) / Math.max(1, effectiveEvalBase)),
+        )
+        const levelMult = 1 + Math.max(0, enemyBaseLevel - 1) * 0.04
+        const scaledDrop = Math.max(
+          safeBefore - directApp.nextArmy,
+          Math.round(safeBefore * evalLossRatio * levelMult),
+        )
+        return {
+          nextArmy: Math.max(1, clampArmy(safeBefore - scaledDrop)),
+          remainder: directApp.remainder,
+        }
+      }
+      // Garantir que em exércitos >= 200 (ex: 1,5k) qualquer portão de debuff sempre reduza ao menos 12%
+      // para que a queda seja imediatamente visível no HUD compactado (1,5k -> <= 1,3k)
+      if (safeBefore >= 200) {
+        const minVisibleDrop = Math.max(
+          safeBefore - directApp.nextArmy,
+          Math.round(safeBefore * 0.12),
+        )
+        return {
+          nextArmy: Math.max(1, clampArmy(safeBefore - minVisibleDrop)),
+          remainder: directApp.remainder,
+        }
+      }
+      return {
+        nextArmy: Math.max(1, clampArmy(directApp.nextArmy)),
+        remainder: directApp.remainder,
+      }
+    }
+
+    // Caso de pegadinha onde a faixa ruim tinha ganho positivo menor na base de referência:
+    // aplica penalidade real de debuff para que o portão vermelho/pegadinha sempre reduza soldados.
+    const fallbackPenalty = Math.max(1, Math.round(safeBefore * 0.15))
+    return {
+      nextArmy: Math.max(1, clampArmy(safeBefore - fallbackPenalty)),
+      remainder: directApp.remainder,
+    }
+  }
+
+  // Faixa benéfica (Azul): preserva escala ortogonal para buffs
+  const rawNext = useOrthogonalMonsterBase
+    ? clampArmy(safeBefore + Math.max(1, evalApp.nextArmy - effectiveEvalBase))
+    : clampArmy(evalApp.nextArmy)
+
+  return {
+    nextArmy: Math.max(safeBefore, rawNext),
+    remainder: evalApp.remainder,
+  }
+}
+

@@ -71,3 +71,6 @@ backend/rotate_keys.py
 # Playwright & QA Artifacts
 artifacts/
 **/artifacts/
+test_artifacts_v10/
+**/test_artifacts_v10/
+test_artifacts*/

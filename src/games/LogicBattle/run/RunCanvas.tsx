@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { soundEngine } from '../audio/soundEngine'
+import { BridgeBaseCommandBar } from '../components/hud/BridgeBaseCommandBar'
 import { BIOMES } from '../config/biomes'
 import { applyGateChain } from '../domain/armyMath'
 import { formatArmy } from '../domain/notation'
@@ -111,7 +112,9 @@ export const RunCanvas: React.FC = () => {
   const bridgeSectorIndex = useLogicBattleStore((s) => s.bridgeSectorIndex)
   const infiniteBridgeMode = useLogicBattleStore((s) => s.infiniteBridgeMode)
   const toggleInfiniteBridgeMode = useLogicBattleStore((s) => s.toggleInfiniteBridgeMode)
-  const extractRunToBase = useLogicBattleStore((s) => s.extractRunToBase)
+  const triggerBridgeDeconstructionToBase = useLogicBattleStore(
+    (s) => s.triggerBridgeDeconstructionToBase,
+  )
   const steerToRoute = useLogicBattleStore((s) => s.steerToRoute)
 
   const isAnyModalOrDrawerOpen =
@@ -626,8 +629,8 @@ export const RunCanvas: React.FC = () => {
           type="button"
           className="lb-compass-btn"
           data-testid="lb-extract-to-base-btn"
-          onClick={extractRunToBase}
-          title="Salvar Progresso no IndexedDB + Cache e Voltar para a Base com a Pontuação"
+          onClick={triggerBridgeDeconstructionToBase}
+          title="Desconstruir Ponte 3D, Sincronizar Carteira Compartilhada e Voltar para a Base"
           aria-label="Voltar para a Base com a Pontuação"
         >
           🏰
@@ -806,6 +809,11 @@ export const RunCanvas: React.FC = () => {
             <small>+×</small>
           </button>
         </div>
+      )}
+
+      {/* V10 Fase 1: Comando da Base da Ponte + Carteira Compartilhada + Desconstrução 3D */}
+      {(phase === 'RUNNING' || phase === 'CALM_WAIT' || phase === 'PAUSED') && (
+        <BridgeBaseCommandBar />
       )}
     </div>
   )

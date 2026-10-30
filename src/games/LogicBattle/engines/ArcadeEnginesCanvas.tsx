@@ -8,6 +8,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useRef, useState } from 'react'
 import { soundEngine } from '../audio/soundEngine'
+import { BridgeBaseCommandBar } from '../components/hud/BridgeBaseCommandBar'
 import { formatArmy } from '../domain/notation'
 import { createRng } from '../domain/rng'
 import { ParticlePool } from '../run/renderer/fxParticles'
@@ -306,6 +307,7 @@ export const ArcadeEnginesCanvas: React.FC = () => {
   const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
   const lastSolvedMathRewardAt = useLogicBattleStore((s) => s.lastSolvedMathRewardAt)
   const lastAppliedMathSeqRef = useRef<number>(0)
+  const lastSyncedStoreArmyRef = useRef<number>(Math.max(12, runPlan.n0))
 
   const engineSpec = ENGINE_CATALOG[activeEngineId] ?? ENGINE_CATALOG.cerco_torres
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -440,8 +442,8 @@ export const ArcadeEnginesCanvas: React.FC = () => {
         id: 'bldg_barracks_0',
         kind: 'barracks',
         tier: 1,
-        normX: 0.38,
-        normY: 0.40,
+        normX: 0.36,
+        normY: 0.38,
         fireCooldownMs: 0,
         trainProgressMs: 2200,
         trainIntervalMs: 3600,
@@ -468,8 +470,8 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           id: 'bldg_crusher',
           kind: 'quarry_crusher',
           tier: 1,
-          normX: 0.22,
-          normY: 0.42,
+          normX: 0.24,
+          normY: 0.44,
           fireCooldownMs: 0,
           trainProgressMs: 0,
           trainIntervalMs: 0,
@@ -545,7 +547,12 @@ export const ArcadeEnginesCanvas: React.FC = () => {
         kind: initEnemyKind,
         hp: 32,
         maxHp: 32,
-        normX: activeEngineId === 'cerco_torres' || activeEngineId === 'pedreira_rei' ? 0.86 : 0.18,
+        normX:
+          activeEngineId === 'cerco_torres' ||
+          activeEngineId === 'pedreira_rei' ||
+          activeEngineId === 'forte_bandeira'
+            ? 0.84
+            : 0.18,
         normY: 0.58,
         speed: 0.000068,
         attackTimerMs: 0,
@@ -563,8 +570,8 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       playerForce: startArmy,
       heroWeaponDmg: Math.max(4, Math.round(startArmy * 0.28)),
       heroFireCadenceMs: 360,
-      baseHp: 120,
-      baseMaxHp: 120,
+      baseHp: 100,
+      baseMaxHp: 100,
       coins: 28,
       comboStreak: 0,
       maxCombo: 1,
@@ -592,6 +599,7 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       padClickCount: 0,
     }
 
+    lastSyncedStoreArmyRef.current = startArmy
     useLogicBattleStore.setState((s) => ({
       snapshot: {
         ...s.snapshot,
@@ -599,6 +607,30 @@ export const ArcadeEnginesCanvas: React.FC = () => {
         phase: 'RUNNING',
       },
     }))
+
+    setHudState({
+      wave: 1,
+      maxWaves: 4,
+      playerForce: startArmy,
+      baseHp: 100,
+      baseMaxHp: 100,
+      coins: 28,
+      comboStreak: 0,
+      comboMult: 1,
+      enemiesLeft: 9,
+      bossHp: 0,
+      bossMaxHp: Math.max(120, snapshot.enemy.bossHp * 2),
+      statusText:
+        activeEngineId === 'forte_bandeira'
+          ? 'Quartel ativo! Colete 🪙 e construa mais Quartéis e Fábricas de Tanques para seu exército atacar!'
+          : activeEngineId === 'cerco_torres'
+            ? 'Colete 🪙 dos goblins abatidos e construa Torres de Besteiros 2.5D e Morteiros atrás da paliçada!'
+            : activeEngineId === 'pedreira_rei'
+              ? 'Contrate Operários e Titãs para carregar blocos de granito até o Britador (÷10) e gerar Lingotes!'
+              : 'Mova o Esquadrão pelo coliseu, colete 🪙 e recrute +Atiradores e Sentinelas Mecha contra a Horda!',
+      pads: initialPads,
+      alliedCount: initialAllies.length,
+    })
 
     projectilePoolRef.current.clear()
     // Disparo inicial imediato em t=0s para feedback visual instantâneo e telemetria E2E
@@ -743,10 +775,17 @@ export const ArcadeEnginesCanvas: React.FC = () => {
 
     sim.padClickCount += 1
 
-    // Se o jogador clicar no botão da dock ou pisar no pad, permite construir se tiver moedas
-    // (ou concede um subsídio tático mínimo caso clique direto no botão para manter fluidez)
+    // Se o jogador clicar no botão da dock ou pisar no pad, permite construir usando as moedas da partida
+    // ou descontando o restante da Carteira Compartilhada (reserveTroops)
     if (sim.coins < pad.costCoins) {
-      sim.coins = Math.max(0, sim.coins)
+      const shortfall = pad.costCoins - sim.coins
+      sim.coins = 0
+      useLogicBattleStore.setState((st) => ({
+        save: {
+          ...st.save,
+          reserveTroops: Math.max(5, st.save.reserveTroops - shortfall),
+        },
+      }))
     } else {
       sim.coins -= pad.costCoins
     }
@@ -1017,6 +1056,7 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     )
 
     // Sincronizar imediatamente com o HUD global
+    lastSyncedStoreArmyRef.current = sim.playerForce
     useLogicBattleStore.setState((s) => ({
       snapshot: {
         ...s.snapshot,
@@ -1056,6 +1096,9 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     let rafId = 0
     let lastPerf = performance.now()
     let hudSyncTimer = 0
+    let enemyEvoTimerMs = 0
+    let enemyDebuffPulseTimerMs = 0
+    let sharedTowersFireTimerMs = 0
 
     const step = (now: number) => {
       const rawDtMs = Math.min(64, Math.max(8, now - lastPerf))
@@ -1071,6 +1114,9 @@ export const ArcadeEnginesCanvas: React.FC = () => {
         sim.spawnTimerMs += dtMs
         sim.fireTimerMs += dtMs
         hudSyncTimer += dtMs
+        enemyEvoTimerMs += dtMs
+        enemyDebuffPulseTimerMs += dtMs
+        sharedTowersFireTimerMs += dtMs
 
         const dpr = Math.min(2, window.devicePixelRatio || 1)
         const rect = canvas.getBoundingClientRect()
@@ -1140,6 +1186,12 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           if (dHero < 0.055 || coin.ageMs > 3600) {
             sim.coins += coin.amount
             sim.droppedCoins.splice(i, 1)
+            useLogicBattleStore.setState((s) => ({
+              snapshot: {
+                ...s.snapshot,
+                bridgeCoinsEarned: (s.snapshot.bridgeCoinsEarned ?? 0) + coin.amount,
+              },
+            }))
           }
         }
 
@@ -1168,8 +1220,8 @@ export const ArcadeEnginesCanvas: React.FC = () => {
             enemyKind = 'enemy_goblin'
           } else if (activeEngineId === 'forte_bandeira') {
             const side = Math.floor(sim.rngNextFloat() * 3)
-            spawnX = side === 0 ? 0.94 : side === 1 ? 0.06 : 0.2 + sim.rngNextFloat() * 0.6
-            spawnY = side === 2 ? 0.08 : 0.22 + sim.rngNextFloat() * 0.55
+            spawnX = side === 0 ? 0.90 : side === 1 ? 0.84 : 0.34 + sim.rngNextFloat() * 0.44
+            spawnY = side === 2 ? 0.82 : 0.24 + sim.rngNextFloat() * 0.52
             enemyKind =
               sim.wave >= 2 && sim.waveEnemiesSpawned % 4 === 0
                 ? 'enemy_tank'
@@ -1346,6 +1398,12 @@ export const ArcadeEnginesCanvas: React.FC = () => {
                 sim.coins += coinsGenerated
                 sim.ingotsStacked += crusherTier
                 sim.remaindersEarned += 1
+                useLogicBattleStore.setState((s) => ({
+                  snapshot: {
+                    ...s.snapshot,
+                    bridgeCoinsEarned: (s.snapshot.bridgeCoinsEarned ?? 0) + coinsGenerated,
+                  },
+                }))
                 const pallet = sim.buildings.find((b) => b.kind === 'ingot_pallet')
                 if (pallet) {
                   pallet.tier = Math.min(3, 1 + Math.floor(sim.ingotsStacked / 3))
@@ -1454,6 +1512,46 @@ export const ArcadeEnginesCanvas: React.FC = () => {
               target.normY * h,
               410,
             )
+          }
+        }
+
+        // 6.5 V10 Fase 3: Base Viva Inimiga evolui autonomamente (~16s), Torres de Debuff disparam (~6.5s) e Torres Aliadas Compartilhadas dão suporte (~1.1s)
+        const currentStoreArmyBeforeStep =
+          useLogicBattleStore.getState().snapshot.currentArmy
+        if (currentStoreArmyBeforeStep !== lastSyncedStoreArmyRef.current) {
+          const extDelta =
+            currentStoreArmyBeforeStep - lastSyncedStoreArmyRef.current
+          sim.playerForce = Math.max(1, sim.playerForce + extDelta)
+          lastSyncedStoreArmyRef.current = currentStoreArmyBeforeStep
+        }
+        if (enemyEvoTimerMs >= 16000) {
+          enemyEvoTimerMs = 0
+          useLogicBattleStore.getState().evolveEnemyBaseInMatch()
+        }
+        const liveStoreForTowers = useLogicBattleStore.getState()
+        const activeSharedTowers = liveStoreForTowers.playerBridgeTowerLevels.filter(
+          (l) => l > 0,
+        ).length
+        if (sharedTowersFireTimerMs >= 1100 && activeSharedTowers > 0 && sim.enemies.length > 0) {
+          sharedTowersFireTimerMs = 0
+          const target = sim.enemies[0]
+          projectilePoolRef.current.spawnProjectile(
+            'spear',
+            w * 0.14,
+            h * 0.17,
+            target.normX * w,
+            target.normY * h,
+            390,
+          )
+        }
+        if (enemyDebuffPulseTimerMs >= 6500 && liveStoreForTowers.enemyDebuffTowersActive > 0) {
+          enemyDebuffPulseTimerMs = 0
+          if (activeSharedTowers >= Math.min(2, liveStoreForTowers.enemyDebuffTowersActive)) {
+            liveStoreForTowers.recordDebuffBoltIntercepted('🛡️ ESCUDO TORRE')
+          } else {
+            liveStoreForTowers.applyEnemyDebuffTowerHit(0.12, '−12% MALDIÇÃO')
+            sim.playerForce = useLogicBattleStore.getState().snapshot.currentArmy
+            lastSyncedStoreArmyRef.current = sim.playerForce
           }
         }
 
@@ -1636,7 +1734,7 @@ export const ArcadeEnginesCanvas: React.FC = () => {
             ctx.strokeStyle = canAfford ? '#34d399' : '#64748b'
             ctx.lineWidth = 2
             ctx.beginPath()
-            ctx.roundRect(px - 36, py + 16, 72, 22, 7)
+            ctx.roundRect(px - 36, py + 34, 72, 22, 7)
             ctx.fill()
             ctx.stroke()
 
@@ -1644,11 +1742,63 @@ export const ArcadeEnginesCanvas: React.FC = () => {
             ctx.font = '800 10px Inter, system-ui, sans-serif'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
-            ctx.fillText(`${pad.icon} 🪙${pad.costCoins}`, px, py + 27)
+            ctx.fillText(`${pad.icon} 🪙${pad.costCoins}`, px, py + 45)
+          }
+
+          // V10 Fase 3: Desenhar Bastião Vivo Inimigo 2.5D/3D + Torres de Debuff e Torres Compartilhadas Aliadas
+          const animTick = Math.floor(sim.elapsedMs / 180)
+          const stNow = useLogicBattleStore.getState()
+          const enemyBaseLvl = stNow.enemyBaseLevel
+          const enemyDebuffTowersCount = stNow.enemyDebuffTowersActive
+          const sharedTowers = stNow.playerBridgeTowerLevels
+          const enemyKeepSprite = getBuildingSprite(
+            'castle_keep',
+            Math.min(3, Math.ceil(enemyBaseLvl / 2)) as 1 | 2 | 3,
+            animTick,
+          )
+          const exBase = w * 0.90
+          const eyBase = h * 0.20
+          ctx.save()
+          ctx.filter = 'hue-rotate(140deg) saturate(1.5)'
+          ctx.drawImage(enemyKeepSprite, exBase - 44, eyBase - 48, 88, 88)
+          for (let eti = 0; eti < enemyDebuffTowersCount; eti++) {
+            const etx = w * (0.77 + eti * 0.046)
+            const ety = h * (0.29 + (eti % 2) * 0.055)
+            const etSprite = getBuildingSprite('archer_tower', 2, animTick)
+            ctx.drawImage(etSprite, etx - 22, ety - 26, 44, 44)
+          }
+          ctx.restore()
+          ctx.fillStyle = 'rgba(69, 10, 10, 0.92)'
+          ctx.strokeStyle = '#f87171'
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          ctx.roundRect(exBase - 54, eyBase - 58, 108, 16, 6)
+          ctx.fill()
+          ctx.stroke()
+          ctx.fillStyle = '#fecaca'
+          ctx.font = '900 9.5px Inter, system-ui, sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(
+            `💀 Base Inimiga Nv.${enemyBaseLvl} · ${enemyDebuffTowersCount}T`,
+            exBase,
+            eyBase - 49,
+          )
+
+          // Torres Compartilhadas Aliadas (playerBridgeTowerLevels) dando suporte de fogo 2.5D
+          const sharedTowerSprite = getBuildingSprite('turret', 2, animTick)
+          for (let ti = 0; ti < sharedTowers.length; ti++) {
+            const tlvl = sharedTowers[ti] ?? 0
+            if (tlvl <= 0) continue
+            const tx = w * (0.10 + ti * 0.052)
+            const ty = h * 0.165
+            ctx.drawImage(sharedTowerSprite, tx - 24, ty - 26, 48, 48)
+            ctx.fillStyle = '#bae6fd'
+            ctx.font = '800 8.5px Inter, system-ui, sans-serif'
+            ctx.textAlign = 'center'
+            ctx.fillText(`🗼Nv.${tlvl}`, tx, ty + 22)
           }
 
           // Desenhar Edifícios 2.5D construídos (Torres, Quartéis, Fábrica de Tanque, Britador, Castelo)
-          const animTick = Math.floor(sim.elapsedMs / 180)
           for (const bldg of sim.buildings) {
             const bx = bldg.normX * w
             const by = bldg.normY * h
@@ -1664,10 +1814,15 @@ export const ArcadeEnginesCanvas: React.FC = () => {
               ctx.fillRect(bx - 26, by - 52, 52 * ratio, 4)
             }
 
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.84)'
+            ctx.beginPath()
+            ctx.roundRect(bx - 38, by - 71, 76, 15, 5)
+            ctx.fill()
             ctx.fillStyle = '#e2e8f0'
             ctx.font = '800 10px Inter, system-ui, sans-serif'
             ctx.textAlign = 'center'
-            ctx.fillText(bldg.label, bx, by + 38)
+            ctx.textBaseline = 'middle'
+            ctx.fillText(bldg.label, bx, by - 63)
           }
 
           // Desenhar Moedas de Ouro 2.5D (🪙) no chão
@@ -1829,14 +1984,67 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           )
 
           particlePoolRef.current.updateAndDraw(ctx, dtMs)
-          ;(window as unknown as { __lbActiveProjectiles?: number }).__lbActiveProjectiles =
-            projectilePoolRef.current.getActiveCount()
+          const activeProjCount = projectilePoolRef.current.getActiveCount()
+          const stTel = useLogicBattleStore.getState()
+          const winObj = window as unknown as {
+            __lbActiveProjectiles?: number
+            __lbArcadeEngineTelemetry?: Record<string, unknown>
+            __lbMultiEngineV10Telemetry?: Record<string, unknown>
+            __lbEvolveEnemyBaseForAudit?: () => { enemyBaseLevel: number; activeTowersCount: number }
+            __lbForceEnemyDebuffHitForAudit?: (lossRatio?: number, label?: string) => void
+          }
+          winObj.__lbActiveProjectiles = activeProjCount
+          winObj.__lbEvolveEnemyBaseForAudit = () => {
+            const newLvl = useLogicBattleStore.getState().evolveEnemyBaseInMatch()
+            const activeTowers = useLogicBattleStore.getState().enemyDebuffTowersActive
+            return { enemyBaseLevel: newLvl, activeTowersCount: activeTowers }
+          }
+          winObj.__lbForceEnemyDebuffHitForAudit = (
+            lossRatio = 0.15,
+            label = '−15% MALDIÇÃO',
+          ) => {
+            useLogicBattleStore.getState().applyEnemyDebuffTowerHit(lossRatio, label)
+            const updatedArmy = useLogicBattleStore.getState().snapshot.currentArmy
+            sim.playerForce = updatedArmy
+          }
+          const telPayload = {
+            engineId: activeEngineId,
+            activeEngineId,
+            wave: sim.wave,
+            playerForce: sim.playerForce,
+            coins: sim.coins,
+            sharedWalletBalance: stTel.getSharedWalletBalance(),
+            enemyBaseLevel: stTel.enemyBaseLevel,
+            enemyDebuffTowersActive: stTel.enemyDebuffTowersActive,
+            playerBridgeTowerLevels: [...stTel.playerBridgeTowerLevels],
+            citadelLevels: { ...stTel.save.citadelLevels },
+            alliedStructuresCount:
+              sim.buildings.length +
+              stTel.playerBridgeTowerLevels.filter((l) => l > 0).length,
+            buildingsCount: sim.buildings.length,
+            alliedUnitsCount: sim.alliedUnits.length,
+            enemiesCount: sim.enemies.length,
+            activeProjectiles: activeProjCount,
+          }
+          winObj.__lbArcadeEngineTelemetry = telPayload
+          winObj.__lbMultiEngineV10Telemetry = telPayload
           ctx.restore()
         }
 
         // Sincronizar HUD React a cada 180ms
         if (hudSyncTimer >= 180) {
           hudSyncTimer = 0
+          if (
+            useLogicBattleStore.getState().snapshot.currentArmy !== sim.playerForce
+          ) {
+            lastSyncedStoreArmyRef.current = sim.playerForce
+            useLogicBattleStore.setState((st) => ({
+              snapshot: {
+                ...st.snapshot,
+                currentArmy: sim.playerForce,
+              },
+            }))
+          }
           const bossUnit = sim.enemies.find((e) => e.isBoss)
           setHudState((prev) => ({
             ...prev,
@@ -1990,6 +2198,9 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           {hudState.statusText}
         </div>
       </div>
+
+      {/* V10 Fase 3: Barra de Comando da Carteira Compartilhada + Bases Vivas em todas as Engines Arcade */}
+      <BridgeBaseCommandBar />
 
       {/* Dock Tática de Construções, Quartéis, Torres, Operários e Cartas de Armas (Específica de cada Engine!) */}
       {(snapshot.phase === 'RUNNING' ||

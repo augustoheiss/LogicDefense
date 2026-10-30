@@ -192,10 +192,20 @@ export class SerpentSimulation {
       this.hero.armyPower = Math.max(0, prevPower + prevDmg * 4)
     } else if (pad.op === '÷') {
       this.hero.arrowDamage = Math.max(1, Math.floor(prevDmg / Math.max(1, pad.operand)))
-      this.hero.armyPower = Math.max(0, Math.floor(prevPower / Math.max(1, pad.operand)))
+      this.hero.armyPower = Math.max(
+        1,
+        Math.min(prevPower - 1, Math.floor(prevPower / Math.max(2, pad.operand))),
+      )
     } else if (pad.op === '−') {
+      const effectiveSub =
+        prevPower > 50
+          ? Math.max(pad.operand, Math.round(prevPower * 0.14))
+          : Math.max(1, pad.operand)
       this.hero.arrowDamage = Math.max(1, prevDmg - pad.operand)
-      this.hero.armyPower = Math.max(0, prevPower - pad.operand)
+      this.hero.armyPower = Math.max(1, prevPower - effectiveSub)
+    }
+    if (pad.isTrap && this.hero.armyPower >= prevPower && prevPower > 1) {
+      this.hero.armyPower = Math.max(1, prevPower - Math.max(1, Math.round(prevPower * 0.14)))
     }
 
     if (pad.isTrap) {

@@ -5,6 +5,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useRef, useState } from 'react'
 import { soundEngine } from '../../audio/soundEngine'
+import { BridgeBaseCommandBar } from '../../components/hud/BridgeBaseCommandBar'
 import { ParticlePool } from '../../run/renderer/fxParticles'
 import { ProjectilePool } from '../../run/renderer/projectilePool'
 import { useLogicBattleStore } from '../../state/useLogicBattleStore'
@@ -18,6 +19,7 @@ import {
   wrapCoord,
 } from './torusGrid'
 import {
+  getBuildingSprite,
   getDragonSegmentSprite,
   getPropSprite,
   getUnitSprite,
@@ -39,6 +41,7 @@ export const SerpentCanvas: React.FC = () => {
   const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
   const lastSolvedMathRewardAt = useLogicBattleStore((s) => s.lastSolvedMathRewardAt)
   const lastAppliedMathSeqRef = useRef<number>(0)
+  const lastSyncedStoreArmyRef = useRef<number>(Math.max(5, initialStoreArmy))
 
   const simRef = useRef<SerpentSimulation>(
     SerpentSimulation.fromSeed(seed, 1, Math.max(5, initialStoreArmy)),
@@ -79,6 +82,7 @@ export const SerpentCanvas: React.FC = () => {
     setNearbyPadsUi(sim.pads.slice(0, 3))
 
     // SIT-05: Sincronizar poder inicial no HUD imediatamente
+    lastSyncedStoreArmyRef.current = sim.hero.armyPower
     useLogicBattleStore.setState((st) => ({
       snapshot: {
         ...st.snapshot,
@@ -154,6 +158,9 @@ export const SerpentCanvas: React.FC = () => {
     let rafId = 0
     let lastNow = performance.now()
     let uiSyncTimer = 0
+    let serpEnemyEvoTimer = 0
+    let serpSharedTowerTimer = 0
+    let serpDebuffPulseTimer = 0
 
     const loop = (now: number) => {
       const dtMs = Math.min(64, Math.max(8, now - lastNow))
@@ -166,6 +173,12 @@ export const SerpentCanvas: React.FC = () => {
       const sim = simRef.current
 
       if (!isPaused && sim.status === 'RUNNING') {
+        const extStoreArmy = useLogicBattleStore.getState().snapshot.currentArmy
+        if (extStoreArmy !== lastSyncedStoreArmyRef.current) {
+          const extDelta = extStoreArmy - lastSyncedStoreArmyRef.current
+          sim.hero.armyPower = Math.max(1, sim.hero.armyPower + extDelta)
+          lastSyncedStoreArmyRef.current = extStoreArmy
+        }
         // 1. Consolidar vetor de entrada (Teclado > Joystick > Arraste no Canvas > Caminhada até Placa)
         let targetDx = 0
         let targetDy = 0
@@ -294,6 +307,45 @@ export const SerpentCanvas: React.FC = () => {
 
         // Sincronizar HUD (SIT-05: HUD mostra exatamente sim.hero.armyPower)
         uiSyncTimer += dtMs
+        serpEnemyEvoTimer += dtMs
+        serpSharedTowerTimer += dtMs
+        serpDebuffPulseTimer += dtMs
+
+        if (serpEnemyEvoTimer >= 16000) {
+          serpEnemyEvoTimer = 0
+          useLogicBattleStore.getState().evolveEnemyBaseInMatch()
+        }
+        const stSerpLoop = useLogicBattleStore.getState()
+        const activeSharedSentinelCount = stSerpLoop.playerBridgeTowerLevels.filter(
+          (l) => l > 0,
+        ).length
+        if (
+          serpDebuffPulseTimer >= 7000 &&
+          stSerpLoop.enemyDebuffTowersActive > 0
+        ) {
+          serpDebuffPulseTimer = 0
+          if (
+            activeSharedSentinelCount >=
+            Math.min(2, stSerpLoop.enemyDebuffTowersActive)
+          ) {
+            stSerpLoop.recordDebuffBoltIntercepted('🛡️ SENTINELA BLOQUEOU')
+          } else {
+            stSerpLoop.applyEnemyDebuffTowerHit(0.12, '−12% MALDIÇÃO')
+            sim.hero.armyPower =
+              useLogicBattleStore.getState().snapshot.currentArmy
+            lastSyncedStoreArmyRef.current = sim.hero.armyPower
+          }
+        }
+        if (serpSharedTowerTimer >= 1200) {
+          serpSharedTowerTimer = 0
+          const stTowers = useLogicBattleStore.getState().playerBridgeTowerLevels
+          const totalSharedLvl = stTowers.reduce((a, b) => a + b, 0)
+          const alive = sim.getAliveSegments()
+          if (totalSharedLvl > 0 && alive.length > 0) {
+            const tailSeg = alive[alive.length - 1]
+            tailSeg.hp = Math.max(1, tailSeg.hp - Math.max(1, Math.floor(totalSharedLvl * 0.5)))
+          }
+        }
         if (uiSyncTimer >= 120) {
           uiSyncTimer = 0
           setHeartsUi(sim.hero.hearts)
@@ -302,11 +354,21 @@ export const SerpentCanvas: React.FC = () => {
 
           const currentStoreArmy =
             useLogicBattleStore.getState().snapshot.currentArmy
-          if (currentStoreArmy !== sim.hero.armyPower) {
+          const currentBridgeCoins =
+            useLogicBattleStore.getState().snapshot.bridgeCoinsEarned ?? 0
+          if (
+            currentStoreArmy !== sim.hero.armyPower ||
+            currentBridgeCoins < sim.coinsEarned
+          ) {
+            lastSyncedStoreArmyRef.current = sim.hero.armyPower
             useLogicBattleStore.setState((st) => ({
               snapshot: {
                 ...st.snapshot,
                 currentArmy: sim.hero.armyPower,
+                bridgeCoinsEarned: Math.max(
+                  st.snapshot.bridgeCoinsEarned ?? 0,
+                  sim.coinsEarned,
+                ),
                 calcComboStreak: sim.comboStreak,
                 calcComboMultiplier: sim.comboMultiplier,
               },
@@ -469,24 +531,24 @@ export const SerpentCanvas: React.FC = () => {
             const sy = centerY + dy * CELL_PX
 
             const sprite = pad.isTrap ? blockSprite : pedestalSprite
-            ctx.drawImage(sprite, sx - 24, sy - 24, 48, 48)
+            ctx.drawImage(sprite, sx - 18, sy - 11, 36, 33)
 
-            // Ícone de upgrade no pedestal (🏹 +Besteiro / ⚡ Besta Rápida / 🪨 Bloco)
+            // Ícone de upgrade no pedestal dentro dos limites da célula 44×44 (zero sobreposição vertical)
             const iconTag = pad.isTrap
               ? '🪨'
               : pad.op === '×' || pad.op === '^2'
                 ? '🏹'
                 : '⚡'
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)'
             ctx.beginPath()
-            ctx.roundRect(sx - 20, sy - 28, 40, 14, 4)
+            ctx.roundRect(sx - 20, sy - 21, 40, 12, 4)
             ctx.fill()
 
             ctx.fillStyle = pad.isTrap ? '#fca5a5' : '#fef08a'
-            ctx.font = '900 10px Inter, system-ui, sans-serif'
+            ctx.font = '900 9.5px Inter, system-ui, sans-serif'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
-            ctx.fillText(`${iconTag}${pad.label}`, sx, sy - 21)
+            ctx.fillText(`${iconTag}${pad.label}`, sx, sy - 15)
           }
 
           // Desenhar Barris de TNT 2.5D Encadeados (−12, −18)
@@ -584,6 +646,84 @@ export const SerpentCanvas: React.FC = () => {
 
           const heroSprite = getUnitSprite('crowned_hero', animTick)
           ctx.drawImage(heroSprite, centerX - 28, centerY - 32, 56, 56)
+
+          // V10 Fase 3: Desenhar Bastião Aliado de Sentinelas (topo-esquerdo) e Ninho Vulcânico Inimigo (topo-direito)
+          // sobre plataformas fortificadas dedicadas (sem sobrepor as paredes do labirinto ao redor do herói)
+          const stNow = useLogicBattleStore.getState()
+          const sharedTowers = stNow.playerBridgeTowerLevels
+          const turretSprite = getBuildingSprite('turret', 2, animTick)
+          const alliedBastionX = 246
+          const alliedBastionY = 104
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.88)'
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)'
+          ctx.lineWidth = 1.4
+          ctx.beginPath()
+          ctx.roundRect(alliedBastionX - 78, alliedBastionY - 48, 156, 76, 10)
+          ctx.fill()
+          ctx.stroke()
+          ctx.fillStyle = '#bae6fd'
+          ctx.font = '900 9px Inter, system-ui, sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(
+            `🗼 Bastião Sentinela (${sharedTowers.filter((l) => l > 0).length}/4)`,
+            alliedBastionX,
+            alliedBastionY - 37,
+          )
+          for (let ti = 0; ti < sharedTowers.length; ti++) {
+            const tlvl = sharedTowers[ti] ?? 0
+            const tx = alliedBastionX - 51 + ti * 34
+            const ty = alliedBastionY - 4
+            ctx.save()
+            if (tlvl <= 0) ctx.globalAlpha = 0.35
+            ctx.drawImage(turretSprite, tx - 17, ty - 18, 34, 34)
+            ctx.restore()
+            ctx.fillStyle = tlvl > 0 ? '#7dd3fc' : '#64748b'
+            ctx.font = '800 8px Inter, system-ui, sans-serif'
+            ctx.fillText(`Nv.${tlvl}`, tx, ty + 20)
+          }
+
+          // Desenhar Ninho/Bastião Vivo da Serpente + Torres de Maldição no topo direito da arena
+          const serpEnemyLvl = stNow.enemyBaseLevel
+          const serpDebuffTowers = stNow.enemyDebuffTowersActive
+          const enemyKeepSpr = getBuildingSprite(
+            'castle_keep',
+            Math.min(3, Math.ceil(serpEnemyLvl / 2)) as 1 | 2 | 3,
+            animTick,
+          )
+          const nestX = w - 215
+          const nestY = 104
+          ctx.fillStyle = 'rgba(45, 10, 10, 0.88)'
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.55)'
+          ctx.lineWidth = 1.4
+          ctx.beginPath()
+          ctx.roundRect(nestX - 150, nestY - 48, 194, 78, 10)
+          ctx.fill()
+          ctx.stroke()
+          ctx.save()
+          ctx.filter = 'hue-rotate(140deg) saturate(1.5)'
+          ctx.drawImage(enemyKeepSpr, nestX - 28, nestY - 30, 56, 56)
+          for (let eti = 0; eti < serpDebuffTowers; eti++) {
+            const etx = nestX - 54 - eti * 26
+            const ety = nestY + (eti % 2 === 0 ? -6 : 10)
+            const etSpr = getBuildingSprite('archer_tower', 2, animTick)
+            ctx.drawImage(etSpr, etx - 15, ety - 17, 30, 30)
+          }
+          ctx.restore()
+          ctx.fillStyle = 'rgba(69, 10, 10, 0.94)'
+          ctx.strokeStyle = '#f87171'
+          ctx.lineWidth = 1.2
+          ctx.beginPath()
+          ctx.roundRect(nestX - 118, nestY - 45, 132, 14, 5)
+          ctx.fill()
+          ctx.stroke()
+          ctx.fillStyle = '#fecaca'
+          ctx.font = '900 9px Inter, system-ui, sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(
+            `💀 Ninho Inimigo Nv.${serpEnemyLvl} · ${serpDebuffTowers}T`,
+            nestX - 52,
+            nestY - 38,
+          )
           ctx.restore()
 
           // Atualizar e desenhar projéteis e partículas
@@ -600,9 +740,82 @@ export const SerpentCanvas: React.FC = () => {
               )
             },
           )
-          ;(
-            window as unknown as { __lbActiveProjectiles?: number }
-          ).__lbActiveProjectiles = projectilePoolRef.current.getActiveCount()
+          const activeProjCount = projectilePoolRef.current.getActiveCount()
+          const stSerpTel = useLogicBattleStore.getState()
+          const winSerp = window as unknown as {
+            __lbActiveProjectiles?: number
+            __lbSerpentEngineTelemetry?: Record<string, unknown>
+            __lbMultiEngineV10Telemetry?: Record<string, unknown>
+            __lbEvolveEnemyBaseForAudit?: () => { enemyBaseLevel: number; activeTowersCount: number }
+            __lbForceEnemyDebuffHitForAudit?: (lossRatio?: number, label?: string) => void
+            __lbApplySerpentNegativePadForAudit?: () => {
+              armyBefore: number
+              armyAfter: number
+              padLabel: string
+            }
+          }
+          winSerp.__lbActiveProjectiles = activeProjCount
+          winSerp.__lbEvolveEnemyBaseForAudit = () => {
+            const newLvl = useLogicBattleStore.getState().evolveEnemyBaseInMatch()
+            const activeTowers = useLogicBattleStore.getState().enemyDebuffTowersActive
+            return { enemyBaseLevel: newLvl, activeTowersCount: activeTowers }
+          }
+          winSerp.__lbForceEnemyDebuffHitForAudit = (
+            lossRatio = 0.15,
+            label = '−15% MALDIÇÃO',
+          ) => {
+            useLogicBattleStore.getState().applyEnemyDebuffTowerHit(lossRatio, label)
+            const updatedArmy = useLogicBattleStore.getState().snapshot.currentArmy
+            sim.hero.armyPower = updatedArmy
+            lastSyncedStoreArmyRef.current = updatedArmy
+          }
+          winSerp.__lbApplySerpentNegativePadForAudit = () => {
+            const armyBefore = sim.hero.armyPower
+            const negPad =
+              sim.pads.find((p) => !p.used && (p.isTrap || p.op === '÷' || p.op === '−')) ?? {
+                id: `audit_neg_pad_${Date.now()}`,
+                x: Math.round(sim.hero.x),
+                y: Math.round(sim.hero.y),
+                op: '÷' as const,
+                operand: 2,
+                label: '÷ 2',
+                isTrap: true,
+                isOptimal: false,
+                used: false,
+              }
+            sim.applyMathPad(negPad)
+            lastSyncedStoreArmyRef.current = sim.hero.armyPower
+            useLogicBattleStore.setState((st) => ({
+              snapshot: {
+                ...st.snapshot,
+                currentArmy: sim.hero.armyPower,
+              },
+            }))
+            return {
+              armyBefore,
+              armyAfter: sim.hero.armyPower,
+              padLabel: negPad.label,
+            }
+          }
+          const serpPayload = {
+            engineId: 'serpente_numeros',
+            activeEngineId: 'serpente_numeros',
+            heroX: Number(sim.hero.x.toFixed(2)),
+            heroY: Number(sim.hero.y.toFixed(2)),
+            armyPower: sim.hero.armyPower,
+            arrowDamage: sim.hero.arrowDamage,
+            coinsEarned: sim.coinsEarned,
+            sharedWalletBalance: stSerpTel.getSharedWalletBalance(),
+            enemyBaseLevel: stSerpTel.enemyBaseLevel,
+            enemyDebuffTowersActive: stSerpTel.enemyDebuffTowersActive,
+            playerBridgeTowerLevels: [...stSerpTel.playerBridgeTowerLevels],
+            citadelLevels: { ...stSerpTel.save.citadelLevels },
+            alliedStructuresCount: stSerpTel.playerBridgeTowerLevels.filter((l) => l > 0).length,
+            aliveDragonSegments: sim.getAliveSegments().length,
+            activeProjectiles: activeProjCount,
+          }
+          winSerp.__lbSerpentEngineTelemetry = serpPayload
+          winSerp.__lbMultiEngineV10Telemetry = serpPayload
 
           particlePoolRef.current.updateAndDraw(ctx, isPaused ? 0 : dtMs)
           ctx.restore()
@@ -800,6 +1013,9 @@ export const SerpentCanvas: React.FC = () => {
           ⛶
         </button>
       </div>
+
+      {/* V10 Fase 3: Barra de Comando da Carteira Compartilhada + Bases Vivas na Serpente do Labirinto */}
+      <BridgeBaseCommandBar />
 
       {/* SIT-06: Desmontar controles e botões quando aparecer o resultado */}
       {showControls && (

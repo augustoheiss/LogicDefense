@@ -584,3 +584,123 @@ export function computeRightCorridorExponentialGates(params: {
     exponentialFactor,
   }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// V10 Fase 1: Cadência de ~8s–10s na Rota Central + Bases Vivas (Inimiga & Aliada)
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const CENTER_ROUTE_CADENCE_POLICY = {
+  /** Quantidade máxima de segmentos centrais visíveis simultaneamente na ponte 3D. */
+  maxSimultaneousVisibleSegments: 1,
+  /** Intervalo-alvo entre decisões de portões na Rota Central (em segundos). */
+  targetGateIntervalSec: 9.0,
+  /** Distância espacial 3D do ciclo de progressão para que o par único cruze toda a ponte. */
+  worldSpanZ: 280.0,
+} as const
+
+export const ENEMY_LIVING_BASE_POLICY = {
+  /** Tempo entre evoluções autônomas da Base Inimiga durante a partida (ms). */
+  evolutionIntervalMs: 16000,
+  /** Nível máximo de evolução da Base Inimiga dentro de um setor. */
+  maxEnemyBaseLevel: 5,
+  /** Posições das 4 Torres de Debuff 3D que a Base Inimiga constrói nos parapeitos da ponte. */
+  debuffTowerSlots: [
+    { id: 0, x: -4.2, z: -56.0, unlockAtEnemyLevel: 1, label: '−10% TORRE' },
+    { id: 1, x: 4.2, z: -44.0, unlockAtEnemyLevel: 2, label: '−12% FEIXE' },
+    { id: 2, x: -4.2, z: -32.0, unlockAtEnemyLevel: 3, label: '−15% MALDIÇÃO' },
+    { id: 3, x: 4.2, z: -20.0, unlockAtEnemyLevel: 4, label: '−18% ABISMO' },
+  ],
+  /** Intervalo base de disparo de pulso matemático negativo por torre inimiga (ms). */
+  debuffPulseCooldownMs: 5200,
+  /** Velocidade do projétil de debuff rumo ao esquadrão (+Z m/s). */
+  debuffBoltSpeedZ: 18.0,
+  /** Redução real de soldados aplicada quando um pulso de Torre de Debuff atinge o esquadrão. */
+  debuffLossRatioByLevel: [0.1, 0.12, 0.15, 0.18, 0.22] as const,
+} as const
+
+export interface BridgeTowerSlotSpec {
+  readonly slotIndex: 0 | 1 | 2 | 3
+  readonly id: string
+  readonly namePt: string
+  readonly x: number
+  readonly z: number
+  readonly rolePt: string
+}
+
+export const PLAYER_BRIDGE_BASE_POLICY = {
+  maxTowerLevel: 5,
+  baseUpgradeCost: 15,
+  costGrowthFactor: 1.75,
+  shieldInterceptCooldownBaseMs: 4200,
+  slots: [
+    {
+      slotIndex: 0,
+      id: 'bridge_tower_0',
+      namePt: 'Balista Oeste',
+      x: -7.2,
+      z: 12.2,
+      rolePt: 'Disparo Automático + Escudo Anti-Debuff',
+    },
+    {
+      slotIndex: 1,
+      id: 'bridge_tower_1',
+      namePt: 'Sentinela Centro-Oeste',
+      x: -3.8,
+      z: 12.2,
+      rolePt: 'Fogo Rápido na Horda Central',
+    },
+    {
+      slotIndex: 2,
+      id: 'bridge_tower_2',
+      namePt: 'Sentinela Centro-Leste',
+      x: 3.8,
+      z: 12.2,
+      rolePt: 'Interceptador de Feixes Inimigos',
+    },
+    {
+      slotIndex: 3,
+      id: 'bridge_tower_3',
+      namePt: 'Balista Leste',
+      x: 7.2,
+      z: 12.2,
+      rolePt: 'Canhão Defensivo de Longo Alcance',
+    },
+  ] as const satisfies readonly BridgeTowerSlotSpec[],
+} as const
+
+export function getBridgeTowerUpgradeCost(currentLevel: number): number {
+  const safeLvl = Math.max(0, Math.floor(currentLevel))
+  return Math.round(
+    PLAYER_BRIDGE_BASE_POLICY.baseUpgradeCost *
+      Math.pow(PLAYER_BRIDGE_BASE_POLICY.costGrowthFactor, safeLvl),
+  )
+}
+
+export function computeAlliedBridgeTowerStats(
+  levels: readonly [number, number, number, number],
+): {
+  totalLevel: number
+  activeTowersCount: number
+  bonusProjectilesPerVolley: number
+  bonusDamagePerHit: number
+  shieldInterceptCooldownMs: number
+} {
+  const safeLevels = levels ?? [1, 0, 0, 0]
+  const totalLevel =
+    (safeLevels[0] ?? 0) +
+    (safeLevels[1] ?? 0) +
+    (safeLevels[2] ?? 0) +
+    (safeLevels[3] ?? 0)
+  const activeTowersCount = safeLevels.filter((lvl) => lvl > 0).length
+  return {
+    totalLevel,
+    activeTowersCount,
+    bonusProjectilesPerVolley: Math.min(8, activeTowersCount),
+    bonusDamagePerHit: Math.max(0, Math.floor(totalLevel * 0.65)),
+    shieldInterceptCooldownMs: Math.max(
+      1100,
+      PLAYER_BRIDGE_BASE_POLICY.shieldInterceptCooldownBaseMs - totalLevel * 240,
+    ),
+  }
+}
+

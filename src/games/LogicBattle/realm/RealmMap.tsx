@@ -10,6 +10,7 @@ import { formatArmy } from '../domain/notation'
 import { ENGINE_LIST } from '../engines/engineContract'
 import { useLogicBattleStore } from '../state/useLogicBattleStore'
 import { CitadelBuildingId } from '../types'
+import { OpenWorldBase3D } from './openworld3d/OpenWorldBase3D'
 
 // Posições isométricas das 5 construções da Cidadela na zona verde-menta (fiel a mundo2_reino_conceito.jpg)
 const CITADEL_MAP_SPOTS: Record<
@@ -245,10 +246,12 @@ export const RealmMap: React.FC = () => {
 
   return (
     <div className="lb-realm-map-box" data-testid="lb-realm-map">
+      <OpenWorldBase3D />
       <svg
         viewBox="0 0 900 620"
         preserveAspectRatio="xMidYMid meet"
         className="lb-realm-svg"
+        style={{ position: 'relative', zIndex: 2 }}
         role="img"
         aria-label="Mapa Isométrico do Reino e Cidadela"
       >
@@ -649,7 +652,11 @@ export const RealmMap: React.FC = () => {
       </svg>
 
       {/* 9. Pins Teardrop Acima do Telhado + Pílulas [Nv X] na Base das 5 Construções da Cidadela */}
-      <div className="lb-map-citadel-overlay" data-testid="lb-buildings-grid">
+      <div
+        className="lb-map-citadel-overlay"
+        data-testid="lb-buildings-grid"
+        style={{ zIndex: 12 }}
+      >
         {CITADEL_BUILDING_LIST.map((b) => {
           const spot = CITADEL_MAP_SPOTS[b.id]
           const currentLevel = save.citadelLevels[b.id] ?? 0
@@ -703,6 +710,7 @@ export const RealmMap: React.FC = () => {
         data-testid="lb-engine-selector"
         role="group"
         aria-label="Selecionar Modo de Jogo (6 Engines do Reino)"
+        style={{ zIndex: 20 }}
       >
         {ENGINE_LIST.map((eng) => {
           const isCurrent = activeEngineId === eng.id

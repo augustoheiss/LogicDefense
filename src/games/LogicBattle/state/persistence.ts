@@ -59,6 +59,7 @@ export function createDefaultSaveV1(): SaveV1 {
     conqueredRegionIds: ['reg_cidadela_origem'],
     selectedRegionId: 'reg_ponte_leste',
     citadelLevels: initialCitadel,
+    playerBridgeTowerLevels: [1, 0, 0, 0],
     album: createInitialAlbum(),
     twinsDiscovered: [],
     mastery: createInitialMastery(),
@@ -130,6 +131,19 @@ function sanitizeCheckpoint(raw: unknown): ActiveBridgeRunCheckpoint | null {
       typeof cp.bankedScoreMark === 'number' && Number.isFinite(cp.bankedScoreMark)
         ? Math.max(0, Math.floor(cp.bankedScoreMark))
         : 0,
+    playerBridgeTowerLevels:
+      Array.isArray(cp.playerBridgeTowerLevels) && cp.playerBridgeTowerLevels.length === 4
+        ? [
+            Math.max(0, Math.floor(Number(cp.playerBridgeTowerLevels[0]) || 0)),
+            Math.max(0, Math.floor(Number(cp.playerBridgeTowerLevels[1]) || 0)),
+            Math.max(0, Math.floor(Number(cp.playerBridgeTowerLevels[2]) || 0)),
+            Math.max(0, Math.floor(Number(cp.playerBridgeTowerLevels[3]) || 0)),
+          ]
+        : [1, 0, 0, 0],
+    enemyBaseLevel:
+      typeof cp.enemyBaseLevel === 'number' && Number.isFinite(cp.enemyBaseLevel)
+        ? Math.max(1, Math.floor(cp.enemyBaseLevel))
+        : 1,
     updatedAt:
       typeof cp.updatedAt === 'string' ? cp.updatedAt : new Date().toISOString(),
   }
@@ -220,6 +234,15 @@ export function migrateSave(raw: unknown): SaveV1 {
       ...defaults.citadelLevels,
       ...(obj.citadelLevels && typeof obj.citadelLevels === 'object' ? obj.citadelLevels : {}),
     },
+    playerBridgeTowerLevels:
+      Array.isArray(obj.playerBridgeTowerLevels) && obj.playerBridgeTowerLevels.length === 4
+        ? [
+            Math.max(0, Math.floor(Number(obj.playerBridgeTowerLevels[0]) || 0)),
+            Math.max(0, Math.floor(Number(obj.playerBridgeTowerLevels[1]) || 0)),
+            Math.max(0, Math.floor(Number(obj.playerBridgeTowerLevels[2]) || 0)),
+            Math.max(0, Math.floor(Number(obj.playerBridgeTowerLevels[3]) || 0)),
+          ]
+        : activeRunCheckpoint?.playerBridgeTowerLevels ?? [1, 0, 0, 0],
     album: {
       ...defaults.album,
       ...(obj.album && typeof obj.album === 'object' ? obj.album : {}),

@@ -186,7 +186,7 @@ function buildFairPairSegment(
     altGate =
       currentBestArmy >= 10
         ? makeSimpleGate(`${segId}_alt`, '×', 4, 5, '× 0,8', true)
-        : makeSimpleGate(`${segId}_alt`, '+', addModest, 1, `+ ${fmtGateVal(addModest)}`)
+        : makeSimpleGate(`${segId}_alt`, '−', subAmt, 1, `− ${fmtGateVal(subAmt)}`)
   } else {
     // Família 4: Multiplicação Direta vs Soma/Subtração
     const useMul = currentBestArmy >= 8 && canMultiplySafely && rng.nextFloat() < 0.5
@@ -247,7 +247,7 @@ function buildCalibratedFinalSegment(
     `+ ${fmtGateVal(neededDelta)}`,
   )
 
-  // Para garantir que o pior caminho termine estritamente abaixo de enemyTotalForce:
+  // Para garantir que o pior caminho termine estritamente abaixo de enemyTotalForce e seja redutor:
   let worstGate: Gate
   if (runningWorstBeforeFinal >= enemyTotalForce) {
     const dropNeeded = Math.max(1, runningWorstBeforeFinal - Math.max(1, enemyTotalForce * 0.85))
@@ -259,10 +259,6 @@ function buildCalibratedFinalSegment(
       `− ${fmtGateVal(dropNeeded)}`,
     )
   } else {
-    const safeSmallAdd = Math.max(
-      0,
-      Math.min(3, Math.floor((enemyTotalForce - 1 - runningWorstBeforeFinal) * 0.25)),
-    )
     const refScale =
       enemyTotalForce > 120
         ? Math.max(runningWorstBeforeFinal, Math.floor(runningBestBeforeFinal * 0.22))
@@ -270,11 +266,8 @@ function buildCalibratedFinalSegment(
     const scaledDrop =
       refScale > 30
         ? Math.max(2, Math.floor(refScale * 0.22))
-        : 2
-    worstGate =
-      safeSmallAdd > 0 && refScale <= 30
-        ? makeSimpleGate(`${segId}_cal_worst`, '+', safeSmallAdd, 1, `+ ${fmtGateVal(safeSmallAdd)}`)
-        : makeSimpleGate(`${segId}_cal_worst`, '−', scaledDrop, 1, `− ${fmtGateVal(scaledDrop)}`)
+        : Math.max(1, Math.min(2, Math.max(1, runningWorstBeforeFinal - 2)))
+    worstGate = makeSimpleGate(`${segId}_cal_worst`, '−', scaledDrop, 1, `− ${fmtGateVal(scaledDrop)}`)
   }
 
   const lanes: Gate[][] =

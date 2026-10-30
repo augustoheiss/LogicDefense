@@ -12,11 +12,14 @@ import {
   BRIDGE_3D_DIMENSIONS,
   BRIDGE_3D_ROUTES,
   BridgeRouteId,
+  CENTER_ROUTE_CADENCE_POLICY,
+  computeAlliedBridgeTowerStats,
   computeLeftCorridorMonsterScaling,
   computeRightCorridorExponentialGates,
   computeSectorBossSpec,
   computeShotProfile,
   DynamicShotProfile,
+  ENEMY_LIVING_BASE_POLICY,
   laneNormToWorldX,
   resolveRouteFromWorldX,
   RIGHT_CORRIDOR_TIER_BUFF_POLICIES,
@@ -25,6 +28,29 @@ import {
 import { formatArmy } from '../../domain/notation'
 
 export type BossLifecycleState = 'MARCHING' | 'MELEE_CLASH' | 'INTERMISSION'
+
+export interface EnemyDebuffTower3DEntity {
+  id: number
+  x: number
+  z: number
+  level: number
+  active: boolean
+  pulseCooldownMs: number
+  label: string
+  hitFlashMs: number
+}
+
+export interface EnemyDebuffBolt3DEntity {
+  id: number
+  x: number
+  y: number
+  z: number
+  vz: number
+  lossRatio: number
+  label: string
+  active: boolean
+}
+
 
 export interface SupplyCaravan3DState {
   active: boolean
@@ -99,6 +125,9 @@ export interface Bridge3DSimCallbacks {
   ) => void
   onSectorBossDefeated: (newSector: number, bonusSoldiers: number) => void
   onRequireMathChallenge?: (pendingBonusSoldiers: number, gateLabel: string) => void
+  onEnemyBaseEvolved?: (newLevel: number, activeTowers: number) => void
+  onEnemyDebuffTowerHit?: (lossRatio: number, label: string) => void
+  onDebuffBoltIntercepted?: (label: string) => void
 }
 
 export interface Bridge3DSimState {
@@ -147,6 +176,15 @@ export interface Bridge3DSimState {
   bossArchetypeName: string
   supplyCaravan: SupplyCaravan3DState
   bolts: Bolt3DEntity[]
+  /** V10 Fase 1: Base Viva Inimiga + Torres de Debuff 3D + Base Aliada da Ponte */
+  enemyBaseLevel: number
+  enemyEvolutionTimerMs: number
+  enemyDebuffTowers: EnemyDebuffTower3DEntity[]
+  enemyDebuffBolts: EnemyDebuffBolt3DEntity[]
+  enemyDebuffHitsCount: number
+  debuffBoltsInterceptedCount: number
+  playerBridgeTowerLevels: [number, number, number, number]
+  playerTowerShieldCooldownMs: number
 }
 
 export const MAX_SIM_BOLTS = 72
@@ -166,11 +204,17 @@ export function nextSimRandom(sim: Bridge3DSimState): number {
 
 /**
  * Calcula a posição Z 3D contínua de um segmento da Rota Central a partir de `seg.zPosition` e `progress`.
- * Garante movimento 100% contínuo sem saltos quando `activeSegmentIndex` avança.
+ * V10 Fase 1: utiliza `CENTER_ROUTE_CADENCE_POLICY.worldSpanZ` para que o par único visível
+ * atravesse toda a ponte (do Castelo Norte até o Herói) em ~8.5s–10s.
  */
 export function computeSegmentWorldZ(segZPosition: number, progress: number): number {
-  return BRIDGE_3D_DIMENSIONS.zPlayerLine - 1.5 - (segZPosition - progress) * 94.0
+  return (
+    BRIDGE_3D_DIMENSIONS.zPlayerLine -
+    1.5 -
+    (segZPosition - progress) * CENTER_ROUTE_CADENCE_POLICY.worldSpanZ
+  )
 }
+
 
 export function createInitialBridge3DSimState(
   initialBossHp = 150,
@@ -197,10 +241,10 @@ export function createInitialBridge3DSimState(
   })
 
   const barrels: ExplosiveBarrel3DEntity[] = [
-    { id: 1, x: -2.35, z: -27, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 2, x: 2.35, z: -38, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 3, x: -2.2, z: -50, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 4, x: 2.2, z: -62, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 1, x: -3.85, z: -18, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 2, x: 3.85, z: -38, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 3, x: -3.85, z: -50, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 4, x: 3.85, z: -62, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
   ]
 
   // V9 Pilar 2 & 3: Apenas 2 portões espaçados na Rota Esquerda, 100% ancorados no Nível dos Monstros do Setor
@@ -335,8 +379,97 @@ export function createInitialBridge3DSimState(
       rewardsGrantedCount: 0,
     },
     bolts,
+    enemyBaseLevel: 1,
+    enemyEvolutionTimerMs: ENEMY_LIVING_BASE_POLICY.evolutionIntervalMs,
+    enemyDebuffTowers: ENEMY_LIVING_BASE_POLICY.debuffTowerSlots.map((slot, idx) => ({
+      id: slot.id,
+      x: slot.x,
+      z: slot.z,
+      level: 1,
+      active: idx === 0,
+      pulseCooldownMs: ENEMY_LIVING_BASE_POLICY.debuffPulseCooldownMs + idx * 1400,
+      label: slot.label,
+      hitFlashMs: 0,
+    })),
+    enemyDebuffBolts: Array.from({ length: 8 }, (_, idx) => ({
+      id: idx + 1,
+      x: 0,
+      y: 1.45,
+      z: -56,
+      vz: ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ,
+      lossRatio: 0.1,
+      label: '−10% TORRE',
+      active: false,
+    })),
+    enemyDebuffHitsCount: 0,
+    debuffBoltsInterceptedCount: 0,
+    playerBridgeTowerLevels: [1, 0, 0, 0],
+    playerTowerShieldCooldownMs: 0,
   }
 }
+
+/**
+ * V10 Fase 1 (SIT-V10-LIVING-BASES-AND-SHARED-WALLET):
+ * Evolui autonomamente o nível da Base Inimiga (1..5), ativa novas Torres de Debuff 3D
+ * nos parapeitos da ponte, reforça os Mini-Bosses e dispara imediatamente um pulso de debuff.
+ */
+export function evolveEnemyLivingBase(sim: Bridge3DSimState): {
+  enemyBaseLevel: number
+  activeTowersCount: number
+} {
+  sim.enemyBaseLevel = Math.min(
+    ENEMY_LIVING_BASE_POLICY.maxEnemyBaseLevel,
+    sim.enemyBaseLevel + 1,
+  )
+  sim.enemyEvolutionTimerMs = ENEMY_LIVING_BASE_POLICY.evolutionIntervalMs
+
+  let activeTowersCount = 0
+  for (let i = 0; i < sim.enemyDebuffTowers.length; i++) {
+    const tower = sim.enemyDebuffTowers[i]
+    const slotSpec = ENEMY_LIVING_BASE_POLICY.debuffTowerSlots[i]
+    if (sim.enemyBaseLevel >= slotSpec.unlockAtEnemyLevel) {
+      tower.active = true
+      tower.level = Math.max(1, sim.enemyBaseLevel - slotSpec.unlockAtEnemyLevel + 1)
+      tower.hitFlashMs = 300
+      activeTowersCount++
+    }
+  }
+
+  // Dispara imediatamente um projétil de debuff visível ao evoluir a Base Inimiga
+  const slotLoss =
+    ENEMY_LIVING_BASE_POLICY.debuffLossRatioByLevel[
+      Math.min(
+        ENEMY_LIVING_BASE_POLICY.debuffLossRatioByLevel.length - 1,
+        Math.max(0, sim.enemyBaseLevel - 1),
+      )
+    ] ?? 0.12
+  const freeDebuffBolt = sim.enemyDebuffBolts.find((b) => !b.active) ?? sim.enemyDebuffBolts[0]
+  if (freeDebuffBolt) {
+    const srcTower =
+      sim.enemyDebuffTowers.filter((t) => t.active).slice(-1)[0] ??
+      sim.enemyDebuffTowers[0]
+    freeDebuffBolt.active = true
+    freeDebuffBolt.x = srcTower ? srcTower.x * 0.45 : 0
+    freeDebuffBolt.y = 1.45
+    freeDebuffBolt.z = srcTower ? srcTower.z : -44
+    freeDebuffBolt.vz = ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ
+    freeDebuffBolt.lossRatio = slotLoss
+    freeDebuffBolt.label = srcTower ? srcTower.label : `−${Math.round(slotLoss * 100)}% TORRE`
+  }
+
+  // Fortalece a onda da horda inimiga ao evoluir a Base Inimiga
+  for (const en of sim.enemies) {
+    en.maxHp = Math.round(en.maxHp * 1.12)
+    en.hp = Math.min(en.maxHp, en.hp + 6)
+    en.speedZ = Math.min(4.2, en.speedZ * 1.05)
+  }
+
+  return {
+    enemyBaseLevel: sim.enemyBaseLevel,
+    activeTowersCount,
+  }
+}
+
 
 /**
  * V9 Pilar 1: Ativa por alguns segundos (12s a 24s conforme o grau da conta) as cores,
@@ -476,12 +609,18 @@ export function stepBridge3DSim(
     isBattlePhase?: boolean
     infiniteBridgeMode?: boolean
     allSegmentsResolved?: boolean
+    playerBridgeTowerLevels?: [number, number, number, number]
   },
   callbacks: Bridge3DSimCallbacks,
 ): void {
   const clampedDt = Math.min(0.05, Math.max(0.001, dtSec))
   const dtMs = clampedDt * 1000
   const timerDtMs = Math.min(250, Math.max(1, dtSec * 1000))
+
+  if (input.playerBridgeTowerLevels) {
+    sim.playerBridgeTowerLevels = [...input.playerBridgeTowerLevels]
+  }
+  const alliedTowerStats = computeAlliedBridgeTowerStats(sim.playerBridgeTowerLevels)
 
   // 1. Posição 3D horizontal livre do Herói e rota ativa (LEFT, CENTER, RIGHT)
   const targetWorldX = laneNormToWorldX(input.laneNormX)
@@ -514,7 +653,7 @@ export function stepBridge3DSim(
     sim.rightRoutePromptCooldownMs = Math.max(0, sim.rightRoutePromptCooldownMs - dtMs)
   }
 
-  // 2. Perfil dinâmico de tiro escalado pelos pontos atuais + bônus de armas coletadas nas rotas laterais (V9 Tier Buffs)
+  // 2. Perfil dinâmico de tiro escalado pelos pontos atuais + bônus de armas coletadas nas rotas laterais + Torres Aliadas da Ponte (V10)
   const baseProfile = computeShotProfile(input.currentArmy)
   const hasLeftBoost = sim.leftFrozenBlock.unlocked || sim.leftCannonLevel > 0
   const hasRightBoost =
@@ -525,19 +664,23 @@ export function stepBridge3DSim(
     RIGHT_CORRIDOR_TIER_BUFF_POLICIES[2]
   const extraBarrels =
     (hasLeftBoost ? 1 : 0) +
-    (hasRightBoost ? activeTierSpec.extraParallelBarrels : 0)
+    (hasRightBoost ? activeTierSpec.extraParallelBarrels : 0) +
+    Math.floor(alliedTowerStats.activeTowersCount / 2)
   const dmgMult =
     (hasRightBoost
       ? activeTierSpec.weaponDmgMult + sim.rightWeaponLevel * 0.45
       : 1.0) * (hasLeftBoost ? 1.15 + sim.leftCannonLevel * 0.12 : 1.0)
-  const fireRateBonus = hasLeftBoost
-    ? 1.4 + Math.min(2.0, sim.leftCannonLevel * 0.3)
-    : 0
+  const fireRateBonus =
+    (hasLeftBoost ? 1.4 + Math.min(2.0, sim.leftCannonLevel * 0.3) : 0) +
+    alliedTowerStats.activeTowersCount * 0.35
   const rightFireRateMult = hasRightBoost ? activeTierSpec.fireRateMult : 1.0
 
   sim.shotProfile = {
     ...baseProfile,
-    damagePerShot: Math.max(1, baseProfile.damagePerShot * dmgMult),
+    damagePerShot: Math.max(
+      1,
+      baseProfile.damagePerShot * dmgMult + alliedTowerStats.bonusDamagePerHit,
+    ),
     shotsPerSecond: Math.min(
       20,
       Number(
@@ -546,6 +689,7 @@ export function stepBridge3DSim(
     ),
     parallelBarrels: Math.min(6, baseProfile.parallelBarrels + extraBarrels),
   }
+
 
   // Decair flashes visuais
   if (sim.playerHitFlashMs > 0) sim.playerHitFlashMs = Math.max(0, sim.playerHitFlashMs - dtMs)
@@ -1119,6 +1263,80 @@ export function stepBridge3DSim(
         ? hordeContactLoss
         : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 3))
     attritionLossThisFrame += effectiveHordeLoss
+  }
+
+  // 7. V10 Fase 1: Evolução Autônoma da Base Inimiga + Torres de Debuff 3D + Escudo Aliado
+  if (sim.playerTowerShieldCooldownMs > 0) {
+    sim.playerTowerShieldCooldownMs = Math.max(0, sim.playerTowerShieldCooldownMs - timerDtMs)
+  }
+  if (!input.isBattlePhase) {
+    sim.enemyEvolutionTimerMs = Math.max(0, sim.enemyEvolutionTimerMs - timerDtMs)
+    if (
+      sim.enemyEvolutionTimerMs <= 0 &&
+      sim.enemyBaseLevel < ENEMY_LIVING_BASE_POLICY.maxEnemyBaseLevel
+    ) {
+      const evolved = evolveEnemyLivingBase(sim)
+      callbacks.onEnemyBaseEvolved?.(evolved.enemyBaseLevel, evolved.activeTowersCount)
+    }
+
+    // Torres de Debuff ativas disparam pulsos negativos contra o esquadrão do jogador
+    for (const tower of sim.enemyDebuffTowers) {
+      if (tower.hitFlashMs > 0) {
+        tower.hitFlashMs = Math.max(0, tower.hitFlashMs - dtMs)
+      }
+      if (!tower.active) continue
+      tower.pulseCooldownMs -= timerDtMs
+      if (tower.pulseCooldownMs <= 0) {
+        tower.pulseCooldownMs = Math.max(
+          2800,
+          ENEMY_LIVING_BASE_POLICY.debuffPulseCooldownMs - (sim.enemyBaseLevel - 1) * 350,
+        )
+        const freeBolt = sim.enemyDebuffBolts.find((b) => !b.active)
+        if (freeBolt) {
+          const lossRatio =
+            ENEMY_LIVING_BASE_POLICY.debuffLossRatioByLevel[
+              Math.min(
+                ENEMY_LIVING_BASE_POLICY.debuffLossRatioByLevel.length - 1,
+                Math.max(0, sim.enemyBaseLevel - 1),
+              )
+            ] ?? 0.1
+          freeBolt.active = true
+          freeBolt.x = tower.x * 0.45
+          freeBolt.y = 1.45
+          freeBolt.z = tower.z
+          freeBolt.vz = ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ
+          freeBolt.lossRatio = lossRatio
+          freeBolt.label = tower.label
+          tower.hitFlashMs = 240
+        }
+      }
+    }
+
+    // Avançar projéteis de debuff inimigo (+Z) e testar interceptação pelas Torres Aliadas ou impacto no Herói
+    for (const dBolt of sim.enemyDebuffBolts) {
+      if (!dBolt.active) continue
+      dBolt.z += dBolt.vz * clampedDt
+
+      // Torres Aliadas Nv.2+ interceptam feixes de debuff quando o escudo tático está pronto
+      if (
+        alliedTowerStats.activeTowersCount >= 2 &&
+        sim.playerTowerShieldCooldownMs <= 0 &&
+        dBolt.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 5.5
+      ) {
+        dBolt.active = false
+        sim.debuffBoltsInterceptedCount += 1
+        sim.playerTowerShieldCooldownMs = alliedTowerStats.shieldInterceptCooldownMs
+        callbacks.onDebuffBoltIntercepted?.(dBolt.label)
+        continue
+      }
+
+      if (dBolt.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.8) {
+        dBolt.active = false
+        sim.enemyDebuffHitsCount += 1
+        sim.playerHitFlashMs = 320
+        callbacks.onEnemyDebuffTowerHit?.(dBolt.lossRatio, dBolt.label)
+      }
+    }
   }
 
   if (

@@ -11,18 +11,24 @@ import React, { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BIOMES } from '../../config/biomes'
+import { applyGateChain, isGateBeneficial, isLaneBeneficial } from '../../domain/armyMath'
 import { formatArmy } from '../../domain/notation'
+import { evaluateSegmentCounterfactual } from '../../domain/pathOracle'
 import { useLogicBattleStore } from '../../state/useLogicBattleStore'
 import {
   BOSS_ARCHETYPES_3D,
   BRIDGE_3D_DIMENSIONS,
   BRIDGE_3D_ROUTES,
+  CENTER_ROUTE_CADENCE_POLICY,
   computeSectorBossSpec,
+  ENEMY_LIVING_BASE_POLICY,
+  PLAYER_BRIDGE_BASE_POLICY,
 } from './bridge3dPolicies'
 import {
   applyMathBonusToRightWeapon,
   computeSegmentWorldZ,
   createInitialBridge3DSimState,
+  evolveEnemyLivingBase,
   stepBridge3DSim,
 } from './bridge3dSim'
 import { EnemyHordeAndBoss3D } from './EnemyHordeAndBoss3D'
@@ -47,6 +53,10 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   const inspectedSegmentId = useLogicBattleStore((s) => s.snapshot.inspectedSegmentId)
   const notationMode = useLogicBattleStore((s) => s.save.settings.notationMode)
   const mathSolvedSeq = useLogicBattleStore((s) => s.lastSolvedMathRewardAt?.seq ?? 0)
+  const playerBridgeTowerLevels = useLogicBattleStore((s) => s.playerBridgeTowerLevels)
+  const enemyBaseLevel = useLogicBattleStore((s) => s.enemyBaseLevel)
+  const isDeconstructingBridge = useLogicBattleStore((s) => s.isDeconstructingBridge)
+  const deconstructionProgress = useLogicBattleStore((s) => s.deconstructionProgress)
 
   const biome = BIOMES[biomeId] ?? BIOMES.planicie_pedra
   const skyTopColor = biome.skyGradient[0]
@@ -57,6 +67,8 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
 
   const waterRibsRef = useRef<THREE.Group | null>(null)
   const centerSegmentsGroupRef = useRef<THREE.Group | null>(null)
+  const bridgeDeckGroupRef = useRef<THREE.Group | null>(null)
+  const enemyDebuffBoltsGroupRef = useRef<THREE.Group | null>(null)
 
   // Motor de Simulação 3D Determinístico (Fase 2: bridge3dSim.ts) hidratado com Checkpoint V8
   const simRef = useRef(
@@ -175,7 +187,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
     smoothedLaneXRef.current +=
       (snap.laneX - smoothedLaneXRef.current) * Math.min(1, dt * 15)
     if (typeof window !== 'undefined') {
-      ;(
+      ; (
         window as unknown as { __lbHeroPos?: { x: number; y: number } }
       ).__lbHeroPos = { x: smoothedLaneXRef.current, y: snap.progress }
     }
@@ -206,6 +218,11 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       }
     }
 
+    // Sincronizar evoluções manuais/externas da Base Inimiga com o motor 3D
+    while (sim.enemyBaseLevel < live.enemyBaseLevel) {
+      evolveEnemyLivingBase(sim)
+    }
+
     // Passo determinístico 60Hz do Motor 3D (bridge3dSim.ts)
     stepBridge3DSim(
       sim,
@@ -220,6 +237,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         allSegmentsResolved:
           snap.segments.length > 0 &&
           Object.keys(snap.resolvedSegments).length >= snap.segments.length,
+        playerBridgeTowerLevels: live.playerBridgeTowerLevels,
       },
       {
         onEnemyKilled: (coinsDelta, damageDealt, attritionLoss) => {
@@ -239,15 +257,26 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
             onOpenMathBonus()
           }
         },
+        onEnemyBaseEvolved: (newLevel) => {
+          live.evolveEnemyBaseInMatch(newLevel)
+        },
+        onEnemyDebuffTowerHit: (lossRatio, label) => {
+          live.applyEnemyDebuffTowerHit(lossRatio, label)
+        },
+        onDebuffBoltIntercepted: (label) => {
+          live.recordDebuffBoltIntercepted(label)
+        },
       },
     )
 
-    // Expor contagem real de projéteis 3D ativos e telemetria modular 3D para auditoria E2E (Fase 3 / V9)
+    // Expor contagem real de projéteis 3D ativos e telemetria modular 3D para auditoria E2E (Fase 3 / V9 / V10)
     if (typeof window !== 'undefined') {
       const win = window as unknown as {
         __lbActiveProjectiles?: number
         __lbBridge3DTelemetry?: Record<string, unknown>
         __lbSetBossZForAudit?: (z: number) => void
+        __lbEvolveEnemyBaseForAudit?: () => { enemyBaseLevel: number; activeTowersCount: number }
+        __lbForceEnemyDebuffHitForAudit?: (lossRatio?: number, label?: string) => void
       }
       win.__lbSetBossZForAudit = (z: number) => {
         simRef.current.bossZ = z
@@ -255,6 +284,22 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
           win.__lbBridge3DTelemetry.bossZ = Number(z.toFixed(2))
         }
       }
+      win.__lbEvolveEnemyBaseForAudit = () => {
+        const res = evolveEnemyLivingBase(simRef.current)
+        useLogicBattleStore.getState().evolveEnemyBaseInMatch(res.enemyBaseLevel)
+        return res
+      }
+      win.__lbForceEnemyDebuffHitForAudit = (
+        lossRatio = 0.15,
+        label = '−15% MALDIÇÃO',
+      ) => {
+        simRef.current.enemyDebuffHitsCount += 1
+        useLogicBattleStore.getState().applyEnemyDebuffTowerHit(lossRatio, label)
+      }
+      const visibleCenterSlice = snap.segments.slice(
+        snap.activeSegmentIndex,
+        snap.activeSegmentIndex + CENTER_ROUTE_CADENCE_POLICY.maxSimultaneousVisibleSegments,
+      )
       win.__lbActiveProjectiles = Math.max(1, sim.activeBoltsCount)
       win.__lbBridge3DTelemetry = {
         sectorIndex: sim.sectorIndex,
@@ -288,6 +333,8 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         rightGateLabels: sim.rightGates.map((g) => g.label),
         rightGateSubLabels: sim.rightGates.map((g) => g.subLabel ?? ''),
         centerSegmentsCount: snap.segments.length,
+        visibleCenterSegmentsCount: visibleCenterSlice.length,
+        centerTargetGateIntervalSec: CENTER_ROUTE_CADENCE_POLICY.targetGateIntervalSec,
         centerProgress: Number(snap.progress.toFixed(4)),
         centerActiveSegmentIndex: snap.activeSegmentIndex,
         centerFirstVisibleGateZ: Number(
@@ -310,13 +357,21 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         supplyCaravanZ: Number(sim.supplyCaravan.z.toFixed(2)),
         enemiesCount: sim.enemies.length,
         barrelsActive: sim.barrels.filter((b) => b.active).length,
+        enemyBaseLevel: sim.enemyBaseLevel,
+        enemyDebuffTowersActive: sim.enemyDebuffTowers.filter((t) => t.active).length,
+        enemyDebuffHitsCount: sim.enemyDebuffHitsCount,
+        debuffBoltsInterceptedCount: sim.debuffBoltsInterceptedCount,
+        playerBridgeTowerLevels: [...sim.playerBridgeTowerLevels],
+        isDeconstructingBridge: live.isDeconstructingBridge,
+        deconstructionProgress: live.deconstructionProgress,
+        deconstructionCompletedCount: live.deconstructionCompletedCount,
         extraSoldiersCount:
           snap.currentArmy <= 5
             ? 0
             : Math.min(
-                24,
-                Math.max(1, Math.floor(Math.log2(Math.max(2, snap.currentArmy - 3)) * 3)),
-              ),
+              24,
+              Math.max(1, Math.floor(Math.log2(Math.max(2, snap.currentArmy - 3)) * 3)),
+            ),
         hasSquad10: snap.currentArmy >= 10,
         hasCenturion01k: snap.currentArmy >= 100,
         hasChampion1k: snap.currentArmy >= 1000,
@@ -328,9 +383,38 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       waterRibsRef.current.position.z = ((clockSec * 6.5) % 14) - 7
     }
 
-    // Posicionar segmentos matemáticos centrais continuamente via (seg.zPosition - progress) * 94
+    // Posicionar o par único de portões da Rota Central continuamente via CENTER_ROUTE_CADENCE_POLICY.worldSpanZ
     if (centerSegmentsGroupRef.current) {
-      centerSegmentsGroupRef.current.position.z = snap.progress * 94.0
+      centerSegmentsGroupRef.current.position.z =
+        snap.progress * CENTER_ROUTE_CADENCE_POLICY.worldSpanZ
+    }
+
+    // Animar projéteis de debuff disparados pelas Torres Inimigas
+    if (enemyDebuffBoltsGroupRef.current) {
+      const children = enemyDebuffBoltsGroupRef.current.children
+      for (let i = 0; i < sim.enemyDebuffBolts.length; i++) {
+        const boltData = sim.enemyDebuffBolts[i]
+        const mesh = children[i] as THREE.Object3D | undefined
+        if (!mesh) continue
+        mesh.visible = boltData.active
+        if (boltData.active) {
+          mesh.position.set(boltData.x, boltData.y, boltData.z)
+        }
+      }
+    }
+
+    // Animar Desconstrução 3D da Ponte ao voltar para a Base Principal (V10)
+    if (bridgeDeckGroupRef.current) {
+      if (live.isDeconstructingBridge || live.deconstructionProgress > 0) {
+        const p = live.deconstructionProgress
+        bridgeDeckGroupRef.current.position.y = -p * 6.5
+        bridgeDeckGroupRef.current.rotation.x = p * 0.24
+        bridgeDeckGroupRef.current.scale.set(1 - p * 0.18, 1, 1 - p * 0.28)
+      } else {
+        bridgeDeckGroupRef.current.position.y = 0
+        bridgeDeckGroupRef.current.rotation.x = 0
+        bridgeDeckGroupRef.current.scale.set(1, 1, 1)
+      }
     }
   })
 
@@ -439,7 +523,14 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       </group>
 
       {/* ── TABULEIRO DA PONTE 3D WIDESCREEN COM AS 3 ROTAS PARALELAS ────────── */}
-      <group name="BridgeThreeRoutesDeck">
+      <group
+        ref={bridgeDeckGroupRef}
+        name="BridgeThreeRoutesDeck"
+        userData={{
+          isDeconstructingBridge,
+          deconstructionProgress,
+        }}
+      >
         <mesh position={[0, -0.65, -42]} receiveShadow castShadow>
           <boxGeometry args={[BRIDGE_3D_DIMENSIONS.totalWidth, 1.2, 142]} />
           <meshStandardMaterial color="#1e293b" roughness={0.85} />
@@ -554,66 +645,145 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       {/* ── COMPONENTE MODULAR 1 (FASE 3): CORREDORES LATERAIS 3D (ESQUERDA & DIREITA) ── */}
       <SideCorridors3D simRef={simRef} onOpenMathBonus={onOpenMathBonus} />
 
-      {/* ── PORTÕES MATEMÁTICOS DA ROTA CENTRAL 3D (MÁX 2 PARES VISÍVEIS POR VEZ) ── */}
+      {/* ── V10: 1 ÚNICO PAR DE PORTÕES VISÍVEL POR VEZ NA ROTA CENTRAL (~8.5s–10s) + CORES HONESTAS ── */}
       <group ref={centerSegmentsGroupRef} name="CenterRouteSegments3D">
-        {segments.slice(activeSegmentIndex, activeSegmentIndex + 2).map((seg) => {
-          const zSeg = computeSegmentWorldZ(seg.zPosition, 0)
-          const isInspected = inspectedSegmentId === seg.id
-          const cols = seg.lanes.length
-          const laneWidth = 9.6 / Math.max(2, cols)
+        {segments
+          .slice(
+            activeSegmentIndex,
+            activeSegmentIndex +
+            CENTER_ROUTE_CADENCE_POLICY.maxSimultaneousVisibleSegments,
+          )
+          .map((seg) => {
+            const zSeg = computeSegmentWorldZ(seg.zPosition, 0)
+            const isInspected = inspectedSegmentId === seg.id
+            const cols = seg.lanes.length
+            const laneWidth = 9.6 / Math.max(2, cols)
 
+            return (
+              <group key={seg.id} position={[0, 0, zSeg]}>
+                {seg.lanes.map((laneGates, lIdx) => {
+                  const primary = laneGates[0]
+                  if (!primary) return null
+                  const xCenter = (lIdx - (cols - 1) * 0.5) * laneWidth
+                  const isTrapLane =
+                    Boolean(seg.trapId) && seg.intuitiveLane === lIdx
+                  const isPositive =
+                    !isTrapLane &&
+                    isLaneBeneficial(laneGates, Math.max(25, currentArmy))
+                  const panelColor = isPositive ? '#0284c7' : '#dc2626'
+                  const borderColor = isInspected
+                    ? '#fde047'
+                    : isPositive
+                      ? '#7dd3fc'
+                      : '#fca5a5'
+                  const labelTex = getPlaqueTexture(
+                    primary.label,
+                    panelColor,
+                    borderColor,
+                    '#ffffff',
+                    laneGates[1] ? `E DEPOIS ${laneGates[1].label}` : '',
+                  )
+
+                  return (
+                    <group key={`${seg.id}_l_${lIdx}`} position={[xCenter, 0, 0]}>
+                      <mesh position={[-laneWidth * 0.44, 1.8, 0]} castShadow>
+                        <cylinderGeometry args={[0.16, 0.2, 3.6, 8]} />
+                        <meshStandardMaterial color={borderColor} metalness={0.5} />
+                      </mesh>
+                      <mesh position={[laneWidth * 0.44, 1.8, 0]} castShadow>
+                        <cylinderGeometry args={[0.16, 0.2, 3.6, 8]} />
+                        <meshStandardMaterial color={borderColor} metalness={0.5} />
+                      </mesh>
+                      <mesh position={[0, 1.85, 0]}>
+                        <boxGeometry args={[laneWidth * 0.86, 2.7, 0.18]} />
+                        <meshStandardMaterial
+                          color={panelColor}
+                          transparent
+                          opacity={0.52}
+                          emissive={panelColor}
+                          emissiveIntensity={0.3}
+                        />
+                      </mesh>
+                      <mesh position={[0, 2.0, 0.14]}>
+                        <planeGeometry args={[laneWidth * 0.82, 1.9]} />
+                        <meshBasicMaterial map={labelTex} transparent />
+                      </mesh>
+                    </group>
+                  )
+                })}
+              </group>
+            )
+          })}
+      </group>
+
+      {/* ── V10: TORRES DE DEBUFF 3D DA BASE INIMIGA NOS PARAPEITOS + PROJÉTEIS DE DEBUFF ── */}
+      <group name="EnemyDebuffTowers3D">
+        {ENEMY_LIVING_BASE_POLICY.debuffTowerSlots.map((slot, idx) => {
+          const isUnlocked = enemyBaseLevel >= slot.unlockAtEnemyLevel
           return (
-            <group key={seg.id} position={[0, 0, zSeg]}>
-              {seg.lanes.map((laneGates, lIdx) => {
-                const primary = laneGates[0]
-                if (!primary) return null
-                const xCenter = (lIdx - (cols - 1) * 0.5) * laneWidth
-                const isPositive =
-                  primary.op === '+' ||
-                  primary.op === '×' ||
-                  primary.op === '%+' ||
-                  primary.op === '^'
-                const panelColor = isPositive ? '#0284c7' : '#dc2626'
-                const borderColor = isInspected
-                  ? '#fde047'
-                  : isPositive
-                    ? '#7dd3fc'
-                    : '#fca5a5'
-                const labelTex = getPlaqueTexture(
-                  primary.label,
-                  panelColor,
-                  borderColor,
-                  '#ffffff',
-                  laneGates[1] ? `E DEPOIS ${laneGates[1].label}` : '',
-                )
+            <group
+              key={`enemy_debuff_tower_${slot.id}`}
+              position={[slot.x, isUnlocked ? 0.35 : -2.2, slot.z]}
+              visible={isUnlocked}
+            >
+              <mesh position={[0, 1.4, 0]} castShadow>
+                <cylinderGeometry args={[0.55, 0.75, 2.8, 8]} />
+                <meshStandardMaterial color="#450a0a" roughness={0.6} />
+              </mesh>
+              <mesh position={[0, 3.1, 0]}>
+                <octahedronGeometry args={[0.62, 0]} />
+                <meshStandardMaterial
+                  color="#ef4444"
+                  emissive="#dc2626"
+                  emissiveIntensity={0.85}
+                />
+              </mesh>
+            </group>
+          )
+        })}
+        <group ref={enemyDebuffBoltsGroupRef} name="EnemyDebuffBolts3D">
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <mesh key={`enemy_debuff_bolt_${idx}`} visible={false}>
+              <sphereGeometry args={[0.42, 10, 10]} />
+              <meshStandardMaterial
+                color="#f43f5e"
+                emissive="#e11d48"
+                emissiveIntensity={1.1}
+              />
+            </mesh>
+          ))}
+        </group>
+      </group>
 
-                return (
-                  <group key={`${seg.id}_l_${lIdx}`} position={[xCenter, 0, 0]}>
-                    <mesh position={[-laneWidth * 0.44, 1.8, 0]} castShadow>
-                      <cylinderGeometry args={[0.16, 0.2, 3.6, 8]} />
-                      <meshStandardMaterial color={borderColor} metalness={0.5} />
-                    </mesh>
-                    <mesh position={[laneWidth * 0.44, 1.8, 0]} castShadow>
-                      <cylinderGeometry args={[0.16, 0.2, 3.6, 8]} />
-                      <meshStandardMaterial color={borderColor} metalness={0.5} />
-                    </mesh>
-                    <mesh position={[0, 1.85, 0]}>
-                      <boxGeometry args={[laneWidth * 0.86, 2.7, 0.18]} />
-                      <meshStandardMaterial
-                        color={panelColor}
-                        transparent
-                        opacity={0.52}
-                        emissive={panelColor}
-                        emissiveIntensity={0.3}
-                      />
-                    </mesh>
-                    <mesh position={[0, 2.0, 0.14]}>
-                      <planeGeometry args={[laneWidth * 0.82, 1.9]} />
-                      <meshBasicMaterial map={labelTex} transparent />
-                    </mesh>
-                  </group>
-                )
-              })}
+      {/* ── V10: BASTIÃO SUL & 4 TORRES DEFENSIVAS 3D DA BASE ALIADA DA PONTE (Z = +12.2) ── */}
+      <group name="PlayerBridgeBastion3D">
+        {PLAYER_BRIDGE_BASE_POLICY.slots.map((slot) => {
+          const lvl = playerBridgeTowerLevels[slot.slotIndex] ?? 0
+          const isBuilt = lvl > 0
+          return (
+            <group
+              key={slot.id}
+              position={[slot.x, 0.1, slot.z]}
+              scale={isBuilt ? [1 + lvl * 0.06, 1 + lvl * 0.12, 1 + lvl * 0.06] : [0.7, 0.4, 0.7]}
+            >
+              <mesh position={[0, 1.1, 0]} castShadow>
+                <cylinderGeometry args={[0.62, 0.82, 2.2, 8]} />
+                <meshStandardMaterial
+                  color={isBuilt ? '#0284c7' : '#334155'}
+                  roughness={0.5}
+                  metalness={0.35}
+                />
+              </mesh>
+              {isBuilt && (
+                <mesh position={[0, 2.45, -0.25]} castShadow>
+                  <coneGeometry args={[0.75, 1.2, 8]} />
+                  <meshStandardMaterial
+                    color="#38bdf8"
+                    emissive="#0ea5e9"
+                    emissiveIntensity={0.45}
+                  />
+                </mesh>
+              )}
             </group>
           )
         })}

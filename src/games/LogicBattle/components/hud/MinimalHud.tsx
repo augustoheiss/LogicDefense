@@ -10,6 +10,7 @@ import { SettingsPopover } from './SettingsPopover'
 
 export const MinimalHud: React.FC = () => {
   const world = useLogicBattleStore((s) => s.world)
+  const activeEngineId = useLogicBattleStore((s) => s.activeEngineId)
   const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
   const calcComboMultiplier = useLogicBattleStore(
     (s) => s.snapshot.calcComboMultiplier,
@@ -22,6 +23,9 @@ export const MinimalHud: React.FC = () => {
   const tokensInRun = useLogicBattleStore((s) => s.tokensInRun)
   const recoveredFromBackup = useLogicBattleStore((s) => s.recoveredFromBackup)
   const switchWorld = useLogicBattleStore((s) => s.switchWorld)
+  const triggerBridgeDeconstructionToBase = useLogicBattleStore(
+    (s) => s.triggerBridgeDeconstructionToBase,
+  )
   const togglePauseRun = useLogicBattleStore((s) => s.togglePauseRun)
   const toggleCalmMode = useLogicBattleStore((s) => s.toggleCalmMode)
   const toggleNotationMode = useLogicBattleStore((s) => s.toggleNotationMode)
@@ -59,7 +63,11 @@ export const MinimalHud: React.FC = () => {
               <button
                 type="button"
                 className="lb-hud-3d-btn lb-hud-3d-btn--back"
-                onClick={() => switchWorld('realm')}
+                onClick={() =>
+                  activeEngineId === 'ponte_portoes'
+                    ? triggerBridgeDeconstructionToBase()
+                    : switchWorld('realm')
+                }
                 data-testid="lb-tab-world-realm"
                 aria-label="Voltar ao Mapa do Reino"
                 title="Mapa do Reino (Mundo 2)"

@@ -6,8 +6,12 @@ import { soundEngine } from '../audio/soundEngine'
 import { BIOMES } from '../config/biomes'
 import { REGIONS } from '../config/regions'
 import { TRAP_CATALOG, TWIN_CATALOG } from '../config/trapCatalog'
-import { CITADEL_BUILDINGS } from '../config/upgrades'
-import { applyGateChainWithRemainder, clampArmy } from '../domain/armyMath'
+import { CITADEL_BUILDINGS, getUpgradeCost } from '../config/upgrades'
+import {
+  applyAuthenticCenterGatePass,
+  applyGateChainWithRemainder,
+  clampArmy,
+} from '../domain/armyMath'
 import { resolveBattle } from '../domain/battleResolver'
 import {
   calculateCappedSurvivorBonus,
@@ -48,7 +52,11 @@ import {
   getLaneCenterNormX,
   resolveLaneIndexFromNormX,
 } from '../run/renderer/perspective'
-import { computeSectorBossSpec } from '../run/bridge3d/bridge3dPolicies'
+import {
+  computeSectorBossSpec,
+  getBridgeTowerUpgradeCost,
+  PLAYER_BRIDGE_BASE_POLICY,
+} from '../run/bridge3d/bridge3dPolicies'
 import {
   ENGINE_CATALOG,
   EngineId,
@@ -124,6 +132,8 @@ function buildSaveWithCheckpoint(
     leftCannonLevel?: number
     rightWeaponLevel?: number
     bankedScoreMark?: number
+    playerBridgeTowerLevels?: [number, number, number, number]
+    enemyBaseLevel?: number
   },
 ): SaveV1 {
   const prevCp = baseSave.activeRunCheckpoint
@@ -136,6 +146,12 @@ function buildSaveWithCheckpoint(
     params.bankedScoreMark !== undefined
       ? Math.max(0, Math.floor(params.bankedScoreMark))
       : prevCp?.bankedScoreMark ?? 5
+  const resolvedTowerLevels: [number, number, number, number] =
+    params.playerBridgeTowerLevels ??
+    baseSave.playerBridgeTowerLevels ??
+    prevCp?.playerBridgeTowerLevels ?? [1, 0, 0, 0]
+  const resolvedEnemyBaseLevel =
+    params.enemyBaseLevel ?? prevCp?.enemyBaseLevel ?? 1
 
   const nextCheckpoint: ActiveBridgeRunCheckpoint = {
     sectorIndex,
@@ -149,6 +165,8 @@ function buildSaveWithCheckpoint(
     mathChallengesSolved: params.mathChallengesSolved,
     seed: params.seed,
     bankedScoreMark,
+    playerBridgeTowerLevels: resolvedTowerLevels,
+    enemyBaseLevel: resolvedEnemyBaseLevel,
     updatedAt: new Date().toISOString(),
   }
 
@@ -171,6 +189,7 @@ function buildSaveWithCheckpoint(
 
   return {
     ...baseSave,
+    playerBridgeTowerLevels: resolvedTowerLevels,
     activeRunCheckpoint: nextCheckpoint,
     stats: {
       ...baseSave.stats,
@@ -289,7 +308,24 @@ export interface LogicBattleStoreState {
   bridgeSectorIndex: number
   infiniteBridgeMode: boolean
 
+  // V10 Fase 1: Bases Vivas (Inimiga vs. Aliada), Carteira Compartilhada e Desconstrução Tática 3D
+  enemyBaseLevel: number
+  enemyDebuffTowersActive: number
+  playerBridgeTowerLevels: [number, number, number, number]
+  bridgeBaseDrawerOpen: boolean
+  isDeconstructingBridge: boolean
+  deconstructionProgress: number
+  deconstructionCompletedCount: number
+
   // Actions
+  getSharedWalletBalance: () => ArmyCount
+  toggleBridgeBaseDrawer: (open?: boolean) => void
+  upgradeBridgeTowerInMatch: (slotIndex: 0 | 1 | 2 | 3) => boolean
+  upgradeCitadelInMatch: (buildingId: CitadelBuildingId) => boolean
+  evolveEnemyBaseInMatch: (targetLevel?: number) => number
+  applyEnemyDebuffTowerHit: (lossRatio: number, label: string) => void
+  recordDebuffBoltIntercepted: (label: string) => void
+  triggerBridgeDeconstructionToBase: () => void
   toggleInfiniteBridgeMode: () => void
   advanceInfiniteBridgeSector: () => void
   extractRunToBase: () => void
@@ -473,12 +509,283 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   lastSolvedMathRewardAt: null,
   bridgeSectorIndex: initialSectorIndex,
   infiniteBridgeMode: initialSectorIndex > 1,
+  enemyBaseLevel: initialCheckpoint?.enemyBaseLevel ?? 1,
+  enemyDebuffTowersActive: 1,
+  playerBridgeTowerLevels:
+    initialCheckpoint?.playerBridgeTowerLevels ??
+    initialLoad.save.playerBridgeTowerLevels ?? [1, 0, 0, 0],
+  bridgeBaseDrawerOpen: false,
+  isDeconstructingBridge: false,
+  deconstructionProgress: 0,
+  deconstructionCompletedCount: 0,
   captainSpeech: {
     mood: 'excited',
     text:
       initialSectorIndex > 1
         ? `Progresso restaurado do IndexedDB/Cache! Continuando no Setor ${initialSectorIndex} com ${formatArmy(initialN0, initialLoad.save.settings.notationMode)} soldados!`
         : 'Capitã Vírgula a postos! Deslize o exército pelos portões e cuidado com as pegadinhas da intuição!',
+  },
+
+  getSharedWalletBalance: () => {
+    const state = get()
+    const { save, snapshot, bridgeSectorIndex, runPlan } = state
+    const prevBankedMark = save.activeRunCheckpoint?.bankedScoreMark ?? runPlan.n0
+    const coinsBonus = Math.max(0, snapshot.bridgeCoinsEarned ?? 0)
+    const sectorBonus = bridgeSectorIndex > 1 ? (bridgeSectorIndex - 1) * 15 : 0
+    const totalRunContribution = snapshot.currentArmy + coinsBonus + sectorBonus
+    const unbankedExtractable =
+      state.world === 'run'
+        ? clampArmy(Math.max(0, totalRunContribution - prevBankedMark))
+        : 0
+    return clampArmy(save.reserveTroops + unbankedExtractable)
+  },
+
+  toggleBridgeBaseDrawer: (open) => {
+    set((s) => ({
+      bridgeBaseDrawerOpen: open !== undefined ? open : !s.bridgeBaseDrawerOpen,
+    }))
+  },
+
+  upgradeBridgeTowerInMatch: (slotIndex) => {
+    const state = get()
+    const currentLevels: [number, number, number, number] = [
+      ...state.playerBridgeTowerLevels,
+    ]
+    const currentLvl = currentLevels[slotIndex] ?? 0
+    if (currentLvl >= PLAYER_BRIDGE_BASE_POLICY.maxTowerLevel) {
+      return false
+    }
+    const cost = getBridgeTowerUpgradeCost(currentLvl)
+    const sharedBalance = get().getSharedWalletBalance()
+    if (sharedBalance < cost) {
+      return false
+    }
+
+    const { save, snapshot, bridgeSectorIndex, runPlan, mathChallengesSolvedInRun } = state
+    const prevBankedMark = save.activeRunCheckpoint?.bankedScoreMark ?? runPlan.n0
+    const coinsBonus = Math.max(0, snapshot.bridgeCoinsEarned ?? 0)
+    const sectorBonus = bridgeSectorIndex > 1 ? (bridgeSectorIndex - 1) * 15 : 0
+    const totalRunContribution = snapshot.currentArmy + coinsBonus + sectorBonus
+    const nextBankedMark = Math.max(prevBankedMark, totalRunContribution)
+    const nextReserveAfterSpend = clampArmy(sharedBalance - cost)
+
+    currentLevels[slotIndex] = currentLvl + 1
+    soundEngine.playRedemptionSuccess()
+
+    // Bônus imediato na partida: +4 soldados de guarnição da torre na ponte
+    const nextArmy = clampArmy(snapshot.currentArmy + 4)
+    const slotSpec = PLAYER_BRIDGE_BASE_POLICY.slots[slotIndex]
+    const fbTower: FloatingFeedbackItem = {
+      id: `fb_tower_${slotIndex}_${Date.now()}`,
+      text: `🗼 ${slotSpec.namePt} Nv.${currentLevels[slotIndex]}`,
+      subText: `−${cost} Carteira · +4 🛡️`,
+      tone: 'reinforcement',
+      createdAtMs: snapshot.elapsedMs,
+    }
+
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...save,
+        reserveTroops: nextReserveAfterSpend,
+        playerBridgeTowerLevels: currentLevels,
+      },
+      {
+        sectorIndex: bridgeSectorIndex,
+        currentArmy: nextArmy,
+        bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+        bridgeKills: snapshot.bridgeKills ?? 0,
+        mathChallengesSolved: mathChallengesSolvedInRun,
+        seed: runPlan.seed,
+        bankedScoreMark: nextBankedMark + 4,
+      },
+    )
+    if (nextSave.activeRunCheckpoint) {
+      nextSave.activeRunCheckpoint.playerBridgeTowerLevels = currentLevels
+      nextSave.activeRunCheckpoint.enemyBaseLevel = state.enemyBaseLevel
+    }
+    SaveRepository.save(nextSave)
+
+    set({
+      save: nextSave,
+      playerBridgeTowerLevels: currentLevels,
+      snapshot: {
+        ...snapshot,
+        currentArmy: nextArmy,
+        crowdNodes: buildCrowdNodes(nextArmy),
+        recentFeedback: [...snapshot.recentFeedback.slice(-4), fbTower],
+      },
+      captainSpeech: {
+        mood: 'proud',
+        text: `🗼 ${slotSpec.namePt} evoluída para Nv.${currentLevels[slotIndex]} usando a Carteira Compartilhada! Disparos automáticos e escudo anti-debuff reforçados na ponte!`,
+      },
+    })
+    return true
+  },
+
+  evolveEnemyBaseInMatch: (targetLevel) => {
+    const state = get()
+    const nextLevel =
+      targetLevel !== undefined
+        ? Math.max(1, Math.min(5, Math.floor(targetLevel)))
+        : Math.min(5, state.enemyBaseLevel + 1)
+    const activeTowers = Math.min(4, nextLevel)
+    const nextHorde = Math.round(state.snapshot.enemy.horde * 1.12)
+    const nextBossHp = Math.round(state.snapshot.enemy.bossHp * 1.08)
+    const fbEvo: FloatingFeedbackItem = {
+      id: `fb_enemy_evo_${nextLevel}_${Date.now()}`,
+      text: `💀 Base Inimiga Nv.${nextLevel}!`,
+      subText: `${activeTowers} Torre(s) de Debuff Ativa(s)`,
+      tone: 'trap',
+      createdAtMs: state.snapshot.elapsedMs,
+    }
+    set({
+      enemyBaseLevel: nextLevel,
+      enemyDebuffTowersActive: activeTowers,
+      snapshot: {
+        ...state.snapshot,
+        enemy: {
+          ...state.snapshot.enemy,
+          horde: nextHorde,
+          bossHp: nextBossHp,
+          totalForce: nextHorde + nextBossHp,
+        },
+        recentFeedback: [...state.snapshot.recentFeedback.slice(-4), fbEvo],
+      },
+      captainSpeech: {
+        mood: 'curious',
+        text: `⚠️ A Base Inimiga evoluiu para Nv.${nextLevel} e ergueu ${activeTowers} Torre(s) de Debuff na ponte! Evolua nossas Torres da Ponte para interceptar os feixes!`,
+      },
+    })
+    return nextLevel
+  },
+
+  applyEnemyDebuffTowerHit: (lossRatio, label) => {
+    const state = get()
+    if (state.isDeconstructingBridge) return
+    const snap = state.snapshot
+    if (
+      snap.phase !== 'RUNNING' &&
+      snap.phase !== 'CALM_WAIT' &&
+      snap.phase !== 'BATTLE'
+    ) {
+      return
+    }
+    const safeBefore = Math.max(1, clampArmy(snap.currentArmy))
+    const clampedRatio = Math.max(0.08, Math.min(0.45, lossRatio))
+    const soldiersLost =
+      safeBefore > 1
+        ? Math.max(1, Math.round(safeBefore * clampedRatio))
+        : 0
+    const nextArmy = Math.max(1, clampArmy(safeBefore - soldiersLost))
+    soundEngine.playGatePass(nextArmy, false)
+    const fbDebuff: FloatingFeedbackItem = {
+      id: `fb_debuff_hit_${Date.now()}`,
+      text: `−${formatArmy(soldiersLost, state.save.settings.notationMode)} Soldados`,
+      subText: `⚠️ Pulso Inimigo (${label})`,
+      tone: 'trap',
+      createdAtMs: snap.elapsedMs,
+    }
+    set({
+      snapshot: {
+        ...snap,
+        currentArmy: nextArmy,
+        crowdNodes: buildCrowdNodes(nextArmy),
+        recentFeedback: [...snap.recentFeedback.slice(-4), fbDebuff],
+      },
+    })
+  },
+
+  recordDebuffBoltIntercepted: (label) => {
+    const state = get()
+    const snap = state.snapshot
+    const fbShield: FloatingFeedbackItem = {
+      id: `fb_shield_${Date.now()}`,
+      text: `🛡️ Feixe Interceptado!`,
+      subText: `Torre Aliada bloqueou ${label}`,
+      tone: 'reinforcement',
+      createdAtMs: snap.elapsedMs,
+    }
+    set({
+      snapshot: {
+        ...snap,
+        recentFeedback: [...snap.recentFeedback.slice(-4), fbShield],
+      },
+    })
+  },
+
+  triggerBridgeDeconstructionToBase: () => {
+    const state = get()
+    const { save, snapshot, bridgeSectorIndex, runPlan, mathChallengesSolvedInRun } = state
+    const prevBankedMark = save.activeRunCheckpoint?.bankedScoreMark ?? runPlan.n0
+    const coinsBonus = Math.max(0, snapshot.bridgeCoinsEarned ?? 0)
+    const sectorBonus = bridgeSectorIndex > 1 ? (bridgeSectorIndex - 1) * 15 : 0
+    const totalRunContribution = snapshot.currentArmy + coinsBonus + sectorBonus
+    const extractedTroops = clampArmy(Math.max(0, totalRunContribution - prevBankedMark))
+    const nextReserveTroops = clampArmy(save.reserveTroops + extractedTroops)
+    const nextTotalScore = Math.max(
+      save.stats.totalPlayerScore ?? 0,
+      nextReserveTroops + (bridgeSectorIndex - 1) * 50 + (snapshot.bridgeKills ?? 0),
+    )
+
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...save,
+        reserveTroops: nextReserveTroops,
+        playerBridgeTowerLevels: state.playerBridgeTowerLevels,
+        stats: {
+          ...save.stats,
+          totalPlayerScore: nextTotalScore,
+        },
+      },
+      {
+        sectorIndex: bridgeSectorIndex,
+        currentArmy: snapshot.currentArmy,
+        bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+        bridgeKills: snapshot.bridgeKills ?? 0,
+        mathChallengesSolved: mathChallengesSolvedInRun,
+        seed: runPlan.seed,
+        bankedScoreMark: Math.max(prevBankedMark, totalRunContribution),
+      },
+    )
+    SaveRepository.save(nextSave)
+
+    // Inicia animação 3D de Desconstrução Tática da Ponte (~280ms) já com a Carteira 100% sincronizada
+    set({
+      save: nextSave,
+      isDeconstructingBridge: true,
+      deconstructionProgress: 0.38,
+      bridgeBaseDrawerOpen: false,
+    })
+
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        if (get().isDeconstructingBridge) {
+          set({ deconstructionProgress: 0.82 })
+        }
+      }, 110)
+      window.setTimeout(() => {
+        set((s) => ({
+          world: 'realm',
+          isDeconstructingBridge: false,
+          deconstructionProgress: 1,
+          deconstructionCompletedCount: s.deconstructionCompletedCount + 1,
+          lastDirectAttackResult: null,
+          battleResolution: null,
+          activeTrapHit: null,
+          activeRedemptionTokenId: null,
+          activeMathChallenge: null,
+          activeMathChallengeDiagnostic: null,
+          settingsPopoverOpen: false,
+          activeRealmSheet: 'none',
+          captainSpeech: {
+            mood: 'proud',
+            text: `🏰 Ponte recolhida e Carteira Compartilhada sincronizada! Reserva da Base Principal: ${formatArmy(s.save.reserveTroops, s.save.settings.notationMode)} soldados!`,
+          },
+        }))
+      }, 260)
+    } else {
+      get().extractRunToBase()
+    }
   },
 
   extractRunToBase: () => {
@@ -499,6 +806,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       {
         ...save,
         reserveTroops: nextReserveTroops,
+        playerBridgeTowerLevels: state.playerBridgeTowerLevels,
         stats: {
           ...save.stats,
           totalPlayerScore: nextTotalScore,
@@ -519,6 +827,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     set({
       save: nextSave,
       world: 'realm',
+      isDeconstructingBridge: false,
+      deconstructionProgress: 1,
+      deconstructionCompletedCount: state.deconstructionCompletedCount + 1,
+      bridgeBaseDrawerOpen: false,
       lastDirectAttackResult: null,
       battleResolution: null,
       activeTrapHit: null,
@@ -661,6 +973,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
   applySideRouteReward: (route, soldiersDelta, reasonLabel) => {
     const state = get()
+    if (state.isDeconstructingBridge) return
     const snap = state.snapshot
     if (
       snap.phase !== 'RUNNING' &&
@@ -699,6 +1012,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
   onSectorBossDefeatedInBridge: (newSector, bonusSoldiers) => {
     const state = get()
+    if (state.isDeconstructingBridge) return
     const snap = state.snapshot
     if (snap.phase !== 'RUNNING' && snap.phase !== 'CALM_WAIT') return
     const nextArmy = clampArmy(snap.currentArmy + bonusSoldiers)
@@ -1086,6 +1400,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     playerAttritionLoss = 0,
   ) => {
     const state = get()
+    if (state.isDeconstructingBridge) return
     const snap = state.snapshot
     if (
       snap.phase !== 'RUNNING' &&
@@ -1565,7 +1880,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
     if (
       (snapshot.phase !== 'RUNNING' && snapshot.phase !== 'CALM_WAIT') ||
-      isModalOpen
+      isModalOpen ||
+      state.isDeconstructingBridge
     ) {
       return
     }
@@ -1573,9 +1889,13 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const safeDt = Math.min(80, Math.max(0, dtMs))
     const nextElapsed = snapshot.elapsedMs + safeDt
 
-    // V9: Velocidade da esteira central sincronizada com as rotas laterais (~5.88 m/s em modo normal, ~3.92 m/s em modo calmo),
-    // nunca travando a Rota Central enquanto as rotas Esquerda e Direita se movem!
-    const speedPerMs = save.settings.calmMode ? 1 / 24000 : 1 / 16000
+    // V10 Fase 1 (UAT-V10-CENTER-CADENCE-10S):
+    // Exibimos 1 único par de portões por vez na ponte e espaçamos o ciclo para ~8.5s–9.5s por segmento
+    // (mantendo aceleração de saída do Castelo Norte no primeiro segundo para resposta visual imediata).
+    const isInitialLaunchWindow =
+      snapshot.activeSegmentIndex === 0 && snapshot.elapsedMs < 1150
+    const steadyCycleMs = save.settings.calmMode ? 68000 : 58000
+    const speedPerMs = isInitialLaunchWindow ? 1 / 33000 : 1 / steadyCycleMs
     const nextProgress = Math.min(1, snapshot.progress + safeDt * speedPerMs)
 
     const activeSeg = snapshot.segments[snapshot.activeSegmentIndex]
@@ -1675,8 +1995,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       }
 
       const armyBefore = clampArmy(snapshot.currentArmy)
-      // V9 (Pilar 2): Escala Ortogonal — Rota Central ancorada no Nível dos Monstros do Setor,
-      // sem multiplicar nem dividir exponencialmente o exército inflado pela Rota da Direita.
+      // V9 (Pilar 2) + V10 (Pilar 1 — QAR1-V10-AUTHENTIC-DEBUFFS):
+      // Portões benéficos (Azuis) mantêm escala ortogonal justa; todo portão negativo/redutor (Vermelho)
+      // ou queda em pegadinha reduz DE VERDADE o exército atual (`nextArmy < armyBefore`).
       const monsterEvalCap = Math.max(105, Math.round(snapshot.enemy.totalForce * 1.5))
       const monsterRefBase = Math.max(
         25,
@@ -1690,11 +2011,23 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         : armyBefore
       const cf = evaluateSegmentCounterfactual(activeSeg, effectiveEvalBase)
       const appResult = applyGateChainWithRemainder(effectiveEvalBase, chosenGates)
-      const rawNextArmy = useOrthogonalMonsterBase
-        ? clampArmy(armyBefore + (appResult.nextArmy - effectiveEvalBase))
-        : clampArmy(appResult.nextArmy)
-      const nextRemainderBank = snapshot.remainderBankInRun + appResult.remainder
       const wasOptimal = appResult.nextArmy >= cf.bestValue
+      const isTrapFall =
+        Boolean(activeSeg.trapId) && chosenLane === activeSeg.intuitiveLane
+      const isNonOptimalPairDebuff =
+        activeSeg.kind === 'pair' && !wasOptimal && activeSeg.lanes.length >= 2
+
+      const authenticPass = applyAuthenticCenterGatePass({
+        armyBefore,
+        chosenGates,
+        effectiveEvalBase,
+        useOrthogonalMonsterBase,
+        wasOptimal,
+        isTrapFall: isTrapFall || isNonOptimalPairDebuff,
+        enemyBaseLevel: state.enemyBaseLevel,
+      })
+      const rawNextArmy = clampArmy(authenticPass.nextArmy)
+      const nextRemainderBank = snapshot.remainderBankInRun + authenticPass.remainder
 
       // Combo de Cálculo V3 (§2.2): escolher o portão ótimo sobe o multiplicador (×1 -> ×1,5 -> ×2 -> ×3)
       const nextComboStreak = wasOptimal ? (snapshot.calcComboStreak ?? 0) + 1 : 0
@@ -2713,8 +3046,105 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     return res
   },
 
+  upgradeCitadelInMatch: (buildingId) => {
+    const state = get()
+    const spec = CITADEL_BUILDINGS[buildingId]
+    if (!spec) return false
+    const currentLevel = state.save.citadelLevels[buildingId] ?? 0
+    const cost = getUpgradeCost(buildingId, currentLevel)
+    if (currentLevel >= spec.maxLevel || !Number.isFinite(cost)) {
+      return false
+    }
+    const sharedBalance = get().getSharedWalletBalance()
+    if (sharedBalance < cost) {
+      return false
+    }
+
+    const { save, snapshot, bridgeSectorIndex, runPlan, mathChallengesSolvedInRun } = state
+    const prevBankedMark = save.activeRunCheckpoint?.bankedScoreMark ?? runPlan.n0
+    const coinsBonus = Math.max(0, snapshot.bridgeCoinsEarned ?? 0)
+    const sectorBonus = bridgeSectorIndex > 1 ? (bridgeSectorIndex - 1) * 15 : 0
+    const totalRunContribution = snapshot.currentArmy + coinsBonus + sectorBonus
+    const nextBankedMark = Math.max(prevBankedMark, totalRunContribution)
+    const nextReserveAfterSpend = clampArmy(sharedBalance - cost)
+    const nextLevel = currentLevel + 1
+    const nextCitadelLevels: Record<CitadelBuildingId, number> = {
+      ...save.citadelLevels,
+      [buildingId]: nextLevel,
+    }
+
+    let nextArmy = snapshot.currentArmy
+    let nextLunetas = state.lunetaChargesRemaining
+    let nextSegments = snapshot.segments
+    let bonusArmyAdded = 0
+    if (buildingId === 'quartel') {
+      const prevRecruits = getInitialArmyFromQuartel(currentLevel)
+      const nextRecruits = getInitialArmyFromQuartel(nextLevel)
+      bonusArmyAdded = Math.max(8, nextRecruits - prevRecruits)
+      nextArmy = clampArmy(snapshot.currentArmy + bonusArmyAdded)
+    } else if (buildingId === 'forja') {
+      nextLunetas = state.lunetaChargesRemaining + 1
+    } else if (buildingId === 'observatorio') {
+      nextSegments = snapshot.segments.map((seg) =>
+        seg.trapId ? { ...seg, showDetectorWarning: true } : seg,
+      )
+    }
+
+    soundEngine.playRedemptionSuccess()
+    const fbCitadel: FloatingFeedbackItem = {
+      id: `fb_citadel_${buildingId}_${Date.now()}`,
+      text: `🏰 ${spec.name} Nv.${nextLevel}!`,
+      subText: `−${cost} Carteira · ${spec.levelLabels[nextLevel] ?? ''}`,
+      tone: 'optimal',
+      createdAtMs: snapshot.elapsedMs,
+    }
+
+    const nextSave = buildSaveWithCheckpoint(
+      {
+        ...save,
+        reserveTroops: nextReserveAfterSpend,
+        citadelLevels: nextCitadelLevels,
+      },
+      {
+        sectorIndex: bridgeSectorIndex,
+        currentArmy: nextArmy,
+        bridgeCoinsEarned: snapshot.bridgeCoinsEarned ?? 0,
+        bridgeKills: snapshot.bridgeKills ?? 0,
+        mathChallengesSolved: mathChallengesSolvedInRun,
+        seed: runPlan.seed,
+        bankedScoreMark: nextBankedMark + bonusArmyAdded,
+        playerBridgeTowerLevels: state.playerBridgeTowerLevels,
+        enemyBaseLevel: state.enemyBaseLevel,
+      },
+    )
+    SaveRepository.save(nextSave)
+
+    set({
+      save: nextSave,
+      lunetaChargesRemaining: nextLunetas,
+      snapshot: {
+        ...snapshot,
+        currentArmy: nextArmy,
+        crowdNodes:
+          nextArmy !== snapshot.currentArmy
+            ? buildCrowdNodes(nextArmy)
+            : snapshot.crowdNodes,
+        segments: nextSegments,
+        recentFeedback: [...snapshot.recentFeedback.slice(-4), fbCitadel],
+      },
+      captainSpeech: {
+        mood: 'proud',
+        text: `🏰 Base Principal evoluída dentro da partida! ${spec.name} agora está no Nv.${nextLevel} (${spec.levelLabels[nextLevel] ?? ''})!`,
+      },
+    })
+    return true
+  },
+
   upgradeCitadelBuilding: (buildingId) => {
     const state = get()
+    if (state.world === 'run') {
+      return get().upgradeCitadelInMatch(buildingId)
+    }
     const res = purchaseCitadelUpgrade(
       buildingId,
       state.save.citadelLevels,

@@ -82,22 +82,22 @@ export function generateSerpentLevel(
     grid.floorCells.find((c) => c.x >= 22 && c.x <= 26 && c.y >= 22 && c.y <= 26) ??
     grid.floorCells[0]
 
-  // Posicionar a cabeça do dragão no corredor superior visível (2 a 4 células acima do herói)
+  // Posicionar a cabeça do dragão no corredor superior visível (3 a 5 células acima do herói)
   // Fiel ao conceito engine_F_serpente_labirinto_infinito.jpg: serpente visível na tela desde t=0s!
   let dragonStart =
     grid.floorCells.find(
       (c) =>
-        Math.abs(c.x - heroStart.x) <= 2 &&
-        c.y >= heroStart.y - 4 &&
-        c.y <= heroStart.y - 2,
+        Math.abs(c.x - heroStart.x) <= 3 &&
+        c.y >= heroStart.y - 5 &&
+        c.y <= heroStart.y - 3,
     ) ?? grid.floorCells[Math.floor(grid.floorCells.length / 3)]
 
   for (const cand of rng.shuffle([...grid.floorCells])) {
     const dx = Math.abs(cand.x - heroStart.x)
     const dy = heroStart.y - cand.y
-    if (dx <= 2 && dy >= 2 && dy <= 4) {
+    if (dx <= 3 && dy >= 3 && dy <= 5) {
       const pathCheck = findToroidalChasePath(grid, cand, heroStart, false)
-      if (pathCheck.steps >= 3 && pathCheck.steps <= 9) {
+      if (pathCheck.steps >= 5 && pathCheck.steps <= 12) {
         dragonStart = cand
         break
       }
