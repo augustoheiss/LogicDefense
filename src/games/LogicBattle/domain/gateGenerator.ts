@@ -15,8 +15,9 @@ import {
   RedemptionToken,
   RunPlan,
   TrapId,
+  TwinId,
 } from '../types'
-import { clampArmy } from './armyMath'
+import { clampArmy, isLaneBeneficial } from './armyMath'
 import {
   createInitialMastery,
   selectNextTrapForBiome,
@@ -287,6 +288,106 @@ function buildCalibratedFinalSegment(
   }
 }
 
+function buildContrastingTwinLanes(
+  segId: string,
+  twinId: TwinId,
+  laneCount: 2 | 3,
+  runningBest: ArmyCount,
+  rng: SeededRng,
+): Gate[][] {
+  const baseTwinLanes = TWIN_CATALOG[twinId].buildLanes(laneCount)
+  let buffGate: Gate
+  let debuffGate: Gate
+
+  if (twinId === 'G01') {
+    buffGate = makeSimpleGate(`${segId}_tw_b`, '÷', 1, 2, '÷ ½', true)
+    debuffGate = baseTwinLanes[0]?.[0] ?? makeSimpleGate(`${segId}_tw_d`, '×', 1, 4, '× ¼', true)
+  } else if (twinId === 'G02') {
+    buffGate = makeSimpleGate(`${segId}_tw_b`, '÷', 1, 2, '÷ 0,5', true)
+    debuffGate = baseTwinLanes[0]?.[0] ?? makeSimpleGate(`${segId}_tw_d`, '×', 1, 2, '× 0,5', true)
+  } else if (twinId === 'G03') {
+    buffGate = baseTwinLanes[0]?.[0] ?? makeSimpleGate(`${segId}_tw_b`, '%+', 50, 1, '+ 50%', true)
+    debuffGate = makeSimpleGate(`${segId}_tw_d`, '%−', 25, 1, '− 25%', true)
+  } else if (twinId === 'G04') {
+    buffGate = baseTwinLanes[1]?.[0] ?? makeSimpleGate(`${segId}_tw_b`, '×', 1000, 1, '× 1k')
+    debuffGate = makeSimpleGate(`${segId}_tw_d`, '÷', 2, 1, '÷ 2', true)
+  } else if (twinId === 'G05') {
+    buffGate = baseTwinLanes[0]?.[0] ?? makeSimpleGate(`${segId}_tw_b`, '÷', 1, 2, '÷ ½', true)
+    debuffGate = makeSimpleGate(`${segId}_tw_d`, '×', 1, 2, '× ½', true)
+  } else {
+    buffGate = makeSimpleGate(`${segId}_tw_b`, '%+', 50, 1, '+ 50%', true)
+    debuffGate = baseTwinLanes[0]?.[0] ?? makeSimpleGate(`${segId}_tw_d`, '%−', 50, 1, '− 50%', true)
+  }
+
+  const lanes: Gate[][] =
+    rng.nextFloat() < 0.5 ? [[buffGate], [debuffGate]] : [[debuffGate], [buffGate]]
+
+  if (laneCount === 3) {
+    const midAdd = Math.max(3, Math.round(runningBest * 0.2))
+    lanes.push([makeSimpleGate(`${segId}_tw_m`, '+', midAdd, 1, `+ ${fmtGateVal(midAdd)}`)])
+  }
+  return lanes
+}
+
+function normalizeTrapLanesBuffVsDebuff(
+  segId: string,
+  index: number,
+  rawLanes: Gate[][],
+  rawIntuitiveLane: number,
+  runningBest: ArmyCount,
+  enemyTotalForce: ArmyCount,
+): { lanes: Gate[][]; intuitiveLane: number } {
+  const lanes = rawLanes.map((l) => [...l])
+  const badIdx = rawIntuitiveLane === 1 ? 1 : 0
+  const goodIdx = badIdx === 0 ? 1 : 0
+  const addGood = Math.max(
+    6,
+    Math.round(Math.min(enemyTotalForce * 0.22, Math.max(8, runningBest * 0.35))),
+  )
+  const subBad = Math.max(
+    3,
+    Math.round(Math.min(enemyTotalForce * 0.18, Math.max(4, runningBest * 0.22))),
+  )
+
+  // Garantir que a faixa ótima (goodIdx) seja SEMPRE um Buff real (Azul, isLaneBeneficial === true)
+  if (!isLaneBeneficial(lanes[goodIdx] ?? [], Math.max(100, runningBest))) {
+    const buffVariant = index % 3
+    if (buffVariant === 0) {
+      lanes[goodIdx] = [makeSimpleGate(`${segId}_tr_good`, '÷', 1, 2, '÷ ½', true)]
+    } else if (buffVariant === 1) {
+      lanes[goodIdx] = [makeSimpleGate(`${segId}_tr_good`, '×', 3, 2, '× ³⁄₂', true)]
+    } else {
+      lanes[goodIdx] = [
+        makeSimpleGate(
+          `${segId}_tr_good`,
+          'expr',
+          addGood,
+          1,
+          `− (−${fmtGateVal(addGood)})`,
+          true,
+          'sub_neg',
+        ),
+      ]
+    }
+  }
+
+  // Garantir que a faixa de pegadinha (badIdx) seja SEMPRE um Debuff real (Vermelho, isLaneBeneficial === false)
+  if (isLaneBeneficial(lanes[badIdx] ?? [], Math.max(100, runningBest))) {
+    const debuffVariant = index % 3
+    if (debuffVariant === 0) {
+      lanes[badIdx] = [makeSimpleGate(`${segId}_tr_bad`, '×', 1, 2, '× ½', true)]
+    } else if (debuffVariant === 1) {
+      lanes[badIdx] = [makeSimpleGate(`${segId}_tr_bad`, '×', 4, 5, '× 0,8', true)]
+    } else {
+      lanes[badIdx] = [
+        makeSimpleGate(`${segId}_tr_bad`, '−', subBad, 1, `− ${fmtGateVal(subBad)}`),
+      ]
+    }
+  }
+
+  return { lanes, intuitiveLane: badIdx }
+}
+
 function createDefaultEnemyForBiome(
   biomeId: BiomeId,
   n0: ArmyCount,
@@ -409,8 +510,13 @@ function tryBuildRunWithSeed(
           : biome.twinIds
       const twinPool = eligibleTwins.length > 0 ? eligibleTwins : biome.twinIds
       const twinId = rng.pick(twinPool)
-      const twinEntry = TWIN_CATALOG[twinId]
-      const twinLanes = twinEntry.buildLanes(laneCount)
+      const twinLanes = buildContrastingTwinLanes(
+        segId,
+        twinId,
+        laneCount,
+        runningBest,
+        rng,
+      )
       const twinSeg: LaneSegment = {
         id: segId,
         index: i,
@@ -476,6 +582,16 @@ function tryBuildRunWithSeed(
           trapLanes = [built.lanes[1], built.lanes[0], ...built.lanes.slice(2)]
           trapIntuitiveLane = 0
         }
+        const normalizedTrap = normalizeTrapLanesBuffVsDebuff(
+          segId,
+          i,
+          trapLanes,
+          trapIntuitiveLane,
+          runningBest,
+          enemy.totalForce,
+        )
+        trapLanes = normalizedTrap.lanes
+        trapIntuitiveLane = normalizedTrap.intuitiveLane
 
         const candidateSeg: LaneSegment = {
           id: segId,

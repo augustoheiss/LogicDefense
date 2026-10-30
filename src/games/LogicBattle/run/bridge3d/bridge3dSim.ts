@@ -45,6 +45,7 @@ export interface EnemyDebuffBolt3DEntity {
   x: number
   y: number
   z: number
+  vx: number
   vz: number
   lossRatio: number
   label: string
@@ -182,6 +183,7 @@ export interface Bridge3DSimState {
   enemyDebuffTowers: EnemyDebuffTower3DEntity[]
   enemyDebuffBolts: EnemyDebuffBolt3DEntity[]
   enemyDebuffHitsCount: number
+  debuffBoltsDodgedCount: number
   debuffBoltsInterceptedCount: number
   playerBridgeTowerLevels: [number, number, number, number]
   playerTowerShieldCooldownMs: number
@@ -205,12 +207,11 @@ export function nextSimRandom(sim: Bridge3DSimState): number {
 /**
  * Calcula a posição Z 3D contínua de um segmento da Rota Central a partir de `seg.zPosition` e `progress`.
  * V10 Fase 1: utiliza `CENTER_ROUTE_CADENCE_POLICY.worldSpanZ` para que o par único visível
- * atravesse toda a ponte (do Castelo Norte até o Herói) em ~8.5s–10s.
+ * atravesse toda a ponte (do Castelo Norte até a linha exata do Herói em `zPlayerLine`) em ~8.5s–10s.
  */
 export function computeSegmentWorldZ(segZPosition: number, progress: number): number {
   return (
     BRIDGE_3D_DIMENSIONS.zPlayerLine -
-    1.5 -
     (segZPosition - progress) * CENTER_ROUTE_CADENCE_POLICY.worldSpanZ
   )
 }
@@ -396,12 +397,14 @@ export function createInitialBridge3DSimState(
       x: 0,
       y: 1.45,
       z: -56,
+      vx: 0,
       vz: ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ,
       lossRatio: 0.1,
       label: '−10% TORRE',
       active: false,
     })),
     enemyDebuffHitsCount: 0,
+    debuffBoltsDodgedCount: 0,
     debuffBoltsInterceptedCount: 0,
     playerBridgeTowerLevels: [1, 0, 0, 0],
     playerTowerShieldCooldownMs: 0,
@@ -448,10 +451,19 @@ export function evolveEnemyLivingBase(sim: Bridge3DSimState): {
     const srcTower =
       sim.enemyDebuffTowers.filter((t) => t.active).slice(-1)[0] ??
       sim.enemyDebuffTowers[0]
+    const spawnX = srcTower ? srcTower.x : -4.2
+    const spawnZ = srcTower ? srcTower.z : -44
+    const targetXAtLaunch = Math.max(-4.8, Math.min(4.8, sim.heroWorldX))
+    const travelSec = Math.max(
+      0.5,
+      (BRIDGE_3D_DIMENSIONS.zPlayerLine - spawnZ) /
+        ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ,
+    )
     freeDebuffBolt.active = true
-    freeDebuffBolt.x = srcTower ? srcTower.x * 0.45 : 0
+    freeDebuffBolt.x = spawnX
     freeDebuffBolt.y = 1.45
-    freeDebuffBolt.z = srcTower ? srcTower.z : -44
+    freeDebuffBolt.z = spawnZ
+    freeDebuffBolt.vx = (targetXAtLaunch - spawnX) / travelSec
     freeDebuffBolt.vz = ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ
     freeDebuffBolt.lossRatio = slotLoss
     freeDebuffBolt.label = srcTower ? srcTower.label : `−${Math.round(slotLoss * 100)}% TORRE`
@@ -790,18 +802,20 @@ export function stepBridge3DSim(
       sim.bossMeleeCooldownMs -= timerDtMs
       if (sim.bossMeleeCooldownMs <= 0) {
         sim.bossMeleeCooldownMs = 1000
-        const isPlayerInCenter = sim.activeRoute === 'CENTER'
-        const strikeDmg = isPlayerInCenter
-          ? currentSectorSpec.meleeDamagePerStrike
-          : Math.max(3, Math.round(currentSectorSpec.meleeDamagePerStrike * 0.65))
-        const effectiveStrikeLoss = input.isBattlePhase
-          ? 0
-          : input.allSegmentsResolved
-            ? strikeDmg
-            : Math.min(strikeDmg, Math.max(0, input.currentArmy - 3))
-        attritionLossThisFrame += effectiveStrikeLoss
-        sim.playerHitFlashMs = 360
-        sim.bossHitFlashMs = 220
+        // O golpe corpo a corpo do Boss só acerta se o jogador estiver no alcance frontal do Boss (permite desviar para as laterais!)
+        const isHeroInBossReach =
+          sim.activeRoute === 'CENTER' && Math.abs(sim.heroWorldX) <= 3.1
+        if (isHeroInBossReach) {
+          const strikeDmg = currentSectorSpec.meleeDamagePerStrike
+          const effectiveStrikeLoss = input.isBattlePhase
+            ? 0
+            : input.allSegmentsResolved
+              ? strikeDmg
+              : Math.min(strikeDmg, Math.max(0, input.currentArmy - 3))
+          attritionLossThisFrame += effectiveStrikeLoss
+          sim.playerHitFlashMs = 360
+          sim.bossHitFlashMs = 220
+        }
       }
     }
   }
@@ -1234,21 +1248,22 @@ export function stepBridge3DSim(
 
   sim.activeBoltsCount = activeCount
 
-  // 6. Avanço da Horda e Mini-Bosses (+Z) e Dano Real de Contato nos Soldados do Jogador
+  // 6. Avanço da Horda e Mini-Bosses (+Z) e Dano Real de Contato SOMENTE se acertar a posição X do Herói (permite desviar!)
   let hordeContactLoss = 0
   for (const en of sim.enemies) {
     en.z += en.speedZ * clampedDt
-    if (en.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.6) {
-      // Se o monstro alcançar a linha do jogador, causa dano real de contato!
+    if (en.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.55) {
+      // Se o jogador desviou para o lado (|en.x - sim.heroWorldX| > hitRadiusX), o monstro passa reto sem tirar HP!
+      const hitRadiusX = en.isMiniBoss ? 1.45 : 1.05
       const isDirectHitOnHero =
-        sim.activeRoute === 'CENTER' && Math.abs(en.x - sim.heroWorldX) < 2.6
-      const contactDmg = isDirectHitOnHero
-        ? en.contactDamage
-        : Math.max(1, Math.floor(en.contactDamage * 0.5))
-      hordeContactLoss += contactDmg
-      sim.playerHitFlashMs = 280
+        sim.activeRoute === 'CENTER' && Math.abs(en.x - sim.heroWorldX) <= hitRadiusX
+      if (isDirectHitOnHero) {
+        hordeContactLoss += en.contactDamage
+        sim.playerHitFlashMs = 280
+      }
       // Respawn lá no fundo da ponte perto do castelo
       en.z = -84 - nextSimRandom(sim) * 14
+      en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
       en.maxHp = en.isMiniBoss
         ? 176 + (sim.sectorIndex - 1) * 90
         : 18 + (sim.sectorIndex - 1) * 10
@@ -1256,16 +1271,16 @@ export function stepBridge3DSim(
     }
   }
   if (hordeContactLoss > 0 && !input.isBattlePhase) {
-    // Enquanto o Boss ainda está marchando (antes do MELEE_CLASH com segmentos encerrados), a Horda drena o exército até o piso de 3 soldados,
-    // permitindo que o Boss alcance a linha do jogador (+7.7) e desfira o golpe corpo a corpo fatal!
+    // Enquanto o Boss ainda está marchando (antes do MELEE_CLASH com segmentos encerrados), a Horda drena o exército até o piso de 5 soldados,
+    // permitindo que o jogador escolha portões com base íntegra e o Boss desfira o golpe corpo a corpo fatal!
     const effectiveHordeLoss =
       sim.bossLifecycle === 'MELEE_CLASH' && input.allSegmentsResolved
         ? hordeContactLoss
-        : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 3))
+        : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 5))
     attritionLossThisFrame += effectiveHordeLoss
   }
 
-  // 7. V10 Fase 1: Evolução Autônoma da Base Inimiga + Torres de Debuff 3D + Escudo Aliado
+  // 7. V10 Fase 1: Evolução Autônoma da Base Inimiga + Torres de Debuff 3D + Escudo Aliado + Esquiva Real
   if (sim.playerTowerShieldCooldownMs > 0) {
     sim.playerTowerShieldCooldownMs = Math.max(0, sim.playerTowerShieldCooldownMs - timerDtMs)
   }
@@ -1279,7 +1294,7 @@ export function stepBridge3DSim(
       callbacks.onEnemyBaseEvolved?.(evolved.enemyBaseLevel, evolved.activeTowersCount)
     }
 
-    // Torres de Debuff ativas disparam pulsos negativos contra o esquadrão do jogador
+    // Torres de Debuff ativas disparam projéteis mirados na posição em que o jogador estava no instante do disparo (sem teleguiar!)
     for (const tower of sim.enemyDebuffTowers) {
       if (tower.hitFlashMs > 0) {
         tower.hitFlashMs = Math.max(0, tower.hitFlashMs - dtMs)
@@ -1300,10 +1315,19 @@ export function stepBridge3DSim(
                 Math.max(0, sim.enemyBaseLevel - 1),
               )
             ] ?? 0.1
+          const spawnX = tower.x
+          const spawnZ = tower.z
+          const targetXAtLaunch = Math.max(-4.8, Math.min(4.8, sim.heroWorldX))
+          const travelSec = Math.max(
+            0.5,
+            (BRIDGE_3D_DIMENSIONS.zPlayerLine - spawnZ) /
+              ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ,
+          )
           freeBolt.active = true
-          freeBolt.x = tower.x * 0.45
+          freeBolt.x = spawnX
           freeBolt.y = 1.45
-          freeBolt.z = tower.z
+          freeBolt.z = spawnZ
+          freeBolt.vx = (targetXAtLaunch - spawnX) / travelSec
           freeBolt.vz = ENEMY_LIVING_BASE_POLICY.debuffBoltSpeedZ
           freeBolt.lossRatio = lossRatio
           freeBolt.label = tower.label
@@ -1312,9 +1336,11 @@ export function stepBridge3DSim(
       }
     }
 
-    // Avançar projéteis de debuff inimigo (+Z) e testar interceptação pelas Torres Aliadas ou impacto no Herói
+    // Avançar projéteis de debuff inimigo (+Z, trajetória reta fixa) e testar interceptação, impacto real ou esquiva!
     for (const dBolt of sim.enemyDebuffBolts) {
       if (!dBolt.active) continue
+      const prevZ = dBolt.z
+      dBolt.x += (dBolt.vx ?? 0) * clampedDt
       dBolt.z += dBolt.vz * clampedDt
 
       // Torres Aliadas Nv.2+ interceptam feixes de debuff quando o escudo tático está pronto
@@ -1330,11 +1356,26 @@ export function stepBridge3DSim(
         continue
       }
 
-      if (dBolt.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.8) {
+      // Colisão física real na linha do jogador: SÓ acerta e reduz HP se atingir o raio horizontal do Herói!
+      // Se o jogador se moveu e desviou da trajetória (|dBolt.x - sim.heroWorldX| > 1.25), o tiro passa reto sem tirar HP!
+      if (
+        prevZ <= BRIDGE_3D_DIMENSIONS.zPlayerLine + 0.65 &&
+        dBolt.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.65
+      ) {
+        const hitDistX = Math.abs(dBolt.x - sim.heroWorldX)
+        if (hitDistX <= 1.25) {
+          dBolt.active = false
+          sim.enemyDebuffHitsCount += 1
+          sim.playerHitFlashMs = 320
+          callbacks.onEnemyDebuffTowerHit?.(dBolt.lossRatio, dBolt.label)
+          continue
+        }
+      }
+
+      // Se passou da linha do jogador sem acertar o Herói, o jogador DESVIOU com sucesso!
+      if (dBolt.z > BRIDGE_3D_DIMENSIONS.zPlayerLine + 1.2) {
         dBolt.active = false
-        sim.enemyDebuffHitsCount += 1
-        sim.playerHitFlashMs = 320
-        callbacks.onEnemyDebuffTowerHit?.(dBolt.lossRatio, dBolt.label)
+        sim.debuffBoltsDodgedCount += 1
       }
     }
   }

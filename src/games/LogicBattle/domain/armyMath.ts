@@ -262,13 +262,19 @@ export function applyAuthenticCenterGatePass(
     }
   }
 
-  // Faixa benéfica (Azul): preserva escala ortogonal para buffs
+  // Faixa benéfica (Azul): preserva escala ortogonal para buffs e garante ganho positivo real (>= +2) mesmo com exército pequeno!
+  const probeBase = Math.max(10, effectiveEvalBase)
+  const probeApp = applyGateChainWithRemainder(probeBase, chosenGates)
+  const minPositiveGain = Math.max(
+    2,
+    Math.round(Math.max(1, probeApp.nextArmy - probeBase) * Math.min(1, safeBefore / probeBase)),
+  )
   const rawNext = useOrthogonalMonsterBase
-    ? clampArmy(safeBefore + Math.max(1, evalApp.nextArmy - effectiveEvalBase))
-    : clampArmy(evalApp.nextArmy)
+    ? clampArmy(safeBefore + Math.max(2, evalApp.nextArmy - effectiveEvalBase))
+    : clampArmy(Math.max(safeBefore + minPositiveGain, evalApp.nextArmy))
 
   return {
-    nextArmy: Math.max(safeBefore, rawNext),
+    nextArmy: Math.max(safeBefore + 2, rawNext),
     remainder: evalApp.remainder,
   }
 }

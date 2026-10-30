@@ -479,10 +479,15 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.lb-lane-choice-grid.is-transparent-hitboxes {
+  pointer-events: none;
+}
+
 .lb-lane-choice-grid.is-transparent-hitboxes .lb-gate-choice-btn {
   background: transparent;
   border: none;
   box-shadow: none;
+  pointer-events: none;
 }
 
 .lb-lane-choice-grid.is-visible-pills .lb-gate-choice-btn {

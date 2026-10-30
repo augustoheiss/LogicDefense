@@ -14,6 +14,7 @@ import { BIOMES } from '../../config/biomes'
 import { isLaneBeneficial } from '../../domain/armyMath'
 import { formatArmy } from '../../domain/notation'
 import { useLogicBattleStore } from '../../state/useLogicBattleStore'
+import { resolveClosestCenterGateFromWorldX } from '../renderer/perspective'
 import {
   BOSS_ARCHETYPES_3D,
   BRIDGE_3D_DIMENSIONS,
@@ -21,6 +22,7 @@ import {
   CENTER_ROUTE_CADENCE_POLICY,
   computeSectorBossSpec,
   ENEMY_LIVING_BASE_POLICY,
+  laneNormToWorldX,
   PLAYER_BRIDGE_BASE_POLICY,
 } from './bridge3dPolicies'
 import {
@@ -48,6 +50,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   const segments = useLogicBattleStore((s) => s.snapshot.segments)
   const activeSegmentIndex = useLogicBattleStore((s) => s.snapshot.activeSegmentIndex)
   const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
+  const laneX = useLogicBattleStore((s) => s.snapshot.laneX)
   const enemy = useLogicBattleStore((s) => s.snapshot.enemy)
   const inspectedSegmentId = useLogicBattleStore((s) => s.snapshot.inspectedSegmentId)
   const notationMode = useLogicBattleStore((s) => s.save.settings.notationMode)
@@ -182,9 +185,13 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
     const clockSec = state.clock.elapsedTime
     const sim = simRef.current
 
-    // Garantir interpolação horizontal suave a 60Hz em TODAS as fases (incluindo BATTLE e CALM_WAIT)
-    smoothedLaneXRef.current +=
-      (snap.laneX - smoothedLaneXRef.current) * Math.min(1, dt * 15)
+    // Garantir interpolação horizontal responsiva a 60Hz em TODAS as fases (incluindo esquivas rápidas)
+    const deltaLaneX = snap.laneX - smoothedLaneXRef.current
+    if (Math.abs(deltaLaneX) > 0.45) {
+      smoothedLaneXRef.current = snap.laneX
+    } else {
+      smoothedLaneXRef.current += deltaLaneX * Math.min(1, dt * 28)
+    }
     if (typeof window !== 'undefined') {
       ; (
         window as unknown as { __lbHeroPos?: { x: number; y: number } }
@@ -360,6 +367,21 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         enemyDebuffTowersActive: sim.enemyDebuffTowers.filter((t) => t.active).length,
         enemyDebuffHitsCount: sim.enemyDebuffHitsCount,
         debuffBoltsInterceptedCount: sim.debuffBoltsInterceptedCount,
+        debuffBoltsDodgedCount: sim.debuffBoltsDodgedCount,
+        closestCenterGateLane: resolveClosestCenterGateFromWorldX(
+          sim.heroWorldX,
+          (snap.segments[snap.activeSegmentIndex]?.lanes.length ?? 2) === 3 ? 3 : 2,
+        ).chosenLane,
+        closestCenterGateCenterX: resolveClosestCenterGateFromWorldX(
+          sim.heroWorldX,
+          (snap.segments[snap.activeSegmentIndex]?.lanes.length ?? 2) === 3 ? 3 : 2,
+        ).gateCenterX,
+        closestCenterGateDistance: Number(
+          resolveClosestCenterGateFromWorldX(
+            sim.heroWorldX,
+            (snap.segments[snap.activeSegmentIndex]?.lanes.length ?? 2) === 3 ? 3 : 2,
+          ).distanceToCenter.toFixed(2),
+        ),
         playerBridgeTowerLevels: [...sim.playerBridgeTowerLevels],
         isDeconstructingBridge: live.isDeconstructingBridge,
         deconstructionProgress: live.deconstructionProgress,
@@ -644,7 +666,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
       {/* ── COMPONENTE MODULAR 1 (FASE 3): CORREDORES LATERAIS 3D (ESQUERDA & DIREITA) ── */}
       <SideCorridors3D simRef={simRef} onOpenMathBonus={onOpenMathBonus} />
 
-      {/* ── V10: 1 ÚNICO PAR DE PORTÕES VISÍVEL POR VEZ NA ROTA CENTRAL (~8.5s–10s) + CORES HONESTAS ── */}
+      {/* ── V10: 1 ÚNICO PAR DE PORTÕES VISÍVEL POR VEZ NA ROTA CENTRAL (~8.5s–10s) + ALVO MAIS PRÓXIMO DO CENTRO DO HERÓI ── */}
       <group ref={centerSegmentsGroupRef} name="CenterRouteSegments3D">
         {segments
           .slice(
@@ -657,6 +679,12 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
             const isInspected = inspectedSegmentId === seg.id
             const cols = seg.lanes.length
             const laneWidth = 9.6 / Math.max(2, cols)
+            const heroCenterWorldX = laneNormToWorldX(laneX)
+            const closestCenter = resolveClosestCenterGateFromWorldX(
+              heroCenterWorldX,
+              cols === 3 ? 3 : 2,
+            )
+            const isHeroInCenterCorridor = Math.abs(laneX) <= 0.52
 
             return (
               <group key={seg.id} position={[0, 0, zSeg]}>
@@ -664,27 +692,39 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
                   const primary = laneGates[0]
                   if (!primary) return null
                   const xCenter = (lIdx - (cols - 1) * 0.5) * laneWidth
-                  const isTrapLane =
-                    Boolean(seg.trapId) && seg.intuitiveLane === lIdx
-                  const isPositive =
-                    !isTrapLane &&
-                    isLaneBeneficial(laneGates, Math.max(25, currentArmy))
+                  const isTargetGate =
+                    isHeroInCenterCorridor && closestCenter.chosenLane === lIdx
+                  const isPositive = isLaneBeneficial(
+                    laneGates,
+                    Math.max(25, currentArmy),
+                  )
                   const panelColor = isPositive ? '#0284c7' : '#dc2626'
-                  const borderColor = isInspected
-                    ? '#fde047'
-                    : isPositive
-                      ? '#7dd3fc'
-                      : '#fca5a5'
+                  const borderColor = isTargetGate
+                    ? '#fef08a'
+                    : isInspected
+                      ? '#fde047'
+                      : isPositive
+                        ? '#7dd3fc'
+                        : '#fca5a5'
+                  const secondLabel = laneGates[1]
+                    ? `E DEPOIS ${laneGates[1].label}`
+                    : isTargetGate
+                      ? '🎯 ALVO'
+                      : ''
                   const labelTex = getPlaqueTexture(
                     primary.label,
                     panelColor,
                     borderColor,
                     '#ffffff',
-                    laneGates[1] ? `E DEPOIS ${laneGates[1].label}` : '',
+                    secondLabel,
                   )
 
                   return (
-                    <group key={`${seg.id}_l_${lIdx}`} position={[xCenter, 0, 0]}>
+                    <group
+                      key={`${seg.id}_l_${lIdx}`}
+                      position={[xCenter, 0, 0]}
+                      scale={isTargetGate ? [1.05, 1.05, 1.05] : [0.92, 0.92, 0.92]}
+                    >
                       <mesh position={[-laneWidth * 0.44, 1.8, 0]} castShadow>
                         <cylinderGeometry args={[0.16, 0.2, 3.6, 8]} />
                         <meshStandardMaterial color={borderColor} metalness={0.5} />
@@ -693,19 +733,33 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
                         <cylinderGeometry args={[0.16, 0.2, 3.6, 8]} />
                         <meshStandardMaterial color={borderColor} metalness={0.5} />
                       </mesh>
+                      {isTargetGate && (
+                        <mesh position={[0, 0.14, 0.22]}>
+                          <boxGeometry args={[laneWidth * 0.88, 0.14, 0.42]} />
+                          <meshStandardMaterial
+                            color="#fde047"
+                            emissive="#facc15"
+                            emissiveIntensity={0.85}
+                          />
+                        </mesh>
+                      )}
                       <mesh position={[0, 1.85, 0]}>
                         <boxGeometry args={[laneWidth * 0.86, 2.7, 0.18]} />
                         <meshStandardMaterial
                           color={panelColor}
                           transparent
-                          opacity={0.52}
+                          opacity={isTargetGate ? 0.78 : 0.28}
                           emissive={panelColor}
-                          emissiveIntensity={0.3}
+                          emissiveIntensity={isTargetGate ? 0.52 : 0.08}
                         />
                       </mesh>
                       <mesh position={[0, 2.0, 0.14]}>
                         <planeGeometry args={[laneWidth * 0.82, 1.9]} />
-                        <meshBasicMaterial map={labelTex} transparent />
+                        <meshBasicMaterial
+                          map={labelTex}
+                          transparent
+                          opacity={isTargetGate ? 1 : 0.62}
+                        />
                       </mesh>
                     </group>
                   )

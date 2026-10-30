@@ -50,6 +50,7 @@ import {
 } from '../run/renderer/crowdRenderer'
 import {
   getLaneCenterNormX,
+  resolveClosestCenterGateFromWorldX,
   resolveLaneIndexFromNormX,
 } from '../run/renderer/perspective'
 import {
@@ -959,9 +960,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
   steerToRoute: (route) => {
     const state = get()
     const targetLaneNormX =
-      route === 'LEFT' ? -0.82 : route === 'RIGHT' ? 0.82 : 0
+      route === 'LEFT' ? -0.82 : route === 'RIGHT' ? 0.82 : -0.2264
     const laneIdx = resolveLaneIndexFromNormX(targetLaneNormX, state.snapshot.laneCount)
     soundEngine.playLaneSwitch(laneIdx)
+    if (typeof window !== 'undefined') {
+      ;(
+        window as unknown as { __lbHeroPos?: { x: number; y: number } }
+      ).__lbHeroPos = { x: targetLaneNormX, y: state.snapshot.progress }
+    }
     set({
       snapshot: {
         ...state.snapshot,
@@ -1777,6 +1783,11 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const state = get()
     const clampedX = Math.max(-1.0, Math.min(1.0, laneNormX))
     const laneIdx = resolveLaneIndexFromNormX(clampedX, state.snapshot.laneCount)
+    if (typeof window !== 'undefined') {
+      ;(
+        window as unknown as { __lbHeroPos?: { x: number; y: number } }
+      ).__lbHeroPos = { x: clampedX, y: state.snapshot.progress }
+    }
     set({
       snapshot: {
         ...state.snapshot,
@@ -1797,6 +1808,11 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const nextLane = resolveLaneIndexFromNormX(nextX, state.snapshot.laneCount)
     if (nextLane !== state.snapshot.currentLane) {
       soundEngine.playLaneSwitch(nextLane)
+    }
+    if (typeof window !== 'undefined') {
+      ;(
+        window as unknown as { __lbHeroPos?: { x: number; y: number } }
+      ).__lbHeroPos = { x: nextX, y: state.snapshot.progress }
     }
     set({
       snapshot: {
@@ -1820,17 +1836,31 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const clampedLane = Math.max(0, Math.min(snapshot.laneCount - 1, laneIndex))
     const targetLaneX = getLaneCenterNormX(clampedLane, snapshot.laneCount)
 
-    // Movimento livre e contínuo até o alvo selecionado
+    // Movimento livre e contínuo até o centro exato do portão selecionado
     const dx = targetLaneX - snapshot.laneX
     const steppedLaneX = targetLaneX
 
     if (clampedLane !== snapshot.currentLane) {
       soundEngine.playLaneSwitch(clampedLane)
     }
+    if (typeof window !== 'undefined') {
+      ;(
+        window as unknown as { __lbHeroPos?: { x: number; y: number } }
+      ).__lbHeroPos = { x: steppedLaneX, y: snapshot.progress }
+    }
 
     const seg = snapshot.segments[snapshot.activeSegmentIndex]
-    // Se já estiver matando o Boss (fase BATTLE ou fim da ponte), mantém o controle horizontal destravado!
-    if (!seg || snapshot.phase === 'BATTLE') {
+    const isLive3DBridgeStage =
+      state.activeEngineId === 'ponte_portoes' &&
+      snapshot.phase === 'RUNNING' &&
+      typeof window !== 'undefined' &&
+      Boolean(
+        (window as unknown as { __lbBridge3DTelemetry?: unknown })
+          .__lbBridge3DTelemetry,
+      )
+    // Na Ponte 3D em tempo real (RUNNING), escolher a faixa alinha o Herói exatamente com o centro do portão
+    // sem teletransportar o portão nem consumir dois segmentos seguidos!
+    if (!seg || snapshot.phase === 'BATTLE' || isLive3DBridgeStage) {
       set({
         snapshot: {
           ...snapshot,
@@ -1930,13 +1960,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         return
       }
 
-      const resolvedCenterLane = resolveLaneIndexFromNormX(
-        snapshot.laneX,
+      const heroWorldX = snapshot.laneX * 10.6
+      const closestCenterGate = resolveClosestCenterGateFromWorldX(
+        heroWorldX,
         activeSeg.lanes.length === 3 ? 3 : 2,
       )
       const chosenLane = Math.max(
         0,
-        Math.min(activeSeg.lanes.length - 1, resolvedCenterLane),
+        Math.min(activeSeg.lanes.length - 1, closestCenterGate.chosenLane),
       )
       const chosenGates = activeSeg.lanes[chosenLane] ?? []
 
@@ -2015,7 +2046,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       const isTrapFall =
         Boolean(activeSeg.trapId) && chosenLane === activeSeg.intuitiveLane
       const isNonOptimalPairDebuff =
-        activeSeg.kind === 'pair' && !wasOptimal && activeSeg.lanes.length >= 2
+        (activeSeg.kind === 'pair' || activeSeg.kind === 'twins') &&
+        !wasOptimal &&
+        activeSeg.lanes.length >= 2
 
       const authenticPass = applyAuthenticCenterGatePass({
         armyBefore,
@@ -2066,8 +2099,8 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       }
       const nextCrowdNodes = buildCrowdNodes(safeNextGateArmy)
 
-      // Verificar se é segmento de Portões Gêmeos
-      if (activeSeg.kind === 'twins' && activeSeg.twinId) {
+      // Verificar se é segmento de Portões Gêmeos (celebração somente ao escolher o portão ótimo/benéfico!)
+      if (activeSeg.kind === 'twins' && activeSeg.twinId && wasOptimal) {
         soundEngine.playTwinsHarmony()
         const twinSpec = TWIN_CATALOG[activeSeg.twinId]
         const nextTwins = save.twinsDiscovered.includes(activeSeg.twinId)

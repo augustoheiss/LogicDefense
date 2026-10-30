@@ -64,25 +64,62 @@ export function projectBridgePoint(
 }
 
 /**
- * Retorna a coordenada X normalizada [-1, +1] do centro da faixa `laneIndex` entre `laneCount` faixas.
+ * Retorna a coordenada X 3D real do centro do portão `laneIndex` na Rota Central (`X ∈ [-5.5, +5.5]`).
+ * - Para 2 faixas (`laneWidth = 4.8`): Faixa 0 em `X = -2.4`, Faixa 1 em `X = +2.4`.
+ * - Para 3 faixas (`laneWidth = 3.2`): Faixa 0 em `X = -3.2`, Faixa 1 em `X = 0.0`, Faixa 2 em `X = +3.2`.
  */
-export function getLaneCenterNormX(laneIndex: number, laneCount: 2 | 3): number {
-  if (laneCount === 2) {
-    return laneIndex === 0 ? -0.24 : 0.24
-  }
-  if (laneIndex === 0) return -0.32
-  if (laneIndex === 1) return 0
-  return 0.32
+export function getCenterGateWorldX(laneIndex: number, laneCount: 2 | 3): number {
+  const cols = laneCount === 3 ? 3 : 2
+  const clampedIdx = Math.max(0, Math.min(cols - 1, laneIndex))
+  const laneWidth = 9.6 / cols
+  return (clampedIdx - (cols - 1) * 0.5) * laneWidth
 }
 
 /**
- * Converte a coordenada horizontal da legião `laneX` em [-1, +1] para o índice da faixa ativa.
+ * Seleciona estritamente o único portão da Rota Central cujo centro 3D (`gateCenterX`)
+ * está mais próximo da posição horizontal atual do jogador (`heroWorldX`).
+ */
+export function resolveClosestCenterGateFromWorldX(
+  heroWorldX: number,
+  laneCount: 2 | 3,
+): { chosenLane: number; gateCenterX: number; distanceToCenter: number } {
+  const cols = laneCount === 3 ? 3 : 2
+  const safeX = Number.isFinite(heroWorldX) ? heroWorldX : 0
+  let bestLane = 0
+  let bestCenterX = getCenterGateWorldX(0, cols)
+  let bestDist = Math.abs(safeX - bestCenterX)
+
+  for (let i = 1; i < cols; i++) {
+    const cx = getCenterGateWorldX(i, cols)
+    const dist = Math.abs(safeX - cx)
+    if (dist < bestDist) {
+      bestDist = dist
+      bestLane = i
+      bestCenterX = cx
+    }
+  }
+
+  return {
+    chosenLane: bestLane,
+    gateCenterX: bestCenterX,
+    distanceToCenter: bestDist,
+  }
+}
+
+/**
+ * Retorna a coordenada X normalizada [-1, +1] do centro da faixa `laneIndex` entre `laneCount` faixas.
+ * Sincronizada com `getCenterGateWorldX(laneIndex, laneCount) / 10.6`.
+ */
+export function getLaneCenterNormX(laneIndex: number, laneCount: 2 | 3): number {
+  return Number((getCenterGateWorldX(laneIndex, laneCount) / 10.6).toFixed(4))
+}
+
+/**
+ * Converte a coordenada horizontal da legião `laneX` em [-1, +1] para o índice da faixa ativa,
+ * escolhendo sempre o portão cujo centro está mais próximo da posição do jogador.
  */
 export function resolveLaneIndexFromNormX(laneNormX: number, laneCount: 2 | 3): number {
-  if (laneCount === 2) {
-    return laneNormX < 0 ? 0 : 1
-  }
-  if (laneNormX < -0.14) return 0
-  if (laneNormX > 0.14) return 2
-  return 1
+  const safeNormX = Number.isFinite(laneNormX) ? laneNormX : 0
+  const heroWorldX = safeNormX * 10.6
+  return resolveClosestCenterGateFromWorldX(heroWorldX, laneCount).chosenLane
 }
