@@ -114,12 +114,15 @@ export function useSteeringInput(canvasRef: RefObject<HTMLCanvasElement | null>)
         const btn = targetEl.closest('button')
         if (btn) {
           if (btn.classList.contains('lb-gate-choice-btn')) {
-            downOnGateChoice = true
-            downClientX = e.clientX
+            if (btn.closest('.is-visible-pills')) {
+              downOnGateChoice = true
+              downClientX = e.clientX
+              return
+            }
+          } else {
+            // Ignorar cliques nos botões da bússola 3D, Luneta e Bônus Matemático
             return
           }
-          // Ignorar cliques nos botões da bússola 3D, Luneta e Bônus Matemático
-          return
         }
       }
 

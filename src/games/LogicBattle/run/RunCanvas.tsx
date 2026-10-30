@@ -732,7 +732,18 @@ export const RunCanvas: React.FC = () => {
                   type="button"
                   data-testid={`lb-gate-choice-${laneIdx}`}
                   className={`lb-gate-choice-btn ${isSelected ? 'is-selected' : ''}`}
-                  onClick={() => chooseLaneAndAdvance(laneIdx)}
+                  onClick={(e) => {
+                    if (webglActive && !showVisibleTapPills && e.detail > 0) {
+                      const rect = canvasRef.current?.getBoundingClientRect()
+                      if (rect && rect.width > 0) {
+                        const rel = (e.clientX - rect.left) / rect.width
+                        const targetNormX = Math.max(-0.96, Math.min(0.96, (rel - 0.5) * 2.1))
+                        useLogicBattleStore.getState().setSteeringX(targetNormX)
+                      }
+                      return
+                    }
+                    chooseLaneAndAdvance(laneIdx)
+                  }}
                   aria-label={`Escolher faixa ${laneIdx + 1}: ${primary?.label ?? ''}`}
                 >
                   {showVisibleTapPills && (

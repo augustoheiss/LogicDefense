@@ -21,6 +21,7 @@ import {
   DynamicShotProfile,
   ENEMY_LIVING_BASE_POLICY,
   laneNormToWorldX,
+  PLAYER_BRIDGE_BASE_POLICY,
   resolveRouteFromWorldX,
   RIGHT_CORRIDOR_TIER_BUFF_POLICIES,
   RIGHT_CORRIDOR_TIMED_POLICIES,
@@ -28,6 +29,18 @@ import {
 import { formatArmy } from '../../domain/notation'
 
 export type BossLifecycleState = 'MARCHING' | 'MELEE_CLASH' | 'INTERMISSION'
+
+export interface AlliedTowerBolt3DEntity {
+  id: number
+  x: number
+  y: number
+  z: number
+  vx: number
+  vz: number
+  damage: number
+  slotIndex: number
+  active: boolean
+}
 
 export interface EnemyDebuffTower3DEntity {
   id: number
@@ -187,6 +200,10 @@ export interface Bridge3DSimState {
   debuffBoltsInterceptedCount: number
   playerBridgeTowerLevels: [number, number, number, number]
   playerTowerShieldCooldownMs: number
+  alliedTowerBolts: AlliedTowerBolt3DEntity[]
+  towerFireCooldownsMs: [number, number, number, number]
+  towerShotsFiredCount: number
+  towerKillsCount: number
 }
 
 export const MAX_SIM_BOLTS = 72
@@ -224,28 +241,28 @@ export function createInitialBridge3DSimState(
   const baseBossHp = Math.max(150, initialBossHp)
   const initialRngState = (Math.floor(seed) ^ 0x9e3779b9) >>> 0 || 42
   const enemies: Enemy3DEntity[] = Array.from({ length: INITIAL_ENEMY_COUNT }, (_, idx) => {
-    const isMiniBoss = idx === 7 || idx === 14
+    const isMiniBoss = idx === 2 || idx === 7 || idx === 11 || idx === 14
     const row = Math.floor(idx / 4)
     const col = (idx % 4) - 1.5
     const maxHp = isMiniBoss ? 176 : 14
     return {
       id: idx + 1,
       x: col * 1.6,
-      z: -35 - row * 10.5 - (idx % 3) * 1.8,
+      z: isMiniBoss ? -22 - row * 12 : -32 - row * 10.5 - (idx % 3) * 1.8,
       hp: maxHp,
       maxHp,
       isMiniBoss,
-      speedZ: isMiniBoss ? 2.15 : 2.55 + (idx % 3) * 0.25,
+      speedZ: isMiniBoss ? 2.55 : 2.65 + (idx % 3) * 0.25,
       contactDamage: isMiniBoss ? 3 : 1,
       hitFlashMs: 0,
     }
   })
 
   const barrels: ExplosiveBarrel3DEntity[] = [
-    { id: 1, x: -3.85, z: -18, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 2, x: 3.85, z: -38, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 3, x: -3.85, z: -50, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 4, x: 3.85, z: -62, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 1, x: -3.2, z: -18, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 2, x: 3.2, z: -34, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 3, x: -3.2, z: -48, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 4, x: 3.2, z: -62, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
   ]
 
   // V9 Pilar 2 & 3: Apenas 2 portões espaçados na Rota Esquerda, 100% ancorados no Nível dos Monstros do Setor
@@ -408,6 +425,20 @@ export function createInitialBridge3DSimState(
     debuffBoltsInterceptedCount: 0,
     playerBridgeTowerLevels: [1, 0, 0, 0],
     playerTowerShieldCooldownMs: 0,
+    alliedTowerBolts: Array.from({ length: 16 }, (_, idx) => ({
+      id: idx + 1,
+      x: 0,
+      y: 2.35,
+      z: 9.0,
+      vx: 0,
+      vz: -38,
+      damage: 8,
+      slotIndex: idx % 4,
+      active: false,
+    })),
+    towerFireCooldownsMs: [450, 650, 850, 1050],
+    towerShotsFiredCount: 0,
+    towerKillsCount: 0,
   }
 }
 
@@ -1085,20 +1116,19 @@ export function stepBridge3DSim(
       continue
     }
 
-    // 5c. Colisão na Rota Central: Barris Explosivos (112 HP) com Detonação AoE
+    // 5c. Colisão na Rota Central: Demolidores / Barris Blindados em Marcha (112 HP) com Detonação AoE
     if (boltRoute === 'CENTER') {
       let hitBarrel = false
       for (const barrel of sim.barrels) {
         if (!barrel.active) continue
-        if (Math.abs(bolt.z - barrel.z) < 1.35 && Math.abs(bolt.x - barrel.x) < 1.25) {
+        if (Math.abs(bolt.z - barrel.z) < 1.55 && Math.abs(bolt.x - barrel.x) < 1.35) {
           barrel.hp -= bolt.damage
-          barrel.explosionFlashMs = 180
+          barrel.explosionFlashMs = 160
           bolt.active = false
           hitBarrel = true
+          damageDealtThisFrame += Math.min(bolt.damage, 4)
           if (barrel.hp <= 0) {
-            barrel.active = false
-            barrel.explosionFlashMs = 450
-            coinsEarnedThisFrame += 3
+            coinsEarnedThisFrame += 4
             // Detonação AoE: atinge todos os monstros num raio de 10.5m
             for (const en of sim.enemies) {
               const dist = Math.hypot(en.x - barrel.x, en.z - barrel.z)
@@ -1116,6 +1146,12 @@ export function stepBridge3DSim(
                 }
               }
             }
+            // Respawn imediato no fundo da ponte para marchar novamente sem travar nem inflar no lugar!
+            barrel.z = -80 - nextSimRandom(sim) * 14
+            barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
+            barrel.hp = barrel.maxHp
+            barrel.active = true
+            barrel.explosionFlashMs = 200
           }
           break
         }
@@ -1248,8 +1284,25 @@ export function stepBridge3DSim(
 
   sim.activeBoltsCount = activeCount
 
-  // 6. Avanço da Horda e Mini-Bosses (+Z) e Dano Real de Contato SOMENTE se acertar a posição X do Herói (permite desviar!)
+  // 6. Avanço da Horda, Mini-Bosses e Demolidores (+Z) e Dano Real de Contato SOMENTE se acertar a posição X do Herói (permite desviar!)
   let hordeContactLoss = 0
+  const barrelMarchSpeedZ = 2.35 + (sim.sectorIndex - 1) * 0.15
+  for (const barrel of sim.barrels) {
+    if (!barrel.active) continue
+    barrel.z += barrelMarchSpeedZ * clampedDt
+    if (barrel.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.55) {
+      const isDirectHitOnHero =
+        sim.activeRoute === 'CENTER' && Math.abs(barrel.x - sim.heroWorldX) <= 1.35
+      if (isDirectHitOnHero) {
+        hordeContactLoss += 2
+        sim.playerHitFlashMs = 280
+      }
+      barrel.z = -80 - nextSimRandom(sim) * 14
+      barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
+      barrel.hp = barrel.maxHp
+      barrel.active = true
+    }
+  }
   for (const en of sim.enemies) {
     en.z += en.speedZ * clampedDt
     if (en.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 0.55) {
@@ -1278,6 +1331,152 @@ export function stepBridge3DSim(
         ? hordeContactLoss
         : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 5))
     attritionLossThisFrame += effectiveHordeLoss
+  }
+
+  // 6b. Disparos Ativos das 4 Torres Aliadas da Ponte (Miram e Abatem Mini-Bosses, Horda e Boss!)
+  if (input.isRunningOrBattle) {
+    for (let slotIdx = 0; slotIdx < 4; slotIdx++) {
+      const lvl = sim.playerBridgeTowerLevels[slotIdx] ?? 0
+      if (lvl <= 0) continue
+      sim.towerFireCooldownsMs[slotIdx] -= timerDtMs
+      if (sim.towerFireCooldownsMs[slotIdx] <= 0) {
+        sim.towerFireCooldownsMs[slotIdx] = Math.max(300, 1020 - lvl * 145)
+        const freeTurretBolt = sim.alliedTowerBolts.find((b) => !b.active)
+        if (freeTurretBolt) {
+          const slotSpec = PLAYER_BRIDGE_BASE_POLICY.slots[slotIdx]
+          const spawnX = slotSpec?.x ?? 0
+          const spawnZ = slotSpec?.z ?? 9.0
+          // Encontrar o alvo mais próximo (priorizando Mini-Bosses e monstros próximos)
+          let targetX = 0
+          let targetZ = -28
+          let bestScore = -99999
+          for (const en of sim.enemies) {
+            if (en.z < -78 || en.z > BRIDGE_3D_DIMENSIONS.zPlayerLine) continue
+            const score = en.z + (en.isMiniBoss ? 14 : 0)
+            if (score > bestScore) {
+              bestScore = score
+              targetX = en.x
+              targetZ = en.z
+            }
+          }
+          for (const barrel of sim.barrels) {
+            if (!barrel.active || barrel.z < -75) continue
+            const score = barrel.z + 10
+            if (score > bestScore) {
+              bestScore = score
+              targetX = barrel.x
+              targetZ = barrel.z
+            }
+          }
+          if (bestScore < -5000 && sim.bossLifecycle !== 'INTERMISSION' && sim.bossZ > -68.5) {
+            targetX = 0
+            targetZ = sim.bossZ
+          }
+          const vz = -38
+          const travelTime = Math.max(0.18, Math.abs(targetZ - spawnZ) / Math.abs(vz))
+          freeTurretBolt.active = true
+          freeTurretBolt.slotIndex = slotIdx
+          freeTurretBolt.x = spawnX
+          freeTurretBolt.y = 2.35
+          freeTurretBolt.z = spawnZ
+          freeTurretBolt.vz = vz
+          freeTurretBolt.vx = (targetX - spawnX) / travelTime
+          freeTurretBolt.damage = Math.max(
+            6,
+            lvl * 8 + Math.round(sim.shotProfile.damagePerShot * 0.65 * lvl),
+          )
+          sim.towerShotsFiredCount += 1
+        }
+      }
+    }
+
+    for (const tBolt of sim.alliedTowerBolts) {
+      if (!tBolt.active) continue
+      tBolt.x += tBolt.vx * clampedDt
+      tBolt.z += tBolt.vz * clampedDt
+      if (tBolt.z < BRIDGE_3D_DIMENSIONS.zFortressLine) {
+        tBolt.active = false
+        continue
+      }
+
+      let hitTarget = false
+      for (const barrel of sim.barrels) {
+        if (!barrel.active) continue
+        if (Math.abs(tBolt.z - barrel.z) < 1.65 && Math.abs(tBolt.x - barrel.x) < 1.45) {
+          barrel.hp -= tBolt.damage
+          barrel.explosionFlashMs = 160
+          tBolt.active = false
+          hitTarget = true
+          damageDealtThisFrame += Math.min(tBolt.damage, 5)
+          if (barrel.hp <= 0) {
+            sim.towerKillsCount += 1
+            coinsEarnedThisFrame += 4
+            barrel.z = -80 - nextSimRandom(sim) * 14
+            barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
+            barrel.hp = barrel.maxHp
+            barrel.active = true
+            barrel.explosionFlashMs = 200
+            if (sim.towerKillsCount % 2 === 0) {
+              const towerReinforce = Math.max(3, alliedTowerStats.totalLevel * 2)
+              callbacks.onSideRouteReward(
+                'LEFT',
+                towerReinforce,
+                `🗼 Torre Aliada Abateu Mini-Boss (+${towerReinforce} 🛡️)`,
+              )
+            }
+          }
+          break
+        }
+      }
+      if (hitTarget) continue
+
+      for (const en of sim.enemies) {
+        const hitRadiusX = en.isMiniBoss ? 1.7 : 1.2
+        const hitDepthZ = en.isMiniBoss ? 1.8 : 1.3
+        if (Math.abs(tBolt.z - en.z) < hitDepthZ && Math.abs(tBolt.x - en.x) < hitRadiusX) {
+          en.hp -= tBolt.damage
+          en.hitFlashMs = 160
+          tBolt.active = false
+          hitTarget = true
+          damageDealtThisFrame += Math.min(tBolt.damage, 4)
+          if (en.hp <= 0) {
+            sim.towerKillsCount += 1
+            coinsEarnedThisFrame += en.isMiniBoss ? 5 : 2
+            en.z = -84 - nextSimRandom(sim) * 16
+            en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
+            en.maxHp = en.isMiniBoss
+              ? 176 + (sim.sectorIndex - 1) * 90
+              : 18 + (sim.sectorIndex - 1) * 10
+            en.hp = en.maxHp
+            if (sim.towerKillsCount % 2 === 0) {
+              const towerReinforce = Math.max(3, alliedTowerStats.totalLevel * 2)
+              callbacks.onSideRouteReward(
+                'LEFT',
+                towerReinforce,
+                `🗼 Torre Aliada Reforçou Esquadrão (+${towerReinforce} 🛡️)`,
+              )
+            }
+          }
+          break
+        }
+      }
+      if (hitTarget) continue
+
+      if (
+        sim.bossLifecycle !== 'INTERMISSION' &&
+        sim.bossZ > -68.5 &&
+        Math.abs(tBolt.z - sim.bossZ) < 3.6 &&
+        Math.abs(tBolt.x) < 3.6
+      ) {
+        const minBossHpFloor = input.isBattlePhase
+          ? Math.max(18, Math.round(sim.bossMaxHp * 0.2))
+          : 1
+        sim.bossHp = Math.max(minBossHpFloor, sim.bossHp - tBolt.damage)
+        sim.bossHitFlashMs = 150
+        tBolt.active = false
+        damageDealtThisFrame += Math.min(tBolt.damage, 6)
+      }
+    }
   }
 
   // 7. V10 Fase 1: Evolução Autônoma da Base Inimiga + Torres de Debuff 3D + Escudo Aliado + Esquiva Real
@@ -1343,9 +1542,9 @@ export function stepBridge3DSim(
       dBolt.x += (dBolt.vx ?? 0) * clampedDt
       dBolt.z += dBolt.vz * clampedDt
 
-      // Torres Aliadas Nv.2+ interceptam feixes de debuff quando o escudo tático está pronto
+      // Torres Aliadas Nv.1+ interceptam feixes de debuff quando o escudo tático está pronto
       if (
-        alliedTowerStats.activeTowersCount >= 2 &&
+        alliedTowerStats.activeTowersCount >= 1 &&
         sim.playerTowerShieldCooldownMs <= 0 &&
         dBolt.z >= BRIDGE_3D_DIMENSIONS.zPlayerLine - 5.5
       ) {

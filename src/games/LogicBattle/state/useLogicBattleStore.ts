@@ -11,6 +11,7 @@ import {
   applyAuthenticCenterGatePass,
   applyGateChainWithRemainder,
   clampArmy,
+  isLaneBeneficial,
 } from '../domain/armyMath'
 import { resolveBattle } from '../domain/battleResolver'
 import {
@@ -573,13 +574,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     currentLevels[slotIndex] = currentLvl + 1
     soundEngine.playRedemptionSuccess()
 
-    // Bônus imediato na partida: +4 soldados de guarnição da torre na ponte
-    const nextArmy = clampArmy(snapshot.currentArmy + 4)
+    // Bônus imediato na partida: soldados de guarnição da torre na ponte escalados pelo nível
+    const garrisonBonus = Math.max(6, currentLevels[slotIndex] * 5)
+    const nextArmy = clampArmy(snapshot.currentArmy + garrisonBonus)
     const slotSpec = PLAYER_BRIDGE_BASE_POLICY.slots[slotIndex]
     const fbTower: FloatingFeedbackItem = {
       id: `fb_tower_${slotIndex}_${Date.now()}`,
       text: `🗼 ${slotSpec.namePt} Nv.${currentLevels[slotIndex]}`,
-      subText: `−${cost} Carteira · +4 🛡️`,
+      subText: `−${cost} Carteira · +${garrisonBonus} 🛡️ + Canhão Ativo`,
       tone: 'reinforcement',
       createdAtMs: snapshot.elapsedMs,
     }
@@ -597,7 +599,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         bridgeKills: snapshot.bridgeKills ?? 0,
         mathChallengesSolved: mathChallengesSolvedInRun,
         seed: runPlan.seed,
-        bankedScoreMark: nextBankedMark + 4,
+        bankedScoreMark: nextBankedMark + garrisonBonus,
       },
     )
     if (nextSave.activeRunCheckpoint) {
@@ -1850,17 +1852,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     }
 
     const seg = snapshot.segments[snapshot.activeSegmentIndex]
-    const isLive3DBridgeStage =
-      state.activeEngineId === 'ponte_portoes' &&
-      snapshot.phase === 'RUNNING' &&
-      typeof window !== 'undefined' &&
-      Boolean(
-        (window as unknown as { __lbBridge3DTelemetry?: unknown })
-          .__lbBridge3DTelemetry,
-      )
-    // Na Ponte 3D em tempo real (RUNNING), escolher a faixa alinha o Herói exatamente com o centro do portão
-    // sem teletransportar o portão nem consumir dois segmentos seguidos!
-    if (!seg || snapshot.phase === 'BATTLE' || isLive3DBridgeStage) {
+    if (!seg || snapshot.phase === 'BATTLE') {
       set({
         snapshot: {
           ...snapshot,
@@ -1936,9 +1928,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       !snapshot.resolvedSegments[activeSeg.id] &&
       nextProgress >= activeSeg.zPosition
     ) {
-      // V8/V9: Se o jogador estiver fisicamente nos Corredores Laterais (|laneX| > 0.52),
-      // ele NÃO colide com os portões da Rota Central (pois está passando pela esteira lateral Esquerda/Direita)!
-      if (Math.abs(snapshot.laneX) > 0.52) {
+      // V8/V9: Se o jogador estiver fisicamente dentro dos Corredores Laterais (|laneX| > 0.68, X < -7.2 ou X > +7.2),
+      // ele NÃO colide com os portões da Rota Central (pois está passando pela esteira lateral Esquerda/Direita).
+      // Dentro de [-0.68, +0.68], sempre aciona o portão central mais próximo!
+      if (Math.abs(snapshot.laneX) > 0.68) {
         const resolvedMap = {
           ...snapshot.resolvedSegments,
           [activeSeg.id]: { chosenLane: -1, resultArmy: snapshot.currentArmy },
@@ -2043,12 +2036,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       const cf = evaluateSegmentCounterfactual(activeSeg, effectiveEvalBase)
       const appResult = applyGateChainWithRemainder(effectiveEvalBase, chosenGates)
       const wasOptimal = appResult.nextArmy >= cf.bestValue
+      const chosenIsBeneficial = isLaneBeneficial(
+        chosenGates,
+        Math.max(100, armyBefore),
+      )
       const isTrapFall =
-        Boolean(activeSeg.trapId) && chosenLane === activeSeg.intuitiveLane
-      const isNonOptimalPairDebuff =
-        (activeSeg.kind === 'pair' || activeSeg.kind === 'twins') &&
-        !wasOptimal &&
-        activeSeg.lanes.length >= 2
+        Boolean(activeSeg.trapId) &&
+        chosenLane === activeSeg.intuitiveLane &&
+        !chosenIsBeneficial
 
       const authenticPass = applyAuthenticCenterGatePass({
         armyBefore,
@@ -2056,7 +2051,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         effectiveEvalBase,
         useOrthogonalMonsterBase,
         wasOptimal,
-        isTrapFall: isTrapFall || isNonOptimalPairDebuff,
+        isTrapFall,
         enemyBaseLevel: state.enemyBaseLevel,
       })
       const rawNextArmy = clampArmy(authenticPass.nextArmy)
@@ -3110,6 +3105,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     let nextLunetas = state.lunetaChargesRemaining
     let nextSegments = snapshot.segments
     let bonusArmyAdded = 0
+    const nextBridgeTowers: [number, number, number, number] = [
+      ...state.playerBridgeTowerLevels,
+    ]
     if (buildingId === 'quartel') {
       const prevRecruits = getInitialArmyFromQuartel(currentLevel)
       const nextRecruits = getInitialArmyFromQuartel(nextLevel)
@@ -3121,6 +3119,16 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       nextSegments = snapshot.segments.map((seg) =>
         seg.trapId ? { ...seg, showDetectorWarning: true } : seg,
       )
+    }
+    // Sincronizar evolução da Cidadela com o Bastião das Torres da Ponte (reforça a torre de menor nível)
+    let minIdx = 0
+    for (let i = 1; i < 4; i++) {
+      if (nextBridgeTowers[i] < nextBridgeTowers[minIdx]) {
+        minIdx = i
+      }
+    }
+    if (nextBridgeTowers[minIdx] < PLAYER_BRIDGE_BASE_POLICY.maxTowerLevel) {
+      nextBridgeTowers[minIdx] += 1
     }
 
     soundEngine.playRedemptionSuccess()
@@ -3137,6 +3145,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         ...save,
         reserveTroops: nextReserveAfterSpend,
         citadelLevels: nextCitadelLevels,
+        playerBridgeTowerLevels: nextBridgeTowers,
       },
       {
         sectorIndex: bridgeSectorIndex,
@@ -3146,7 +3155,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         mathChallengesSolved: mathChallengesSolvedInRun,
         seed: runPlan.seed,
         bankedScoreMark: nextBankedMark + bonusArmyAdded,
-        playerBridgeTowerLevels: state.playerBridgeTowerLevels,
+        playerBridgeTowerLevels: nextBridgeTowers,
         enemyBaseLevel: state.enemyBaseLevel,
       },
     )
@@ -3154,6 +3163,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
 
     set({
       save: nextSave,
+      playerBridgeTowerLevels: nextBridgeTowers,
       lunetaChargesRemaining: nextLunetas,
       snapshot: {
         ...snapshot,

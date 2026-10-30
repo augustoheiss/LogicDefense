@@ -43,7 +43,7 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
   const supplyCaravanCrystalRef = useRef<THREE.Mesh | null>(null)
 
   const barrel112Tex = useMemo(
-    () => getPlaqueTexture('🛢️ 112 HP', '#b45309', '#facc15', '#ffffff', 'EXPLOSIVO'),
+    () => getPlaqueTexture('💀 112 HP', '#7f1d1d', '#facc15', '#ffffff', 'MINI-BOSS'),
     [],
   )
   const miniBossTex = useMemo(
@@ -78,33 +78,38 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
     const clockSec = state.clock.elapsedTime
     const sim = simRef.current
 
-    // 1. Sincronizar Barris Explosivos (112 HP) na Rota Central e atualizar placa de HP em tempo real
+    // 1. Sincronizar Mini-Bosses Demolidores do Setor (112+ HP) em marcha contínua (+Z) sem travar nem inflar de tamanho
     if (barrelsGroupRef.current) {
       const children = barrelsGroupRef.current.children
       for (let i = 0; i < sim.barrels.length; i++) {
         const barrel = sim.barrels[i]
         const grp = children[i] as THREE.Group | undefined
         if (!grp || !barrel) continue
-        grp.visible = barrel.active || barrel.explosionFlashMs > 0
-        if (barrel.explosionFlashMs > 0 && !barrel.active) {
-          const s = 1 + (450 - barrel.explosionFlashMs) * 0.006
-          grp.scale.set(s, s, s)
-        } else {
-          grp.scale.set(1, 1, 1)
-          const plaqueMesh = grp.children[2] as THREE.Mesh | undefined
-          const plaqueMat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
-          if (plaqueMat) {
-            const nextTex = getPlaqueTexture(
-              `🛢️ ${formatArmy(Math.max(0, barrel.hp), notationMode)} HP`,
-              barrel.explosionFlashMs > 0 ? '#dc2626' : '#b45309',
-              '#facc15',
-              '#ffffff',
-              'EXPLOSIVO',
-            )
-            if (plaqueMat.map !== nextTex) {
-              plaqueMat.map = nextTex
-              plaqueMat.needsUpdate = true
-            }
+        grp.visible = barrel.active
+        grp.scale.set(1.45, 1.45, 1.45)
+        grp.position.set(
+          barrel.x,
+          Math.abs(Math.sin(clockSec * 5.5 + barrel.id * 0.9)) * 0.2,
+          barrel.z,
+        )
+        const bodyMesh = grp.children[0] as THREE.Mesh | undefined
+        const bodyMat = bodyMesh?.material as THREE.MeshStandardMaterial | undefined
+        if (bodyMat) {
+          bodyMat.color.set(barrel.explosionFlashMs > 0 ? '#facc15' : '#991b1b')
+        }
+        const plaqueMesh = grp.children[2] as THREE.Mesh | undefined
+        const plaqueMat = plaqueMesh?.material as THREE.MeshBasicMaterial | undefined
+        if (plaqueMat) {
+          const nextTex = getPlaqueTexture(
+            `💀 ${formatArmy(Math.max(1, barrel.hp), notationMode)} HP`,
+            barrel.explosionFlashMs > 0 ? '#ca8a04' : '#7f1d1d',
+            '#facc15',
+            '#ffffff',
+            'MINI-BOSS',
+          )
+          if (plaqueMat.map !== nextTex) {
+            plaqueMat.map = nextTex
+            plaqueMat.needsUpdate = true
           }
         }
       }
@@ -282,19 +287,23 @@ export const EnemyHordeAndBoss3D: React.FC<EnemyHordeAndBoss3DProps> = ({
 
   return (
     <group name="EnemyHordeAndBoss3D">
-      {/* 1. Barris Explosivos 3D (112 HP) na Rota Central */}
+      {/* 1. Mini-Bosses Demolidores do Setor (112+ HP) marchando continuamente na Rota Central */}
       <group ref={barrelsGroupRef} name="ExplosiveBarrels3D">
         {simRef.current.barrels.map((barrel) => (
-          <group key={`barrel_3d_${barrel.id}`} position={[barrel.x, 0, barrel.z]}>
+          <group
+            key={`barrel_3d_${barrel.id}`}
+            position={[barrel.x, 0, barrel.z]}
+            scale={[1.45, 1.45, 1.45]}
+          >
             <mesh position={[0, 0.78, 0]} castShadow>
-              <cylinderGeometry args={[0.68, 0.72, 1.55, 12]} />
-              <meshStandardMaterial color="#b45309" roughness={0.55} metalness={0.25} />
+              <capsuleGeometry args={[0.44, 0.68, 6, 10]} />
+              <meshStandardMaterial color="#991b1b" roughness={0.45} metalness={0.35} />
             </mesh>
-            <mesh position={[0, 1.15, 0]}>
-              <cylinderGeometry args={[0.71, 0.71, 0.16, 12]} />
+            <mesh position={[0, 1.56, 0]} castShadow>
+              <sphereGeometry args={[0.38, 10, 10]} />
               <meshStandardMaterial color="#facc15" metalness={0.75} />
             </mesh>
-            <mesh position={[0, 2.15, 0]}>
+            <mesh position={[0, 2.38, 0]}>
               <planeGeometry args={[2.2, 1.1]} />
               <meshBasicMaterial map={barrel112Tex} transparent />
             </mesh>

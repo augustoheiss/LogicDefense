@@ -174,7 +174,7 @@ export function isLaneBeneficial(gates: readonly Gate[], refArmy = 100): boolean
   if (!gates || gates.length === 0) return true
   const probe = Math.max(100, clampArmy(refArmy))
   const after = applyGateChain(probe, gates)
-  return after >= probe
+  return after > probe
 }
 
 export interface AuthenticCenterGatePassParams {
@@ -190,11 +190,13 @@ export interface AuthenticCenterGatePassParams {
 /**
  * V10 (Pilar 1 — QAR1-V10-AUTHENTIC-DEBUFFS):
  * Aplica a passagem pelos portões da Rota Central garantindo que:
- * 1. Portões benéficos preservem a Escala Ortogonal V9 (sem explodir exponencialmente o exército da Rota Direita).
+ * 1. Todo portão benéfico (Azul — multiplicação `×`, divisão por fração `÷ 1/2`, `÷ 0,5`,
+ *    porcentagem `%+`, potência `^` ou soma `+`) aumente DE VERDADE o placar (`nextArmy > armyBefore`),
+ *    aplicando multiplicações e divisões diretamente sobre `armyBefore` para que nunca colapsem em +0.
  * 2. Todo portão negativo/redutor (`isLaneBeneficial === false`) ou queda em pegadinha (`isTrapFall === true`)
  *    reduza DE VERDADE o exército atual (`nextArmy < armyBefore`), aplicando reduções proporcionais (`− 20%`,
- *    `× 1/2`, `× 0,8`, `÷ 2`, `^ 0`) diretamente sobre `armyBefore` e escalando subtrações quando o exército
- *    estiver inflado.
+ *    `× 1/2`, `× 0,8`, `÷ 2`, `÷ 3`, `÷ 1,25`, `^ 0`) diretamente sobre `armyBefore` e escalando subtrações
+ *    quando o exército estiver inflado.
  */
 export function applyAuthenticCenterGatePass(
   params: AuthenticCenterGatePassParams,
@@ -210,7 +212,7 @@ export function applyAuthenticCenterGatePass(
 
   const safeBefore = Math.max(1, clampArmy(armyBefore))
   const evalApp = applyGateChainWithRemainder(effectiveEvalBase, chosenGates)
-  const laneBeneficial = isLaneBeneficial(chosenGates, effectiveEvalBase)
+  const laneBeneficial = isLaneBeneficial(chosenGates, Math.max(100, safeBefore))
 
   if (!laneBeneficial || isTrapFall) {
     const directApp = applyGateChainWithRemainder(safeBefore, chosenGates)
@@ -262,20 +264,40 @@ export function applyAuthenticCenterGatePass(
     }
   }
 
-  // Faixa benéfica (Azul): preserva escala ortogonal para buffs e garante ganho positivo real (>= +2) mesmo com exército pequeno!
-  const probeBase = Math.max(10, effectiveEvalBase)
-  const probeApp = applyGateChainWithRemainder(probeBase, chosenGates)
-  const minPositiveGain = Math.max(
-    2,
-    Math.round(Math.max(1, probeApp.nextArmy - probeBase) * Math.min(1, safeBefore / probeBase)),
+  // Faixa benéfica (Azul): aplica multiplicação/divisão por fração/porcentagem diretamente sobre safeBefore
+  // para que buffs de × e ÷ SEMPRE aumentem visivelmente o placar em qualquer escala!
+  const directApp = applyGateChainWithRemainder(safeBefore, chosenGates)
+  const hasProportionalOrMulOp = chosenGates.some(
+    (g) =>
+      g.op === '×' ||
+      g.op === '÷' ||
+      g.op === '%+' ||
+      g.op === '^' ||
+      g.operand.exprKind === 'double_neg_mul',
   )
-  const rawNext = useOrthogonalMonsterBase
-    ? clampArmy(safeBefore + Math.max(2, evalApp.nextArmy - effectiveEvalBase))
-    : clampArmy(Math.max(safeBefore + minPositiveGain, evalApp.nextArmy))
+
+  if (hasProportionalOrMulOp) {
+    const minMulNext = Math.max(
+      safeBefore + 2,
+      Math.ceil(safeBefore * 1.15),
+      directApp.nextArmy,
+    )
+    return {
+      nextArmy: clampArmy(minMulNext),
+      remainder: directApp.remainder,
+    }
+  }
+
+  const additiveGain = Math.max(
+    2,
+    directApp.nextArmy - safeBefore,
+    evalApp.nextArmy - effectiveEvalBase,
+    safeBefore >= 1_000 ? Math.ceil(safeBefore * 0.06) : 2,
+  )
 
   return {
-    nextArmy: Math.max(safeBefore + 2, rawNext),
-    remainder: evalApp.remainder,
+    nextArmy: clampArmy(safeBefore + additiveGain),
+    remainder: directApp.remainder,
   }
 }
 

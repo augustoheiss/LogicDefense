@@ -1260,14 +1260,14 @@ export const TRAP_CATALOG: Record<TrapId, TrapCatalogEntry> = {
     conceptId: 'produto_sinais',
     codexSlug: 'regras-de-ouro-negativos',
     legendary: false,
-    summaryGatesPt: '× (−1)·(−1)  vs  ⚠ − 10',
-    verifiedExamplePt: 'Com N = 50: ×(−1)·(−1) = ×1 mantém todos os 50 soldados, enquanto −10 reduz para 40.',
-    intuitionTrapPt: 'Dois números negativos assustam, mas (−1) × (−1) = +1 preserva 100% do exército!',
-    luzGuiaPt: 'Duas inversões seguidas se anulam: (−1) × (−1) = +1!',
+    summaryGatesPt: '× (−2)·(−1)  vs  ⚠ − 10',
+    verifiedExamplePt: 'Com N = 50: ×(−2)·(−1) = ×2 dobra para 100 soldados, enquanto −10 reduz para 40.',
+    intuitionTrapPt: 'Dois números negativos assustam, mas (−2) × (−1) = +2 dobra o exército!',
+    luzGuiaPt: 'Menos com menos na multiplicação dá mais: (−2) × (−1) = +2!',
     isValidForArmy: (n) => n >= 20,
     buildSegment: (n, _randFloat, laneCount) => {
       const subVal = Math.max(5, Math.floor(n * 0.2))
-      const gDoubleNeg = makeGate('t18-dneg', '×', 1, 1, 1, '× (−1)·(−1)', true, 'double_neg_mul')
+      const gDoubleNeg = makeGate('t18-dneg', '×', 2, 2, 1, '× (−2)·(−1)', true, 'double_neg_mul')
       const gSub = makeGate('t18-sub', '−', subVal, subVal, 1, `− ${subVal}`)
       const midSub = Math.max(2, Math.floor(subVal * 0.5))
       return ensureTrapLaneCardinality(

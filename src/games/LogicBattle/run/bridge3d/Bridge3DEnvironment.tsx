@@ -71,6 +71,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   const centerSegmentsGroupRef = useRef<THREE.Group | null>(null)
   const bridgeDeckGroupRef = useRef<THREE.Group | null>(null)
   const enemyDebuffBoltsGroupRef = useRef<THREE.Group | null>(null)
+  const alliedTowerBoltsGroupRef = useRef<THREE.Group | null>(null)
 
   // Motor de Simulação 3D Determinístico (Fase 2: bridge3dSim.ts) hidratado com Checkpoint V8
   const simRef = useRef(
@@ -383,6 +384,12 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
           ).distanceToCenter.toFixed(2),
         ),
         playerBridgeTowerLevels: [...sim.playerBridgeTowerLevels],
+        towerShotsFiredCount: sim.towerShotsFiredCount,
+        towerKillsCount: sim.towerKillsCount,
+        barrelPositionsZ: sim.barrels.map((b) => Number(b.z.toFixed(2))),
+        miniBossPositionsZ: sim.enemies
+          .filter((e) => e.isMiniBoss)
+          .map((e) => Number(e.z.toFixed(2))),
         isDeconstructingBridge: live.isDeconstructingBridge,
         deconstructionProgress: live.deconstructionProgress,
         deconstructionCompletedCount: live.deconstructionCompletedCount,
@@ -420,6 +427,20 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         mesh.visible = boltData.active
         if (boltData.active) {
           mesh.position.set(boltData.x, boltData.y, boltData.z)
+        }
+      }
+    }
+
+    // Animar projéteis disparados pelas 4 Torres Aliadas da Ponte contra a Horda/Mini-Bosses
+    if (alliedTowerBoltsGroupRef.current) {
+      const children = alliedTowerBoltsGroupRef.current.children
+      for (let i = 0; i < sim.alliedTowerBolts.length; i++) {
+        const tBolt = sim.alliedTowerBolts[i]
+        const mesh = children[i] as THREE.Object3D | undefined
+        if (!mesh) continue
+        mesh.visible = tBolt.active
+        if (tBolt.active) {
+          mesh.position.set(tBolt.x, tBolt.y, tBolt.z)
         }
       }
     }
@@ -808,38 +829,73 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         </group>
       </group>
 
-      {/* ── V10: BASTIÃO SUL & 4 TORRES DEFENSIVAS 3D DA BASE ALIADA DA PONTE (Z = +12.2) ── */}
+      {/* ── V10: BASTIÃO SUL & 4 TORRES DEFENSIVAS 3D DA BASE ALIADA DA PONTE (ATIRAM E INTERCEPTAM!) ── */}
       <group name="PlayerBridgeBastion3D">
         {PLAYER_BRIDGE_BASE_POLICY.slots.map((slot) => {
           const lvl = playerBridgeTowerLevels[slot.slotIndex] ?? 0
           const isBuilt = lvl > 0
+          const towerTex = getPlaqueTexture(
+            isBuilt ? `🗼 NV.${lvl}` : '🔒 SLOT',
+            isBuilt ? '#0369a1' : '#334155',
+            isBuilt ? '#38bdf8' : '#64748b',
+            '#ffffff',
+            isBuilt ? 'ATIRANDO' : 'CONSTRUIR',
+          )
           return (
             <group
               key={slot.id}
               position={[slot.x, 0.1, slot.z]}
-              scale={isBuilt ? [1 + lvl * 0.06, 1 + lvl * 0.12, 1 + lvl * 0.06] : [0.7, 0.4, 0.7]}
+              scale={isBuilt ? [1 + lvl * 0.08, 1 + lvl * 0.14, 1 + lvl * 0.08] : [0.75, 0.45, 0.75]}
             >
               <mesh position={[0, 1.1, 0]} castShadow>
                 <cylinderGeometry args={[0.62, 0.82, 2.2, 8]} />
                 <meshStandardMaterial
                   color={isBuilt ? '#0284c7' : '#334155'}
-                  roughness={0.5}
-                  metalness={0.35}
+                  roughness={0.45}
+                  metalness={0.4}
                 />
               </mesh>
               {isBuilt && (
-                <mesh position={[0, 2.45, -0.25]} castShadow>
-                  <coneGeometry args={[0.75, 1.2, 8]} />
-                  <meshStandardMaterial
-                    color="#38bdf8"
-                    emissive="#0ea5e9"
-                    emissiveIntensity={0.45}
-                  />
-                </mesh>
+                <>
+                  <mesh position={[0, 2.45, -0.15]} castShadow>
+                    <coneGeometry args={[0.78, 1.25, 8]} />
+                    <meshStandardMaterial
+                      color="#38bdf8"
+                      emissive="#0ea5e9"
+                      emissiveIntensity={0.65}
+                    />
+                  </mesh>
+                  {/* Canhão / Balista frontal apontado para a ponte (-Z) */}
+                  <mesh position={[0, 2.1, -0.75]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+                    <cylinderGeometry args={[0.18, 0.22, 1.35, 8]} />
+                    <meshStandardMaterial
+                      color="#facc15"
+                      emissive="#eab308"
+                      emissiveIntensity={0.45}
+                      metalness={0.8}
+                    />
+                  </mesh>
+                </>
               )}
+              <mesh position={[0, 3.45, 0]}>
+                <planeGeometry args={[2.1, 1.05]} />
+                <meshBasicMaterial map={towerTex} transparent />
+              </mesh>
             </group>
           )
         })}
+        <group ref={alliedTowerBoltsGroupRef} name="AlliedTowerBolts3D">
+          {Array.from({ length: 16 }).map((_, idx) => (
+            <mesh key={`allied_tower_bolt_${idx}`} visible={false}>
+              <sphereGeometry args={[0.36, 10, 10]} />
+              <meshStandardMaterial
+                color="#38bdf8"
+                emissive="#0ea5e9"
+                emissiveIntensity={1.25}
+              />
+            </mesh>
+          ))}
+        </group>
       </group>
 
       {/* ── COMPONENTE MODULAR 2 (FASE 3): HORDA INIMIGA, BARRIS 112 HP, MINI-BOSSES E MEGA-BOSS ── */}
