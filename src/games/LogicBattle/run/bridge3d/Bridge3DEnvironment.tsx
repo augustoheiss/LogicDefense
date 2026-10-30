@@ -11,9 +11,8 @@ import React, { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BIOMES } from '../../config/biomes'
-import { applyGateChain, isGateBeneficial, isLaneBeneficial } from '../../domain/armyMath'
+import { isLaneBeneficial } from '../../domain/armyMath'
 import { formatArmy } from '../../domain/notation'
-import { evaluateSegmentCounterfactual } from '../../domain/pathOracle'
 import { useLogicBattleStore } from '../../state/useLogicBattleStore'
 import {
   BOSS_ARCHETYPES_3D,
@@ -718,7 +717,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
 
       {/* ── V10: TORRES DE DEBUFF 3D DA BASE INIMIGA NOS PARAPEITOS + PROJÉTEIS DE DEBUFF ── */}
       <group name="EnemyDebuffTowers3D">
-        {ENEMY_LIVING_BASE_POLICY.debuffTowerSlots.map((slot, idx) => {
+        {ENEMY_LIVING_BASE_POLICY.debuffTowerSlots.map((slot) => {
           const isUnlocked = enemyBaseLevel >= slot.unlockAtEnemyLevel
           return (
             <group
