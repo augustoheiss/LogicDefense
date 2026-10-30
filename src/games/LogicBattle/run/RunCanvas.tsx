@@ -89,6 +89,13 @@ export const RunCanvas: React.FC = () => {
   const currentLane = useLogicBattleStore((s) => s.snapshot.currentLane)
   const laneX = useLogicBattleStore((s) => s.snapshot.laneX)
   const currentArmy = useLogicBattleStore((s) => s.snapshot.currentArmy)
+  const enemy = useLogicBattleStore((s) => s.snapshot.enemy)
+  const mathChallengesSolvedInRun = useLogicBattleStore(
+    (s) => s.mathChallengesSolvedInRun,
+  )
+  const lastSolvedMathRewardAt = useLogicBattleStore(
+    (s) => s.lastSolvedMathRewardAt,
+  )
   const inspectedSegmentId = useLogicBattleStore((s) => s.snapshot.inspectedSegmentId)
   const activeSegment = useLogicBattleStore(
     (s) => s.snapshot.segments[s.snapshot.activeSegmentIndex] ?? null,
@@ -123,6 +130,15 @@ export const RunCanvas: React.FC = () => {
     albumDrawerOpen ||
     codexDrawerSlug !== null ||
     settingsPopoverOpen
+
+  // V11 Balanceamento 10x: Inimigos são 10x mais fortes que a Rota Central/Esquerda.
+  // Sempre que o jogador estiver atrás da força inimiga ou tomando dano, incentivamos resolver a lógica (🧮) e pegar a Rota Direita (➡️).
+  const isLosingAgainstEnemies = currentArmy < enemy.totalForce
+  const isCriticalLosing =
+    currentArmy < enemy.totalForce * 0.45 || latestFeedback?.tone === 'trap'
+  const deficitAgainstEnemies = Math.max(0, enemy.totalForce - currentArmy)
+  const needsRightRouteSteer =
+    lastSolvedMathRewardAt !== null && laneX <= 0.56
 
   useRunLoop(
     world === 'run' &&
@@ -703,6 +719,55 @@ export const RunCanvas: React.FC = () => {
         </div>
       )}
 
+      {/* V11: Incentivo de Lógica quando o jogador está em desvantagem contra os Inimigos 10x mais fortes */}
+      {(phase === 'RUNNING' || phase === 'CALM_WAIT') &&
+        !isAnyModalOrDrawerOpen &&
+        isLosingAgainstEnemies && (
+          <div
+            className={`lb-losing-incentive-banner ${
+              isCriticalLosing ? 'is-critical' : ''
+            }`}
+            data-testid="lb-losing-math-incentive-banner"
+            role="status"
+          >
+            <div className="lb-losing-incentive-banner__text">
+              <strong>
+                {isCriticalLosing
+                  ? '🚨 INIMIGOS 10× MAIS FORTES! RESOLVA A LÓGICA PARA VIRAR O JOGO!'
+                  : '⚠️ Horda 10× mais forte que o Centro/Esquerda!'}
+              </strong>
+              <span>
+                {needsRightRouteSteer
+                  ? `Super Buff liberado! Deslize para a Rota Direita (➡️) para multiplicar seu exército!`
+                  : `Faltam ${formatArmy(deficitAgainstEnemies, settings.notationMode)} 🛡️ — clique em 🧮 no canto inferior direito e pegue os Super Buffs da Direita (➡️)!`}
+              </span>
+            </div>
+            <div className="lb-losing-incentive-banner__actions">
+              <button
+                type="button"
+                className="lb-losing-incentive-cta"
+                data-testid="lb-losing-incentive-solve-btn"
+                onClick={() => {
+                  openMathChallengeModal()
+                }}
+              >
+                🧮 Resolver Conta
+              </button>
+              <button
+                type="button"
+                className="lb-losing-incentive-route-btn"
+                data-testid="lb-losing-incentive-right-route-btn"
+                onClick={() => {
+                  steerToRoute('RIGHT')
+                }}
+                title="Ir para a Rota Direita pegar os Super Buffs"
+              >
+                ➡️ Rota Direita
+              </button>
+            </div>
+          </div>
+        )}
+
       {/* Camada Tática Flutuante Minimalista (Luneta + Zonas de Toque nas Faixas) — SIT-06: desmontada no resultado */}
       {(phase === 'RUNNING' || phase === 'CALM_WAIT' || phase === 'PAUSED') && (
         <div
@@ -782,43 +847,87 @@ export const RunCanvas: React.FC = () => {
             <small>{lunetaCharges}</small>
           </button>
 
-          {/* V6/V7: Botão Bônus Opcional de Conta na Rota Direita — só abre quando o usuário clica! */}
-          <button
-            type="button"
-            className="lb-luneta-fab"
-            data-testid="lb-bridge-math-path-btn"
-            onClick={() => {
-              const rect = canvasRef.current?.getBoundingClientRect()
-              const cx = (rect?.width ?? 420) * 0.5
-              const cy = (rect?.height ?? 680) * 0.55
-              particlePoolRef.current.spawnBurst(
-                cx,
-                cy,
-                '#facc15',
-                18,
-                settings.reducedMotion,
-              )
-              projectilePoolRef.current.spawnDamageText(
-                cx,
-                cy - 18,
-                '✨ BÔNUS DE CONTA!',
-                '#fde047',
-              )
-              openMathChallengeModal()
-            }}
-            title="Bônus de Conta: Escolha Fácil, Médio, Difícil ou Problema para ganhar +Soldados, +Moedas e Buffs"
-            aria-label="Fazer Conta Bônus"
-            style={{
-              borderColor: '#facc15',
-              background:
-                'linear-gradient(135deg, rgba(250, 204, 21, 0.32), rgba(168, 85, 247, 0.35))',
-              color: '#fef08a',
-              boxShadow: '0 0 14px rgba(250, 204, 21, 0.45)',
-            }}
+          {/* V11: Botão de Fazer Conta no canto inferior direito com Animação Indicadora + Setas */}
+          <div
+            className={`lb-math-cta-corner ${
+              isLosingAgainstEnemies ? 'is-urgent' : ''
+            } ${mathChallengesSolvedInRun === 0 ? 'is-unopened' : ''}`}
+            data-testid="lb-math-cta-corner"
           >
-            <span>🧮</span>
-            <small>+×</small>
-          </button>
+            <div
+              className={`lb-math-callout-pill ${
+                isCriticalLosing ? 'is-critical' : ''
+              }`}
+              data-testid="lb-math-btn-animated-indicator"
+              onClick={() => {
+                openMathChallengeModal()
+              }}
+            >
+              <span className="lb-math-callout-pill__badge">
+                {isCriticalLosing
+                  ? '🚨 VIRAR O JOGO!'
+                  : '⚡ FAZER CONTA!'}
+              </span>
+              <span className="lb-math-callout-pill__sub">
+                Pegar Super Buffs ➡️
+              </span>
+              <span
+                className="lb-math-callout-pill__arrow"
+                aria-hidden="true"
+              >
+                👇
+              </span>
+            </div>
+
+            <div className="lb-math-fab-wrapper">
+              <span
+                className="lb-math-fab-pulse-ring"
+                aria-hidden="true"
+              />
+              <span
+                className="lb-math-fab-pulse-ring lb-math-fab-pulse-ring--outer"
+                aria-hidden="true"
+              />
+              <button
+                type="button"
+                className={`lb-luneta-fab lb-math-fab-animated ${
+                  isLosingAgainstEnemies ? 'is-losing-glow' : ''
+                }`}
+                data-testid="lb-bridge-math-path-btn"
+                onClick={() => {
+                  const rect = canvasRef.current?.getBoundingClientRect()
+                  const cx = (rect?.width ?? 420) * 0.5
+                  const cy = (rect?.height ?? 680) * 0.55
+                  particlePoolRef.current.spawnBurst(
+                    cx,
+                    cy,
+                    '#facc15',
+                    18,
+                    settings.reducedMotion,
+                  )
+                  projectilePoolRef.current.spawnDamageText(
+                    cx,
+                    cy - 18,
+                    '✨ BÔNUS DE CONTA!',
+                    '#fde047',
+                  )
+                  openMathChallengeModal()
+                }}
+                title="Bônus de Conta: Escolha Fácil, Médio, Difícil ou Problema para ganhar Super Buffs na Rota Direita"
+                aria-label="Fazer Conta Bônus"
+                style={{
+                  borderColor: '#facc15',
+                  background:
+                    'linear-gradient(135deg, rgba(250, 204, 21, 0.42), rgba(168, 85, 247, 0.48))',
+                  color: '#fef08a',
+                  boxShadow: '0 0 18px rgba(250, 204, 21, 0.65)',
+                }}
+              >
+                <span>🧮</span>
+                <small>+×</small>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

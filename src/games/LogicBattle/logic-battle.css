@@ -1333,3 +1333,267 @@
   padding: 6px 8px;
   font-weight: 800;
 }
+
+/* ── V11: PROPORÇÃO 10X INIMIGOS, INDICADOR ANIMADO DO BOTÃO 🧮 E INCENTIVO DE LÓGICA ── */
+@keyframes lbMathCalloutBounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-7px) scale(1.04);
+  }
+}
+
+@keyframes lbMathArrowPoint {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+@keyframes lbMathFabPulseRing {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.58);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
+
+@keyframes lbLosingBannerPulse {
+  0%,
+  100% {
+    box-shadow: 0 6px 20px rgba(2, 6, 23, 0.72), 0 0 14px rgba(250, 204, 21, 0.45);
+  }
+  50% {
+    box-shadow: 0 6px 24px rgba(2, 6, 23, 0.85), 0 0 24px rgba(244, 63, 94, 0.75);
+  }
+}
+
+.lb-math-cta-corner {
+  position: relative;
+  z-index: 22;
+  margin-left: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.lb-math-callout-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 10px 4px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(88, 28, 135, 0.92));
+  border: 2px solid #facc15;
+  color: #fef08a;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 14px rgba(250, 204, 21, 0.55);
+  cursor: pointer;
+  user-select: none;
+  animation: lbMathCalloutBounce 1.15s ease-in-out infinite;
+  text-align: center;
+  max-width: 155px;
+}
+
+.lb-math-callout-pill.is-critical {
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.96), rgba(88, 28, 135, 0.95));
+  border-color: #fb7185;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.75), 0 0 18px rgba(244, 63, 94, 0.75);
+}
+
+.lb-math-callout-pill__badge {
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #fde047;
+  line-height: 1.1;
+}
+
+.lb-math-callout-pill__sub {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #e9d5ff;
+  line-height: 1.1;
+}
+
+.lb-math-callout-pill__arrow {
+  font-size: 0.95rem;
+  line-height: 1;
+  margin-top: 1px;
+  animation: lbMathArrowPoint 0.75s ease-in-out infinite;
+}
+
+.lb-math-fab-wrapper {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lb-math-fab-pulse-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2.5px solid #facc15;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.75);
+  pointer-events: none;
+  animation: lbMathFabPulseRing 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.lb-math-fab-pulse-ring--outer {
+  inset: -7px;
+  border-color: #c084fc;
+  animation-delay: 0.55s;
+}
+
+.lb-math-fab-animated {
+  margin-left: 0 !important;
+  width: 52px !important;
+  height: 52px !important;
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
+}
+
+.lb-math-fab-animated:hover {
+  transform: scale(1.08);
+}
+
+.lb-math-fab-animated.is-losing-glow {
+  border-width: 2.5px;
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.85), 0 0 32px rgba(168, 85, 247, 0.65) !important;
+}
+
+.lb-losing-incentive-banner {
+  position: absolute;
+  top: 86px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 23;
+  width: min(92vw, 560px);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(59, 7, 100, 0.92));
+  border: 2px solid #facc15;
+  border-radius: 14px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #f8fafc;
+  pointer-events: auto;
+  animation: lbLosingBannerPulse 2.1s ease-in-out infinite;
+}
+
+.lb-losing-incentive-banner.is-critical {
+  background: linear-gradient(135deg, rgba(69, 10, 10, 0.95), rgba(59, 7, 100, 0.94));
+  border-color: #fb7185;
+}
+
+.lb-losing-incentive-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lb-losing-incentive-banner__text strong {
+  font-size: 0.74rem;
+  font-weight: 900;
+  color: #fde047;
+  line-height: 1.15;
+}
+
+.lb-losing-incentive-banner__text span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.2;
+}
+
+.lb-losing-incentive-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lb-losing-incentive-cta {
+  background: linear-gradient(180deg, #facc15 0%, #ca8a04 100%);
+  border: 2px solid #fef08a;
+  border-radius: 10px;
+  padding: 5px 10px;
+  color: #0f172a;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 #713f12;
+}
+
+.lb-losing-incentive-route-btn {
+  background: linear-gradient(180deg, #9333ea 0%, #6b21a8 100%);
+  border: 1.5px solid #e9d5ff;
+  border-radius: 10px;
+  padding: 5px 9px;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .lb-losing-incentive-banner {
+    flex-direction: column;
+    align-items: stretch;
+    top: 82px;
+    padding: 6px 10px;
+  }
+  .lb-losing-incentive-banner__actions {
+    justify-content: flex-end;
+  }
+}
+
+.lb-defeat-logic-incentive {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.35), rgba(30, 41, 59, 0.92));
+  border: 2px solid #facc15;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.lb-defeat-logic-incentive__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lb-defeat-logic-incentive__copy strong {
+  font-size: 0.78rem;
+  color: #fde047;
+}
+
+.lb-defeat-logic-incentive__copy span {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  line-height: 1.3;
+}

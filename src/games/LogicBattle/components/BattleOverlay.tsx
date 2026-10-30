@@ -30,6 +30,9 @@ export const BattleOverlay: React.FC = () => {
   const openNextRedemptionModal = useLogicBattleStore(
     (s) => s.openNextRedemptionModal,
   )
+  const openMathChallengeModal = useLogicBattleStore(
+    (s) => s.openMathChallengeModal,
+  )
   const [showDetails, setShowDetails] = useState(false)
   const [skippedBonus, setSkippedBonus] = useState(false)
 
@@ -158,6 +161,33 @@ export const BattleOverlay: React.FC = () => {
         {!isVictory && !contract?.canGuaranteeVictory && (
           <div className="lb-rematch-pill" data-testid="lb-tactical-rematch-offer">
             🧭 Faltaram {formatArmy(resolution.deficit, notationMode)} soldados
+          </div>
+        )}
+
+        {!isVictory && (
+          <div
+            className="lb-defeat-logic-incentive"
+            data-testid="lb-defeat-solve-logic-cta"
+          >
+            <div className="lb-defeat-logic-incentive__copy">
+              <strong>🧮 Dica do Capitão Vírgula (Inimigos 10× mais fortes!):</strong>
+              <span>
+                Os buffs da Rota Central e da Esquerda dão apenas 1/10 da força necessária. Para vencer a Horda e o Mega-Boss, clique no botão <strong>🧮 Fazer Conta</strong> no canto inferior direito e pegue os <strong>Super Buffs da Rota Direita (➡️)</strong>!
+              </span>
+            </div>
+            <button
+              type="button"
+              data-testid="lb-defeat-rematch-with-math-btn"
+              className="lb-btn-3d lb-btn-3d--gold"
+              onClick={() => {
+                startNewRun({ regionId: region.id })
+                setTimeout(() => {
+                  openMathChallengeModal()
+                }, 60)
+              }}
+            >
+              🧮 Revanche + Resolver Lógica Agora!
+            </button>
           </div>
         )}
 

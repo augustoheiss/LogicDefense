@@ -260,7 +260,7 @@ export function computeSegmentWorldZ(segZPosition: number, progress: number): nu
 
 
 export function createInitialBridge3DSimState(
-  initialBossHp = 150,
+  initialBossHp = 1500,
   seed = 42,
 ): Bridge3DSimState {
   const baseBossHp = Math.max(150, initialBossHp)
@@ -269,7 +269,7 @@ export function createInitialBridge3DSimState(
     const isMiniBoss = idx === 2 || idx === 7 || idx === 11 || idx === 14
     const row = Math.floor(idx / 4)
     const col = (idx % 4) - 1.5
-    const maxHp = isMiniBoss ? 176 : 14
+    const maxHp = isMiniBoss ? 680 : 85
     return {
       id: idx + 1,
       x: col * 1.6,
@@ -277,17 +277,17 @@ export function createInitialBridge3DSimState(
       hp: maxHp,
       maxHp,
       isMiniBoss,
-      speedZ: isMiniBoss ? 2.55 : 2.65 + (idx % 3) * 0.25,
-      contactDamage: isMiniBoss ? 3 : 1,
+      speedZ: isMiniBoss ? 2.65 : 2.75 + (idx % 3) * 0.25,
+      contactDamage: isMiniBoss ? 26 : 8,
       hitFlashMs: 0,
     }
   })
 
   const barrels: ExplosiveBarrel3DEntity[] = [
-    { id: 1, x: -3.2, z: -18, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 2, x: 3.2, z: -34, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 3, x: -3.2, z: -48, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
-    { id: 4, x: 3.2, z: -62, hp: 112, maxHp: 112, active: true, explosionFlashMs: 0 },
+    { id: 1, x: -3.2, z: -18, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
+    { id: 2, x: 3.2, z: -34, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
+    { id: 3, x: -3.2, z: -48, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
+    { id: 4, x: 3.2, z: -62, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
   ]
 
   // V9 Pilar 2 & 3: Apenas 2 portões espaçados na Rota Esquerda, 100% ancorados no Nível dos Monstros do Setor
@@ -1273,22 +1273,22 @@ export function stepBridge3DSim(
             for (const en of sim.enemies) {
               const dist = Math.hypot(en.x - barrel.x, en.z - barrel.z)
               if (dist <= 10.5) {
-                en.hp -= 140
+                en.hp -= 480
                 en.hitFlashMs = 240
                 if (en.hp <= 0) {
                   coinsEarnedThisFrame += en.isMiniBoss ? 5 : 1
                   damageDealtThisFrame += en.isMiniBoss ? 8 : 2
                   en.z = -84 - nextSimRandom(sim) * 14
                   en.maxHp = en.isMiniBoss
-                    ? 176 + (sim.sectorIndex - 1) * 90
-                    : 18 + (sim.sectorIndex - 1) * 10
+                    ? 680 + (sim.sectorIndex - 1) * 360
+                    : 85 + (sim.sectorIndex - 1) * 55
                   en.hp = en.maxHp
                 }
               }
             }
             // Respawn imediato no fundo da ponte para marchar novamente sem travar nem inflar no lugar!
             barrel.z = -80 - nextSimRandom(sim) * 14
-            barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
+            barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
             barrel.hp = barrel.maxHp
             barrel.active = true
             barrel.explosionFlashMs = 200
@@ -1298,7 +1298,7 @@ export function stepBridge3DSim(
       }
       if (hitBarrel) continue
 
-      // 5d. Colisão na Rota Central: Horda Rubra e Mini-Bosses (176 HP) — Suporta Canhão Perfurante (Grau III/IV)
+      // 5d. Colisão na Rota Central: Horda Rubra e Mini-Bosses — Suporta Canhão Perfurante (Grau III/IV)
       let hitEnemy = false
       for (const en of sim.enemies) {
         const hitRadiusX = en.isMiniBoss ? 1.55 : 0.98
@@ -1321,8 +1321,8 @@ export function stepBridge3DSim(
             en.z = -84 - nextSimRandom(sim) * 16
             en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
             en.maxHp = en.isMiniBoss
-              ? 176 + (sim.sectorIndex - 1) * 90
-              : 18 + (sim.sectorIndex - 1) * 10
+              ? 680 + (sim.sectorIndex - 1) * 360
+              : 85 + (sim.sectorIndex - 1) * 55
             en.hp = en.maxHp
           }
           break
@@ -1427,7 +1427,7 @@ export function stepBridge3DSim(
           // Reativar barris para o novo setor
           for (const barrel of sim.barrels) {
             barrel.active = true
-            barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
+            barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
             barrel.hp = barrel.maxHp
           }
           callbacks.onSectorBossDefeated(sim.sectorIndex, sectorReward)
@@ -1454,11 +1454,11 @@ export function stepBridge3DSim(
       const isDirectHitOnHero =
         sim.activeRoute === 'CENTER' && Math.abs(barrel.x - sim.heroWorldX) <= 1.35
       if (isDirectHitOnHero) {
-        hordeContactLoss += 2
+        hordeContactLoss += 16 + (sim.sectorIndex - 1) * 8
         sim.playerHitFlashMs = 280
       }
       barrel.z = -80 - nextSimRandom(sim) * 14
-      barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
+      barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
       barrel.hp = barrel.maxHp
       barrel.active = true
     }
@@ -1478,18 +1478,20 @@ export function stepBridge3DSim(
       en.z = -84 - nextSimRandom(sim) * 14
       en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
       en.maxHp = en.isMiniBoss
-        ? 176 + (sim.sectorIndex - 1) * 90
-        : 18 + (sim.sectorIndex - 1) * 10
+        ? 680 + (sim.sectorIndex - 1) * 360
+        : 85 + (sim.sectorIndex - 1) * 55
       en.hp = en.maxHp
     }
   }
   if (hordeContactLoss > 0 && !input.isBattlePhase) {
-    // Enquanto o Boss ainda está marchando (antes do MELEE_CLASH com segmentos encerrados), a Horda drena o exército até o piso de 5 soldados,
-    // permitindo que o jogador escolha portões com base íntegra e o Boss desfira o golpe corpo a corpo fatal!
-    const effectiveHordeLoss =
-      sim.bossLifecycle === 'MELEE_CLASH' && input.allSegmentsResolved
-        ? hordeContactLoss
-        : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 5))
+    // V11: Assim que o Boss avança para z >= -36 (ou em MELEE_CLASH / segmentos resolvidos), a Horda 10× também causa dano letal real!
+    const isLethalWavePressure =
+      sim.bossLifecycle === 'MELEE_CLASH' ||
+      Boolean(input.allSegmentsResolved) ||
+      sim.bossZ >= -36
+    const effectiveHordeLoss = isLethalWavePressure
+      ? hordeContactLoss
+      : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 5))
     attritionLossThisFrame += effectiveHordeLoss
   }
 
@@ -1584,7 +1586,7 @@ export function stepBridge3DSim(
             sim.towerKillsCount += 1
             coinsEarnedThisFrame += 4
             barrel.z = -80 - nextSimRandom(sim) * 14
-            barrel.maxHp = 112 + (sim.sectorIndex - 1) * 45
+            barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
             barrel.hp = barrel.maxHp
             barrel.active = true
             barrel.explosionFlashMs = 200
@@ -1617,8 +1619,8 @@ export function stepBridge3DSim(
             en.z = -84 - nextSimRandom(sim) * 16
             en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
             en.maxHp = en.isMiniBoss
-              ? 176 + (sim.sectorIndex - 1) * 90
-              : 18 + (sim.sectorIndex - 1) * 10
+              ? 680 + (sim.sectorIndex - 1) * 360
+              : 85 + (sim.sectorIndex - 1) * 55
             en.hp = en.maxHp
             if (sim.towerKillsCount % 2 === 0) {
               const towerReinforce = Math.max(3, alliedTowerStats.totalLevel * 2)

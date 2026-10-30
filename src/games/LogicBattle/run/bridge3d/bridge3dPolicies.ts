@@ -257,17 +257,17 @@ export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
     icon: '🟢',
     badgePt: '🟢 Fácil',
     durationMs: 12000,
-    armyBonusRatio: 0.2,
-    minFlatSoldiers: 8,
-    weaponDmgMult: 1.35,
-    fireRateMult: 1.15,
+    armyBonusRatio: 0.45,
+    minFlatSoldiers: 120,
+    weaponDmgMult: 2.2,
+    fireRateMult: 1.25,
     extraParallelBarrels: 1,
     piercingShots: false,
     bossRoyalVolleyRatio: 0,
-    gate0SubLabelPt: '🟢 CONTA · CADÊNCIA +15%',
-    gate1SubLabelPt: '🟢 +20% EXÉRCITO',
-    gate1RatioLabelPt: '+20%',
-    activeHudSummaryPt: '🟢 +20% Soldados e +15% Cadência',
+    gate0SubLabelPt: '🟢 CONTA · CADÊNCIA +25%',
+    gate1SubLabelPt: '🟢 +45% EXÉRCITO',
+    gate1RatioLabelPt: '+45%',
+    activeHudSummaryPt: '🟢 +45% Soldados e +25% Cadência',
     plaqueBorderColor: '#4ade80',
     plaqueAccentColor: '#bbf7d0',
   },
@@ -276,17 +276,17 @@ export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
     icon: '🔵',
     badgePt: '🔵 Médio',
     durationMs: 15000,
-    armyBonusRatio: 0.45,
-    minFlatSoldiers: 18,
-    weaponDmgMult: 1.65,
-    fireRateMult: 1.2,
+    armyBonusRatio: 0.85,
+    minFlatSoldiers: 280,
+    weaponDmgMult: 3.1,
+    fireRateMult: 1.35,
     extraParallelBarrels: 2,
     piercingShots: false,
     bossRoyalVolleyRatio: 0,
     gate0SubLabelPt: '🔵 CONTA · TIRO DUPLO',
-    gate1SubLabelPt: '🔵 +45% · TIRO DUPLO',
-    gate1RatioLabelPt: '+45%',
-    activeHudSummaryPt: '🔵 +45% Soldados e Tiro Duplo',
+    gate1SubLabelPt: '🔵 +85% · TIRO DUPLO',
+    gate1RatioLabelPt: '+85%',
+    activeHudSummaryPt: '🔵 +85% Soldados e Tiro Duplo',
     plaqueBorderColor: '#38bdf8',
     plaqueAccentColor: '#bae6fd',
   },
@@ -295,17 +295,17 @@ export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
     icon: '🟣',
     badgePt: '🟣 Difícil',
     durationMs: 18000,
-    armyBonusRatio: 0.75,
-    minFlatSoldiers: 32,
-    weaponDmgMult: 2.1,
-    fireRateMult: 1.25,
+    armyBonusRatio: 1.35,
+    minFlatSoldiers: 560,
+    weaponDmgMult: 4.4,
+    fireRateMult: 1.45,
     extraParallelBarrels: 2,
     piercingShots: true,
-    bossRoyalVolleyRatio: 0,
+    bossRoyalVolleyRatio: 0.12,
     gate0SubLabelPt: '🟣 CONTA · PERFURANTE',
-    gate1SubLabelPt: '🟣 +75% · PERFURANTE',
-    gate1RatioLabelPt: '+75%',
-    activeHudSummaryPt: '🟣 +75% Soldados e Canhão Perfurante',
+    gate1SubLabelPt: '🟣 +135% · PERFURANTE',
+    gate1RatioLabelPt: '+135%',
+    activeHudSummaryPt: '🟣 +135% Soldados e Canhão Perfurante',
     plaqueBorderColor: '#c084fc',
     plaqueAccentColor: '#e9d5ff',
   },
@@ -314,17 +314,17 @@ export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
     icon: '👑',
     badgePt: '👑 Problema',
     durationMs: 24000,
-    armyBonusRatio: 1.0,
-    minFlatSoldiers: 55,
-    weaponDmgMult: 2.6,
-    fireRateMult: 1.35,
+    armyBonusRatio: 2.2,
+    minFlatSoldiers: 1100,
+    weaponDmgMult: 6.2,
+    fireRateMult: 1.6,
     extraParallelBarrels: 3,
     piercingShots: true,
-    bossRoyalVolleyRatio: 0.25,
+    bossRoyalVolleyRatio: 0.3,
     gate0SubLabelPt: '👑 PROBLEMA · SALVA REAL',
-    gate1SubLabelPt: '👑 DOBRA ×2 · SALVA REAL',
-    gate1RatioLabelPt: '×2 DOBRA',
-    activeHudSummaryPt: '👑 DOBRA EXÉRCITO (×2) e Salva Real',
+    gate1SubLabelPt: '👑 TRIPLICA ×3 · SALVA REAL',
+    gate1RatioLabelPt: '×3 SUPER',
+    activeHudSummaryPt: '👑 SUPER-BUFF (×3) e Salva Real',
     plaqueBorderColor: '#facc15',
     plaqueAccentColor: '#fef08a',
   },
@@ -436,18 +436,28 @@ export const BOSS_ARCHETYPES_3D: readonly BossArchetype3DSpec[] = [
 ] as const
 
 /**
- * V8 Fase 3: Curva pura de HP do Boss 100% determinada pelo Setor (`sectorIndex`)
- * e 0% dependente de `currentArmy` (Fim do Rubber-Banding!).
- * Fazer contas na Rota Direita agora torna o jogador genuinamente mais forte que o Boss!
+ * Proporção 10× dos Inimigos vs. Buffs Passivos do Caminho Central e da Esquerda:
+ * Os inimigos (Boss + Horda + Mini-Bosses) são 10× mais fortes do que o orçamento
+ * passivo da Rota Central e da Rota Esquerda, tornando obrigatório resolver os
+ * desafios de lógica (🧮) e coletar os Super-Buffs da Rota Direita para vencer!
+ */
+export const ENEMY_VS_PASSIVE_ROUTE_RATIO = 10
+
+/**
+ * V8 Fase 3 + V11: Curva pura de HP do Boss 100% determinada pelo Setor (`sectorIndex`),
+ * 10× mais forte que a capacidade passiva da Rota Central/Esquerda e 0% dependente de `currentArmy`.
+ * Fazer contas na Rota Direita é indispensável para superar a força inimiga!
  */
 export function computeSectorBossHp(sectorIndex: number): number {
   const s = Math.max(
     1,
     Math.floor(Number.isFinite(sectorIndex) ? sectorIndex : 1),
   )
-  if (s === 1) return 150
+  const basePassiveBossHp = 150
+  const scaledBaseBossHp = basePassiveBossHp * ENEMY_VS_PASSIVE_ROUTE_RATIO // 1500 HP no Setor 1
+  if (s === 1) return scaledBaseBossHp
   return Math.round(
-    150 * Math.pow(s, 1.45) * Math.pow(1.22, Math.min(s - 1, 25)),
+    scaledBaseBossHp * Math.pow(s, 1.45) * Math.pow(1.22, Math.min(s - 1, 25)),
   )
 }
 
@@ -456,6 +466,7 @@ export interface SectorBossDeterministicSpec {
   readonly bossHp: number
   readonly hordeHp: number
   readonly totalForce: number
+  readonly passiveRouteBaselineForce: number
   readonly archetype: BossArchetype3DSpec
   readonly marchSpeedZ: number
   readonly meleeDamagePerStrike: number
@@ -471,22 +482,28 @@ export function computeSectorBossSpec(
     Math.floor(Number.isFinite(sectorIndex) ? sectorIndex : 1),
   )
   const bossHp = computeSectorBossHp(s)
-  const hordeHp = s === 1 ? 30 : Math.max(25, Math.round(bossHp * 0.25))
+  const hordeHp = s === 1 ? 300 : Math.max(250, Math.round(bossHp * 0.25))
+  const totalForce = bossHp + hordeHp
+  const passiveRouteBaselineForce = Math.max(
+    150,
+    Math.round(totalForce / ENEMY_VS_PASSIVE_ROUTE_RATIO),
+  )
   const archetype =
     BOSS_ARCHETYPES_3D[(s - 1) % BOSS_ARCHETYPES_3D.length] ??
     BOSS_ARCHETYPES_3D[0]
   const marchSpeedZ = Number(Math.min(4.2, 2.75 + (s - 1) * 0.16).toFixed(2))
-  const meleeDamagePerStrike = Math.max(4, Math.round(bossHp * 0.15))
+  const meleeDamagePerStrike = Math.max(35, Math.round(bossHp * 0.085))
   const sectorClearRewardSoldiers = Math.max(
-    24,
-    Math.round(bossHp * 0.32 + s * 15),
+    60,
+    Math.round(passiveRouteBaselineForce * 0.55 + s * 25),
   )
-  const sectorClearRewardCoins = 25 + s * 20
+  const sectorClearRewardCoins = 35 + s * 25
   return {
     sectorIndex: s,
     bossHp,
     hordeHp,
-    totalForce: bossHp + hordeHp,
+    totalForce,
+    passiveRouteBaselineForce,
     archetype,
     marchSpeedZ,
     meleeDamagePerStrike,
@@ -505,21 +522,26 @@ export interface LeftCorridorMonsterScaleSpec {
 }
 
 /**
- * V9 Pilar 2: Escala da Rota Esquerda 100% ancorada no Nível dos Monstros do Setor (`computeSectorBossSpec(S)`).
- * Zero dependência de `currentArmy` ou `mathChallengesSolved`!
+ * V9 Pilar 2 + V11: Escala da Rota Esquerda mantida em 1/10 da força inimiga
+ * (`spec.bossHp / ENEMY_VS_PASSIVE_ROUTE_RATIO`), garantindo que os inimigos sejam
+ * 10× mais fortes do que os buffs passivos da esquerda e do centro!
  */
 export function computeLeftCorridorMonsterScaling(
   sectorIndex: number,
 ): LeftCorridorMonsterScaleSpec {
   const spec = computeSectorBossSpec(sectorIndex)
-  const gate0Soldiers = Math.max(2, Math.round(spec.bossHp * 0.02))
+  const passiveBossBaseline = Math.max(
+    150,
+    Math.round(spec.bossHp / ENEMY_VS_PASSIVE_ROUTE_RATIO),
+  )
+  const gate0Soldiers = Math.max(2, Math.round(passiveBossBaseline * 0.02))
   const gate1Soldiers = Math.max(
     gate0Soldiers + 2,
-    Math.round(spec.bossHp * 0.045),
+    Math.round(passiveBossBaseline * 0.045),
   )
-  const cannonHp = Math.max(5, Math.round(spec.bossHp * 0.035))
-  const cannonUnlockBonus = Math.max(3, Math.round(spec.bossHp * 0.03))
-  const cannonCollectBonus = Math.max(5, Math.round(spec.bossHp * 0.05))
+  const cannonHp = Math.max(5, Math.round(passiveBossBaseline * 0.035))
+  const cannonUnlockBonus = Math.max(3, Math.round(passiveBossBaseline * 0.03))
+  const cannonCollectBonus = Math.max(5, Math.round(passiveBossBaseline * 0.05))
   return {
     sectorIndex: spec.sectorIndex,
     gate0Soldiers,
@@ -531,8 +553,9 @@ export function computeLeftCorridorMonsterScaling(
 }
 
 /**
- * V9 Pilar 1: Escala Exponencial Exclusiva da Rota Direita vinculada ao Grau (1..4)
+ * V9 Pilar 1 + V11: Escala Exponencial Exclusiva da Rota Direita vinculada ao Grau (1..4)
  * e à resposta da questão resolvida (`solvedQuestionValue`).
+ * Concede os Super-Buffs capazes de superar a vantagem de 10× dos inimigos!
  */
 export function computeRightCorridorExponentialGates(params: {
   sectorIndex: number
@@ -551,28 +574,28 @@ export function computeRightCorridorExponentialGates(params: {
     RIGHT_CORRIDOR_TIER_BUFF_POLICIES[params.activeTier] ??
     RIGHT_CORRIDOR_TIER_BUFF_POLICIES[2]
   const k = Math.max(0, Math.floor(params.mathChallengesSolved))
-  const expBase = 1.38 + params.activeTier * 0.12
+  const expBase = 1.42 + params.activeTier * 0.14
   const exponentialFactor = Math.pow(expBase, Math.min(k, 40))
   const qVal = Math.max(
-    4,
-    Math.min(100000, Math.abs(Math.round(params.solvedQuestionValue || 15))),
+    6,
+    Math.min(100000, Math.abs(Math.round(params.solvedQuestionValue || 18))),
   )
   const monsterSpec = computeSectorBossSpec(params.sectorIndex)
   const safeArmy = Number.isFinite(params.currentArmy) ? params.currentArmy : 5
-  const armyRef = Math.max(safeArmy, monsterSpec.bossHp * 0.5, 20)
+  const armyRef = Math.max(safeArmy, monsterSpec.bossHp * 0.45, 280)
 
   const raw0 = Math.round(
-    qVal * exponentialFactor +
-      armyRef * tierSpec.armyBonusRatio * 0.65 * Math.pow(1.22, Math.min(k, 25)),
+    qVal * 2.5 * exponentialFactor +
+      armyRef * tierSpec.armyBonusRatio * 0.65 * Math.pow(1.25, Math.min(k, 25)),
   )
   const gate0Soldiers = Math.max(tierSpec.minFlatSoldiers, raw0)
 
   const raw1 = Math.round(
-    armyRef * tierSpec.armyBonusRatio * Math.pow(1.35, Math.min(k, 25)) +
-      qVal * 1.8 * exponentialFactor,
+    armyRef * tierSpec.armyBonusRatio * Math.pow(1.38, Math.min(k, 25)) +
+      qVal * 3.5 * exponentialFactor,
   )
   const gate1Soldiers = Math.max(
-    gate0Soldiers + 8,
+    gate0Soldiers + 45,
     Math.round(Math.max(raw1, gate0Soldiers * 1.65)),
   )
 

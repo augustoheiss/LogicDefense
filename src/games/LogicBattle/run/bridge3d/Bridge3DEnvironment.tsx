@@ -22,6 +22,7 @@ import {
   CENTER_ROUTE_CADENCE_POLICY,
   computeSectorBossSpec,
   ENEMY_LIVING_BASE_POLICY,
+  ENEMY_VS_PASSIVE_ROUTE_RATIO,
   laneNormToWorldX,
   PLAYER_BRIDGE_BASE_POLICY,
 } from './bridge3dPolicies'
@@ -166,7 +167,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         }
         for (const barrel of nextSim.barrels) {
           barrel.active = true
-          barrel.maxHp = 112 + (live.bridgeSectorIndex - 1) * 45
+          barrel.maxHp = 450 + (live.bridgeSectorIndex - 1) * 220
           barrel.hp = barrel.maxHp
         }
       }
@@ -385,6 +386,9 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         ),
         bossHp: sim.bossHp,
         bossMaxHp: sim.bossMaxHp,
+        enemyVsPassiveRouteRatio: ENEMY_VS_PASSIVE_ROUTE_RATIO,
+        passiveRouteBaselineForce: computeSectorBossSpec(sim.sectorIndex)
+          .passiveRouteBaselineForce,
         bossZ: Number(sim.bossZ.toFixed(2)),
         bossLifecycle: sim.bossLifecycle,
         bossRespawnTimerMs: Math.round(sim.bossRespawnTimerMs),

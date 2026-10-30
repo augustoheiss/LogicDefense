@@ -56,6 +56,7 @@ import {
 } from '../run/renderer/perspective'
 import {
   computeSectorBossSpec,
+  ENEMY_VS_PASSIVE_ROUTE_RATIO,
   getBridgeTowerUpgradeCost,
   PLAYER_BRIDGE_BASE_POLICY,
 } from '../run/bridge3d/bridge3dPolicies'
@@ -440,16 +441,22 @@ function buildSectorScaledEnemy(
   sectorIndex: number,
   _currentArmy?: ArmyCount,
 ) {
+  const spec = computeSectorBossSpec(sectorIndex)
   if (sectorIndex <= 1) {
+    const scaledHorde = clampArmy(
+      Math.max(spec.hordeHp, baseEnemy.garrison * ENEMY_VS_PASSIVE_ROUTE_RATIO),
+    )
+    const scaledBossHp = clampArmy(
+      Math.max(spec.bossHp, baseEnemy.bossHp * ENEMY_VS_PASSIVE_ROUTE_RATIO),
+    )
     return {
-      horde: baseEnemy.garrison,
-      bossHp: baseEnemy.bossHp,
+      horde: scaledHorde,
+      bossHp: scaledBossHp,
       bossName: baseEnemy.bossName,
       bossTitle: baseEnemy.bossTitle,
-      totalForce: baseEnemy.garrison + baseEnemy.bossHp,
+      totalForce: clampArmy(scaledHorde + scaledBossHp),
     }
   }
-  const spec = computeSectorBossSpec(sectorIndex)
   const scaledBossHp = clampArmy(spec.bossHp)
   const scaledHorde = clampArmy(spec.hordeHp)
   return {
@@ -707,6 +714,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         crowdNodes: buildCrowdNodes(nextArmy),
         recentFeedback: [...snap.recentFeedback.slice(-4), fbDebuff],
       },
+      captainSpeech: {
+        mood: 'curious',
+        text: `⚠️ Sofremos dano do feixe inimigo! Clique no botão 🧮 (canto inferior direito), resolva a lógica e pegue os Super-Buffs da Rota Direita ➡️ para virar o jogo!`,
+      },
     })
   },
 
@@ -744,6 +755,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       snapshot: {
         ...snap,
         recentFeedback: [...snap.recentFeedback.slice(-4), fbSiege],
+      },
+      captainSpeech: {
+        mood: 'curious',
+        text: `🚨 O Boss está destruindo nossa ${slotSpec?.namePt ?? 'Torre'}! Clique no botão 🧮 (canto inferior direito), resolva a lógica e pegue os buffs superiores da Rota Direita ➡️ para derrotá-lo!`,
       },
     })
   },
@@ -811,7 +826,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const fbBossHit: FloatingFeedbackItem = {
       id: `fb_boss_strike_${Date.now()}`,
       text: `💥 Golpe de ${bossNamePt.slice(0, 12)}!`,
-      subText: `−${formatArmy(damage, state.save.settings.notationMode)} Soldados`,
+      subText: `−${formatArmy(damage, state.save.settings.notationMode)} Soldados · Resolva 🧮!`,
       tone: 'trap',
       createdAtMs: snap.elapsedMs,
     }
@@ -819,6 +834,10 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       snapshot: {
         ...snap,
         recentFeedback: [...snap.recentFeedback.slice(-4), fbBossHit],
+      },
+      captainSpeech: {
+        mood: 'curious',
+        text: `🚨 Estamos perdendo soldados para ${bossNamePt}! Clique no botão 🧮 (canto inferior direito), resolva o desafio de lógica e colete os Super-Buffs da Rota Direita ➡️ para vencer!`,
       },
     })
   },
@@ -1142,8 +1161,9 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       tone: 'optimal',
       createdAtMs: snap.elapsedMs,
     }
-    // V9 (Pilar 2): Escala Ortogonal — Rota Central escala apenas com o Nível dos Monstros (spec.totalForce)
-    const monsterScale = Math.max(25, Math.round(spec.totalForce * 0.22))
+    // V9 (Pilar 2) + V11: Escala Ortogonal 1/10 — Rota Central escala apenas com 1/10 do Nível dos Monstros (spec.passiveRouteBaselineForce),
+    // mantendo os inimigos 10× mais fortes do que os buffs do caminho central e esquerdo!
+    const monsterScale = Math.max(25, Math.round(spec.passiveRouteBaselineForce * 0.22))
     const updatedSegments =
       newSector > 1
         ? snap.segments.map((seg, idx) => ({
@@ -1612,11 +1632,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         },
         captainSpeech: {
           mood: 'curious',
-          text: `Nosso batalhão foi dizimado no Setor ${state.bridgeSectorIndex}! Pontuação e progresso salvos automaticamente no IndexedDB e Cache!`,
+          text: `🚨 Nosso batalhão foi superado pela força 10× dos inimigos no Setor ${state.bridgeSectorIndex}! Para vencer, clique no botão 🧮 (canto inferior direito), resolva a lógica e pegue os Super-Buffs da Rota Direita ➡️!`,
         },
       })
       return
     }
+
+    const shouldEncourageLogic =
+      playerAttritionLoss > 0 && nextPlayerArmy < nextTotalForce * 0.75
 
     set({
       snapshot: {
@@ -1635,6 +1658,14 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         bridgeKills: updatedKills,
         bridgeCoinsEarned: updatedCoins,
       },
+      ...(shouldEncourageLogic
+        ? {
+            captainSpeech: {
+              mood: 'curious' as const,
+              text: `⚠️ Estamos perdendo tropas contra inimigos 10× mais fortes! Clique no botão 🧮 no canto inferior direito, resolva a lógica e pegue os buffs superiores da Rota Direita ➡️!`,
+            },
+          }
+        : {}),
     })
   },
 

@@ -427,8 +427,9 @@ function createDefaultEnemyForBiome(
 
   const spec = baseByBiome[biomeId]
   const scale = Math.max(1, Math.round(n0 / 5))
-  const horde = spec.horde * scale
-  const bossHp = spec.bossHp * scale
+  // V11: Inimigos 10× mais fortes do que a rota central e esquerda para exigir resolução de contas (🧮) e buffs da Rota Direita
+  const horde = spec.horde * scale * 10
+  const bossHp = spec.bossHp * scale * 10
   return {
     horde,
     bossHp,
@@ -453,12 +454,18 @@ function tryBuildRunWithSeed(
   const enemy =
     params.enemy ?? createDefaultEnemyForBiome(params.biomeId, rawInputN0)
 
-  // V9 Pilar 2: Ancorar a referência de geração da Rota Central na força dos monstros do Setor (`enemy.totalForce`),
-  // impedindo que soldados exponenciais da Rota Direita inflem os portões centrais!
+  // V11: Proporção 10× dos inimigos vs. buffs passivos do caminho central e esquerdo!
+  // Os portões do Caminho Central entregam apenas 1/10 da força total do inimigo,
+  // tornando obrigatório resolver as contas (🧮) e pegar os Super-Buffs da Rota Direita para vencer!
+  const passiveCenterTargetForce =
+    enemy.totalForce >= 400
+      ? Math.max(70, Math.round(enemy.totalForce / 10))
+      : enemy.totalForce
+
   const monsterBaselineN0 =
-    enemy.totalForce <= 120
+    passiveCenterTargetForce <= 120
       ? 5
-      : Math.max(10, Math.round(enemy.totalForce * 0.18))
+      : Math.max(10, Math.round(passiveCenterTargetForce * 0.18))
   const n0 = params.enemy ? monsterBaselineN0 : rawInputN0
 
   const segments: LaneSegment[] = []
@@ -472,8 +479,8 @@ function tryBuildRunWithSeed(
 
   const twinTargetIndex = 2
   let maxBestAllowed = Math.max(
-    Math.ceil(enemy.totalForce * GATE_POLICIES.oracleMaxBestRatio),
-    enemy.totalForce > 120 ? Math.ceil(n0 * 5.5) : 0,
+    Math.ceil(passiveCenterTargetForce * GATE_POLICIES.oracleMaxBestRatio),
+    passiveCenterTargetForce > 120 ? Math.ceil(n0 * 5.5) : 0,
     n0 + 95,
   )
 
@@ -481,7 +488,7 @@ function tryBuildRunWithSeed(
     const zPosition = Number(((i + 1) / (segmentCount + 1)).toFixed(4))
     const segId = `seg_${attemptSeed}_${i}`
 
-    // Último segmento: calibração fina com o Oráculo
+    // Último segmento: calibração fina com o Oráculo (ancorado em 1/10 da força inimiga!)
     if (i === segmentCount - 1) {
       const finalSeg = buildCalibratedFinalSegment(
         segId,
@@ -490,7 +497,7 @@ function tryBuildRunWithSeed(
         laneCount,
         runningBest,
         runningWorst,
-        enemy.totalForce,
+        passiveCenterTargetForce,
         rng,
       )
       segments.push(finalSeg)
@@ -504,7 +511,7 @@ function tryBuildRunWithSeed(
     // Inserir 1 segmento de Portões Gêmeos por corrida (filtrando ×10³ fora da Torre das Potências se o inimigo não exigir salto de milhar)
     if (!placedTwins && i >= twinTargetIndex && i < segmentCount - 2 && biome.twinIds.length > 0) {
       const eligibleTwins =
-        (enemy.totalForce < 600 || enemy.totalForce < n0 * 400) &&
+        (passiveCenterTargetForce < 600 || passiveCenterTargetForce < n0 * 400) &&
         params.biomeId !== 'torre_potencias'
           ? biome.twinIds.filter((tid) => tid !== 'G04')
           : biome.twinIds
@@ -588,7 +595,7 @@ function tryBuildRunWithSeed(
           trapLanes,
           trapIntuitiveLane,
           runningBest,
-          enemy.totalForce,
+          passiveCenterTargetForce,
         )
         trapLanes = normalizedTrap.lanes
         trapIntuitiveLane = normalizedTrap.intuitiveLane
@@ -633,7 +640,7 @@ function tryBuildRunWithSeed(
       params.biomeId,
       laneCount,
       runningBest,
-      enemy.totalForce,
+      passiveCenterTargetForce,
       rng,
       usedGateLabels,
     )
@@ -665,13 +672,13 @@ function tryBuildRunWithSeed(
 
   const oracle = pathOracle(candidatePlan)
   const minRequiredBest = Math.ceil(
-    enemy.totalForce * (1 + GATE_POLICIES.oracleBestMarginRatio),
+    passiveCenterTargetForce * (1 + GATE_POLICIES.oracleBestMarginRatio),
   )
 
   if (
     oracle.best >= minRequiredBest &&
     oracle.best <= maxBestAllowed + 15 &&
-    oracle.worst < enemy.totalForce &&
+    oracle.worst < passiveCenterTargetForce &&
     usedTraps.size >= 1 &&
     placedTwins
   ) {
@@ -705,12 +712,16 @@ export function generateRun(params: GenerateRunParams): RunPlan {
   const rawInputN0 = clampArmy(params.n0 ?? 5)
   const enemy =
     params.enemy ?? createDefaultEnemyForBiome(params.biomeId, rawInputN0)
+  const passiveCenterTargetForce =
+    enemy.totalForce >= 400
+      ? Math.max(70, Math.round(enemy.totalForce / 10))
+      : enemy.totalForce
   const monsterBaselineN0 =
-    enemy.totalForce <= 120
+    passiveCenterTargetForce <= 120
       ? 5
-      : Math.max(10, Math.round(enemy.totalForce * 0.18))
+      : Math.max(10, Math.round(passiveCenterTargetForce * 0.18))
   const n0 = params.enemy ? monsterBaselineN0 : rawInputN0
-  const targetBest = Math.ceil(enemy.totalForce * 1.35)
+  const targetBest = Math.ceil(passiveCenterTargetForce * 1.35)
   const stepAdd = Math.max(5, Math.ceil((targetBest - n0) / biome.segmentCount))
 
   const fallbackSegments: LaneSegment[] = Array.from(
