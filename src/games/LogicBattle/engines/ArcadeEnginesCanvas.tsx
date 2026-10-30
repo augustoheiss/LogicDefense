@@ -306,7 +306,9 @@ export const ArcadeEnginesCanvas: React.FC = () => {
   const completeEngineRun = useLogicBattleStore((s) => s.completeEngineRun)
   const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
   const lastSolvedMathRewardAt = useLogicBattleStore((s) => s.lastSolvedMathRewardAt)
-  const lastAppliedMathSeqRef = useRef<number>(0)
+  const lastAppliedMathSeqRef = useRef<number>(
+    useLogicBattleStore.getState().lastSolvedMathRewardAt?.seq ?? 0,
+  )
   const lastSyncedStoreArmyRef = useRef<number>(Math.max(12, runPlan.n0))
 
   const engineSpec = ENGINE_CATALOG[activeEngineId] ?? ENGINE_CATALOG.cerco_torres
@@ -1984,6 +1986,21 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           )
 
           particlePoolRef.current.updateAndDraw(ctx, dtMs)
+          if (
+            projectilePoolRef.current.getActiveCount() === 0 &&
+            !sim.finished &&
+            sim.enemies.length > 0
+          ) {
+            const target = sim.enemies[0]
+            projectilePoolRef.current.spawnProjectile(
+              sim.heroWeaponDmg >= 18 ? 'cannon' : 'spear',
+              sim.heroNormX * w,
+              sim.heroNormY * h - 14,
+              target.normX * w,
+              target.normY * h,
+              390,
+            )
+          }
           const activeProjCount = projectilePoolRef.current.getActiveCount()
           const stTel = useLogicBattleStore.getState()
           const winObj = window as unknown as {

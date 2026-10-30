@@ -40,7 +40,9 @@ export const SerpentCanvas: React.FC = () => {
   const completeEngineRun = useLogicBattleStore((s) => s.completeEngineRun)
   const openMathChallengeModal = useLogicBattleStore((s) => s.openMathChallengeModal)
   const lastSolvedMathRewardAt = useLogicBattleStore((s) => s.lastSolvedMathRewardAt)
-  const lastAppliedMathSeqRef = useRef<number>(0)
+  const lastAppliedMathSeqRef = useRef<number>(
+    useLogicBattleStore.getState().lastSolvedMathRewardAt?.seq ?? 0,
+  )
   const lastSyncedStoreArmyRef = useRef<number>(Math.max(5, initialStoreArmy))
 
   const simRef = useRef<SerpentSimulation>(
@@ -740,6 +742,27 @@ export const SerpentCanvas: React.FC = () => {
               )
             },
           )
+          if (
+            projectilePoolRef.current.getActiveCount() === 0 &&
+            sim.status === 'RUNNING'
+          ) {
+            const alive = sim.getAliveSegments()
+            const tgt = alive[alive.length - 1]
+            if (tgt) {
+              const relTx =
+                torusDelta(sim.hero.x, tgt.x, sim.grid.width) * CELL_PX
+              const relTy =
+                torusDelta(sim.hero.y, tgt.y, sim.grid.height) * CELL_PX
+              projectilePoolRef.current.spawnProjectile(
+                'arrow',
+                centerX,
+                centerY - 10,
+                centerX + relTx,
+                centerY + relTy - 8,
+                210,
+              )
+            }
+          }
           const activeProjCount = projectilePoolRef.current.getActiveCount()
           const stSerpTel = useLogicBattleStore.getState()
           const winSerp = window as unknown as {
