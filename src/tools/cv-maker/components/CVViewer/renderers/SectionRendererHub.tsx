@@ -464,7 +464,7 @@ export function useSectionRenderers({
       'basics', 'meta', 'document_title', 'title', 'themeConfig',
       'work', 'education', 'projects', 'skills', 'languages',
       'certificates', 'interests', 'references', 'photo', 'summary',
-      'resumo', 'contacts', 'civil', 'header', 'cover_letter'
+      'resumo', 'contacts', 'civil', 'header', 'cover_letter', 'coverLetter'
     ])
 
     const customBlocks = ast.blocks.filter(b => !standardKeys.has(b.key))
