@@ -21,6 +21,8 @@ const DEFAULT_DRIVING_SPEED_MPS = 8.33; // ~30 km/h urban average
  * Separates durable graph-routing abstractions from volatile upstream policy details.
  */
 export const ROUTING_POLICY_CONFIG = {
+  defaultPrivacyMode: 'offline_first' as 'offline_first' | 'osrm_opt_in',
+  anonymizeOriginDecimals: 3,
   maxWaypointsPerRequest: 25,
   dedupeStopRadiusMeters: 6,
   osrmTimeoutMs: 5000,
@@ -36,6 +38,24 @@ export const ROUTING_POLICY_CONFIG = {
     ],
   },
 } as const;
+
+/**
+ * Truncates/rounds a GPS coordinate to `decimals` decimal places (default 3 = ~110m grid)
+ * so exact home/device coordinates are not leaked when opting into external OSRM routing.
+ */
+export function anonymizeCoordForOsrm(
+  pt: [number, number],
+  decimals: number = ROUTING_POLICY_CONFIG.anonymizeOriginDecimals
+): [number, number] {
+  const factor = Math.pow(10, Math.max(1, Math.min(6, decimals)));
+  return [
+    Math.round(pt[0] * factor) / factor,
+    Math.round(pt[1] * factor) / factor,
+  ];
+}
+
+export const roundOriginForPrivacy = anonymizeCoordForOsrm;
+export const anonymizeOriginForOsrm = anonymizeCoordForOsrm;
 
 export interface RouteStepSummary {
   instruction: string;
@@ -294,12 +314,17 @@ export async function calculateMultiStopMapRoute(
     label?: string;
     fetchImpl?: typeof fetch;
     endpointsOverride?: readonly string[];
+    privacyMode?: 'offline_first' | 'osrm_opt_in';
+    anonymizeOrigin?: boolean;
   } = {}
 ): Promise<MapRouteResult> {
   const origin = toLatLngTuple(originInput);
   const profile = options.profile || 'foot';
   const timeoutMs = options.timeoutMs ?? ROUTING_POLICY_CONFIG.osrmTimeoutMs;
   const fetchFn = options.fetchImpl ?? (typeof fetch !== 'undefined' ? fetch : undefined);
+  const effectivePrivacyMode: 'offline_first' | 'osrm_opt_in' =
+    options.privacyMode ??
+    (options.fetchImpl ? 'osrm_opt_in' : ROUTING_POLICY_CONFIG.defaultPrivacyMode);
 
   const normalizedUnits: WalkingSequenceUnitInput[] = [];
   for (let idx = 0; idx < stopsInput.length; idx++) {
@@ -442,12 +467,16 @@ export async function calculateMultiStopMapRoute(
     };
   };
 
-  if (!fetchFn) {
+  if (!fetchFn || effectivePrivacyMode === 'offline_first') {
     return buildOfflineFallback();
   }
 
+  const originForOsrm: [number, number] = options.anonymizeOrigin
+    ? anonymizeCoordForOsrm(origin, ROUTING_POLICY_CONFIG.anonymizeOriginDecimals)
+    : origin;
+
   const osrmWaypoints = subsampleWaypointsForOsrm(
-    origin,
+    originForOsrm,
     orderedStops,
     ROUTING_POLICY_CONFIG.maxWaypointsPerRequest
   );
@@ -558,6 +587,8 @@ export async function calculateMapRoute(
         timeoutMs?: number;
         label?: string;
         fetchImpl?: typeof fetch;
+        privacyMode?: 'offline_first' | 'osrm_opt_in';
+        anonymizeOrigin?: boolean;
       }
     | 'foot'
     | 'driving' = {},
@@ -572,6 +603,8 @@ export async function calculateMapRoute(
     timeoutMs: options.timeoutMs ?? 3000,
     label: options.label,
     fetchImpl: options.fetchImpl,
+    privacyMode: options.privacyMode,
+    anonymizeOrigin: options.anonymizeOrigin,
   });
 }
 

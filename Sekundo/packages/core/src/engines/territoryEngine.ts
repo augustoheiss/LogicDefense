@@ -203,6 +203,7 @@ export function computeTerritoryRecencyList(
       locality?: string;
       totalUnits: number;
       workedUnits: number;
+      headerWorked?: boolean;
       assignedAt?: string;
       completedAt?: string;
       latestCompletedAt?: string;
@@ -237,9 +238,15 @@ export function computeTerritoryRecencyList(
         locality: meta.locality,
         totalUnits: 0,
         workedUnits: 0,
+        headerWorked: Number(meta.worked) === 1,
         assignedAt: meta.assignedAt || meta.assigned_date || meta.data_designacao,
         completedAt: meta.completedAt || meta.completed_date || meta.data_conclusao,
       });
+    } else if (tNum && (e.type === 'header' || Array.isArray(meta.boundaryPolygon))) {
+      const existing = territoryMap.get(String(tNum))!;
+      if (Number(meta.worked) === 1 && existing.headerWorked === undefined) {
+        existing.headerWorked = true;
+      }
     }
   });
 
@@ -298,8 +305,16 @@ export function computeTerritoryRecencyList(
   const list: import('./types').TerritoryRecencyItem[] = [];
 
   territoryMap.forEach((data, tNum) => {
-    const isCompleted = data.totalUnits > 0 && data.workedUnits === data.totalUnits;
-    const percent = data.totalUnits > 0 ? Math.round((data.workedUnits / data.totalUnits) * 100) : 0;
+    const isCompleted =
+      data.totalUnits > 0
+        ? data.workedUnits === data.totalUnits
+        : Boolean(data.headerWorked);
+    const percent =
+      data.totalUnits > 0
+        ? Math.round((data.workedUnits / data.totalUnits) * 100)
+        : data.headerWorked
+        ? 100
+        : 0;
     const effectiveAssignedAt = data.assignedAt || data.earliestAssignedAt;
     const effectiveCompletedAt = data.completedAt || (isCompleted ? data.latestCompletedAt : undefined);
 

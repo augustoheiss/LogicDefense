@@ -252,24 +252,42 @@ export interface TournamentMetrics {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Advanced Canvassing Logistics Domain Types
+// 7. Advanced Canvassing Logistics Domain Types (LGPD / GDPR / C-25/17 Safe)
 // ---------------------------------------------------------------------------
 
+/**
+ * Operational Coverage Codes compliant with LGPD Art. 5º II / Art. 11 and CJEU C-25/17:
+ * Focuses strictly on public quadra/street coverage without profiling residents.
+ */
+export type CanvassOperationalCode =
+  | 'VIS' // Visitado / Coberto
+  | 'PEN' // Pendente / Ausente (Nova Tentativa)
+  | 'COM' // Ponto Comercial
+  | 'INA' // Acesso Restrito / Portaria
+  | 'VAC';// Imóvel Vago / Lote
+
 export type CanvassContactCode =
-  | 'CNT' // Contacted
-  | 'NH'  // Not Home
-  | 'REF' // Refused
-  | 'DNC' // Do Not Call
-  | 'LAN' // Foreign Language
-  | 'VAC' // Vacant
-  | 'INA' // Inaccessible / Gate
-  | 'HOS';// Hostile
+  | CanvassOperationalCode
+  | 'CNT' // Contacted (Legacy alias -> VIS)
+  | 'NH'  // Not Home (Legacy alias -> PEN)
+  /** @deprecated LGPD Art. 5º II / CJEU C-25/17: Avoid behavioral profiling of residents */
+  | 'REF' // Refused (Deprecated -> normalized to VIS in LGPD mode)
+  /** @deprecated LGPD Art. 5º II / CJEU C-25/17: Avoid structured refusal registries without consent */
+  | 'DNC' // Do Not Call (Deprecated -> normalized to VIS in LGPD mode)
+  /** @deprecated LGPD Art. 5º II: Avoid profiling ethnic/national origin per door */
+  | 'LAN' // Foreign Language (Deprecated -> normalized to VIS in LGPD mode)
+  /** @deprecated LGPD Art. 5º II / CJEU C-25/17: Never label residents as Hostile */
+  | 'HOS';// Hostile (Deprecated -> normalized to VIS in LGPD mode)
+
+export type RoutingPrivacyMode = 'offline_first' | 'osrm_opt_in';
 
 export interface CanvassingNodeMeta {
   contactCode?: CanvassContactCode;
   eLotOrder?: number;
+  /** @deprecated LGPD Art. 5º II: Do not store ethnic/language origin per individual address */
   foreignLanguage?: string;
   lastVisitedAt?: string;
+  /** @deprecated LGPD / C-25/17: Avoid associating personal publisher names to individual doors */
   canvasserName?: string;
 }
 
@@ -281,6 +299,12 @@ export interface CanvassingMetrics {
   dncCount: number;
   languageCount: number;
   contactRatePercent: number;
+  // LGPD / C-25/17 Operational Quadra/Street Coverage Metrics:
+  visitedCount?: number;
+  pendingCount?: number;
+  commercialCount?: number;
+  inaccessibleCount?: number;
+  vacantCount?: number;
 }
 
 // ---------------------------------------------------------------------------

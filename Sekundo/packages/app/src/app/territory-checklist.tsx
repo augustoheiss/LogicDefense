@@ -66,6 +66,7 @@ import {
   exportUpdatedTerritoryModelCsvFromStorage,
   triggerCsvFileDownloadOrCopy,
   shareLocationPayload,
+  loadRoutingPrivacyMode,
 } from '../storage/omniStorageBridge';
 import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
 import type { MapPin } from '../components/map/mapTypes';
@@ -253,7 +254,11 @@ export default function TerritoryChecklistScreen() {
     try {
       const origin = await resolveOperatorOrigin();
       if (!origin) return;
-      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, 'foot', 4000);
+      const route = await calculateMapRoute(origin, { lat: dest.lat, lng: dest.lng }, {
+        profile: 'foot',
+        timeoutMs: 4000,
+        privacyMode: loadRoutingPrivacyMode(),
+      });
       setActiveRoute(route);
       setRouteDestinationMeta(dest);
     } finally {
@@ -317,6 +322,7 @@ export default function TerritoryChecklistScreen() {
       const route = await calculateMultiStopMapRoute(origin, stops, {
         profile: 'foot',
         timeoutMs: 4500,
+        privacyMode: loadRoutingPrivacyMode(),
       });
       setActiveRoute(route);
       setRouteDestinationMeta({
@@ -343,8 +349,10 @@ export default function TerritoryChecklistScreen() {
     }
 
     // 2. Identify parent groups (nodes that have children or explicit headers)
+    const headerNodeByKey = new Map<string, FlatSkeletonEntry>();
     for (const node of flatRegistry) {
       if (allParentKeys.has(node.key) || node.type === 'header') {
+        headerNodeByKey.set(node.key, node);
         if (!groupMap.has(node.key)) {
           groupMap.set(node.key, { label: node.label, items: [] });
         }
@@ -386,6 +394,19 @@ export default function TerritoryChecklistScreen() {
             groupMap.set(rootKey, { label: `Setor ${rootKey}`, items: [] });
           }
           groupMap.get(rootKey)!.items.push(node);
+        }
+      }
+    }
+
+    // 3b. Support polygon-only KML/GeoJSON quadras (0 leaf houses) so they appear in Checklist and can be toggled
+    for (const [groupKey, data] of groupMap.entries()) {
+      if (data.items.length === 0 && !allParentKeys.has(groupKey)) {
+        const headerNode = headerNodeByKey.get(groupKey);
+        const hasPoly =
+          Array.isArray(headerNode?.meta?.boundaryPolygon) &&
+          headerNode!.meta!.boundaryPolygon.length >= 3;
+        if (headerNode && hasPoly) {
+          data.items.push(headerNode);
         }
       }
     }
@@ -484,13 +505,22 @@ export default function TerritoryChecklistScreen() {
       result.sort((a, b) => pathKey.compare(a.groupKey, b.groupKey));
     }
 
-    // Overall metrics for leaf items
+    // Overall metrics for leaf items (including polygon-only KML quadra headers)
     let overallTotal = 0;
     let overallWorked = 0;
     flatRegistry.forEach((n) => {
-      if ((n.type === 'territory' || n.type === 'slot') && !allParentKeys.has(n.key)) {
+      const meta = (n.meta || {}) as Record<string, any>;
+      const isPolygonOnlyHeader =
+        n.type === 'header' &&
+        !allParentKeys.has(n.key) &&
+        Array.isArray(meta.boundaryPolygon) &&
+        meta.boundaryPolygon.length >= 3;
+      if (
+        ((n.type === 'territory' || n.type === 'slot') && !allParentKeys.has(n.key)) ||
+        isPolygonOnlyHeader
+      ) {
         overallTotal++;
-        if (Number((n.meta as any)?.worked) === 1) {
+        if (Number(meta.worked) === 1) {
           overallWorked++;
         }
       }
@@ -1180,6 +1210,7 @@ export default function TerritoryChecklistScreen() {
                       onSelectPin={(k) => setInlineSelectedKey(k)}
                       onSelectQuadra={(k) => setInlineSelectedKey(k)}
                       onToggleWork={(k) => handleToggleItem(k)}
+                      onToggleQuadraHeaderWorked={(k) => handleToggleItem(k)}
                       onEditPin={(k) => {
                         const found = flatRegistry.find((n) => pathKey.equals(n.key, k));
                         if (found) setEditingAddressItem(found);
@@ -1322,6 +1353,7 @@ export default function TerritoryChecklistScreen() {
               {/* Group Header */}
               <View style={styles.groupHeader}>
                 <Pressable
+                  testID={`checklist-group-header-${group.groupKey}`}
                   onPress={() => toggleExpanded(`G:${group.groupKey}`)}
                   style={styles.groupHeaderLeft}
                   accessibilityRole="button"
@@ -1478,6 +1510,7 @@ export default function TerritoryChecklistScreen() {
                     </Pressable>
                   ) : null}
                   <Pressable
+                    testID={`checklist-group-batch-toggle-${group.groupKey}`}
                     onPress={() => handleToggleQuadra(group)}
                     style={[
                       styles.batchToggleBtn,
@@ -1494,7 +1527,9 @@ export default function TerritoryChecklistScreen() {
               {/* Group Recency & Progress Meta */}
               <View style={styles.groupMetaBar}>
                 <Text style={styles.groupProgressText}>
-                  {group.worked}/{group.total} casas concluídas
+                  {group.items.length === 1 && group.items[0].type === 'header'
+                    ? `🗺️ Polígono KML sem casas (${group.worked}/${group.total} concluído)`
+                    : `${group.worked}/${group.total} casas concluídas`}
                 </Text>
                 {group.isAllWorked ? (
                   <View style={styles.groupCompletedBadge}>
@@ -1606,6 +1641,7 @@ export default function TerritoryChecklistScreen() {
                     >
                       {/* Left: Instant Checkbox Toggle */}
                       <Pressable
+                        testID={`checklist-item-toggle-${item.key}`}
                         onPress={() => handleToggleItem(item.key)}
                         style={[
                           styles.checkboxBtn,
@@ -1628,7 +1664,11 @@ export default function TerritoryChecklistScreen() {
                               </View>
                             ) : null}
                             <View style={styles.propTypeBadge}>
-                              <Text style={styles.propTypeText}>{propTypeLabels[propType] || '🏠 Residência'}</Text>
+                              <Text style={styles.propTypeText}>
+                                {item.type === 'header'
+                                  ? '🗺️ Polígono KML (Sem Casas)'
+                                  : propTypeLabels[propType] || '🏠 Residência'}
+                              </Text>
                             </View>
                             {isForeign ? (
                               <View style={styles.foreignBadge}>

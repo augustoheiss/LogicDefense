@@ -31,11 +31,16 @@ import {
   transferAddressesBetweenTerritories,
   formatShareTerritoryOrQuadraLocationsText,
   resolveTerritoryNumber,
+  importTerritoryMultiFormat,
+  exportTerritoryMultiFormat,
+  buildCleanRoomTerritoryImportSample,
   type FlatSkeletonEntry,
+  type TerritoryMultiIoFormat,
 } from '@sekundo/core';
 import {
   exportUpdatedTerritoryModelCsvFromStorage,
   triggerCsvFileDownloadOrCopy,
+  triggerBinaryFileDownload,
   shareLocationPayload,
   loadTerritoryRegistryBackupSnapshot,
 } from '../../storage/omniStorageBridge';
@@ -136,6 +141,10 @@ export function TerritoryManageModal({
   ]);
   const [shareFilterQuery, setShareFilterQuery] = useState('');
   const [copiedShare, setCopiedShare] = useState(false);
+  const [exportPrivacySafeMode, setExportPrivacySafeMode] = useState(true);
+  const [importMergeMode, setImportMergeMode] = useState<'merge' | 'replace'>('merge');
+  const [importPrivacySanitize, setImportPrivacySanitize] = useState(true);
+  const [includeKmlPoints, setIncludeKmlPoints] = useState(false);
 
   // --- Tab 5: Transfer Addresses Between Territories State ---
   const [transferSourceTerritory, setTransferSourceTerritory] = useState(effectiveTargetTerritory);
@@ -153,12 +162,17 @@ export function TerritoryManageModal({
   const [transferNewDestName, setTransferNewDestName] = useState('');
   const [transferDeleteEmptySource, setTransferDeleteEmptySource] = useState(false);
 
-  // Sync fields when modal opens or target changes
+  // Reset tab and feedback only when modal opens or explicit initialTab/target changes
   useEffect(() => {
     if (!visible) return;
     setActiveTab(initialTab);
     setFeedback(null);
     setConfirmDelete(false);
+  }, [visible, initialTab, targetGroupKey, targetAddressKey]);
+
+  // Sync fields when modal opens or target changes
+  useEffect(() => {
+    if (!visible) return;
 
     const tNum = effectiveTargetTerritory;
     setSelectedEditTerritory(tNum);
@@ -421,7 +435,8 @@ export function TerritoryManageModal({
     try {
       const { csvText, filename } = await exportUpdatedTerritoryModelCsvFromStorage(
         cleanNodes,
-        mode
+        mode,
+        { privacySafeMode: exportPrivacySafeMode }
       );
       const outcome = await triggerCsvFileDownloadOrCopy(csvText, filename);
       setFeedback(
@@ -434,6 +449,148 @@ export function TerritoryManageModal({
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleMultiFormatExport = async (
+    format: TerritoryMultiIoFormat,
+    spreadsheetSchema?: 'external_18col' | 'sekundo_19col'
+  ) => {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const payload = exportTerritoryMultiFormat(cleanNodes, {
+        format,
+        privacySafeMode: exportPrivacySafeMode,
+        spreadsheetSchema,
+        includeKmlPoints,
+      });
+      if (payload.bytes) {
+        triggerBinaryFileDownload(payload.bytes, payload.fileName, payload.mimeType);
+      } else if (payload.text) {
+        await triggerCsvFileDownloadOrCopy(payload.text, payload.fileName);
+      }
+      setFeedback(
+        `📥 Arquivo "${payload.fileName}" (${format.toUpperCase()}) exportado${
+          exportPrivacySafeMode ? ' com Escudo LGPD / C-25/17 ativo!' : '!'
+        }`
+      );
+    } catch (err: any) {
+      setFeedback(`⚠️ Erro ao exportar ${format.toUpperCase()}: ${err?.message || 'Falha'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDownloadCleanRoomSample = async (
+    sampleType: 'xlsx_18col' | 'csv_18col' | 'csv_19col' | 'kml_folders' | 'geojson'
+  ) => {
+    try {
+      const sample = buildCleanRoomTerritoryImportSample(sampleType);
+      if (sample.bytes) {
+        triggerBinaryFileDownload(sample.bytes, sample.fileName, sample.mimeType);
+      } else if (sample.text) {
+        await triggerCsvFileDownloadOrCopy(sample.text, sample.fileName);
+      }
+      setFeedback(`📄 Modelo Clean-Room "${sample.fileName}" baixado sem dados pessoais!`);
+    } catch (err: any) {
+      setFeedback(`⚠️ Erro ao gerar modelo: ${err?.message || 'Falha'}`);
+    }
+  };
+
+  const applyImportedMultiFormatNodes = async (
+    importedNodes: FlatSkeletonEntry[],
+    summaryMsg: string
+  ) => {
+    if (importedNodes.length === 0) {
+      setFeedback('⚠️ Nenhum território ou polígono válido encontrado no arquivo importado.');
+      return;
+    }
+    let nextNodes: FlatSkeletonEntry[];
+    if (importMergeMode === 'replace') {
+      nextNodes = importedNodes;
+    } else {
+      const byKey = new Map<string, FlatSkeletonEntry>();
+      for (const n of cleanNodes) byKey.set(n.key, n);
+      for (const n of importedNodes) {
+        const meta = (n.meta || {}) as Record<string, any>;
+        const isPolyHeader =
+          n.type === 'header' &&
+          Array.isArray(meta.boundaryPolygon) &&
+          meta.boundaryPolygon.length >= 3;
+        const hasImportedChildren = importedNodes.some(
+          (other) => other.key !== n.key && other.key.startsWith(`${n.key}-`)
+        );
+        if (isPolyHeader && !hasImportedChildren) {
+          for (const existingKey of Array.from(byKey.keys())) {
+            if (existingKey.startsWith(`${n.key}-`)) {
+              byKey.delete(existingKey);
+            }
+          }
+        }
+        byKey.set(n.key, n);
+      }
+      nextNodes = Array.from(byKey.values());
+    }
+    const firstTNum = resolveTerritoryNumber(importedNodes[0]);
+    await onCommitNodes(nextNodes, {
+      activeTerritoryNumber: firstTNum || effectiveTargetTerritory,
+      message: summaryMsg,
+    });
+    setFeedback(summaryMsg);
+  };
+
+  const handleLoadCleanRoomKmlDemo = async () => {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const sample = buildCleanRoomTerritoryImportSample('kml_folders');
+      const res = importTerritoryMultiFormat(
+        { text: sample.text, fileName: sample.fileName },
+        { privacySafeMode: importPrivacySanitize }
+      );
+      await applyImportedMultiFormatNodes(
+        res.nodes,
+        `✓ KML Demo importado: ${res.polygonsCount} polígono(s) em ${res.territoriesCount} bairro(s)/território(s) sem exigir casas individuais!`
+      );
+    } catch (err: any) {
+      setFeedback(`⚠️ Erro ao carregar KML Demo: ${err?.message || 'Falha'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePickAndImportMultiFormatFile = () => {
+    if (typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.csv,.kml,.geojson,.json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setBusy(true);
+      setFeedback(null);
+      try {
+        const ab = await file.arrayBuffer();
+        const bytes = new Uint8Array(ab);
+        const isBinaryXlsx =
+          file.name.toLowerCase().endsWith('.xlsx') ||
+          (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b);
+        const text = isBinaryXlsx ? undefined : new TextDecoder('utf-8').decode(bytes);
+        const res = importTerritoryMultiFormat(
+          { bytes, text, fileName: file.name },
+          { privacySafeMode: importPrivacySanitize }
+        );
+        await applyImportedMultiFormatNodes(
+          res.nodes,
+          `✓ Arquivo "${file.name}" (${res.format.toUpperCase()}) importado: ${res.territoriesCount} território(s), ${res.polygonsCount} polígono(s) e ${res.addressesCount} endereço(s)!`
+        );
+      } catch (err: any) {
+        setFeedback(`⚠️ Erro ao importar "${file.name}": ${err?.message || 'Formato inválido'}`);
+      } finally {
+        setBusy(false);
+      }
+    };
+    input.click();
   };
 
   // Leaf addresses belonging to `transferSourceTerritory`
@@ -747,7 +904,7 @@ export function TerritoryManageModal({
                   activeTab === 'share_export' && styles.tabBtnTextActive,
                 ]}
               >
-                📲 Compartilhar & CSV
+                📥 Importar / 📤 Exportar & WhatsApp
               </Text>
             </Pressable>
           </View>
@@ -1551,9 +1708,264 @@ export function TerritoryManageModal({
               </View>
             ) : null}
 
-            {/* ==================== TAB 4: SHARE LOCATIONS & EXPORT CSV ==================== */}
+            {/* ==================== TAB 4: IMPORT / EXPORT MULTI-FORMAT & SHARE LOCATIONS ==================== */}
             {activeTab === 'share_export' ? (
               <>
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionTitle}>
+                    📥 IMPORTAR MULTI-FORMATO (.XLSX, .CSV, .KML, .GEOJSON, .JSON)
+                  </Text>
+                  <Text style={styles.helperText}>
+                    Importe planilhas de 18 colunas (.xlsx / .csv), polígonos .kml por bairro (Folder=Bairro → Placemark=Território, mesmo sem casas cadastradas!) ou GeoJSON/JSON.
+                  </Text>
+
+                  <View style={styles.scopeRow}>
+                    <Pressable
+                      testID="import-mode-merge-btn"
+                      onPress={() => setImportMergeMode('merge')}
+                      style={[
+                        styles.scopeBtn,
+                        importMergeMode === 'merge' && styles.scopeBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.scopeBtnText,
+                          importMergeMode === 'merge' && styles.scopeBtnTextActive,
+                        ]}
+                      >
+                        🔗 Mesclar aos Existentes
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID="import-mode-replace-btn"
+                      onPress={() => setImportMergeMode('replace')}
+                      style={[
+                        styles.scopeBtn,
+                        importMergeMode === 'replace' && styles.scopeBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.scopeBtnText,
+                          importMergeMode === 'replace' && styles.scopeBtnTextActive,
+                        ]}
+                      >
+                        🔄 Substituir Base Atual
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID="import-privacy-sanitize-toggle"
+                      onPress={() => setImportPrivacySanitize((p) => !p)}
+                      style={[styles.scopeBtn, importPrivacySanitize && styles.scopeBtnActive]}
+                    >
+                      <Text
+                        style={[
+                          styles.scopeBtnText,
+                          importPrivacySanitize && styles.scopeBtnTextActive,
+                        ]}
+                      >
+                        {importPrivacySanitize
+                          ? '🛡️ Higienizar LGPD na Importação'
+                          : '⚠️ Manter Notas Originais'}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.actionRow}>
+                    <Pressable
+                      testID="import-multi-format-file-btn"
+                      disabled={busy}
+                      onPress={handlePickAndImportMultiFormatFile}
+                      style={[styles.primaryBtn, { flex: 1 }]}
+                    >
+                      <Text style={styles.primaryBtnText}>
+                        📂 Importar Arquivo (.xlsx, .csv, .kml, .geojson, .json)
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      testID="import-demo-kml-polygons-btn"
+                      disabled={busy}
+                      onPress={handleLoadCleanRoomKmlDemo}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>
+                        🧪 Testar KML Demo (Polígonos Sem Casas)
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <Text style={[styles.helperText, { marginTop: 4, fontSize: 11 }]}>
+                    📄 Baixar Modelos Clean-Room (100% sintéticos, sem dados pessoais) para migração de outros sistemas:
+                  </Text>
+                  <View style={styles.actionRow}>
+                    <Pressable
+                      testID="sample-download-xlsx18-btn"
+                      onPress={() => handleDownloadCleanRoomSample('xlsx_18col')}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>📊 Modelo .XLSX (18 cols)</Text>
+                    </Pressable>
+                    <Pressable
+                      testID="sample-download-csv18-btn"
+                      onPress={() => handleDownloadCleanRoomSample('csv_18col')}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>📄 Modelo .CSV (18 cols)</Text>
+                    </Pressable>
+                    <Pressable
+                      testID="sample-download-kml-btn"
+                      onPress={() => handleDownloadCleanRoomSample('kml_folders')}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>🗺️ Modelo .KML (Polígonos)</Text>
+                    </Pressable>
+                    <Pressable
+                      testID="sample-download-geojson-btn"
+                      onPress={() => handleDownloadCleanRoomSample('geojson')}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>🌐 Modelo .GeoJSON</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionTitle}>
+                    📤 EXPORTAR MULTI-FORMATO (.XLSX, .CSV, .KML, .GEOJSON, .JSON) & ESCUDO LGPD / C-25/17
+                  </Text>
+                  <Text style={styles.helperText}>
+                    Exporte os territórios e polígonos da memória para Excel (.xlsx), Google Earth / GIS (.kml), GeoJSON, JSON ou CSV. O Escudo LGPD / C-25/17 omite nomes pessoais e notas comportamentais por padrão.
+                  </Text>
+
+                  <View style={styles.scopeRow}>
+                    <Pressable
+                      testID="export-privacy-lgpd-toggle"
+                      onPress={() => setExportPrivacySafeMode((prev) => !prev)}
+                      style={[styles.scopeBtn, exportPrivacySafeMode && styles.scopeBtnActive]}
+                    >
+                      <Text
+                        style={[
+                          styles.scopeBtnText,
+                          exportPrivacySafeMode && styles.scopeBtnTextActive,
+                        ]}
+                      >
+                        {exportPrivacySafeMode
+                          ? '🛡️ Modo Conformidade LGPD / C-25/17 ATIVO (Sem Dados Pessoais / Notas)'
+                          : '⚠️ Exportação Completa (Inclui Nomes e Notas Locais)'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      testID="export-kml-include-points-toggle"
+                      onPress={() => setIncludeKmlPoints((prev) => !prev)}
+                      style={[styles.scopeBtn, includeKmlPoints && styles.scopeBtnActive]}
+                    >
+                      <Text
+                        style={[
+                          styles.scopeBtnText,
+                          includeKmlPoints && styles.scopeBtnTextActive,
+                        ]}
+                      >
+                        {includeKmlPoints
+                          ? '📍 KML: Polígonos + Casas'
+                          : '🗺️ KML: Apenas Polígonos de Quadra/Território'}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={{ gap: 8 }}>
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        testID="export-territory-xlsx-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('xlsx', 'external_18col')}
+                        style={[styles.primaryBtn, { flex: 1 }]}
+                      >
+                        <Text style={styles.primaryBtnText}>
+                          📊 Exportar .XLSX (18 Colunas)
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID="export-territory-kml-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('kml')}
+                        style={[styles.primaryBtn, { flex: 1 }]}
+                      >
+                        <Text style={styles.primaryBtnText}>
+                          🗺️ Exportar .KML (Folder=Bairro → Polígonos)
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        testID="export-territory-geojson-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('geojson')}
+                        style={[styles.secondaryBtn, { flex: 1 }]}
+                      >
+                        <Text style={styles.secondaryBtnText}>🌐 Exportar .GeoJSON</Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID="export-territory-json-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('json')}
+                        style={[styles.secondaryBtn, { flex: 1 }]}
+                      >
+                        <Text style={styles.secondaryBtnText}>📦 Exportar .JSON</Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID="export-territory-csv18-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('csv', 'external_18col')}
+                        style={[styles.secondaryBtn, { flex: 1 }]}
+                      >
+                        <Text style={styles.secondaryBtnText}>📄 Exportar .CSV (18 cols)</Text>
+                      </Pressable>
+                    </View>
+
+                    <Pressable
+                      testID="export-territory-flat-csv-btn"
+                      disabled={busy}
+                      onPress={() => handleExportCsv('flat_s13')}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>
+                        📥 Baixar Novo Modelo CSV de Territórios (19 Colunas Sekundo)
+                      </Text>
+                    </Pressable>
+
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        testID="export-territory-omni-single-btn"
+                        disabled={busy}
+                        onPress={() => handleExportCsv('omni_single')}
+                        style={[styles.secondaryBtn, { flex: 1 }]}
+                      >
+                        <Text style={styles.secondaryBtnText}>
+                          📦 Exportar Partição Territory CSV
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID="export-territory-omni-full-btn"
+                        disabled={busy}
+                        onPress={() => handleExportCsv('omni_full')}
+                        style={[styles.secondaryBtn, { flex: 1 }]}
+                      >
+                        <Text style={styles.secondaryBtnText}>
+                          🌐 Exportar CSV Geral (Omni Completo)
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+
                 <View style={styles.sectionCard}>
                   <Text style={styles.sectionTitle}>
                     📲 COMPARTILHAR LOCALIZAÇÕES DIRETO (FILTRO POR LISTA + MULTI-SELEÇÃO)
@@ -1751,52 +2163,6 @@ export function TerritoryManageModal({
                     >
                       <Text style={styles.secondaryBtnText}>🗺️ Abrir Maps</Text>
                     </Pressable>
-                  </View>
-                </View>
-
-                <View style={styles.sectionCard}>
-                  <Text style={styles.sectionTitle}>
-                    📤 EXPORTAR NOVO MODELO CSV DE ACORDO COM AS ALTERAÇÕES
-                  </Text>
-                  <Text style={styles.helperText}>
-                    Gera e baixa a planilha atualizada diretamente da memória do aplicativo com todos os novos nomes, números e territórios criados, sem precisar editar CSV manualmente.
-                  </Text>
-
-                  <View style={{ gap: 8 }}>
-                    <Pressable
-                      testID="export-territory-flat-csv-btn"
-                      disabled={busy}
-                      onPress={() => handleExportCsv('flat_s13')}
-                      style={styles.primaryBtn}
-                    >
-                      <Text style={styles.primaryBtnText}>
-                        📥 Baixar Novo Modelo CSV de Territórios (Excel / Registro de Territórios)
-                      </Text>
-                    </Pressable>
-
-                    <View style={styles.actionRow}>
-                      <Pressable
-                        testID="export-territory-omni-single-btn"
-                        disabled={busy}
-                        onPress={() => handleExportCsv('omni_single')}
-                        style={[styles.secondaryBtn, { flex: 1 }]}
-                      >
-                        <Text style={styles.secondaryBtnText}>
-                          📦 Exportar Partição Territory CSV
-                        </Text>
-                      </Pressable>
-
-                      <Pressable
-                        testID="export-territory-omni-full-btn"
-                        disabled={busy}
-                        onPress={() => handleExportCsv('omni_full')}
-                        style={[styles.secondaryBtn, { flex: 1 }]}
-                      >
-                        <Text style={styles.secondaryBtnText}>
-                          🌐 Exportar CSV Geral (Omni Completo)
-                        </Text>
-                      </Pressable>
-                    </View>
                   </View>
                 </View>
               </>

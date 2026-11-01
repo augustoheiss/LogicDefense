@@ -14,6 +14,7 @@ import * as pathKey from '../skeleton/pathKey';
 import { resolveTerritoryNumber, parseLatLng } from '../geo/geoUtils';
 import { buildGoogleMapsDirectionsUrl, buildGoogleMapsSearchUrl } from '../geo/googleMapsLinks';
 import { parseAddressLine } from '../geo/quadraPolygonEngine';
+import { sanitizeCanvassNotesForLgpd } from '../engines/canvassingEngine';
 
 export interface TerritoryIdentitySummary {
   territoryNumber: string;
@@ -300,7 +301,7 @@ export function extractTerritorySummaries(
 
     const normKey = safeNormalizeKey(node.key);
     const isHeaderOnly =
-      parentKeys.has(normKey) || (safeDepth(node.key) === 1 && node.type === 'header');
+      parentKeys.has(normKey) || node.type === 'header';
     if (isHeaderOnly) {
       const cleanLabel = String(node.label || '').trim();
       if (cleanLabel) {
@@ -1074,11 +1075,94 @@ function escapeCsvCell(val: unknown): string {
   return str;
 }
 
+function scrubResidentProfilingText(raw?: string | null): string {
+  return sanitizeCanvassNotesForLgpd(raw);
+}
+
+/**
+ * Sanitizes a territory/address node for LGPD Art. 5º II & Art. 11 / GDPR / CJEU C-25/17 compliance:
+ * - Strips behavioral/refusal/ethnic profiling flags (`dnc`, `isForeign`, `is_foreign`, `language`, `[NÃO VISITAR]`, `HOS`, `REF`, `LAN`)
+ * - Strips personal worker names (`workerName`, `value`, `canvasserName`) when `stripPersonalNames !== false`
+ * - Strips resident notes (`notes`, `observacoes`) when `stripResidentNotes !== false`
+ */
+export function sanitizeTerritoryNodeForPrivacy(
+  node: FlatSkeletonEntry,
+  options: {
+    stripPersonalNames?: boolean;
+    stripResidentNotes?: boolean;
+    stripProfilingFlags?: boolean;
+  } = {}
+): FlatSkeletonEntry {
+  const stripPersonalNames = options.stripPersonalNames !== false;
+  const stripResidentNotes = options.stripResidentNotes !== false;
+  const stripProfilingFlags = options.stripProfilingFlags !== false;
+
+  const prevMeta = (node.meta || {}) as Record<string, any>;
+  const nextMeta: Record<string, any> = { ...prevMeta };
+
+  if (stripProfilingFlags) {
+    delete nextMeta.dnc;
+    delete nextMeta.isForeign;
+    delete nextMeta.is_foreign;
+    delete nextMeta.language;
+    delete nextMeta.idioma;
+    delete nextMeta.foreignLanguage;
+    if (
+      typeof nextMeta.contactCode === 'string' &&
+      ['HOS', 'REF', 'LAN', 'DNC'].includes(nextMeta.contactCode.toUpperCase())
+    ) {
+      nextMeta.contactCode = 'VIS';
+    }
+    if (typeof nextMeta.line === 'string') {
+      nextMeta.line = scrubResidentProfilingText(nextMeta.line);
+    }
+  }
+
+  if (stripPersonalNames) {
+    delete nextMeta.workerName;
+    delete nextMeta.canvasserName;
+    if (Array.isArray(nextMeta.assignmentHistory)) {
+      nextMeta.assignmentHistory = nextMeta.assignmentHistory.map((cycle: any) => ({
+        ...cycle,
+        assignedTo: 'Designado',
+      }));
+    }
+  }
+
+  if (stripResidentNotes) {
+    delete nextMeta.notes;
+    delete nextMeta.observacoes;
+    delete nextMeta.obs;
+  } else if (typeof nextMeta.notes === 'string') {
+    nextMeta.notes = scrubResidentProfilingText(nextMeta.notes);
+  }
+
+  const nextLabel = stripProfilingFlags
+    ? scrubResidentProfilingText(node.label)
+    : node.label;
+
+  return {
+    ...node,
+    label: nextLabel,
+    value: stripPersonalNames ? '' : node.value,
+    email: stripPersonalNames ? '' : node.email,
+    meta: nextMeta,
+  };
+}
+
 /**
  * Exports the current in-memory territory nodes as a clean, human-editable Territory Ledger CSV model
  * that can be opened directly in Excel/Google Sheets or re-imported into Sekundo.
+ * When `options.privacySafeMode` is true, strips personal names, language/DNC profiling, and resident notes.
  */
-export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntry[]): string {
+export function buildTerritoryModelCsvText(
+  cleanTerritoryNodes: FlatSkeletonEntry[],
+  options?: { privacySafeMode?: boolean }
+): string {
+  const effectiveNodes = options?.privacySafeMode
+    ? cleanTerritoryNodes.map((n) => sanitizeTerritoryNodeForPrivacy(n))
+    : cleanTerritoryNodes;
+
   const headers = [
     'Codigo',
     'Territorio',
@@ -1103,7 +1187,7 @@ export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntr
 
   const parentLabels = new Map<string, string>();
   const parentKeys = new Set<string>();
-  for (const node of cleanTerritoryNodes) {
+  for (const node of effectiveNodes) {
     if (safeDepth(node.key) === 1) {
       parentLabels.set(safeRootKey(node.key), node.label || node.key);
     }
@@ -1115,13 +1199,18 @@ export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntr
 
   const lines: string[] = [headers.join(';')];
 
-  for (const node of cleanTerritoryNodes) {
+  for (const node of effectiveNodes) {
     const normKey = safeNormalizeKey(node.key);
-    if ((parentKeys.has(normKey) && safeDepth(node.key) === 1) || node.type === 'header') {
+    const meta = (node.meta || {}) as Record<string, any>;
+    const isPolygonOnlyQuadra =
+      node.type === 'header' &&
+      !parentKeys.has(normKey) &&
+      Array.isArray(meta.boundaryPolygon) &&
+      meta.boundaryPolygon.length >= 3;
+    if (((parentKeys.has(normKey) && safeDepth(node.key) === 1) || node.type === 'header') && !isPolygonOnlyQuadra) {
       continue;
     }
 
-    const meta = (node.meta || {}) as Record<string, any>;
     const territoryNumber = resolveTerritoryNumber(node);
     const territoryName = String(
       meta.territory_name || meta.locality || meta.neighborhood || meta.bairro || ''
@@ -1129,7 +1218,7 @@ export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntr
     const quadraKey = safeRootKey(node.key);
     const quadraName = parentLabels.get(quadraKey) || quadraKey;
 
-    const rawLine = String(meta.line || node.label || '').trim();
+    const rawLine = scrubResidentProfilingText(String(meta.line || node.label || '').trim());
     const parsedAddr = parseAddressLine(rawLine);
     const street = String(meta.street || parsedAddr.street || rawLine).trim();
     const numberStr = String(meta.number || parsedAddr.number || '').trim();
@@ -1142,13 +1231,13 @@ export function buildTerritoryModelCsvText(cleanTerritoryNodes: FlatSkeletonEntr
     const coords = parseLatLng(meta);
     const latStr = coords ? String(coords.lat) : '';
     const lngStr = coords ? String(coords.lng) : '';
-    const propType = String(meta.property_type || 'residencial').trim();
+    const propType = String(meta.property_type || (isPolygonOnlyQuadra ? 'quadra_poligonal' : 'residencial')).trim();
     const language = String(meta.language || meta.idioma || '').trim();
     const worked = Number(meta.worked) === 1 ? '1' : '0';
     const worker = String(meta.workerName || node.value || '').trim();
     const assignedAt = String(meta.assignedAt || meta.assigned_date || '').trim();
     const completedAt = String(meta.completedAt || meta.completed_date || '').trim();
-    const notes = String(meta.notes || meta.observacoes || '').trim();
+    const notes = scrubResidentProfilingText(String(meta.notes || meta.observacoes || '').trim());
 
     const row = [
       node.key,
@@ -1192,12 +1281,14 @@ export function formatShareAddressLocationText(
   const territoryName = String(
     meta.territory_name || meta.locality || meta.neighborhood || meta.bairro || ''
   ).trim();
-  const line = String(meta.line || item.label || '').trim();
+  const line = scrubResidentProfilingText(String(meta.line || item.label || '').trim());
   const neighborhood = String(meta.line2 || meta.neighborhood || meta.bairro || '').trim();
   const city = String(meta.city || meta.cidade || fallbackCity || '').trim();
   const state = String(meta.state || meta.uf || '').trim();
   const postalcode = String(meta.postalcode || meta.cep || '').trim();
-  const notes = options?.includeNotes ? String(meta.notes || meta.observacoes || '').trim() : '';
+  const notes = options?.includeNotes
+    ? scrubResidentProfilingText(String(meta.notes || meta.observacoes || '').trim())
+    : '';
   const coords = parseLatLng(meta);
 
   const mapsUrl = buildGoogleMapsDirectionsUrl({
@@ -1273,7 +1364,7 @@ export function formatShareTerritoryOrQuadraLocationsText(params: {
 
   const leafItems = params.items.filter((item) => {
     const normKey = safeNormalizeKey(item.key);
-    if (parentKeys.has(normKey) && safeDepth(item.key) === 1) return false;
+    if (parentKeys.has(normKey) || item.type === 'header') return false;
     if (params.quadraKey) {
       const rootSeg = safeRootKey(item.key);
       if (!safeKeysEqual(rootSeg, params.quadraKey)) return false;
@@ -1290,9 +1381,25 @@ export function formatShareTerritoryOrQuadraLocationsText(params: {
     : leafItems;
 
   const validCoords: Array<{ lat: number; lng: number }> = [];
-  for (const item of displayItems.length > 0 ? displayItems : leafItems) {
-    const c = parseLatLng((item.meta || {}) as Record<string, any>);
-    if (c) validCoords.push(c);
+  const coordSourceItems =
+    displayItems.length > 0
+      ? displayItems
+      : leafItems.length > 0
+      ? leafItems
+      : params.items;
+  for (const item of coordSourceItems) {
+    const m = (item.meta || {}) as Record<string, any>;
+    const c = parseLatLng(m);
+    if (c) {
+      validCoords.push(c);
+    } else if (Array.isArray(m.boundaryPolygon) && m.boundaryPolygon.length >= 3) {
+      const poly = m.boundaryPolygon as [number, number][];
+      const avgLat = poly.reduce((s, p) => s + Number(p[0]), 0) / poly.length;
+      const avgLng = poly.reduce((s, p) => s + Number(p[1]), 0) / poly.length;
+      if (Number.isFinite(avgLat) && Number.isFinite(avgLng)) {
+        validCoords.push({ lat: avgLat, lng: avgLng });
+      }
+    }
   }
 
   const firstMeta = (leafItems[0]?.meta || {}) as Record<string, any>;
@@ -1334,7 +1441,7 @@ export function formatShareTerritoryOrQuadraLocationsText(params: {
     const m = (item.meta || {}) as Record<string, any>;
     const isDone = Number(m.worked) === 1;
     const statusIcon = isDone ? '✅' : '⬜';
-    const addrLine = String(m.line || item.label || item.key).trim();
+    const addrLine = scrubResidentProfilingText(String(m.line || item.label || item.key).trim());
     const coords = parseLatLng(m);
     const pinUrl = buildGoogleMapsSearchUrl({
       lat: coords?.lat,
@@ -1344,7 +1451,7 @@ export function formatShareTerritoryOrQuadraLocationsText(params: {
     });
     const noteStr =
       params.includeNotes === true
-        ? String(m.notes || m.obs || m.observacao || '').trim()
+        ? scrubResidentProfilingText(String(m.notes || m.obs || m.observacao || '').trim())
         : '';
     const noteSuffix = noteStr ? ` (Obs: ${noteStr})` : '';
     lines.push(`${idx + 1}. ${statusIcon} ${addrLine}${noteSuffix} — ${pinUrl}`);

@@ -322,7 +322,8 @@ export async function persistTerritoryRegistryMutation(params: {
  */
 export async function exportUpdatedTerritoryModelCsvFromStorage(
   currentCleanNodes?: FlatSkeletonEntry[],
-  mode: 'flat_s13' | 'omni_single' | 'omni_full' = 'flat_s13'
+  mode: 'flat_s13' | 'omni_single' | 'omni_full' = 'flat_s13',
+  options?: { privacySafeMode?: boolean }
 ): Promise<{ csvText: string; filename: string }> {
   const nodes =
     currentCleanNodes && currentCleanNodes.length > 0
@@ -336,7 +337,9 @@ export async function exportUpdatedTerritoryModelCsvFromStorage(
   const stamp = new Date().toISOString().slice(0, 10);
   if (mode === 'flat_s13') {
     return {
-      csvText: buildTerritoryModelCsvText(nodes),
+      csvText: buildTerritoryModelCsvText(nodes, {
+        privacySafeMode: options?.privacySafeMode !== false,
+      }),
       filename: `modelo_territorios_${stamp}.csv`,
     };
   }
@@ -1250,4 +1253,153 @@ export async function commitOmniCsvBundleToStorage(
     restoredEventIds,
   };
 }
+
+/**
+ * Triggers a binary file download (.xlsx, etc.) in Web browsers.
+ */
+export function triggerBinaryFileDownload(
+  bytes: Uint8Array,
+  filename: string,
+  mimeType: string = 'application/octet-stream'
+): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  try {
+    const blob = new Blob([bytes as unknown as BlobPart], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    console.warn('Sekundo: Binary file download fallback error', err);
+  }
+}
+
+export interface PaperMapOverlayConfig {
+  enabled: boolean;
+  imageUrl: string;
+  opacity: number;
+  southWest: [number, number];
+  northEast: [number, number];
+  label?: string;
+}
+
+export const PAPER_MAP_OVERLAY_STORAGE_KEY = 'sekundo:paper_map_overlay:v1';
+export const PAPER_MAP_OVERLAY_STORAGE_KEY_ALT = 'sekundo:paper_map_overlay_v1';
+export const ROUTING_PRIVACY_MODE_STORAGE_KEY = 'sekundo:routing_privacy_mode:v1';
+export const ROUTING_PRIVACY_MODE_STORAGE_KEY_ALT = 'sekundo:routing_privacy_mode_v1';
+
+/**
+ * Generates a synthetic vintage scanned paper map SVG data URI for instant 1-click testing
+ * of the Paper Map Overlay (`ImageOverlay`) without requiring an external image file.
+ */
+export function buildDemoPaperMapBlueprintSvgDataUrl(
+  territoryLabel: string = 'Mapa de Papel Histórico (Demo)'
+): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#fef3c7" fill-opacity="0.88" stroke="#92400e" stroke-width="8"/>
+  <rect x="20" y="20" width="760" height="560" fill="none" stroke="#b45309" stroke-width="2" stroke-dasharray="10,6"/>
+  <g stroke="#d97706" stroke-width="3" opacity="0.65">
+    <line x1="120" y1="40" x2="120" y2="560"/>
+    <line x1="280" y1="40" x2="280" y2="560"/>
+    <line x1="460" y1="40" x2="460" y2="560"/>
+    <line x1="640" y1="40" x2="640" y2="560"/>
+    <line x1="40" y1="140" x2="760" y2="140"/>
+    <line x1="40" y1="300" x2="760" y2="300"/>
+    <line x1="40" y1="450" x2="760" y2="450"/>
+  </g>
+  <rect x="135" y="155" width="130" height="130" fill="#fde68a" stroke="#92400e" stroke-width="3"/>
+  <text x="200" y="225" font-family="monospace" font-size="18" font-weight="bold" fill="#78350f" text-anchor="middle">QUADRA A</text>
+  <rect x="295" y="155" width="150" height="130" fill="#fde68a" stroke="#92400e" stroke-width="3"/>
+  <text x="370" y="225" font-family="monospace" font-size="18" font-weight="bold" fill="#78350f" text-anchor="middle">QUADRA B</text>
+  <rect x="295" y="315" width="150" height="120" fill="#fde68a" stroke="#92400e" stroke-width="3"/>
+  <text x="370" y="380" font-family="monospace" font-size="18" font-weight="bold" fill="#78350f" text-anchor="middle">QUADRA C</text>
+  <rect x="40" y="40" width="420" height="44" rx="6" fill="#78350f"/>
+  <text x="56" y="68" font-family="sans-serif" font-size="16" font-weight="bold" fill="#fef3c7">${territoryLabel.replace(/[<>&"]/g, '')}</text>
+</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function loadPaperMapOverlayConfig(): PaperMapOverlayConfig | null {
+  const raw =
+    readWebLocalStorage(PAPER_MAP_OVERLAY_STORAGE_KEY) ??
+    readWebLocalStorage(PAPER_MAP_OVERLAY_STORAGE_KEY_ALT);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed.imageUrl === 'string' &&
+      Array.isArray(parsed.southWest) &&
+      Array.isArray(parsed.northEast)
+    ) {
+      return parsed as PaperMapOverlayConfig;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+export function savePaperMapOverlayConfig(config: PaperMapOverlayConfig | null): void {
+  if (!config) {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(PAPER_MAP_OVERLAY_STORAGE_KEY);
+      window.localStorage.removeItem(PAPER_MAP_OVERLAY_STORAGE_KEY_ALT);
+    }
+    return;
+  }
+  const serialized = JSON.stringify(config);
+  writeWebLocalStorage(PAPER_MAP_OVERLAY_STORAGE_KEY, serialized);
+  writeWebLocalStorage(PAPER_MAP_OVERLAY_STORAGE_KEY_ALT, serialized);
+}
+
+export function loadRoutingPrivacyMode(): 'offline_first' | 'osrm_opt_in' {
+  const raw =
+    readWebLocalStorage(ROUTING_PRIVACY_MODE_STORAGE_KEY) ??
+    readWebLocalStorage(ROUTING_PRIVACY_MODE_STORAGE_KEY_ALT);
+  if (raw === 'osrm_opt_in') return 'osrm_opt_in';
+  return 'offline_first';
+}
+
+export function saveRoutingPrivacyMode(mode: 'offline_first' | 'osrm_opt_in'): void {
+  writeWebLocalStorage(ROUTING_PRIVACY_MODE_STORAGE_KEY, mode);
+  writeWebLocalStorage(ROUTING_PRIVACY_MODE_STORAGE_KEY_ALT, mode);
+}
+
+/**
+ * Unified binary or text file download helper (Master Plan Section 3.4 contract).
+ */
+export async function triggerBinaryOrTextFileDownload(params: {
+  fileName: string;
+  mimeType?: string;
+  text?: string;
+  bytes?: Uint8Array;
+}): Promise<'downloaded' | 'copied'> {
+  if (params.bytes && params.bytes.length > 0) {
+    triggerBinaryFileDownload(
+      params.bytes,
+      params.fileName,
+      params.mimeType || 'application/octet-stream'
+    );
+    return 'downloaded';
+  }
+  return triggerCsvFileDownloadOrCopy(params.text || '', params.fileName);
+}
+
+/**
+ * Master Plan Section 3.4 storage import bridge contract.
+ */
+export async function importTerritoryFileIntoStorage(params: {
+  eventId?: string;
+  cleanTerritoryNodes: FlatSkeletonEntry[];
+  rawRegistry?: FlatSkeletonEntry[];
+  saveSkeletonFn?: (nodes: FlatSkeletonEntry[]) => Promise<void>;
+}) {
+  return persistTerritoryRegistryMutation(params);
+}
+
 

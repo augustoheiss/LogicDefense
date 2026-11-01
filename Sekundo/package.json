@@ -9,9 +9,11 @@
     "packages/app"
   ],
   "scripts": {
+    "test": "npm run test:core && npm run test:coin",
     "test:core": "cd packages/core && npx vitest run",
-    "test:coin": "node packages/coin-engine/scripts/runTests.mjs",
+    "test:coin": "cd packages/coin-engine && node ./scripts/runTests.mjs",
     "typecheck:core": "cd packages/core && npx tsc --noEmit",
+    "typecheck:app": "cd packages/app && npx tsc --noEmit",
     "dev": "cd packages/app && npx expo start",
     "dev:web": "cd packages/app && npx expo start --web",
     "build:web": "cd packages/app && npx expo export -p web --clear",

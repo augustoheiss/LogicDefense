@@ -11,6 +11,8 @@
 import type { FlatSkeletonEntry } from '../skeleton/types';
 import { resolveTerritoryNumber, parseLatLng, bufferPolygonMeters } from './geoUtils';
 
+export type { FlatSkeletonEntry };
+
 /** Default outward margin (meters) applied to automatic hulls so pins sit inside the block. */
 export const DEFAULT_AUTO_BUFFER_METERS = 6;
 
@@ -236,6 +238,7 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     bufferMeters?: number;
     boundarySource?: BoundarySource;
     mergedWithQuadras?: string[];
+    headerWorked?: 0 | 1;
     units: QuadraAddressUnit[];
     points: [number, number][];
   }
@@ -291,6 +294,7 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
         bufferMeters,
         boundarySource,
         mergedWithQuadras,
+        headerWorked: Number(meta.worked) === 1 ? 1 : 0,
         units: [],
         points: [],
       });
@@ -299,9 +303,12 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
 
   // Pass 2: Map leaf addresses to their parent quadra or fallback territory-quadra
   flatRegistry.forEach((entry) => {
-    if (parentKeys.has(entry.key)) return; // Skip intermediate containers
-
     const meta = (entry.meta || {}) as Record<string, any>;
+    const isPolygonContainerOnly =
+      entry.type === 'header' &&
+      ((Array.isArray(meta.boundaryPolygon) && meta.boundaryPolygon.length >= 3) ||
+        meta.is_quadra === true);
+    if (parentKeys.has(entry.key) || isPolygonContainerOnly) return; // Skip intermediate or polygon-only containers
     const rawLine = meta.line || entry.label || '';
     const { street, number } = parseAddressLine(rawLine);
 
@@ -376,13 +383,26 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
   const summaries: QuadraSummary[] = [];
 
   for (const acc of quadraMap.values()) {
-    if (acc.units.length === 0) continue; // Skip empty quadras
+    const hasExplicitPolygon = Boolean(acc.explicitPolygon && acc.explicitPolygon.length >= 3);
+    if (acc.units.length === 0 && !hasExplicitPolygon) continue; // Skip empty quadras unless they carry a KML/GeoJSON polygon
 
     const totalUnits = acc.units.length;
     const workedUnits = acc.units.filter((u) => u.worked === 1).length;
-    const coveragePercent = totalUnits > 0 ? Math.round((workedUnits / totalUnits) * 1000) / 10 : 0;
-    const isCompleted = totalUnits > 0 && workedUnits === totalUnits;
-    const statusColor = acc.customColor || calculateQuadraColor(coveragePercent, totalUnits);
+    const coveragePercent =
+      totalUnits > 0
+        ? Math.round((workedUnits / totalUnits) * 1000) / 10
+        : acc.headerWorked === 1
+        ? 100
+        : 0;
+    const isCompleted =
+      totalUnits > 0 ? workedUnits === totalUnits : acc.headerWorked === 1;
+    const statusColor =
+      acc.customColor ||
+      (totalUnits > 0
+        ? calculateQuadraColor(coveragePercent, totalUnits)
+        : acc.headerWorked === 1
+        ? '#10B981'
+        : '#EF4444');
 
     // Group units by street
     const streetMap = new Map<string, QuadraAddressUnit[]>();

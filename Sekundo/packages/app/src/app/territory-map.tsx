@@ -101,6 +101,12 @@ import {
   persistTerritoryRegistryMutation,
   triggerCsvFileDownloadOrCopy,
   shareLocationPayload,
+  loadPaperMapOverlayConfig,
+  savePaperMapOverlayConfig,
+  buildDemoPaperMapBlueprintSvgDataUrl,
+  loadRoutingPrivacyMode,
+  saveRoutingPrivacyMode,
+  type PaperMapOverlayConfig,
 } from '../storage/omniStorageBridge';
 import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
 
@@ -300,6 +306,12 @@ export default function TerritoryMapScreen() {
   const [walkingOrderMode, setWalkingOrderMode] = useState<
     'sidewalk' | 'sequential' | 'nearest_neighbor'
   >('sidewalk');
+  const [routingPrivacyMode, setRoutingPrivacyMode] = useState<'offline_first' | 'osrm_opt_in'>(
+    () => loadRoutingPrivacyMode()
+  );
+  const [paperMapOverlay, setPaperMapOverlay] = useState<PaperMapOverlayConfig | null>(
+    () => loadPaperMapOverlayConfig()
+  );
 
   // Compute territory recency list and lookup map
   const recencyList = useMemo(() => {
@@ -357,8 +369,13 @@ export default function TerritoryMapScreen() {
     }
 
     flatRegistry.forEach((node) => {
-      if (parentKeys.has(node.key) || node.type === 'header') return;
       const meta = (node.meta || {}) as Record<string, any>;
+      const isPolygonOnlyHeader =
+        node.type === 'header' &&
+        !parentKeys.has(node.key) &&
+        Array.isArray(meta.boundaryPolygon) &&
+        meta.boundaryPolygon.length >= 3;
+      if (parentKeys.has(node.key) || (node.type === 'header' && !isPolygonOnlyHeader)) return;
       territories.add(resolveTerritoryNumber(node));
 
       const cityName = meta.city || meta.cidade || 'Cidade Principal';
@@ -528,14 +545,21 @@ export default function TerritoryMapScreen() {
     });
   }, [allPins, selectedTerritory, filterMode, searchQuery]);
 
-  // Overall statistics for current selection
+  // Overall statistics for current selection (falls back to polygon-only quadras when no address pins exist)
   const stats = useMemo(() => {
+    if (displayedPins.length === 0 && displayedQuadras.length > 0) {
+      const total = displayedQuadras.length;
+      const worked = displayedQuadras.filter((q) => q.isCompleted).length;
+      const pending = total - worked;
+      const percent = total > 0 ? Math.round((worked / total) * 100) : 0;
+      return { total, worked, pending, percent };
+    }
     const total = displayedPins.length;
     const worked = displayedPins.filter((p) => p.worked === 1).length;
     const pending = total - worked;
     const percent = total > 0 ? Math.round((worked / total) * 100) : 0;
     return { total, worked, pending, percent };
-  }, [displayedPins]);
+  }, [displayedPins, displayedQuadras]);
 
   // Only located units go to the map; the rest are listed so nothing silently disappears.
   const { rawMapPins, unlocatedPins } = useMemo(() => {
@@ -697,13 +721,13 @@ export default function TerritoryMapScreen() {
     await commitTerritoryNodes(nextClean);
   };
 
-  // Bulk toggle an entire Quadra (all address numbers) — one atomic write.
+  // Bulk toggle an entire Quadra (all address numbers or polygon-only KML quadra header) — one atomic write.
   const handleBulkToggleQuadra = async (quadra: QuadraSummary, markWorked: boolean) => {
     const now = new Date();
     const status: 0 | 1 = markWorked ? 1 : 0;
     const unitKeySet = new Set(quadra.streets.flatMap((s) => s.units.map((u) => u.key)));
     const nextClean = flatRegistry.map((n) => {
-      if (!unitKeySet.has(n.key)) return n;
+      if (!unitKeySet.has(n.key) && !pathKey.equals(n.key, quadra.key)) return n;
       return {
         ...n,
         value: markWorked ? 'Trabalhado' : '',
@@ -711,6 +735,109 @@ export default function TerritoryMapScreen() {
       };
     });
     await commitTerritoryNodes(nextClean);
+  };
+
+  const computeCurrentBoundsForPaperMap = (): {
+    southWest: [number, number];
+    northEast: [number, number];
+  } => {
+    const pts: [number, number][] = [];
+    for (const q of displayedQuadras) {
+      for (const p of q.boundaryPolygon) {
+        if (Number.isFinite(p[0]) && Number.isFinite(p[1])) pts.push([p[0], p[1]]);
+      }
+    }
+    for (const p of rawMapPins) {
+      if (Number.isFinite(p.lat) && Number.isFinite(p.lng)) pts.push([p.lat, p.lng]);
+    }
+    if (pts.length === 0) {
+      return {
+        southWest: [-23.5535, -46.6365],
+        northEast: [-23.5475, -46.6295],
+      };
+    }
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+    for (const [lat, lng] of pts) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+    const padLat = Math.max(0.0008, (maxLat - minLat) * 0.12);
+    const padLng = Math.max(0.0008, (maxLng - minLng) * 0.12);
+    return {
+      southWest: [minLat - padLat, minLng - padLng],
+      northEast: [maxLat + padLat, maxLng + padLng],
+    };
+  };
+
+  const handleTogglePaperMapOverlay = () => {
+    if (paperMapOverlay?.enabled) {
+      const next = { ...paperMapOverlay, enabled: false };
+      setPaperMapOverlay(next);
+      savePaperMapOverlayConfig(next);
+      return;
+    }
+    const bounds = computeCurrentBoundsForPaperMap();
+    const label =
+      selectedTerritory !== 'all'
+        ? `Mapa de Papel — ${selectedTerritory}`
+        : 'Mapa de Papel Digitalizado (Demo)';
+    const next: PaperMapOverlayConfig = {
+      enabled: true,
+      imageUrl: paperMapOverlay?.imageUrl || buildDemoPaperMapBlueprintSvgDataUrl(label),
+      opacity: paperMapOverlay?.opacity ?? 0.65,
+      southWest: bounds.southWest,
+      northEast: bounds.northEast,
+      label,
+    };
+    setPaperMapOverlay(next);
+    savePaperMapOverlayConfig(next);
+  };
+
+  const handleSetPaperMapOpacity = (opacity: number) => {
+    if (!paperMapOverlay) return;
+    const next = { ...paperMapOverlay, opacity };
+    setPaperMapOverlay(next);
+    savePaperMapOverlayConfig(next);
+  };
+
+  const handleUploadPaperMapImage = () => {
+    if (typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,.svg,.png,.jpg,.jpeg,.webp';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+        if (!dataUrl) return;
+        const bounds = computeCurrentBoundsForPaperMap();
+        const next: PaperMapOverlayConfig = {
+          enabled: true,
+          imageUrl: dataUrl,
+          opacity: paperMapOverlay?.opacity ?? 0.68,
+          southWest: bounds.southWest,
+          northEast: bounds.northEast,
+          label: file.name,
+        };
+        setPaperMapOverlay(next);
+        savePaperMapOverlayConfig(next);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleToggleRoutingPrivacyMode = () => {
+    const next = routingPrivacyMode === 'offline_first' ? 'osrm_opt_in' : 'offline_first';
+    setRoutingPrivacyMode(next);
+    saveRoutingPrivacyMode(next);
   };
 
   // Open address or directions in Google Maps (universal helper)
@@ -735,17 +862,21 @@ export default function TerritoryMapScreen() {
     origin: { lat: number; lng: number },
     stops: RouteWaypointInput[],
     meta: { label: string; city?: string; streetName?: string },
-    profileOverride?: 'foot' | 'driving'
+    profileOverride?: 'foot' | 'driving',
+    privacyModeOverride?: 'offline_first' | 'osrm_opt_in'
   ) => {
     if (stops.length === 0) return;
     setRoutingBusy(true);
     try {
       const effectiveProfile = profileOverride ?? routeProfile;
+      const effectivePrivacy = privacyModeOverride ?? routingPrivacyMode;
       const route = await calculateMultiStopMapRoute(origin, stops, {
         profile: effectiveProfile,
         optimizeOrder: true,
         walkMode: stops.length > 2 ? walkingOrderMode : 'nearest_neighbor',
         label: meta.label,
+        privacyMode: effectivePrivacy,
+        anonymizeOrigin: true,
       });
       setActiveRoute(route);
       const ordered = route.stops && route.stops.length > 0 ? route.stops : stops;
@@ -1670,6 +1801,88 @@ export default function TerritoryMapScreen() {
                   : '📥 Baixar Tiles da Área para Uso Offline'}
               </Text>
             </Pressable>
+            <Pressable
+              testID="cad-layer-toggle-paper-overlay"
+              onPress={handleTogglePaperMapOverlay}
+              style={[
+                styles.mergeTerritoryBtn,
+                { marginTop: 0, borderColor: '#F59E0B' },
+                paperMapOverlay?.enabled && { backgroundColor: 'rgba(245, 158, 11, 0.22)' },
+              ]}
+            >
+              <Text style={[styles.mergeTerritoryBtnText, { color: '#FBBF24' }]}>
+                {paperMapOverlay?.enabled
+                  ? '✓ Sobreposição de Mapa de Papel: ATIVO (Desativar)'
+                  : '🗺️ Sobrepor Mapa de Papel Digitalizado (Demo / Imagem)'}
+              </Text>
+            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+              <Pressable
+                testID="cad-layer-upload-paper-map"
+                onPress={handleUploadPaperMapImage}
+                style={[styles.mergeTerritoryBtn, { marginTop: 0, flex: 1 }]}
+              >
+                <Text style={styles.mergeTerritoryBtnText}>
+                  📂 Enviar Imagem Mapa de Papel (.png/.jpg/.svg)
+                </Text>
+              </Pressable>
+              {paperMapOverlay?.enabled ? (
+                <>
+                  <Pressable
+                    testID="cad-paper-fit-current-territory"
+                    onPress={() => {
+                      const bounds = computeCurrentBoundsForPaperMap();
+                      const next = {
+                        ...paperMapOverlay,
+                        southWest: bounds.southWest,
+                        northEast: bounds.northEast,
+                      };
+                      setPaperMapOverlay(next);
+                      savePaperMapOverlayConfig(next);
+                    }}
+                    style={[styles.mergeTerritoryBtn, { marginTop: 0, paddingHorizontal: 10 }]}
+                  >
+                    <Text style={styles.mergeTerritoryBtnText}>🎯 Enquadrar no Território</Text>
+                  </Pressable>
+                  {[0.35, 0.65, 0.9].map((op) => (
+                    <Pressable
+                      key={op}
+                      testID={`cad-paper-opacity-${Math.round(op * 100)}`}
+                      onPress={() => handleSetPaperMapOpacity(op)}
+                      style={[
+                        styles.mergeTerritoryBtn,
+                        { marginTop: 0, paddingHorizontal: 10 },
+                        Math.abs((paperMapOverlay.opacity ?? 0.65) - op) < 0.05 &&
+                          styles.mergeTerritoryBtnActive,
+                      ]}
+                    >
+                      <Text style={styles.mergeTerritoryBtnText}>{Math.round(op * 100)}%</Text>
+                    </Pressable>
+                  ))}
+                </>
+              ) : null}
+            </View>
+            <Pressable
+              testID="cad-layer-toggle-routing-privacy"
+              onPress={handleToggleRoutingPrivacyMode}
+              style={[
+                styles.mergeTerritoryBtn,
+                {
+                  marginTop: 0,
+                  borderColor: routingPrivacyMode === 'offline_first' ? '#10B981' : '#38BDF8',
+                  backgroundColor:
+                    routingPrivacyMode === 'offline_first'
+                      ? 'rgba(16, 185, 129, 0.16)'
+                      : 'rgba(56, 189, 248, 0.16)',
+                },
+              ]}
+            >
+              <Text style={styles.mergeTerritoryBtnText}>
+                {routingPrivacyMode === 'offline_first'
+                  ? '🔒 Privacidade de Rota: 100% Offline Haversine (Zero Vazamento de GPS)'
+                  : '🌐 Rota Online OSRM Ativa (Origem GPS truncada em ~110m)'}
+              </Text>
+            </Pressable>
           </View>
         ),
       },
@@ -1854,6 +2067,8 @@ export default function TerritoryMapScreen() {
     mergeTerritoryMode,
     offlineTileCount,
     offlineCachingStatus,
+    paperMapOverlay,
+    routingPrivacyMode,
     eventId,
     router,
   ]);
@@ -1938,6 +2153,7 @@ export default function TerritoryMapScreen() {
             quadras={displayedQuadras}
             outlines={mergedTerritoryPolygons}
             showStreetLabels={showStreetLabels}
+            showQuadraPopup={true}
             selectedKey={mapViewMode === 'quadras' ? selectedQuadraKey : selectedPinKey}
             fitRequest={fitRequest}
             userLocation={userLocation}
@@ -2008,6 +2224,13 @@ export default function TerritoryMapScreen() {
                 handleTraceQuadraAddressesRoute(q);
               }
             }}
+            onToggleQuadraHeaderWorked={(qKey) => {
+              const q = allQuadras.find((x) => x.key === qKey);
+              if (q) {
+                handleBulkToggleQuadra(q, !q.isCompleted);
+              }
+            }}
+            paperMapOverlay={paperMapOverlay}
             editSession={activeEditSession}
             onPolygonDraft={handlePolygonDraftChange}
           />
@@ -2048,6 +2271,43 @@ export default function TerritoryMapScreen() {
             </Pressable>
 
             <Pressable
+              testID="map-toggle-paper-overlay-btn"
+              onPress={handleTogglePaperMapOverlay}
+              style={[
+                styles.mapOverlayBtn,
+                paperMapOverlay?.enabled && {
+                  borderColor: '#F59E0B',
+                  backgroundColor: 'rgba(120, 53, 15, 0.92)',
+                },
+              ]}
+            >
+              <Text style={styles.mapOverlayBtnText}>
+                {paperMapOverlay?.enabled ? '🗺️ Papel: ON' : '🗺️ Papel'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              testID="map-toggle-routing-privacy-btn"
+              onPress={handleToggleRoutingPrivacyMode}
+              style={[
+                styles.mapOverlayBtn,
+                routingPrivacyMode === 'offline_first'
+                  ? {
+                      borderColor: '#10B981',
+                      backgroundColor: 'rgba(6, 78, 59, 0.92)',
+                    }
+                  : {
+                      borderColor: '#38BDF8',
+                      backgroundColor: 'rgba(12, 74, 110, 0.92)',
+                    },
+              ]}
+            >
+              <Text style={styles.mapOverlayBtnText}>
+                {routingPrivacyMode === 'offline_first' ? '🔒 Rota Offline' : '🌐 Rota OSRM'}
+              </Text>
+            </Pressable>
+
+            <Pressable
               testID="map-toggle-walking-seq-btn"
               onPress={() => {
                 const next = !showWalkingSequence;
@@ -2083,7 +2343,7 @@ export default function TerritoryMapScreen() {
                 styles.mapOverlayBtn,
                 showWalkingSequence && {
                   borderColor: '#38BDF8',
-                  backgroundColor: 'rgba(56, 189, 248, 0.22)',
+                  backgroundColor: 'rgba(12, 74, 110, 0.92)',
                 },
               ]}
             >
@@ -2099,7 +2359,7 @@ export default function TerritoryMapScreen() {
                 styles.mapOverlayBtn,
                 (gpsEnabled || userLocation) && {
                   borderColor: '#38BDF8',
-                  backgroundColor: 'rgba(37, 99, 235, 0.3)',
+                  backgroundColor: 'rgba(30, 58, 138, 0.92)',
                 },
               ]}
             >
@@ -2119,7 +2379,7 @@ export default function TerritoryMapScreen() {
                 styles.mapOverlayBtn,
                 pickingOriginMode && {
                   borderColor: '#10B981',
-                  backgroundColor: 'rgba(16, 185, 129, 0.28)',
+                  backgroundColor: 'rgba(6, 78, 59, 0.92)',
                 },
               ]}
             >
@@ -2134,7 +2394,7 @@ export default function TerritoryMapScreen() {
                 onPress={centerOnUser}
                 style={[
                   styles.mapOverlayBtn,
-                  { borderColor: '#38BDF8', backgroundColor: 'rgba(37, 99, 235, 0.25)' },
+                  { borderColor: '#38BDF8', backgroundColor: 'rgba(30, 58, 138, 0.92)' },
                 ]}
               >
                 <Text style={styles.mapOverlayBtnText}>🎯 Centralizar</Text>
@@ -2212,10 +2472,57 @@ export default function TerritoryMapScreen() {
                   {formatRouteDistance(activeRoute.distanceMeters)} •{' '}
                   {formatRouteDuration(activeRoute.durationSeconds)} •{' '}
                   {activeRoute.source === 'osrm'
-                    ? `🛣️ Pelas Ruas (${activeRoute.stops?.length || 1} parada${(activeRoute.stops?.length || 1) > 1 ? 's' : ''})`
-                    : `⚠️ Sem internet: direção reta (${activeRoute.cardinalDirection})`}
+                    ? `🌐 Rota OSRM Online (Origem Truncada ~110m • ${activeRoute.stops?.length || 1} parada${(activeRoute.stops?.length || 1) > 1 ? 's' : ''})`
+                    : `🔒 Rota Offline Haversine (Zero GPS Externo • ${activeRoute.cardinalDirection})`}
                 </Text>
               </View>
+              <Pressable
+                testID="active-route-privacy-toggle"
+                onPress={async () => {
+                  const nextPrivacy =
+                    routingPrivacyMode === 'offline_first' ? 'osrm_opt_in' : 'offline_first';
+                  setRoutingPrivacyMode(nextPrivacy);
+                  saveRoutingPrivacyMode(nextPrivacy);
+                  if (userLocation && activeRoute.stops && activeRoute.stops.length > 0) {
+                    await executeMultiStopRouteFromOrigin(
+                      { lat: userLocation.lat, lng: userLocation.lng },
+                      activeRoute.stops.map((s) => ({
+                        key: s.key,
+                        lat: s.lat,
+                        lng: s.lng,
+                        label: s.label,
+                        street: s.street,
+                        numberOrComplement: s.numberOrComplement,
+                        worked: s.worked,
+                      })),
+                      {
+                        label: routeDestinationMeta?.label || 'Destino',
+                        city: routeDestinationMeta?.city,
+                        streetName: routeDestinationMeta?.streetName,
+                      },
+                      routeProfile,
+                      nextPrivacy
+                    );
+                  }
+                }}
+                style={[
+                  styles.activeRouteGmapsBtn,
+                  {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    borderWidth: 1,
+                    borderColor: routingPrivacyMode === 'offline_first' ? '#10B981' : '#38BDF8',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.activeRouteGmapsBtnText,
+                    { color: routingPrivacyMode === 'offline_first' ? '#34D399' : '#38BDF8' },
+                  ]}
+                >
+                  {routingPrivacyMode === 'offline_first' ? '🔒 Offline' : '🌐 OSRM'}
+                </Text>
+              </Pressable>
               <Pressable
                 testID="active-route-profile-toggle"
                 onPress={async () => {
@@ -2362,7 +2669,9 @@ export default function TerritoryMapScreen() {
                 </View>
                 <Text style={styles.drawerTitle}>{selectedQuadra.label}</Text>
                 <Text style={styles.quadraUnitCountSub}>
-                  {selectedQuadra.workedUnits} de {selectedQuadra.totalUnits} números concluídos
+                  {selectedQuadra.totalUnits === 0
+                    ? `🗺️ Polígono KML sem casas individuais (${selectedQuadra.isCompleted ? 'Concluído' : 'Pendente'})`
+                    : `${selectedQuadra.workedUnits} de ${selectedQuadra.totalUnits} números concluídos`}
                 </Text>
               </View>
               <Pressable
@@ -2491,6 +2800,29 @@ export default function TerritoryMapScreen() {
                   </Text>
                 </Pressable>
               </View>
+
+              {/* Primary Quadra / KML Polygon Completion Toggle Button (Above the Fold) */}
+              <Pressable
+                testID="quadra-drawer-toggle-worked-btn"
+                onPress={() => {
+                  const allWorked = selectedQuadra.isCompleted;
+                  handleBulkToggleQuadra(selectedQuadra, !allWorked);
+                }}
+                style={[
+                  styles.bulkQuadraBtn,
+                  selectedQuadra.isCompleted ? styles.bulkQuadraBtnReopen : styles.bulkQuadraBtnComplete,
+                ]}
+              >
+                <Text style={styles.bulkQuadraBtnText}>
+                  {selectedQuadra.totalUnits === 0
+                    ? selectedQuadra.isCompleted
+                      ? '↺ Reabrir Polígono KML (Marcar Pendente)'
+                      : '✓ Marcar Polígono KML Concluído (Sem Casas)'
+                    : selectedQuadra.isCompleted
+                    ? '↺ Reabrir Quadra (Marcar Todas Pendentes)'
+                    : '✓ Concluir Toda a Quadra (Marcar Todas as Casas)'}
+                </Text>
+              </Pressable>
 
               {/* Perimeter Enclosing Streets Banner */}
               <View style={styles.perimeterCard}>
@@ -2678,17 +3010,19 @@ export default function TerritoryMapScreen() {
                       </Pressable>
                     ) : null}
                     <Pressable
+                      testID="quadra-import-geojson-btn"
                       onPress={() => handleImportQuadraGeoJSON(selectedQuadra.key)}
                       style={[styles.editBtn, styles.editBtnGhost]}
                     >
-                      <Text style={styles.editBtnText}>📥 GeoJSON</Text>
+                      <Text style={styles.editBtnText}>📥 Importar GeoJSON</Text>
                     </Pressable>
                     {selectedQuadra.boundaryPolygon.length >= 3 ? (
                       <Pressable
+                        testID="quadra-export-geojson-btn"
                         onPress={() => handleExportQuadraGeoJSON(selectedQuadra)}
                         style={[styles.editBtn, styles.editBtnGhost]}
                       >
-                        <Text style={styles.editBtnText}>📤 GeoJSON</Text>
+                        <Text style={styles.editBtnText}>📤 Exportar GeoJSON</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -2709,24 +3043,6 @@ export default function TerritoryMapScreen() {
                   </Text>
                 </Pressable>
               </View>
-
-              {/* Bulk Toggle Button */}
-              <Pressable
-                onPress={() => {
-                  const allWorked = selectedQuadra.isCompleted;
-                  handleBulkToggleQuadra(selectedQuadra, !allWorked);
-                }}
-                style={[
-                  styles.bulkQuadraBtn,
-                  selectedQuadra.isCompleted ? styles.bulkQuadraBtnReopen : styles.bulkQuadraBtnComplete,
-                ]}
-              >
-                <Text style={styles.bulkQuadraBtnText}>
-                  {selectedQuadra.isCompleted
-                    ? '↺ Reabrir Quadra (Marcar Todas Pendentes)'
-                    : '✓ Concluir Toda a Quadra (Marcar Todas as Casas)'}
-                </Text>
-              </Pressable>
 
               {/* Street-by-street list and individual address units */}
               <View style={styles.streetsSection}>

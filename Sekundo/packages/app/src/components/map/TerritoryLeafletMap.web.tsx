@@ -108,6 +108,7 @@ function TerritoryLeafletDomMap(props: TerritoryLeafletMapProps) {
   const didInitialFitRef = useRef(false);
   const lastFitRequestRef = useRef(props.fitRequest);
   const lastPanToUserRequestRef = useRef(props.panToUserRequest ?? 0);
+  const lastPopupQuadraKeyRef = useRef<string | null>(null);
   const [ready, setReady] = React.useState(false);
 
   // Leaflet handlers read callbacks through this ref, so they never go stale.
@@ -132,6 +133,7 @@ function TerritoryLeafletDomMap(props: TerritoryLeafletMapProps) {
       routeLayerRef.current = L.layerGroup().addTo(map);
       userLocationLayerRef.current = L.layerGroup().addTo(map);
       map.on('click', (e: Leaflet.LeafletMouseEvent) => {
+        lastPopupQuadraKeyRef.current = null;
         if (propsRef.current.pickingOriginMode && propsRef.current.onPickOriginOnMap) {
           propsRef.current.onPickOriginOnMap(e.latlng.lat, e.latlng.lng);
         }
@@ -165,9 +167,16 @@ function TerritoryLeafletDomMap(props: TerritoryLeafletMapProps) {
     const L = LRef.current;
     const group = dataLayerRef.current;
     if (!ready || !L || !group) return;
+    mapRef.current?.closePopup();
+    if (containerRef.current) {
+      containerRef.current.querySelectorAll('.leaflet-popup').forEach((node) => node.remove());
+    }
     group.clearLayers();
 
     const { mode, pins, quadras, outlines, showStreetLabels, showQuadraPopup, selectedKey, editSession } = props;
+    if (!selectedKey || editSession) {
+      lastPopupQuadraKeyRef.current = null;
+    }
 
     if (mode === 'quadras') {
       for (const mt of outlines) {
@@ -197,6 +206,11 @@ function TerritoryLeafletDomMap(props: TerritoryLeafletMapProps) {
         });
         poly.on('click', (e: Leaflet.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
+          if (propsRef.current.pickingOriginMode && propsRef.current.onPickOriginOnMap) {
+            propsRef.current.onPickOriginOnMap(e.latlng.lat, e.latlng.lng);
+            return;
+          }
+          lastPopupQuadraKeyRef.current = q.key;
           propsRef.current.onSelectQuadra(q.key);
         });
 
@@ -218,17 +232,33 @@ function TerritoryLeafletDomMap(props: TerritoryLeafletMapProps) {
         poly.bindTooltip(tip, { sticky: true });
 
         if (showQuadraPopup) {
-          poly.bindPopup(buildQuadraPopupCard(q, propsRef));
+          poly.bindPopup(buildQuadraPopupCard(q, propsRef), { autoPan: false });
         }
 
         group.addLayer(poly);
         const polyEl = poly.getElement();
         if (polyEl) {
           polyEl.setAttribute('data-testid', `quadra-polygon-${q.key}`);
-          polyEl.addEventListener('click', (ev) => {
-            ev.stopPropagation();
+          polyEl.addEventListener('click', () => {
+            if (propsRef.current.pickingOriginMode) return;
+            lastPopupQuadraKeyRef.current = q.key;
+            if (propsRef.current.selectedKey === q.key && propsRef.current.showQuadraPopup && !poly.isPopupOpen()) {
+              try {
+                poly.openPopup(q.centroid);
+              } catch {
+                // ignore popup open error
+              }
+            }
             propsRef.current.onSelectQuadra(q.key);
           });
+        }
+
+        if (showQuadraPopup && isSelected && lastPopupQuadraKeyRef.current === q.key) {
+          try {
+            poly.openPopup(q.centroid);
+          } catch {
+            // ignore popup open error
+          }
         }
 
         if (showStreetLabels && q.perimeterStreets.length > 0) {
@@ -659,6 +689,42 @@ function TerritoryLeafletDomMap(props: TerritoryLeafletMapProps) {
 
   // 5. Highlight units falling outside the edited polygon in warning red.
   const outsideLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const paperOverlayLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+
+  useEffect(() => {
+    const L = LRef.current;
+    const map = mapRef.current;
+    paperOverlayLayerRef.current?.remove();
+    paperOverlayLayerRef.current = null;
+    const ov = props.paperMapOverlay;
+    if (!ready || !L || !map || !ov || !ov.enabled || !ov.imageUrl) return;
+
+    const grp = L.layerGroup().addTo(map);
+    paperOverlayLayerRef.current = grp;
+    const imgOv = L.imageOverlay(ov.imageUrl, [ov.southWest, ov.northEast], {
+      opacity: Math.max(0.05, Math.min(1, ov.opacity ?? 0.65)),
+      interactive: false,
+      className: 'sk-paper-map-overlay',
+    });
+    imgOv.addTo(grp);
+    const imgEl = imgOv.getElement();
+    if (imgEl) {
+      imgEl.setAttribute('data-testid', 'leaflet-paper-map-overlay');
+    }
+    return () => {
+      grp.remove();
+      if (paperOverlayLayerRef.current === grp) paperOverlayLayerRef.current = null;
+    };
+  }, [
+    ready,
+    props.paperMapOverlay?.enabled,
+    props.paperMapOverlay?.imageUrl,
+    props.paperMapOverlay?.opacity,
+    props.paperMapOverlay?.southWest?.[0],
+    props.paperMapOverlay?.southWest?.[1],
+    props.paperMapOverlay?.northEast?.[0],
+    props.paperMapOverlay?.northEast?.[1],
+  ]);
   useEffect(() => {
     const L = LRef.current;
     const map = mapRef.current;
@@ -775,7 +841,10 @@ function buildQuadraPopupCard(q: MapQuadra, propsRef: React.MutableRefObject<Ter
         style: { fontWeight: '800', fontSize: '14px', color: '#111827', marginBottom: '4px' },
       }),
       el('div', {
-        text: `${q.workedUnits}/${q.totalUnits} concluídos (${q.coveragePercent}%)`,
+        text:
+          q.totalUnits > 0
+            ? `${q.workedUnits}/${q.totalUnits} concluídos (${q.coveragePercent}%)`
+            : `🗺️ Polígono KML sem casas individuais (${q.coveragePercent >= 100 ? 'Concluído' : 'Pendente'})`,
         style: { fontSize: '11px', color: '#374151', marginBottom: '6px' },
       }),
       ...(q.perimeterStreets.length > 0
@@ -787,6 +856,17 @@ function buildQuadraPopupCard(q: MapQuadra, propsRef: React.MutableRefObject<Ter
           ]
         : []),
       el('div', { style: { display: 'flex', gap: '5px', marginTop: '6px', flexWrap: 'wrap' } }, [
+        ...(q.totalUnits === 0 && propsRef.current.onToggleQuadraHeaderWorked
+          ? [
+              button(
+                q.coveragePercent >= 100 ? '↩️ Reabrir Quadra' : '✅ Concluir Quadra',
+                q.coveragePercent >= 100 ? '#D97706' : '#10B981',
+                '#FFFFFF',
+                () => propsRef.current.onToggleQuadraHeaderWorked?.(q.key),
+                `popup-quadra-toggle-worked-${q.key}`
+              ),
+            ]
+          : []),
         button('🗺️ Google Maps', '#2563EB', '#FFFFFF', openGmaps, `popup-quadra-gmaps-${q.key}`),
         ...(propsRef.current.onRouteToQuadraInMap
           ? [

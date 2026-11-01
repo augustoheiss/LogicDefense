@@ -55,6 +55,7 @@ export function TerritoryAccordionHeader({
   return (
     <View style={[styles.header, expanded && styles.headerExpanded]}>
       <Pressable
+        testID={`checklist-accordion-${territory}`}
         onPress={onToggle}
         style={styles.mainClickArea}
         accessibilityRole="button"

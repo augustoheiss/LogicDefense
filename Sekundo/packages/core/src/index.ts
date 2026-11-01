@@ -256,6 +256,13 @@ export type {
 
 // Geo Spatial
 export * as geoJsonAdapter from './geo/geoJsonAdapter';
+export {
+  ensureLatLngRing,
+  latLngRingToGeoJsonCoords,
+  calculatePolygonCentroid,
+  geoJsonToSkeletonNodes,
+  skeletonNodesToGeoJson,
+} from './geo/geoJsonAdapter';
 export type {
   GeoJSONGeometry,
   GeoJSONFeature,
@@ -299,6 +306,9 @@ export type {
 } from './geo/googleMapsLinks';
 export {
   ROUTING_POLICY_CONFIG,
+  anonymizeCoordForOsrm,
+  roundOriginForPrivacy,
+  anonymizeOriginForOsrm,
   computeHaversineMeters,
   computeBearingDegrees,
   bearingToCardinalPt,
@@ -318,6 +328,34 @@ export type {
   WalkingSequenceUnitInput,
   WalkingSequenceStop,
 } from './geo/routingEngine';
+export {
+  EXTERNAL_18COL_HEADERS,
+  parseXlsxBytesToGrid,
+  buildXlsxBytesFromGrid,
+  parseCsvTextToGrid,
+  importTerritorySpreadsheetGrid,
+  exportTerritorySpreadsheetGrid,
+  parseKmlToCleanTerritoryNodes,
+  exportCleanTerritoryNodesToKml,
+  parseGeoJsonToCleanTerritoryNodes,
+  exportCleanTerritoryNodesToGeoJson,
+  importTerritoryGeoJsonToCleanNodes,
+  exportCleanTerritoryNodesToGeoJsonText,
+  detectTerritoryFileFormat,
+  importTerritoryMultiFormat,
+  exportTerritoryMultiFormat,
+  importTerritoryUniversalFile,
+  exportTerritoryUniversalFile,
+  buildCleanRoomTerritoryImportSample,
+} from './geo/territoryMultiFormatIo';
+export type {
+  TerritoryMultiIoFormat,
+  TerritorySpreadsheetSchemaType,
+  TerritoryMultiImportOptions,
+  TerritoryMultiImportResult,
+  TerritoryMultiExportOptions,
+  TerritoryMultiExportPayload,
+} from './geo/territoryMultiFormatIo';
 
 // Subtree Delegation (CBAC)
 export * as tokenManager from './delegation/tokenManager';
@@ -703,6 +741,7 @@ export {
   deleteTerritoryOrQuadra,
   transferAddressesBetweenTerritories,
   mergeTerritoryPartitionIntoRawRegistry,
+  sanitizeTerritoryNodeForPrivacy,
   buildTerritoryModelCsvText,
   formatShareAddressLocationText,
   formatShareTerritoryOrQuadraLocationsText,

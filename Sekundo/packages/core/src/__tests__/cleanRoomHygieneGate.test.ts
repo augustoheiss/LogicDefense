@@ -95,6 +95,10 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
     const legacyRenderHost = ['ocorrencias', 'pdf', 'writer'].join('-');
     const formPrefix = String.fromCharCode(83);
     const forbiddenFormCodePattern = new RegExp(`\\b${formPrefix}-?(13|89)\\b`, 'i');
+    const forbiddenExternalToolPattern = new RegExp(
+      `\\b(${['Territory\\s+Helper', 'NW\\s+(Publisher|Scheduler)'].join('|')})\\b`,
+      'i'
+    );
     const forbiddenPiiPattern = new RegExp(
       '\\b(' +
         [
@@ -128,6 +132,10 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
       const formMatch = content.match(forbiddenFormCodePattern);
       if (formMatch) {
         violations.push(`${rel}: contains third-party form code "${formMatch[0]}"`);
+      }
+      const extToolMatch = content.match(forbiddenExternalToolPattern);
+      if (extToolMatch) {
+        violations.push(`${rel}: contains third-party tool name "${extToolMatch[0]}"`);
       }
     }
 

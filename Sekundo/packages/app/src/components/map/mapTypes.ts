@@ -97,6 +97,15 @@ export interface MapActiveRoute {
   stops?: MapWalkingStop[];
 }
 
+export interface MapPaperOverlay {
+  enabled: boolean;
+  imageUrl: string;
+  southWest: LatLngTuple;
+  northEast: LatLngTuple;
+  opacity: number;
+  label?: string;
+}
+
 export interface TerritoryLeafletMapProps {
   mode: 'quadras' | 'pins';
   pins: MapPin[];
@@ -140,6 +149,10 @@ export interface TerritoryLeafletMapProps {
   onRouteToQuadraInMap?: (key: string) => void;
   /** Optional handler to trace a multi-stop street route across all pending addresses in a quadra. */
   onRouteToQuadraAddressesInMap?: (key: string) => void;
+  /** Optional handler to toggle worked status directly on a polygon-only KML quadra header (totalUnits === 0). */
+  onToggleQuadraHeaderWorked?: (key: string) => void;
+  /** Optional scanned paper map image overlay rendered over the territory bounds. */
+  paperMapOverlay?: MapPaperOverlay | null;
   /** When set, the map enters vertex-editing mode for one quadra boundary. */
   editSession?: MapEditSession | null;
   onPolygonDraft?: (ring: LatLngTuple[]) => void;
