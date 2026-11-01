@@ -26,8 +26,10 @@ import * as storage from '../storage/localStorage';
 import {
   engineRegistry,
   detectEnginesFromCSV,
-  parseCSV,
-  upsertRegistry,
+  importGranularCSV,
+  importTerritoryMultiFormat,
+  isSampleTerritorySeedRegistry,
+  selectEnginePartitionNodes,
   exportTemplateCSV,
   getEngineTemplate,
   generateOmniMasterSampleCsv,
@@ -40,15 +42,18 @@ import {
   autoAssignScheduleRegistry,
   type Frequency,
   type EngineId,
+  type FlatSkeletonEntry,
 } from '@sekundo/core';
 import {
   commitOmniCsvBundleToStorage,
   exportFullSiteOmniCsvFromStorage,
   exportSingleEngineOmniCsvFromStorage,
   loadSavedPrivilegeParticipants,
+  loadSavedTerritoryRegistry,
   savePrivilegeParticipants,
   saveScheduleRegistry,
   saveTerritoryRegistry,
+  persistTerritoryRegistryMutation,
 } from '../storage/omniStorageBridge';
 import { deliverFile } from '../utils/deliverFile';
 
@@ -86,6 +91,7 @@ export default function CreateEvent() {
 
   const [autoDetectNotice, setAutoDetectNotice] = useState<string | null>(null);
   const [uploadedCsvText, setUploadedCsvText] = useState<string | null>(null);
+  const [uploadedMultiNodes, setUploadedMultiNodes] = useState<FlatSkeletonEntry[] | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -150,13 +156,53 @@ export default function CreateEvent() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.csv';
+      input.accept = '.csv,.xlsx,.kml,.geojson,.json';
       input.onchange = async (e: any) => {
         const file = e.target?.files?.[0];
         if (!file) return;
+        const lowerName = file.name.toLowerCase();
+        setUploadedFileName(file.name);
+
+        if (
+          lowerName.endsWith('.xlsx') ||
+          lowerName.endsWith('.kml') ||
+          lowerName.endsWith('.geojson') ||
+          lowerName.endsWith('.json')
+        ) {
+          try {
+            const bytes = lowerName.endsWith('.xlsx')
+              ? new Uint8Array(await file.arrayBuffer())
+              : undefined;
+            const text = !lowerName.endsWith('.xlsx') ? await file.text() : undefined;
+            const parsedMulti = importTerritoryMultiFormat(
+              {
+                bytes,
+                text,
+                fileName: file.name,
+              },
+              { privacySafeMode: false }
+            );
+            setUploadedMultiNodes(parsedMulti.nodes);
+            setUploadedCsvText(null);
+            setSelectedEngines(['territory_logistics']);
+            setInspectedEngineId('territory_logistics');
+            if (!name.trim()) {
+              const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+              setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+            }
+            setAutoDetectNotice(
+              `✅ "${file.name}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços)`
+            );
+            setValidationError(null);
+          } catch (err: any) {
+            setValidationError(`Erro ao ler "${file.name}": ${err?.message || err}`);
+          }
+          return;
+        }
+
         const text = await file.text();
         setUploadedCsvText(text);
-        setUploadedFileName(file.name);
+        setUploadedMultiNodes(null);
 
         if (isOmniCsvText(text)) {
           const bundle = importOmniCsvBundle(text);
@@ -208,12 +254,50 @@ export default function CreateEvent() {
 
     const state = await addEvent(finalName, frequency, ['01'], selectedEngines);
 
-    // 2. If single-engine CSV was uploaded, commit it
+    // 2A. If multi-format (.xlsx, .kml, .geojson, .json) territory file was uploaded, commit it
+    if (uploadedMultiNodes && uploadedMultiNodes.length > 0) {
+      await storage.saveSkeleton(state.config.id, uploadedMultiNodes);
+      await saveTerritoryRegistry(uploadedMultiNodes);
+      await persistTerritoryRegistryMutation({
+        eventId: state.config.id,
+        rawRegistry: uploadedMultiNodes,
+        cleanTerritoryNodes: uploadedMultiNodes,
+      });
+      await refreshEvents();
+      router.replace(`/territory-checklist?id=${state.config.id}` as any);
+      return;
+    }
+
+    // 2B. If single-engine CSV was uploaded, commit it
     if (uploadedCsvText) {
       try {
-        const parsed = parseCSV(uploadedCsvText);
-        const upsertRes = upsertRegistry([], parsed, { forceOverwriteState: true });
-        await storage.saveSkeleton(state.config.id, upsertRes.updatedRegistry);
+        const importRes = importGranularCSV([], uploadedCsvText, { forceOverwriteState: true });
+        const updatedRegistry = importRes.updatedRegistry;
+        await storage.saveSkeleton(state.config.id, updatedRegistry);
+
+        const isTerritoryImport =
+          selectedEngines.includes('territory_logistics') ||
+          updatedRegistry.some(
+            (n) =>
+              n.type === 'territory' ||
+              Boolean(n.meta?.territory_number || n.meta?.territoryNumber)
+          );
+
+        if (isTerritoryImport && updatedRegistry.length > 0) {
+          const terrNodes = selectEnginePartitionNodes(updatedRegistry, 'territory_logistics');
+          const effectiveTerrNodes = terrNodes.length > 0 ? terrNodes : updatedRegistry;
+          await saveTerritoryRegistry(effectiveTerrNodes);
+          await persistTerritoryRegistryMutation({
+            eventId: state.config.id,
+            rawRegistry: updatedRegistry,
+            cleanTerritoryNodes: effectiveTerrNodes,
+          });
+          await refreshEvents();
+          router.replace(`/territory-checklist?id=${state.config.id}` as any);
+          return;
+        }
+
+        await refreshEvents();
         router.replace(`/skeleton-editor?id=${state.config.id}`);
         return;
       } catch (err) {
@@ -230,10 +314,18 @@ export default function CreateEvent() {
         directory,
         { strictSameCategoryPairing }
       );
-      const territoryRegistry = buildTerritoriosS13HistoricalRegistry();
+      const existingSavedTerritory = await loadSavedTerritoryRegistry();
+      const territoryRegistry =
+        existingSavedTerritory &&
+        existingSavedTerritory.length > 0 &&
+        !isSampleTerritorySeedRegistry(existingSavedTerritory)
+          ? existingSavedTerritory
+          : buildTerritoriosS13HistoricalRegistry();
       await savePrivilegeParticipants(updatedParticipants);
       await saveScheduleRegistry(updatedRegistry);
-      await saveTerritoryRegistry(territoryRegistry);
+      if (!isSampleTerritorySeedRegistry(territoryRegistry)) {
+        await saveTerritoryRegistry(territoryRegistry);
+      }
 
       const combinedSkeleton = buildCombinedMultiEngineSkeleton({
         scheduleRegistry: updatedRegistry,

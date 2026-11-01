@@ -32,6 +32,8 @@ import {
   buildWorkedMeta,
   resolveTerritoryNumber,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
+  getActiveEngines,
   selectEnginePartitionNodes,
   extractQuadrasFromRegistry,
   parseLatLng,
@@ -62,6 +64,8 @@ import { QuickShareSheet } from '../components/share/QuickShareSheet';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
 import {
   loadSavedTerritoryRegistry,
+  saveTerritoryRegistry,
+  collectFullSiteOmniBundleFromStorage,
   persistTerritoryRegistryMutation,
   exportUpdatedTerritoryModelCsvFromStorage,
   triggerCsvFileDownloadOrCopy,
@@ -95,24 +99,62 @@ export default function TerritoryChecklistScreen() {
     if (rawEventId) {
       return events.find((e) => e.config.id === rawEventId) || events[0];
     }
-    return events.find((e) => (e.config.activeEngines || []).includes('territory_logistics')) || events[0];
+    const territoryEvents = events.filter((e) =>
+      getActiveEngines(e.config).includes('territory_logistics')
+    );
+    return territoryEvents[territoryEvents.length - 1] || events[0];
   }, [events, rawEventId]);
   const eventId = event?.config.id || rawEventId;
   const { flatRegistry: rawFlatRegistry, saveSkeleton, loading } = useSkeleton(eventId);
   const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[]>([]);
   useEffect(() => {
-    loadSavedTerritoryRegistry()
-      .then((reg) => {
-        if (reg && reg.length > 0) setSavedTerritoryRegistry(reg);
-      })
-      .catch(() => undefined);
-  }, [rawFlatRegistry]);
+    let mounted = true;
+    (async () => {
+      try {
+        const reg = await loadSavedTerritoryRegistry();
+        if (!mounted) return;
+        if (reg && reg.length > 0 && !isSampleTerritorySeedRegistry(reg)) {
+          setSavedTerritoryRegistry(reg);
+          return;
+        }
+        const siteBundle = await collectFullSiteOmniBundleFromStorage();
+        if (!mounted) return;
+        if (
+          siteBundle.territoryRegistry &&
+          siteBundle.territoryRegistry.length > 0 &&
+          !isSampleTerritorySeedRegistry(siteBundle.territoryRegistry)
+        ) {
+          setSavedTerritoryRegistry(siteBundle.territoryRegistry);
+          await saveTerritoryRegistry(siteBundle.territoryRegistry);
+        } else if (reg && reg.length > 0) {
+          setSavedTerritoryRegistry(reg);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [rawFlatRegistry, events]);
 
   const fallbackRegistry = useMemo(() => buildTerritoriosS13HistoricalRegistry(), []);
   const flatRegistry = useMemo(() => {
-    const savedPartitioned = selectEnginePartitionNodes(savedTerritoryRegistry, 'territory_logistics');
+    const savedPartitioned = selectEnginePartitionNodes(
+      savedTerritoryRegistry,
+      'territory_logistics'
+    );
+    const partitioned = selectEnginePartitionNodes(
+      rawFlatRegistry || [],
+      'territory_logistics'
+    );
+    if (savedPartitioned.length > 0 && !isSampleTerritorySeedRegistry(savedPartitioned)) {
+      return savedPartitioned;
+    }
+    if (partitioned.length > 0 && !isSampleTerritorySeedRegistry(partitioned)) {
+      return partitioned;
+    }
     if (savedPartitioned.length > 0) return savedPartitioned;
-    const partitioned = selectEnginePartitionNodes(rawFlatRegistry || [], 'territory_logistics');
     if (partitioned.length > 0) return partitioned;
     return fallbackRegistry;
   }, [rawFlatRegistry, savedTerritoryRegistry, fallbackRegistry]);

@@ -47,11 +47,13 @@ import {
 import type { ActivityLogEntry } from '@sekundo/core';
 import {
   exportFullSiteOmniCsvFromStorage,
+  collectFullSiteOmniBundleFromStorage,
   commitOmniCsvBundleToStorage,
   loadSavedPrivilegeParticipants,
   savePrivilegeParticipants,
   loadSavedScheduleRegistry,
   loadSavedTerritoryRegistry,
+  saveTerritoryRegistry,
 } from '../storage/omniStorageBridge';
 import {
   PROGRAMACAO_UNIT_NAME,
@@ -59,6 +61,9 @@ import {
   CAPABILITY_COLUMNS,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
+  isTerritorySpreadsheetCsvText,
+  importTerritoryMultiFormat,
   parseSekundoScheduleBundle,
   parseProgramScheduleText,
   extractStructuredSessions,
@@ -193,7 +198,7 @@ export default function ScheduleHubConsole() {
 
   useEffect(() => {
     const partitionedTerritories = selectEnginePartitionNodes(flatRegistry, 'territory_logistics');
-    if (partitionedTerritories.length > 0) {
+    if (partitionedTerritories.length > 0 && !isSampleTerritorySeedRegistry(partitionedTerritories)) {
       setTerritoryRegistry(partitionedTerritories);
     }
   }, [flatRegistry]);
@@ -307,8 +312,16 @@ export default function ScheduleHubConsole() {
         if (savedSched && savedSched.length > 0) {
           setLocalScheduleRegistry(savedSched);
         }
-        if (savedTerr && savedTerr.length > 0) {
+        if (savedTerr && savedTerr.length > 0 && !isSampleTerritorySeedRegistry(savedTerr)) {
           setTerritoryRegistry(savedTerr);
+        } else {
+          const fullSite = await collectFullSiteOmniBundleFromStorage();
+          if (!mounted) return;
+          if (fullSite.territoryRegistry && fullSite.territoryRegistry.length > 0) {
+            setTerritoryRegistry(fullSite.territoryRegistry);
+          } else if (savedTerr && savedTerr.length > 0) {
+            setTerritoryRegistry(savedTerr);
+          }
         }
         if (savedAudit) {
           setActivityLogEntries(savedAudit);
@@ -399,18 +412,44 @@ export default function ScheduleHubConsole() {
     setStatusBanner(msg);
   };
 
-  // Pick a local .csv, .json, or .txt file!
+  // Pick a local .csv, .xlsx, .kml, .geojson, .json, or .txt file!
   const handlePickLocalScheduleFile = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.csv,.json,.txt';
+      input.accept = '.csv,.xlsx,.kml,.geojson,.json,.txt';
       input.onchange = async (e: any) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
-          const text = await file.text();
           const lower = file.name.toLowerCase();
+          if (
+            lower.endsWith('.xlsx') ||
+            lower.endsWith('.kml') ||
+            lower.endsWith('.geojson')
+          ) {
+            const bytes = lower.endsWith('.xlsx')
+              ? new Uint8Array(await file.arrayBuffer())
+              : undefined;
+            const text = !lower.endsWith('.xlsx') ? await file.text() : undefined;
+            const parsedMulti = importTerritoryMultiFormat(
+              {
+                bytes,
+                text,
+                fileName: file.name,
+              },
+              { privacySafeMode: false }
+            );
+            setTerritoryRegistry(parsedMulti.nodes);
+            await saveTerritoryRegistry(parsedMulti.nodes);
+            setActiveTab('territories');
+            setStatusBanner(
+              `✅ "${file.name}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços) importado!`
+            );
+            return;
+          }
+
+          const text = await file.text();
           if (lower.endsWith('.csv') || isOmniCsvText(text)) {
             const loadedOmni = importOmniCsvBundle(text);
             const presentSet = new Set(loadedOmni.presentSheets || []);
@@ -418,18 +457,27 @@ export default function ScheduleHubConsole() {
               presentSet.size === 0 || presentSet.has(k);
 
             setActiveUnitName(loadedOmni.unitName);
-            if (hasAllOrSheet('participant_privilege')) {
+            if (hasAllOrSheet('participant_privilege') && loadedOmni.participants.length > 0) {
               handleUpdateParticipants(loadedOmni.participants);
             }
-            if (hasAllOrSheet('hub_schedule_slot')) {
+            if (hasAllOrSheet('hub_schedule_slot') && loadedOmni.scheduleRegistry.length > 0) {
               setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
             }
-            if (hasAllOrSheet('hub_territory_cycle')) {
-              setTerritoryRegistry(loadedOmni.territoryRegistry);
-            }
-            await commitOmniCsvBundleToStorage(text, {
+            const committed = await commitOmniCsvBundleToStorage(text, {
               targetEventId: eventId || undefined,
             });
+            if (
+              hasAllOrSheet('hub_territory_cycle') &&
+              committed.bundle.territoryRegistry.length > 0
+            ) {
+              setTerritoryRegistry(committed.bundle.territoryRegistry);
+              if (
+                presentSet.size === 1 &&
+                presentSet.has('hub_territory_cycle')
+              ) {
+                setActiveTab('territories');
+              }
+            }
             setSelectedSessionIdx(0);
             setStatusBanner(
               `✅ CSV "${file.name}" (${presentSet.size || 1} planilhas) importado!`
@@ -502,7 +550,9 @@ export default function ScheduleHubConsole() {
         unitName: activeUnitName,
         participants: activeDirectory,
         scheduleRegistry: activeScheduleRegistry,
-        territoryRegistry,
+        territoryRegistry: !isSampleTerritorySeedRegistry(territoryRegistry)
+          ? territoryRegistry
+          : undefined,
       });
       filename = `sekundo_omni_geral_salvo_${dateStamp}.csv`;
     }
@@ -686,15 +736,36 @@ export default function ScheduleHubConsole() {
   const handleImportCustomText = async () => {
     const trimmed = customScheduleText.trim();
     if (!trimmed) return;
-    if (trimmed.startsWith('_record_kind,') || trimmed.startsWith('_key,')) {
+    if (
+      isOmniCsvText(trimmed) ||
+      isTerritorySpreadsheetCsvText(trimmed) ||
+      trimmed.startsWith('_record_kind,') ||
+      trimmed.startsWith('_key,')
+    ) {
       const loadedOmni = importOmniCsvBundle(trimmed);
+      const presentSet = new Set(loadedOmni.presentSheets || []);
+      const hasAllOrSheet = (k: NonNullable<typeof loadedOmni.presentSheets>[number]) =>
+        presentSet.size === 0 || presentSet.has(k);
+
       setActiveUnitName(loadedOmni.unitName);
-      handleUpdateParticipants(loadedOmni.participants);
-      setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
-      setTerritoryRegistry(loadedOmni.territoryRegistry);
-      await commitOmniCsvBundleToStorage(trimmed, {
+      if (hasAllOrSheet('participant_privilege') && loadedOmni.participants.length > 0) {
+        handleUpdateParticipants(loadedOmni.participants);
+      }
+      if (hasAllOrSheet('hub_schedule_slot') && loadedOmni.scheduleRegistry.length > 0) {
+        setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
+      }
+      const committed = await commitOmniCsvBundleToStorage(trimmed, {
         targetEventId: eventId || undefined,
       });
+      if (
+        hasAllOrSheet('hub_territory_cycle') &&
+        committed.bundle.territoryRegistry.length > 0
+      ) {
+        setTerritoryRegistry(committed.bundle.territoryRegistry);
+        if (presentSet.size === 1 && presentSet.has('hub_territory_cycle')) {
+          setActiveTab('territories');
+        }
+      }
       setShowImportModal(false);
       setCustomScheduleText('');
       setStatusBanner('✅ CSV colado e importado com sucesso!');

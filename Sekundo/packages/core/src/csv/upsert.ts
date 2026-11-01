@@ -137,6 +137,30 @@ export function rowToFlatEntry(row: CSVRow): FlatSkeletonEntry {
     meta.completedAt = meta.completedAt || meta.completed_date || meta.data_conclusao;
   }
 
+  // Normalize territory aliases (17-col, 18-col, 19-col)
+  const rawTerrNum = meta.territory_number ?? meta.territoryNumber ?? meta.Territorio ?? meta.territorio ?? meta.Territory;
+  if (rawTerrNum !== undefined && rawTerrNum !== '') {
+    const tStr = String(rawTerrNum).trim();
+    meta.territory_number = meta.territory_number || tStr;
+    meta.territoryNumber = meta.territoryNumber || tStr;
+    meta.engine_id = meta.engine_id || 'territory_logistics';
+  }
+  if (meta.lat === undefined && (meta.Latitude !== undefined || meta.latitude !== undefined)) {
+    const latNum = Number(String(meta.Latitude ?? meta.latitude).replace(',', '.'));
+    if (Number.isFinite(latNum) && latNum !== 0) meta.lat = latNum;
+  }
+  if (meta.lng === undefined && (meta.Longitude !== undefined || meta.longitude !== undefined)) {
+    const lngNum = Number(String(meta.Longitude ?? meta.longitude).replace(',', '.'));
+    if (Number.isFinite(lngNum) && lngNum !== 0) meta.lng = lngNum;
+  }
+  if (meta.locality === undefined && (meta.Nome_Territorio || meta.territory_locality || meta.Locality)) {
+    meta.locality = String(meta.Nome_Territorio || meta.territory_locality || meta.Locality).trim();
+  }
+  if (meta.worked === undefined && (meta.Trabalhado !== undefined || meta.trabalhado !== undefined)) {
+    const wRaw = String(meta.Trabalhado ?? meta.trabalhado).trim().toLowerCase();
+    meta.worked = wRaw === '1' || wRaw === 'true' || wRaw === 'sim' || wRaw === 'concluido' ? 1 : 0;
+  }
+
   const rawType = (row._type || '').trim().toLowerCase();
   const validTypes: NodeType[] = ['slot', 'territory', 'header', 'note'];
   const type: NodeType = validTypes.includes(rawType as NodeType)

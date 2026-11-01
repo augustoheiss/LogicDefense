@@ -34,11 +34,15 @@ import {
   importTerritoryMultiFormat,
   exportTerritoryMultiFormat,
   buildCleanRoomTerritoryImportSample,
+  stripSampleTerritorySeedNodes,
+  isOmniCsvText,
+  importOmniCsvBundle,
   type FlatSkeletonEntry,
   type TerritoryMultiIoFormat,
 } from '@sekundo/core';
 import {
   exportUpdatedTerritoryModelCsvFromStorage,
+  commitOmniCsvBundleToStorage,
   triggerCsvFileDownloadOrCopy,
   triggerBinaryFileDownload,
   shareLocationPayload,
@@ -505,12 +509,13 @@ export function TerritoryManageModal({
       setFeedback('⚠️ Nenhum território ou polígono válido encontrado no arquivo importado.');
       return;
     }
+    const baseCleanNodes = stripSampleTerritorySeedNodes(cleanNodes);
     let nextNodes: FlatSkeletonEntry[];
-    if (importMergeMode === 'replace') {
+    if (importMergeMode === 'replace' || baseCleanNodes.length === 0) {
       nextNodes = importedNodes;
     } else {
       const byKey = new Map<string, FlatSkeletonEntry>();
-      for (const n of cleanNodes) byKey.set(n.key, n);
+      for (const n of baseCleanNodes) byKey.set(n.key, n);
       for (const n of importedNodes) {
         const meta = (n.meta || {}) as Record<string, any>;
         const isPolyHeader =
@@ -576,6 +581,15 @@ export function TerritoryManageModal({
           file.name.toLowerCase().endsWith('.xlsx') ||
           (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b);
         const text = isBinaryXlsx ? undefined : new TextDecoder('utf-8').decode(bytes);
+        if (text && isOmniCsvText(text)) {
+          const committed = await commitOmniCsvBundleToStorage(text);
+          const omniTerrNodes = committed.bundle.territoryRegistry || [];
+          await applyImportedMultiFormatNodes(
+            omniTerrNodes,
+            `✓ Planilha Omni-CSV "${file.name}" importada: ${omniTerrNodes.length} registro(s) territoriais aplicados!`
+          );
+          return;
+        }
         const res = importTerritoryMultiFormat(
           { bytes, text, fileName: file.name },
           { privacySafeMode: importPrivacySanitize }

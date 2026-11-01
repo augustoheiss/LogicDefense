@@ -20,8 +20,14 @@ import {
 import {
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedNode,
+  isSampleTerritorySeedRegistry,
+  stripSampleTerritorySeedNodes,
 } from '../schedule/programacaoReuniaoSeed';
 import { buildTree } from '../skeleton/skeletonTree';
+import { importGranularCSV } from '../csv/granularImport';
+import { buildTerritoryModelCsvText } from '../territory/territoryCrudEngine';
+import { extractQuadrasFromRegistry } from '../geo/quadraPolygonEngine';
 
 describe('Sekundo Multi-Planilha Master CSV ("CSV Geral") & Single-Engine Planilha Export/Import', () => {
   it('generates a complete Multi-Planilha Master CSV covering all 7 Planilhas including Assistente Moeda (coin_ledger_row) with #PLANILHA and #ABA_PLANILHA markers', () => {
@@ -396,6 +402,167 @@ describe('Sekundo Multi-Planilha Master CSV ("CSV Geral") & Single-Engine Planil
     expect(partitions[1].tableName).toBe('Carteira Filial 02');
     expect(partitions[1].rows.length).toBe(5);
     expect(partitions[1].tableEnvelope).toBeUndefined();
+  });
+
+  it('SIT-06: detects and strips synthetic 16-territory sample seed while preserving user territory hierarchies on export/import round-trip', () => {
+    const sampleSeed = buildTerritoriosS13HistoricalRegistry();
+    expect(sampleSeed).toHaveLength(16);
+    expect(isSampleTerritorySeedRegistry(sampleSeed)).toBe(true);
+    expect(sampleSeed.every((n) => isSampleTerritorySeedNode(n))).toBe(true);
+
+    // Even if _isSampleSeed flag is stripped (e.g. legacy exported CSV), signature detection catches it
+    const legacySeedWithoutFlag = sampleSeed.map((n) => {
+      const { _isSampleSeed, ...restMeta } = (n.meta || {}) as Record<string, any>;
+      return { ...n, meta: restMeta };
+    });
+    expect(isSampleTerritorySeedRegistry(legacySeedWithoutFlag)).toBe(true);
+    expect(stripSampleTerritorySeedNodes(legacySeedWithoutFlag)).toHaveLength(0);
+
+    // Real 4-level hierarchical user territory registry (Area -> Sector -> Territory -> Address)
+    const userHierarchy = [
+      {
+        key: '01',
+        type: 'header' as const,
+        label: 'Área T01 — Zona Urbana',
+        value: '',
+        email: '',
+        meta: { territory_number: 'T01', locality: 'Zona Urbana' },
+      },
+      {
+        key: '01-01',
+        type: 'header' as const,
+        label: 'Setor T01.01 — Jardim Alfa',
+        value: '',
+        email: '',
+        meta: { territory_number: 'T01.01', locality: 'Jardim Alfa' },
+      },
+      {
+        key: '01-01-01',
+        type: 'header' as const,
+        label: 'T01.01.01 — Jardim Alfa (2 endereços)',
+        value: '',
+        email: '',
+        meta: { territory_number: 'T01.01.01', locality: 'Jardim Alfa', lat: -23.512, lng: -46.412 },
+      },
+      {
+        key: '01-01-01-01',
+        type: 'territory' as const,
+        label: 'Avenida das Palmeiras, 120 (Jardim Alfa)',
+        value: '',
+        email: '',
+        meta: {
+          territory_number: 'T01.01.01',
+          locality: 'Jardim Alfa',
+          line: 'Avenida das Palmeiras, 120',
+          city: 'Município Alfa',
+          state: 'SP',
+          lat: -23.5121,
+          lng: -46.4121,
+          worked: 1,
+        },
+      },
+      {
+        key: '01-01-01-02',
+        type: 'territory' as const,
+        label: 'Avenida das Palmeiras, 140 (Jardim Alfa)',
+        value: '',
+        email: '',
+        meta: {
+          territory_number: 'T01.01.01',
+          locality: 'Jardim Alfa',
+          line: 'Avenida das Palmeiras, 140',
+          city: 'Município Alfa',
+          state: 'SP',
+          lat: -23.5125,
+          lng: -46.4125,
+          worked: 0,
+        },
+      },
+    ];
+
+    expect(isSampleTerritorySeedRegistry(userHierarchy)).toBe(false);
+    expect(stripSampleTerritorySeedNodes([...sampleSeed, ...userHierarchy])).toEqual(userHierarchy);
+
+    // Export -> Import Round-Trip via Omni-CSV preserves 'header' vs 'territory' node types
+    const omniCsv = exportOmniCsvBundle(
+      {
+        unitName: 'Unidade Alfa',
+        participants: [],
+        scheduleRegistry: [],
+        territoryRegistry: userHierarchy,
+        events: [],
+        studioDocuments: [],
+        hojeManifestYaml: '',
+        hojeRituals: [],
+      },
+      { onlySheets: ['hub_territory_cycle'] }
+    );
+
+    const reimported = importOmniCsvBundle(omniCsv);
+    expect(reimported.presentSheets).toEqual(['hub_territory_cycle']);
+    expect(reimported.territoryRegistry).toHaveLength(5);
+    expect(reimported.territoryRegistry[0].type).toBe('header');
+    expect(reimported.territoryRegistry[1].type).toBe('header');
+    expect(reimported.territoryRegistry[2].type).toBe('header');
+    expect(reimported.territoryRegistry[3].type).toBe('territory');
+    expect(reimported.territoryRegistry[4].type).toBe('territory');
+
+    const quadras = extractQuadrasFromRegistry(reimported.territoryRegistry);
+    expect(quadras).toHaveLength(1);
+    expect(quadras[0].territoryNumber).toBe('T01.01.01');
+    expect(quadras[0].totalUnits).toBe(2);
+    expect(quadras[0].workedUnits).toBe(1);
+  });
+
+  it('SIT-07: ingests 17-col canonical, 18-col external, and 19-col semicolon territory spreadsheets via importOmniCsvBundle and importGranularCSV without falling back to the 16 sample territories', () => {
+    // 1. 17-column canonical territory CSV (like convert_enderecos.py output)
+    const canonical17Csv = [
+      '_key,_type,label,value,email,territory_number,locality,line,line2,city,state,country,property_type,lat,lng,worked,notes',
+      '01,header,Área T01 — Centro,, ,T01,Centro,,,,Município Beta,SP,BR,header,-23.51,-46.41,0,',
+      '01-01,header,Setor T01.01 — Centro,, ,T01.01,Centro,,,,Município Beta,SP,BR,header,-23.51,-46.41,0,',
+      '01-01-01,header,T01.01.01 — Centro (1 endereços),, ,T01.01.01,Centro,,,,Município Beta,SP,BR,header,-23.51,-46.41,0,',
+      '01-01-01-01,territory,"Rua Beta, 55 (Centro)",,,T01.01.01,Centro,"Rua Beta, 55",Centro,Município Beta,SP,BR,residencial,-23.5105,-46.4105,1,Portão branco',
+    ].join('\n');
+
+    const omniFrom17 = importOmniCsvBundle(canonical17Csv);
+    expect(omniFrom17.presentSheets).toEqual(['hub_territory_cycle']);
+    expect(isSampleTerritorySeedRegistry(omniFrom17.territoryRegistry)).toBe(false);
+    expect(omniFrom17.territoryRegistry).toHaveLength(4);
+    expect(omniFrom17.territoryRegistry[3].meta?.line).toBe('Rua Beta, 55');
+    expect(omniFrom17.territoryRegistry[3].meta?.lat).toBe(-23.5105);
+    expect(omniFrom17.territoryRegistry[3].meta?.worked).toBe(1);
+
+    const granular17 = importGranularCSV([], canonical17Csv, { forceOverwriteState: true });
+    expect(granular17.quarantinedRows).toHaveLength(0);
+    expect(granular17.updatedRegistry).toHaveLength(4);
+
+    // 2. 18-column external territory CSV (no _key or _type)
+    const external18Csv = [
+      'territory_number,territory_locality,line,line2,city,state,postalcode,dnc,lang,locationType,status,latitude,longitude,sortOrder,hideOnMap,lastWorked,notes,tags',
+      'T02.01.01,Bairro Delta,"Rua Gama, 200",Bairro Delta,Município Delta,SP,01000-000,FALSE,,house,1,-23.521,-46.421,1,FALSE,2026-10-15,Visitado,',
+    ].join('\n');
+
+    const omniFrom18 = importOmniCsvBundle(external18Csv);
+    expect(omniFrom18.presentSheets).toEqual(['hub_territory_cycle']);
+    expect(isSampleTerritorySeedRegistry(omniFrom18.territoryRegistry)).toBe(false);
+    expect(omniFrom18.territoryRegistry.length).toBeGreaterThanOrEqual(2);
+
+    const granular18 = importGranularCSV([], external18Csv, { forceOverwriteState: true });
+    expect(granular18.quarantinedRows).toHaveLength(0);
+    expect(granular18.updatedRegistry.length).toBeGreaterThanOrEqual(4); // 01, 01-01, 01-01-01, 01-01-01-01
+
+    // 3. 19-column semicolon Sekundo territory model CSV (modelo_territorios_*.csv)
+    const model19Csv = buildTerritoryModelCsvText(omniFrom17.territoryRegistry, {
+      privacySafeMode: false,
+    });
+    const omniFrom19 = importOmniCsvBundle(model19Csv);
+    expect(omniFrom19.presentSheets).toEqual(['hub_territory_cycle']);
+    expect(isSampleTerritorySeedRegistry(omniFrom19.territoryRegistry)).toBe(false);
+    expect(omniFrom19.territoryRegistry.some((n) => n.label.includes('Rua Beta'))).toBe(true);
+
+    const granular19 = importGranularCSV([], model19Csv, { forceOverwriteState: true });
+    expect(granular19.quarantinedRows).toHaveLength(0);
+    expect(granular19.updatedRegistry.some((n) => n.label.includes('Rua Beta'))).toBe(true);
   });
 });
 

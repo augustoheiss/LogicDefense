@@ -38,6 +38,10 @@ import {
   exportSingleEngineSampleCsv,
   isOmniCsvText,
   importOmniCsvBundle,
+  importTerritoryMultiFormat,
+  stripSampleTerritorySeedNodes,
+  selectEnginePartitionNodes,
+  getActiveEngines,
   groupCoinLedgerRowsByTable,
   getEffectiveCapabilityColumns,
   type CSVDiffResult,
@@ -52,6 +56,8 @@ import {
   commitOmniCsvBundleToStorage,
   exportFullSiteOmniCsvFromStorage,
   exportSingleEngineOmniCsvFromStorage,
+  saveTerritoryRegistry,
+  persistTerritoryRegistryMutation,
 } from '../storage/omniStorageBridge';
 import { deliverFile } from '../utils/deliverFile';
 
@@ -173,10 +179,66 @@ export default function CSVImport() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.csv';
+      input.accept = '.csv,.xlsx,.kml,.geojson,.json';
       input.onchange = async (e: any) => {
         const file = e.target?.files?.[0];
         if (!file) return;
+        const lowerName = file.name.toLowerCase();
+
+        // Handle .xlsx, .kml, .geojson, or .json territory files directly via importTerritoryMultiFormat
+        if (
+          lowerName.endsWith('.xlsx') ||
+          lowerName.endsWith('.kml') ||
+          lowerName.endsWith('.geojson') ||
+          lowerName.endsWith('.json')
+        ) {
+          try {
+            const bytes = lowerName.endsWith('.xlsx')
+              ? new Uint8Array(await file.arrayBuffer())
+              : undefined;
+            const text = !lowerName.endsWith('.xlsx') ? await file.text() : undefined;
+            const parsedMulti = importTerritoryMultiFormat(
+              {
+                bytes,
+                text,
+                fileName: file.name,
+              },
+              { privacySafeMode: false }
+            );
+            setOmniBundlePreview(null);
+            setRawOmniText(null);
+            setActiveTemplateEngine('territory_logistics');
+            setDetectionReport(
+              detectEnginesFromCSV(
+                '_key,_type,label,territory_number,locality,lat,lng,worked\n01,territory,Rua,T01,Centro,-23.5,-46.4,0'
+              )
+            );
+            const rowsAsCsv: CSVRow[] = parsedMulti.nodes.map((n) => ({
+              _key: n.key,
+              _type: n.type,
+              label: n.label,
+              value: n.value || '',
+              email: n.email || '',
+              _meta_json: JSON.stringify(n.meta || {}),
+            }));
+            const activeRegistry = currentEvent
+              ? stripSampleTerritorySeedNodes(flatRegistry)
+              : [];
+            setParsedRows(rowsAsCsv);
+            setQuarantinedRows([]);
+            setDiff(buildDiff(activeRegistry, rowsAsCsv));
+            if (!newEventName) {
+              setNewEventName(file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
+            }
+            setStatusMessage(
+              `✅ "${file.name}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços)`
+            );
+          } catch (err: any) {
+            setStatusMessage(`❌ Erro ao ler "${file.name}": ${err?.message || err}`);
+          }
+          return;
+        }
+
         const text = await file.text();
 
         // Check if it is a Multi-Planilha CSV (`#PLANILHA,<engine>`) or legacy Omni-CSV
@@ -194,12 +256,15 @@ export default function CSVImport() {
           return;
         }
 
-        // Standard Engine CSV
+        // Standard Engine CSV (17-col canonical, 18-col external, 19-col model, or other Engine CSV)
         setOmniBundlePreview(null);
         setRawOmniText(null);
         const report = detectEnginesFromCSV(text);
         setDetectionReport(report);
-        const activeRegistry = currentEvent ? flatRegistry : [];
+        if (report.suggestedEngines.includes('territory_logistics')) {
+          setActiveTemplateEngine('territory_logistics');
+        }
+        const activeRegistry = currentEvent ? stripSampleTerritorySeedNodes(flatRegistry) : [];
         const importRes = importGranularCSV(activeRegistry, text, {
           mode: importMode,
           forceOverwriteState: !preserveHistory,
@@ -216,7 +281,9 @@ export default function CSVImport() {
     }
   };
 
-  const handleCommit = async (targetDestination: 'schedule' | 'territory' | 'map' = 'schedule') => {
+  const handleCommit = async (
+    targetDestination: 'schedule' | 'territory' | 'map' | 'auto' = 'auto'
+  ) => {
     // 1. Commit Omni-CSV Bundle across Sekundo Hubs & Engines (only updating present Planilhas)
     if (omniBundlePreview && rawOmniText) {
       try {
@@ -237,29 +304,83 @@ export default function CSVImport() {
       return;
     }
 
-    // 2. Commit Single-Engine CSV
+    // 2. Commit Single-Engine CSV / Spreadsheet
     if (!parsedRows) return;
+
+    const engines: EngineId[] =
+      detectionReport?.suggestedEngines && detectionReport.suggestedEngines.length > 0
+        ? [...detectionReport.suggestedEngines]
+        : [activeTemplateEngine];
+
+    const hasTerritoryRows =
+      engines.includes('territory_logistics') ||
+      parsedRows.some(
+        (r) =>
+          r._type === 'territory' ||
+          Boolean((r as any).territory_number) ||
+          Boolean(r._meta_json && r._meta_json.includes('territory_logistics'))
+      );
+    if (hasTerritoryRows && !engines.includes('territory_logistics')) {
+      engines.unshift('territory_logistics');
+    }
+
+    let targetId = currentEvent?.config.id || '';
+    let updatedRegistry = [];
+
     if (currentEvent) {
-      if (currentEvent.config.id === eventId) {
-        await commitCSVImport(parsedRows, { forceOverwriteState: !preserveHistory });
-      } else {
-        const currentSkeleton = (await storage.loadSkeleton(currentEvent.config.id)) || [];
-        const upsertRes = upsertRegistry(currentSkeleton, parsedRows, {
-          forceOverwriteState: !preserveHistory,
-        });
-        await storage.saveSkeleton(currentEvent.config.id, upsertRes.updatedRegistry);
-      }
-      router.replace(`/skeleton-editor?id=${currentEvent.config.id}`);
+      targetId = currentEvent.config.id;
+      const rawCurrent = (await storage.loadSkeleton(targetId)) || flatRegistry || [];
+      const cleanedCurrent = hasTerritoryRows
+        ? stripSampleTerritorySeedNodes(rawCurrent)
+        : rawCurrent;
+      const upsertRes = upsertRegistry(cleanedCurrent, parsedRows, {
+        forceOverwriteState: !preserveHistory,
+        preserveUnmatchedCurrent: hasTerritoryRows ? false : true,
+      });
+      updatedRegistry = upsertRes.updatedRegistry;
+      await storage.saveSkeleton(targetId, updatedRegistry);
+
+      // Ensure event config includes the newly imported engine(s)
+      const currentEngines = getActiveEngines(currentEvent.config);
+      const mergedEngines = Array.from(new Set([...currentEngines, ...engines])) as EngineId[];
+      await storage.saveEventState(targetId, {
+        ...currentEvent,
+        config: {
+          ...currentEvent.config,
+          activeEngines: mergedEngines,
+        },
+      });
     } else {
       const finalName = newEventName.trim() || 'Novo Evento Importado';
-      const engines: EngineId[] =
-        detectionReport?.suggestedEngines && detectionReport.suggestedEngines.length > 0
-          ? detectionReport.suggestedEngines
-          : [activeTemplateEngine];
       const newState = await addEvent(finalName, 'weekly', ['01'], engines);
+      targetId = newState.config.id;
       const upsertRes = upsertRegistry([], parsedRows, { forceOverwriteState: true });
-      await storage.saveSkeleton(newState.config.id, upsertRes.updatedRegistry);
-      router.replace(`/skeleton-editor?id=${newState.config.id}`);
+      updatedRegistry = upsertRes.updatedRegistry;
+      await storage.saveSkeleton(targetId, updatedRegistry);
+    }
+
+    if (hasTerritoryRows) {
+      const territoryNodes = selectEnginePartitionNodes(updatedRegistry, 'territory_logistics');
+      const effectiveTerritoryNodes =
+        territoryNodes.length > 0 ? territoryNodes : updatedRegistry;
+      await saveTerritoryRegistry(effectiveTerritoryNodes);
+      await persistTerritoryRegistryMutation({
+        eventId: targetId,
+        rawRegistry: updatedRegistry,
+        cleanTerritoryNodes: effectiveTerritoryNodes,
+      });
+    }
+
+    await refreshEvents();
+
+    if (targetDestination === 'map') {
+      router.replace(`/territory-map?id=${targetId}` as any);
+    } else if (targetDestination === 'territory' || (targetDestination === 'auto' && hasTerritoryRows)) {
+      router.replace(`/territory-checklist?id=${targetId}` as any);
+    } else if (targetDestination === 'schedule') {
+      router.replace(`/schedule-hub?id=${targetId}` as any);
+    } else {
+      router.replace(`/skeleton-editor?id=${targetId}`);
     }
   };
 
@@ -508,10 +629,30 @@ export default function CSVImport() {
                   accessibilityRole="button"
                   accessibilityLabel="Confirmar Importação"
                   {...webTitle('Confirmar Importação')}
-                  onPress={() => handleCommit('schedule')}
+                  onPress={() => handleCommit('auto')}
                   style={[styles.iconBtn, styles.cadBtnEmerald]}
                 >
                   <Text style={styles.iconGlyph}>⚡</Text>
+                </Pressable>
+                <Pressable
+                  testID="single-csv-commit-open-territory"
+                  accessibilityRole="button"
+                  accessibilityLabel="Importar e Abrir Territórios"
+                  {...webTitle('Importar e Abrir Prancheta de Territórios')}
+                  onPress={() => handleCommit('territory')}
+                  style={styles.iconBtn}
+                >
+                  <Text style={styles.iconGlyph}>📋</Text>
+                </Pressable>
+                <Pressable
+                  testID="single-csv-commit-open-map"
+                  accessibilityRole="button"
+                  accessibilityLabel="Importar e Abrir Mapa CAD"
+                  {...webTitle('Importar e Abrir Mapa CAD 2D')}
+                  onPress={() => handleCommit('map')}
+                  style={styles.iconBtn}
+                >
+                  <Text style={styles.iconGlyph}>🗺️</Text>
                 </Pressable>
               </View>
             </View>

@@ -124,8 +124,18 @@ export default function Dashboard() {
     );
   }
 
-  const activeSelectedEvent =
-    events.find((e) => e.config.id === selectedEventId) || events[0] || null;
+  const explicitSelectedEvent = selectedEventId
+    ? events.find((e) => e.config.id === selectedEventId) || null
+    : null;
+  const activeSelectedEvent = explicitSelectedEvent || events[0] || null;
+  const territoryEvents = events.filter((e) =>
+    getActiveEngines(e.config).includes('territory_logistics')
+  );
+  const activeTerritoryEvent =
+    explicitSelectedEvent &&
+    getActiveEngines(explicitSelectedEvent.config).includes('territory_logistics')
+      ? explicitSelectedEvent
+      : territoryEvents[territoryEvents.length - 1] || activeSelectedEvent;
 
   const webTitle = (title: string) => (Platform.OS === 'web' ? ({ title } as any) : {});
 
@@ -346,8 +356,8 @@ export default function Dashboard() {
                   badge: 'TERRITÓRIOS',
                 });
                 router.push(
-                  activeSelectedEvent
-                    ? (`/territory-checklist?id=${encodeURIComponent(activeSelectedEvent.config.id)}` as any)
+                  activeTerritoryEvent
+                    ? (`/territory-checklist?id=${encodeURIComponent(activeTerritoryEvent.config.id)}` as any)
                     : ('/territory-checklist' as any)
                 );
               }}
@@ -377,8 +387,8 @@ export default function Dashboard() {
                   badge: 'MAPA CAD',
                 });
                 router.push(
-                  activeSelectedEvent
-                    ? (`/territory-map?id=${encodeURIComponent(activeSelectedEvent.config.id)}` as any)
+                  activeTerritoryEvent
+                    ? (`/territory-map?id=${encodeURIComponent(activeTerritoryEvent.config.id)}` as any)
                     : ('/territory-map' as any)
                 );
               }}

@@ -33,7 +33,13 @@ import {
   PROGRAMACAO_UNIT_NAME,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
 } from '../schedule/programacaoReuniaoSeed';
+import {
+  isTerritorySpreadsheetCsvText,
+  importTerritorySpreadsheetGrid,
+  parseCsvTextToGrid,
+} from '../geo/territoryMultiFormatIo';
 import {
   FICHAS_4UP_SDOC_YAML,
   TERRITORIOS_MULTICYCLE_SDOC_YAML,
@@ -1311,6 +1317,24 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     headers.includes('_container_id');
 
   if (!isOmniSchema) {
+    if (isTerritorySpreadsheetCsvText(csvText)) {
+      const parsedTerritory = importTerritorySpreadsheetGrid(parseCsvTextToGrid(csvText));
+      return {
+        unitName,
+        participants: DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS.map((p, idx) =>
+          ensureParticipantPrivilegeMatrix(p, idx, { preserveExplicitCapabilities: true })
+        ),
+        scheduleRegistry: [],
+        territoryRegistry: parsedTerritory.nodes,
+        events: [],
+        studioDocuments: [],
+        hojeManifestYaml,
+        hojeRituals: [],
+        coinLedgerRows: [],
+        presentSheets: ['hub_territory_cycle'],
+      };
+    }
+
     // Fallback for standard single-engine or Schedule Hub simplified CSV
     const hubParsed = importScheduleHubFromCsv(csvText);
     return {
@@ -1327,8 +1351,11 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     };
   }
 
+  const seenRecordKinds = new Set<OmniRecordKind>(presentSheets);
+
   for (const row of rows) {
     const kind = (row._record_kind || '').trim() as OmniRecordKind;
+    if (kind) seenRecordKinds.add(kind);
     const containerId = (row._container_id || '').trim();
     const key = (row._key || '').trim();
     const type = ((row._type || 'slot').trim() as NodeType) || 'slot';
@@ -1460,10 +1487,23 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
       if (row.status_or_readiness) {
         mergedMeta.worked = row.status_or_readiness === 'concluido' ? 1 : 0;
       }
+      if (row.contact_or_location && !mergedMeta.locality) {
+        mergedMeta.locality = row.contact_or_location;
+      }
+      if (row.notes_or_payload && !mergedMeta.territoryNumber && !mergedMeta.territory_number) {
+        mergedMeta.territoryNumber = row.notes_or_payload;
+        mergedMeta.territory_number = row.notes_or_payload;
+      }
+
+      const rawTerritoryType = (row._type || '').trim().toLowerCase();
+      const resolvedTerritoryType: NodeType =
+        rawTerritoryType === 'header' || rawTerritoryType === 'note' || rawTerritoryType === 'slot'
+          ? (rawTerritoryType as NodeType)
+          : 'territory';
 
       territoryRegistry.push({
         key,
-        type: 'territory',
+        type: resolvedTerritoryType,
         label: title,
         value: primary,
         email: '',
@@ -1695,21 +1735,49 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     }
   }
 
-  const hasAllSheets = presentSheets.length === 0;
+  const effectivePresentSheets =
+    presentSheets.length > 0 ? presentSheets : Array.from(seenRecordKinds);
+  const hasAllSheets = effectivePresentSheets.length === 0;
   const shouldFallbackParticipants =
     hasAllSheets ||
-    presentSheets.includes('participant_privilege') ||
-    presentSheets.includes('hub_schedule_slot');
+    effectivePresentSheets.includes('participant_privilege') ||
+    effectivePresentSheets.includes('hub_schedule_slot');
   const shouldFallbackSchedule =
-    hasAllSheets || presentSheets.includes('hub_schedule_slot');
+    hasAllSheets || effectivePresentSheets.includes('hub_schedule_slot');
   const shouldFallbackTerritory =
-    hasAllSheets || presentSheets.includes('hub_territory_cycle');
+    hasAllSheets || effectivePresentSheets.includes('hub_territory_cycle');
 
   const resolvedParticipants =
     participants.length > 0
       ? participants
       : shouldFallbackParticipants
       ? DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
+      : [];
+
+  // If territoryRegistry is empty while an imported event_node contains real territory_logistics nodes, promote those nodes!
+  let eventFallbackTerritory: FlatSkeletonEntry[] = [];
+  if (territoryRegistry.length === 0) {
+    for (const ev of eventsMap.values()) {
+      const evEngines = ev.engines || [];
+      const partitioned = selectEnginePartitionNodes(ev.registry || [], 'territory_logistics');
+      if (
+        (evEngines.includes('territory_logistics') || partitioned.length > 0) &&
+        partitioned.length > 0 &&
+        !isSampleTerritorySeedRegistry(partitioned)
+      ) {
+        eventFallbackTerritory = partitioned;
+        break;
+      }
+    }
+  }
+
+  const resolvedTerritoryRegistry =
+    eventFallbackTerritory.length > 0
+      ? eventFallbackTerritory
+      : territoryRegistry.length > 0
+      ? territoryRegistry
+      : shouldFallbackTerritory
+      ? buildTerritoriosS13HistoricalRegistry()
       : [];
 
   return {
@@ -1726,18 +1794,13 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
               : DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
           )
         : [],
-    territoryRegistry:
-      territoryRegistry.length > 0
-        ? territoryRegistry
-        : shouldFallbackTerritory
-        ? buildTerritoriosS13HistoricalRegistry()
-        : [],
+    territoryRegistry: resolvedTerritoryRegistry,
     events: Array.from(eventsMap.values()),
     studioDocuments,
     hojeManifestYaml,
     hojeRituals,
     coinLedgerRows,
-    presentSheets,
+    presentSheets: effectivePresentSheets,
   };
 }
 
@@ -1942,7 +2005,8 @@ export function importScheduleHubFromCsv(csvText: string): {
   if (
     presentSheets.length > 0 ||
     headers.includes('_record_kind') ||
-    headers.includes('_container_id')
+    headers.includes('_container_id') ||
+    isTerritorySpreadsheetCsvText(csvText)
   ) {
     const bundle = importOmniCsvBundle(csvText);
     return {

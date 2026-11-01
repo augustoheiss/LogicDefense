@@ -807,6 +807,53 @@ function formatHierarchicalTerritoryKey(tNum: string): string {
 }
 
 /**
+ * Detects whether a raw CSV string matches a Territory Spreadsheet schema
+ * (17-col canonical, 18-col external `Territory/Locality/Line`, or 19-col semicolon `Codigo;Territorio;Nome_Territorio;...`)
+ * rather than an Omni-CSV or a generic schedule CSV.
+ */
+export function isTerritorySpreadsheetCsvText(csvText: string): boolean {
+  const clean = (csvText || '').replace(/^\uFEFF/, '').trim();
+  if (!clean) return false;
+  if (clean.includes('#PLANILHA,')) return false;
+
+  const firstLine = (clean.split(/\r?\n/)[0] || '').trim();
+  if (!firstLine) return false;
+
+  const semiCount = (firstLine.match(/;/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const delim = semiCount > commaCount ? ';' : ',';
+  const headers = firstLine
+    .split(delim)
+    .map((h) => normalizeHeaderName(h.replace(/^"|"$/g, '')));
+
+  if (headers.includes('_record_kind') || headers.includes('title_or_name')) {
+    return false;
+  }
+
+  const hasTerritoryIdHeader = headers.some((h) =>
+    ['territory_number', 'territorio', 'territory', 'territory_locality', 'nome_territorio'].includes(h)
+  );
+  const hasAddressOrGeoHeader = headers.some((h) =>
+    [
+      'locality',
+      'territory_locality',
+      'nome_territorio',
+      'line',
+      'logradouro',
+      'endereco',
+      'lat',
+      'latitude',
+      'lng',
+      'longitude',
+      'worked',
+      'trabalhado',
+    ].includes(h)
+  );
+
+  return hasTerritoryIdHeader && hasAddressOrGeoHeader;
+}
+
+/**
  * Converts a 2D spreadsheet grid (18-col external, 19-col Sekundo model, or 17-col canonical)
  * into clean `FlatSkeletonEntry[]` nodes ready for Sekundo.
  */
@@ -851,8 +898,12 @@ export function importTerritorySpreadsheetGrid(
     const iMetaJson = colIdx(['_meta_json']);
     const iTerrNum = colIdx(['territory_number']);
     const iLocality = colIdx(['locality']);
+    const iLine = colIdx(['line', 'logradouro', 'endereco']);
+    const iLine2 = colIdx(['line2', 'bairro', 'neighborhood']);
     const iCity = colIdx(['city']);
     const iState = colIdx(['state']);
+    const iCountry = colIdx(['country', 'pais']);
+    const iPropertyType = colIdx(['property_type', 'locationtype', 'tipo_imovel']);
     const iPostal = colIdx(['postalcode']);
     const iLat = colIdx(['lat', 'latitude']);
     const iLng = colIdx(['lng', 'longitude']);
@@ -885,8 +936,19 @@ export function importTerritorySpreadsheetGrid(
         terrSet.add(tNum);
       }
       if (iLocality !== -1 && row[iLocality]) meta.locality = row[iLocality];
+      if (iLine !== -1 && row[iLine]) {
+        meta.line = row[iLine];
+        if (type !== 'header' && !meta.street) {
+          const parsedLine = parseAddressLine(row[iLine]);
+          meta.street = parsedLine.street;
+          meta.number = parsedLine.number;
+        }
+      }
+      if (iLine2 !== -1 && row[iLine2]) meta.line2 = row[iLine2];
       if (iCity !== -1 && row[iCity]) meta.city = row[iCity];
       if (iState !== -1 && row[iState]) meta.state = row[iState];
+      if (iCountry !== -1 && row[iCountry]) meta.country = row[iCountry];
+      if (iPropertyType !== -1 && row[iPropertyType]) meta.property_type = row[iPropertyType];
       if (iPostal !== -1 && row[iPostal]) meta.postalcode = row[iPostal];
       const lat = iLat !== -1 ? parseOptionalCoordNumber(row[iLat]) : parseOptionalCoordNumber(meta.lat);
       const lng = iLng !== -1 ? parseOptionalCoordNumber(row[iLng]) : parseOptionalCoordNumber(meta.lng);

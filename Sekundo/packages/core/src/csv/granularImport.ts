@@ -11,6 +11,7 @@ import type { FlatRegistry, FlatSkeletonEntry, NodeType, PathKey } from '../skel
 import * as pathKey from '../skeleton/pathKey';
 import { upsertRegistry, type UpsertResult } from './upsert';
 import type { CSVRow } from './types';
+import { importTerritorySpreadsheetGrid } from '../geo/territoryMultiFormatIo';
 
 export interface QuarantinedRow {
   rowNumber: number;
@@ -294,6 +295,62 @@ export function parseCSVWithQuarantine(csvText: string): {
         value: valueVal,
         email: '',
         _meta_json: JSON.stringify(metaObj),
+      });
+    }
+    return { validRows, quarantinedRows };
+  }
+
+  // Check if this is an 18-col external (`territory_number,territory_locality,line,...` or `Territory,Locality,Line,...`)
+  // or 19-col Sekundo territory model (`Codigo;Territorio;Nome_Territorio;Quadra;Logradouro;...`) without `_type`
+  const isTerritoryTabularWithoutType =
+    typeIdx === -1 &&
+    (normHeaderSet.has('territory_number') ||
+      normHeaderSet.has('territorio') ||
+      normHeaderSet.has('territory') ||
+      normHeaderSet.has('territory_locality') ||
+      normHeaderSet.has('nome_territorio')) &&
+    (normHeaderSet.has('line') ||
+      normHeaderSet.has('logradouro') ||
+      normHeaderSet.has('endereco') ||
+      normHeaderSet.has('territory_locality') ||
+      normHeaderSet.has('nome_territorio'));
+
+  if (isTerritoryTabularWithoutType) {
+    const parsedGrid = importTerritorySpreadsheetGrid(rawGrid.slice(tableHeaderRowIdx));
+    const existingKeys = new Set(parsedGrid.nodes.map((n) => n.key));
+    const ancestorRows: CSVRow[] = [];
+
+    for (const node of parsedGrid.nodes) {
+      const parts = node.key.split('-');
+      for (let depth = 1; depth < parts.length; depth++) {
+        const ancKey = parts.slice(0, depth).join('-');
+        if (!existingKeys.has(ancKey)) {
+          existingKeys.add(ancKey);
+          const ancLabel =
+            depth === 1 ? `Área T${parts[0]}` : `Setor T${parts[0]}.${parts[1]}`;
+          ancestorRows.push({
+            _key: ancKey,
+            _type: 'header',
+            label: ancLabel,
+            value: '',
+            email: '',
+            _meta_json: JSON.stringify({ engine_id: 'territory_logistics' }),
+          });
+        }
+      }
+    }
+
+    ancestorRows.sort((a, b) => pathKey.compare(a._key, b._key));
+    validRows.push(...ancestorRows);
+
+    for (const node of parsedGrid.nodes) {
+      validRows.push({
+        _key: node.key,
+        _type: node.type,
+        label: node.label,
+        value: node.value || '',
+        email: node.email || '',
+        _meta_json: JSON.stringify(node.meta || {}),
       });
     }
     return { validRows, quarantinedRows };

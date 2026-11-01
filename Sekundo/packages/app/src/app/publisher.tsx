@@ -36,6 +36,8 @@ import {
   parseLatLng,
   calculateDaysDifference,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
+  getActiveEngines,
   selectEnginePartitionNodes,
   calculateMapRoute,
   calculateMultiStopMapRoute,
@@ -66,6 +68,8 @@ import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
 import type { MapPin } from '../components/map/mapTypes';
 import {
   loadSavedTerritoryRegistry,
+  saveTerritoryRegistry,
+  collectFullSiteOmniBundleFromStorage,
   persistTerritoryRegistryMutation,
   exportUpdatedTerritoryModelCsvFromStorage,
   triggerCsvFileDownloadOrCopy,
@@ -112,12 +116,26 @@ export default function PublisherModeScreen() {
   const initialTerritory = typeof territory === 'string' ? territory : '';
 
   const { events } = useLocalEvent();
-  const fallbackEvent =
-    events.find((e) => e.config.id === rawEventId) ||
-    events.find((e) => e.config.id === 'seed-territorios-padrao') ||
-    events.find((e) => (e.config.activeEngines || []).includes('territory_logistics')) ||
-    events[0] ||
-    null;
+  const fallbackEvent = useMemo(() => {
+    if (rawEventId) {
+      const explicit = events.find((e) => e.config.id === rawEventId);
+      if (explicit) return explicit;
+    }
+    const userTerritoryEvents = events.filter(
+      (e) =>
+        getActiveEngines(e.config).includes('territory_logistics') &&
+        e.config.id !== 'seed-territorios-padrao'
+    );
+    if (userTerritoryEvents.length > 0) {
+      return userTerritoryEvents[userTerritoryEvents.length - 1];
+    }
+    return (
+      events.find((e) => getActiveEngines(e.config).includes('territory_logistics')) ||
+      events.find((e) => e.config.id === 'seed-territorios-padrao') ||
+      events[0] ||
+      null
+    );
+  }, [events, rawEventId]);
   const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-padrao';
   const {
     flatRegistry: rawRegistry,
@@ -126,20 +144,49 @@ export default function PublisherModeScreen() {
   } = useSkeleton(eventId);
   const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[]>([]);
   useEffect(() => {
-    loadSavedTerritoryRegistry()
-      .then((reg) => {
-        if (reg && reg.length > 0) setSavedTerritoryRegistry(reg);
-      })
-      .catch(() => undefined);
-  }, [rawRegistry]);
+    let mounted = true;
+    (async () => {
+      try {
+        const reg = await loadSavedTerritoryRegistry();
+        if (!mounted) return;
+        if (reg && reg.length > 0 && !isSampleTerritorySeedRegistry(reg)) {
+          setSavedTerritoryRegistry(reg);
+          return;
+        }
+        const siteBundle = await collectFullSiteOmniBundleFromStorage();
+        if (!mounted) return;
+        if (
+          siteBundle.territoryRegistry &&
+          siteBundle.territoryRegistry.length > 0 &&
+          !isSampleTerritorySeedRegistry(siteBundle.territoryRegistry)
+        ) {
+          setSavedTerritoryRegistry(siteBundle.territoryRegistry);
+          await saveTerritoryRegistry(siteBundle.territoryRegistry);
+        } else if (reg && reg.length > 0) {
+          setSavedTerritoryRegistry(reg);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [rawRegistry, events]);
 
   const flatRegistry = useMemo<FlatSkeletonEntry[]>(() => {
     const savedPartitioned = selectEnginePartitionNodes(
       savedTerritoryRegistry,
       'territory_logistics'
     );
-    if (savedPartitioned.length > 0) return savedPartitioned;
     const partitioned = selectEnginePartitionNodes(rawRegistry || [], 'territory_logistics');
+    if (savedPartitioned.length > 0 && !isSampleTerritorySeedRegistry(savedPartitioned)) {
+      return savedPartitioned;
+    }
+    if (partitioned.length > 0 && !isSampleTerritorySeedRegistry(partitioned)) {
+      return partitioned;
+    }
+    if (savedPartitioned.length > 0) return savedPartitioned;
     if (partitioned.length > 0) return partitioned;
     return buildTerritoriosS13HistoricalRegistry();
   }, [rawRegistry, savedTerritoryRegistry]);

@@ -333,6 +333,7 @@ export {
   parseXlsxBytesToGrid,
   buildXlsxBytesFromGrid,
   parseCsvTextToGrid,
+  isTerritorySpreadsheetCsvText,
   importTerritorySpreadsheetGrid,
   exportTerritorySpreadsheetGrid,
   parseKmlToCleanTerritoryNodes,
@@ -467,6 +468,9 @@ export {
   buildTerritoryCycleRegistryFromRecords,
   buildTerritoriosS13HistoricalRegistry,
   buildTerritoryMultiCycleHistoricalRegistry,
+  isSampleTerritorySeedNode,
+  isSampleTerritorySeedRegistry,
+  stripSampleTerritorySeedNodes,
   parseSekundoScheduleBundle,
 } from './schedule/programacaoReuniaoSeed';
 export type {

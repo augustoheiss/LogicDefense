@@ -25,6 +25,7 @@ import {
   DEFAULT_SEKUNDO_APP_YAML,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
   ensureParticipantPrivilegeMatrix,
   exportOmniCsvBundle,
   exportSingleEngineSampleCsv,
@@ -325,12 +326,26 @@ export async function exportUpdatedTerritoryModelCsvFromStorage(
   mode: 'flat_s13' | 'omni_single' | 'omni_full' = 'flat_s13',
   options?: { privacySafeMode?: boolean }
 ): Promise<{ csvText: string; filename: string }> {
-  const nodes =
-    currentCleanNodes && currentCleanNodes.length > 0
-      ? currentCleanNodes
-      : (await loadSavedTerritoryRegistry()) || buildTerritoriosS13HistoricalRegistry();
+  const savedOrEvent = await (async () => {
+    const saved = await loadSavedTerritoryRegistry();
+    if (saved && saved.length > 0 && !isSampleTerritorySeedRegistry(saved)) return saved;
+    const bundle = await collectFullSiteOmniBundleFromStorage();
+    if (bundle.territoryRegistry && bundle.territoryRegistry.length > 0) {
+      return bundle.territoryRegistry;
+    }
+    return saved;
+  })();
 
-  if (nodes.length > 0) {
+  const nodes =
+    currentCleanNodes && currentCleanNodes.length > 0 && !isSampleTerritorySeedRegistry(currentCleanNodes)
+      ? currentCleanNodes
+      : savedOrEvent && savedOrEvent.length > 0
+      ? savedOrEvent
+      : currentCleanNodes && currentCleanNodes.length > 0
+      ? currentCleanNodes
+      : buildTerritoriosS13HistoricalRegistry();
+
+  if (nodes.length > 0 && !isSampleTerritorySeedRegistry(nodes)) {
     await saveTerritoryRegistry(nodes);
   }
 
@@ -817,8 +832,13 @@ export async function collectFullSiteOmniBundleFromStorage(
     if (!fallbackScheduleFromEvent && schedNodes.length > 0 && engines.includes('roster_assignments')) {
       fallbackScheduleFromEvent = schedNodes;
     }
-    if (!fallbackTerritoryFromEvent && terrNodes.length > 0 && engines.includes('territory_logistics')) {
-      fallbackTerritoryFromEvent = terrNodes;
+    if (terrNodes.length > 0 && (engines.includes('territory_logistics') || terrNodes.some((n) => n.type === 'territory'))) {
+      if (
+        !fallbackTerritoryFromEvent ||
+        (isSampleTerritorySeedRegistry(fallbackTerritoryFromEvent) && !isSampleTerritorySeedRegistry(terrNodes))
+      ) {
+        fallbackTerritoryFromEvent = terrNodes;
+      }
     }
 
     // Do not duplicate the synthetic Hub primary event into `event_node`, because its
@@ -917,7 +937,29 @@ export async function collectFullSiteOmniBundleFromStorage(
     fallbackScheduleFromEvent ||
     buildProgramacaoReuniaoRegistry(undefined, participants);
 
+  const nonSampleOverrideTerritory =
+    overrides?.territoryRegistry &&
+    overrides.territoryRegistry.length > 0 &&
+    !isSampleTerritorySeedRegistry(overrides.territoryRegistry)
+      ? overrides.territoryRegistry
+      : null;
+  const nonSampleSavedTerritory =
+    savedTerritory &&
+    savedTerritory.length > 0 &&
+    !isSampleTerritorySeedRegistry(savedTerritory)
+      ? savedTerritory
+      : null;
+  const nonSampleEventTerritory =
+    fallbackTerritoryFromEvent &&
+    fallbackTerritoryFromEvent.length > 0 &&
+    !isSampleTerritorySeedRegistry(fallbackTerritoryFromEvent)
+      ? fallbackTerritoryFromEvent
+      : null;
+
   const territoryRegistry =
+    nonSampleOverrideTerritory ||
+    nonSampleSavedTerritory ||
+    nonSampleEventTerritory ||
     overrides?.territoryRegistry ||
     savedTerritory ||
     fallbackTerritoryFromEvent ||
@@ -1050,7 +1092,26 @@ export async function commitOmniCsvBundleToStorage(
     await saveScheduleRegistry(bundle.scheduleRegistry);
   }
   if (hasAllOrSheet('hub_territory_cycle') && bundle.territoryRegistry.length > 0) {
-    await saveTerritoryRegistry(bundle.territoryRegistry);
+    if (isSampleTerritorySeedRegistry(bundle.territoryRegistry)) {
+      const existingSaved = await loadSavedTerritoryRegistry();
+      if (existingSaved && existingSaved.length > 0 && !isSampleTerritorySeedRegistry(existingSaved)) {
+        bundle.territoryRegistry = existingSaved;
+      } else {
+        const currentSite = await collectFullSiteOmniBundleFromStorage();
+        if (
+          currentSite.territoryRegistry &&
+          currentSite.territoryRegistry.length > 0 &&
+          !isSampleTerritorySeedRegistry(currentSite.territoryRegistry)
+        ) {
+          bundle.territoryRegistry = currentSite.territoryRegistry;
+          await saveTerritoryRegistry(bundle.territoryRegistry);
+        } else {
+          await saveTerritoryRegistry(bundle.territoryRegistry);
+        }
+      }
+    } else {
+      await saveTerritoryRegistry(bundle.territoryRegistry);
+    }
   }
   if (hasAllOrSheet('coin_ledger_row') && bundle.coinLedgerRows && bundle.coinLedgerRows.length > 0) {
     await saveCoinLedgerRowsToCoinDB(bundle.coinLedgerRows);
