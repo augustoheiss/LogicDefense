@@ -1104,7 +1104,7 @@ export function TerritoryManageModal({
                       style={styles.input}
                       value={newTerrName}
                       onChangeText={setNewTerrName}
-                      placeholder="Ex: Vila Mariana, Setor Sul..."
+                      placeholder="Ex: Bairro Central, Setor Sul..."
                       placeholderTextColor="#64748B"
                     />
                   </View>

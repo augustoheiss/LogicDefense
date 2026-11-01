@@ -68,7 +68,7 @@ describe('territoryCrudEngine', () => {
     const base: FlatSkeletonEntry[] = [];
     const created = createTerritoryOrQuadra(base, {
       territoryNumber: '5',
-      territoryName: 'Vila Mariana',
+      territoryName: 'Bairro Central',
       city: 'São Paulo',
       initialAddress: {
         street: 'Rua Domingos de Morais',
