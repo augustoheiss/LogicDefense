@@ -56,6 +56,7 @@ export interface CoinSyncEventDetail {
   tableId?: string;
   apiKey?: string;
   lastEventSeq?: number;
+  reason?: string;
   __fromBus?: boolean;
 }
 
