@@ -28,6 +28,7 @@ import { buildTree } from '../skeleton/skeletonTree';
 import { importGranularCSV } from '../csv/granularImport';
 import { buildTerritoryModelCsvText } from '../territory/territoryCrudEngine';
 import { extractQuadrasFromRegistry } from '../geo/quadraPolygonEngine';
+import { computeTerritoryRecencyList } from '../engines/territoryEngine';
 
 describe('Sekundo Multi-Planilha Master CSV ("CSV Geral") & Single-Engine Planilha Export/Import', () => {
   it('generates a complete Multi-Planilha Master CSV covering all 7 Planilhas including Assistente Moeda (coin_ledger_row) with #PLANILHA and #ABA_PLANILHA markers', () => {
@@ -512,6 +513,12 @@ describe('Sekundo Multi-Planilha Master CSV ("CSV Geral") & Single-Engine Planil
     expect(quadras[0].territoryNumber).toBe('T01.01.01');
     expect(quadras[0].totalUnits).toBe(2);
     expect(quadras[0].workedUnits).toBe(1);
+
+    const recency = computeTerritoryRecencyList(reimported.territoryRegistry, 'hierarchical');
+    expect(recency).toHaveLength(1);
+    expect(recency[0].territoryNumber).toBe('T01.01.01');
+    expect(recency[0].totalUnits).toBe(2);
+    expect(recency[0].workedUnits).toBe(1);
   });
 
   it('SIT-07: ingests 17-col canonical, 18-col external, and 19-col semicolon territory spreadsheets via importOmniCsvBundle and importGranularCSV without falling back to the 16 sample territories', () => {

@@ -232,6 +232,22 @@ export function computeTerritoryRecencyList(
       meta.territoryNumber ||
       (parts.length === 3 ? e.label.split('—')[0].trim() : undefined);
 
+    if (
+      tNum &&
+      parentKeys.has(e.key) &&
+      parts.length < 3 &&
+      !Array.isArray(meta.boundaryPolygon) &&
+      entries.some((desc) => {
+        if (desc.key === e.key) return false;
+        if (!desc.key.startsWith(`${e.key}-`) && !desc.key.startsWith(`${e.key}.`)) return false;
+        const dMeta = (desc.meta || {}) as Record<string, any>;
+        const dNum = dMeta.territory_number || dMeta.territoryNumber;
+        return Boolean(dNum && String(dNum) !== String(tNum));
+      })
+    ) {
+      return; // Skip Area / Sector ancestor headers that contain child territories
+    }
+
     if (tNum && !territoryMap.has(String(tNum))) {
       territoryMap.set(String(tNum), {
         label: e.label || `Território ${tNum}`,

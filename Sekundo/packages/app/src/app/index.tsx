@@ -131,11 +131,16 @@ export default function Dashboard() {
   const territoryEvents = events.filter((e) =>
     getActiveEngines(e.config).includes('territory_logistics')
   );
+  const userTerritoryEvents = territoryEvents.filter(
+    (e) => e.config.id !== 'seed-territorios-padrao'
+  );
   const activeTerritoryEvent =
     explicitSelectedEvent &&
     getActiveEngines(explicitSelectedEvent.config).includes('territory_logistics')
       ? explicitSelectedEvent
-      : territoryEvents[territoryEvents.length - 1] || activeSelectedEvent;
+      : userTerritoryEvents[userTerritoryEvents.length - 1] ||
+        territoryEvents[territoryEvents.length - 1] ||
+        activeSelectedEvent;
 
   const webTitle = (title: string) => (Platform.OS === 'web' ? ({ title } as any) : {});
 
@@ -289,7 +294,13 @@ export default function Dashboard() {
           </Pressable>
           <Pressable
             testID="simple-card-territories"
-            onPress={() => router.push('/territory-checklist' as any)}
+            onPress={() =>
+              router.push(
+                activeTerritoryEvent
+                  ? (`/territory-checklist?id=${encodeURIComponent(activeTerritoryEvent.config.id)}` as any)
+                  : ('/territory-checklist' as any)
+              )
+            }
             style={{
               flex: 1,
               minWidth: 110,

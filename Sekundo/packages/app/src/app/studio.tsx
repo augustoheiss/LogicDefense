@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,11 +16,19 @@ import { File as ExpoFile } from 'expo-file-system';
 import {
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
+  selectEnginePartitionNodes,
   compileSdocToPdf,
   S89_4UP_SDOC_YAML,
+  type FlatSkeletonEntry,
 } from '@sekundo/core';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useSdocDocument } from '../hooks/useSdocDocument';
+import {
+  loadSavedScheduleRegistry,
+  loadSavedTerritoryRegistry,
+  collectFullSiteOmniBundleFromStorage,
+} from '../storage/omniStorageBridge';
 import { SvgPainter } from '../components/studio/SvgPainter';
 import { MmTopRuler, MmLeftRuler, RULER_THICKNESS } from '../components/studio/MmRulers';
 import { StudioInspectorPanel, collectAllPrimitives } from '../components/studio/StudioSidebars';
@@ -39,14 +47,68 @@ export default function StudioScreen() {
     params.preset === 'territorios-multiciclo' ? 'territorios' : 'reuniao'
   );
   const { flatRegistry } = useSkeleton(eventId);
+  const [savedScheduleRegistry, setSavedScheduleRegistry] = useState<FlatSkeletonEntry[] | null>(
+    null
+  );
+  const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[] | null>(
+    null
+  );
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const [sched, terr] = await Promise.all([
+          loadSavedScheduleRegistry(),
+          loadSavedTerritoryRegistry(),
+        ]);
+        if (!active) return;
+        if (sched && sched.length > 0) {
+          setSavedScheduleRegistry(sched);
+        }
+        if (terr && terr.length > 0 && !isSampleTerritorySeedRegistry(terr)) {
+          setSavedTerritoryRegistry(terr);
+        } else {
+          const fullSite = await collectFullSiteOmniBundleFromStorage();
+          if (!active) return;
+          if (fullSite.territoryRegistry && fullSite.territoryRegistry.length > 0) {
+            setSavedTerritoryRegistry(fullSite.territoryRegistry);
+          } else if (terr && terr.length > 0) {
+            setSavedTerritoryRegistry(terr);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const effectiveRegistry = useMemo(() => {
     if (dataSourceMode === 'avulso') return [];
-    if (flatRegistry && flatRegistry.length > 0 && dataSourceMode === 'reuniao') return flatRegistry;
-    return dataSourceMode === 'territorios'
-      ? buildTerritoriosS13HistoricalRegistry()
-      : buildProgramacaoReuniaoRegistry();
-  }, [flatRegistry, dataSourceMode]);
+    if (dataSourceMode === 'territorios') {
+      const partitioned = selectEnginePartitionNodes(flatRegistry, 'territory_logistics');
+      if (partitioned.length > 0 && !isSampleTerritorySeedRegistry(partitioned)) {
+        return partitioned;
+      }
+      if (
+        savedTerritoryRegistry &&
+        savedTerritoryRegistry.length > 0 &&
+        !isSampleTerritorySeedRegistry(savedTerritoryRegistry)
+      ) {
+        return savedTerritoryRegistry;
+      }
+      if (partitioned.length > 0) return partitioned;
+      if (savedTerritoryRegistry && savedTerritoryRegistry.length > 0) return savedTerritoryRegistry;
+      return buildTerritoriosS13HistoricalRegistry();
+    }
+    const partitionedRoster = selectEnginePartitionNodes(flatRegistry, 'roster_assignments');
+    if (partitionedRoster.length > 0) return partitionedRoster;
+    if (savedScheduleRegistry && savedScheduleRegistry.length > 0) return savedScheduleRegistry;
+    return buildProgramacaoReuniaoRegistry();
+  }, [flatRegistry, dataSourceMode, savedScheduleRegistry, savedTerritoryRegistry]);
 
   const doc = useSdocDocument({
     eventId,

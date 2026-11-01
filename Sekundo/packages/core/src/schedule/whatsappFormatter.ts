@@ -252,7 +252,7 @@ export function formatGroupFilterWhatsApp(
     const holder = openCycle?.assignedTo || (tMeta.worked === 0 ? tMeta.workerName : undefined);
     if (holder && isInGroup(holder)) {
       activeGroupTerritories.push({
-        code: tMeta.territoryNumber || t.key,
+        code: tMeta.territoryNumber || tMeta.territory_number || t.key,
         locality: tMeta.locality || t.label,
         holder,
         since: openCycle?.assignedAt || tMeta.assignedAt || '-',
@@ -399,7 +399,7 @@ export function formatLivePocketScheduleWhatsApp(
  */
 export function formatTerritoryAssignmentWhatsApp(territoryEntry: FlatSkeletonEntry): string {
   const meta = (territoryEntry.meta || {}) as Record<string, any>;
-  const code = meta.territoryNumber || territoryEntry.key;
+  const code = meta.territoryNumber || meta.territory_number || territoryEntry.key;
   const locality = meta.locality || territoryEntry.label;
   const history = (meta.assignmentHistory || []) as Array<{
     assignedTo: string;

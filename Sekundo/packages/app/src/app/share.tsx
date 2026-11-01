@@ -21,14 +21,19 @@ import {
   encodeEncryptedCollabPacket,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
   buildCombinedMultiEngineSkeleton,
   PROGRAMACAO_UNIT_NAME,
+  type FlatSkeletonEntry,
   type ParticipantProfile,
   type EventState,
 } from '@sekundo/core';
 import {
   loadSavedPrivilegeParticipants,
   savePrivilegeParticipants,
+  loadSavedScheduleRegistry,
+  loadSavedTerritoryRegistry,
+  collectFullSiteOmniBundleFromStorage,
 } from '../storage/omniStorageBridge';
 import {
   loadPersistedActivityLog,
@@ -68,16 +73,30 @@ export default function ShareEvent() {
     };
   }, [matchedEvent, effectiveEventId]);
 
+  const [savedScheduleRegistry, setSavedScheduleRegistry] = useState<FlatSkeletonEntry[] | null>(
+    null
+  );
+  const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[] | null>(
+    null
+  );
+
   const effectiveRegistry = useMemo(() => {
-    if (flatRegistry && flatRegistry.length > 0) return flatRegistry;
+    if (flatRegistry && flatRegistry.length > 0 && !isSampleTerritorySeedRegistry(flatRegistry)) {
+      return flatRegistry;
+    }
     return buildCombinedMultiEngineSkeleton({
-      scheduleRegistry: buildProgramacaoReuniaoRegistry(
-        undefined,
-        DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
-      ),
-      territoryRegistry: buildTerritoriosS13HistoricalRegistry(),
+      scheduleRegistry:
+        savedScheduleRegistry && savedScheduleRegistry.length > 0
+          ? savedScheduleRegistry
+          : buildProgramacaoReuniaoRegistry(undefined, DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS),
+      territoryRegistry:
+        savedTerritoryRegistry && savedTerritoryRegistry.length > 0
+          ? savedTerritoryRegistry
+          : flatRegistry && flatRegistry.length > 0
+          ? flatRegistry
+          : buildTerritoriosS13HistoricalRegistry(),
     });
-  }, [flatRegistry]);
+  }, [flatRegistry, savedScheduleRegistry, savedTerritoryRegistry]);
 
   const [passphrase, setPassphrase] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -91,11 +110,37 @@ export default function ShareEvent() {
 
   useEffect(() => {
     let active = true;
-    loadSavedPrivilegeParticipants().then((saved) => {
-      if (active && saved && saved.length > 0) {
-        setPrivilegeRoster(saved.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx)));
+    (async () => {
+      try {
+        const [savedPrivs, savedSched, savedTerr] = await Promise.all([
+          loadSavedPrivilegeParticipants(),
+          loadSavedScheduleRegistry(),
+          loadSavedTerritoryRegistry(),
+        ]);
+        if (!active) return;
+        if (savedPrivs && savedPrivs.length > 0) {
+          setPrivilegeRoster(
+            savedPrivs.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
+          );
+        }
+        if (savedSched && savedSched.length > 0) {
+          setSavedScheduleRegistry(savedSched);
+        }
+        if (savedTerr && savedTerr.length > 0 && !isSampleTerritorySeedRegistry(savedTerr)) {
+          setSavedTerritoryRegistry(savedTerr);
+        } else {
+          const fullSite = await collectFullSiteOmniBundleFromStorage();
+          if (!active) return;
+          if (fullSite.territoryRegistry && fullSite.territoryRegistry.length > 0) {
+            setSavedTerritoryRegistry(fullSite.territoryRegistry);
+          } else if (savedTerr && savedTerr.length > 0) {
+            setSavedTerritoryRegistry(savedTerr);
+          }
+        }
+      } catch {
+        // ignore
       }
-    });
+    })();
     return () => {
       active = false;
     };

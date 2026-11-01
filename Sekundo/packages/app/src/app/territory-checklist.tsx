@@ -102,7 +102,14 @@ export default function TerritoryChecklistScreen() {
     const territoryEvents = events.filter((e) =>
       getActiveEngines(e.config).includes('territory_logistics')
     );
-    return territoryEvents[territoryEvents.length - 1] || events[0];
+    const userTerritoryEvents = territoryEvents.filter(
+      (e) => e.config.id !== 'seed-territorios-padrao'
+    );
+    return (
+      userTerritoryEvents[userTerritoryEvents.length - 1] ||
+      territoryEvents[territoryEvents.length - 1] ||
+      events[0]
+    );
   }, [events, rawEventId]);
   const eventId = event?.config.id || rawEventId;
   const { flatRegistry: rawFlatRegistry, saveSkeleton, loading } = useSkeleton(eventId);

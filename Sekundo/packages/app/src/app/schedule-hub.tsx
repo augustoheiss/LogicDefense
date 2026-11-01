@@ -203,6 +203,103 @@ export default function ScheduleHubConsole() {
     }
   }, [flatRegistry]);
 
+  // Consolidates hierarchical territory spreadsheets (Area -> Sector -> Territory -> Address)
+  // into 1 entry per distinct Territory so the AutoCAD Button Matrix renders 1 button per sector.
+  const consolidatedTerritorySectors = useMemo<FlatSkeletonEntry[]>(() => {
+    if (territoryRegistry.length === 0) return [];
+    const parentKeys = new Set<string>();
+    for (const e of territoryRegistry) {
+      const sep = e.key.includes('.') ? '.' : '-';
+      const parts = e.key.split(sep);
+      if (parts.length > 1) {
+        for (let i = 1; i < parts.length; i++) {
+          parentKeys.add(parts.slice(0, i).join(sep));
+        }
+      }
+    }
+    if (parentKeys.size === 0) return territoryRegistry;
+
+    const sectorMap = new Map<string, FlatSkeletonEntry>();
+    for (const e of territoryRegistry) {
+      const meta = (e.meta || {}) as Record<string, any>;
+      const parts = e.key.split(/[-.]/);
+      const tNum = String(
+        meta.territoryNumber ||
+          meta.territory_number ||
+          (parts.length >= 3 ? `T${parts.slice(0, 3).join('.')}` : e.key)
+      ).trim();
+
+      // Skip Area / Sector ancestor headers that contain child territories with deeper codes
+      if (
+        parentKeys.has(e.key) &&
+        parts.length < 3 &&
+        !Array.isArray(meta.boundaryPolygon) &&
+        territoryRegistry.some((desc) => {
+          if (desc.key === e.key) return false;
+          if (!desc.key.startsWith(`${e.key}-`) && !desc.key.startsWith(`${e.key}.`)) return false;
+          const dMeta = (desc.meta || {}) as Record<string, any>;
+          const dNum = dMeta.territoryNumber || dMeta.territory_number;
+          return Boolean(dNum && String(dNum) !== tNum);
+        })
+      ) {
+        continue;
+      }
+
+      const existing = sectorMap.get(tNum);
+      if (!existing) {
+        const repKey = parts.length >= 3 ? parts.slice(0, 3).join('-') : e.key;
+        const worker = String(meta.workerName || e.value || '').trim();
+        const assignedAt = String(meta.assignedAt || meta.assigned_date || '').trim();
+        const completedAt = String(
+          meta.completedAt || meta.completed_date || meta.lastWorkedAt || ''
+        ).trim();
+        const history = Array.isArray(meta.assignmentHistory)
+          ? meta.assignmentHistory
+          : worker || assignedAt || completedAt
+          ? [
+              {
+                assignedTo: worker || 'Equipe de Campo',
+                assignedAt: assignedAt || completedAt || new Date().toISOString().slice(0, 10),
+                completedAt: completedAt || undefined,
+                serviceYear: 2026,
+              },
+            ]
+          : [];
+        sectorMap.set(tNum, {
+          ...e,
+          key: repKey,
+          label:
+            e.type === 'header'
+              ? e.label
+              : `${tNum} — ${meta.locality || e.label}`,
+          meta: {
+            ...meta,
+            territoryNumber: tNum,
+            territory_number: tNum,
+            assignmentHistory: history,
+          },
+        });
+      } else if (e.type === 'header' && parts.length === 3) {
+        const exMeta = (existing.meta || {}) as Record<string, any>;
+        sectorMap.set(tNum, {
+          ...e,
+          meta: {
+            ...exMeta,
+            ...meta,
+            territoryNumber: tNum,
+            territory_number: tNum,
+            assignmentHistory:
+              Array.isArray(meta.assignmentHistory) && meta.assignmentHistory.length > 0
+                ? meta.assignmentHistory
+                : exMeta.assignmentHistory || [],
+          },
+        });
+      }
+    }
+
+    return Array.from(sectorMap.values());
+  }, [territoryRegistry]);
+
   const sessions = useMemo(
     () => extractStructuredSessions(activeScheduleRegistry),
     [activeScheduleRegistry]
@@ -843,7 +940,8 @@ export default function ScheduleHubConsole() {
       case 'live_pocket':
         return formatLivePocketScheduleWhatsApp(currentSession, waStartTime);
       case 'territory_assignment': {
-        const terr = territoryRegistry[waTargetTerritoryIdx] || territoryRegistry[0];
+        const terr =
+          consolidatedTerritorySectors[waTargetTerritoryIdx] || consolidatedTerritorySectors[0];
         if (!terr) return '';
         return formatTerritoryAssignmentWhatsApp(terr);
       }
@@ -858,6 +956,7 @@ export default function ScheduleHubConsole() {
     waTargetTerritoryIdx,
     activeDirectory,
     territoryRegistry,
+    consolidatedTerritorySectors,
     activeInspectedSlotInfo,
   ]);
 
@@ -920,7 +1019,8 @@ export default function ScheduleHubConsole() {
     return activeDirectory.filter((p) => p.capabilities?.[capKey]);
   }, [activeDirectory, inspectedRequirement, showReassignList]);
 
-  const inspectedTerritory = territoryRegistry[selectedTerritoryIdx] || territoryRegistry[0];
+  const inspectedTerritory =
+    consolidatedTerritorySectors[selectedTerritoryIdx] || consolidatedTerritorySectors[0];
 
   return (
     <SafeAreaView style={[styles.cadViewport, { backgroundColor: theme.bg }]}>
@@ -1133,7 +1233,7 @@ export default function ScheduleHubConsole() {
               },
             ]}
             accessibilityLabel="Aba Territórios"
-            {...({ title: `Territórios (${territoryRegistry.length})` } as any)}
+            {...({ title: `Territórios (${consolidatedTerritorySectors.length})` } as any)}
           >
             <Text
               style={[
@@ -1141,7 +1241,7 @@ export default function ScheduleHubConsole() {
                 { color: activeTab === 'territories' ? '#090D16' : theme.textPrimary },
               ]}
             >
-              🗺️ {territoryRegistry.length}
+              🗺️ {consolidatedTerritorySectors.length}
             </Text>
           </Pressable>
 
@@ -1623,7 +1723,7 @@ export default function ScheduleHubConsole() {
           >
             <View style={styles.sessionCoordStrip}>
               <Text style={[styles.sessionCoordTitle, { color: theme.textPrimary }]}>
-                🗺️ {territoryRegistry.length} Setores
+                🗺️ {consolidatedTerritorySectors.length} Setores
               </Text>
               <View style={styles.coordPillsRow}>
                 {(['all', '2027', '2026'] as const).map((yr) => (
@@ -1647,9 +1747,9 @@ export default function ScheduleHubConsole() {
             </View>
 
             <View style={styles.slotButtonsGrid}>
-              {territoryRegistry.map((t, idx) => {
+              {consolidatedTerritorySectors.map((t, idx) => {
                 const tMeta = (t.meta || {}) as Record<string, any>;
-                const code = tMeta.territoryNumber || t.key;
+                const code = tMeta.territoryNumber || tMeta.territory_number || t.key;
                 const history = (tMeta.assignmentHistory || []) as Array<{
                   assignedTo: string;
                   completedAt?: string;

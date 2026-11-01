@@ -4,7 +4,7 @@
  * 1-Click Document Printing & Official AcroForm Form-Filler Console.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -28,14 +28,21 @@ import {
   generateTerritoryS13AndCardsPDF,
   computeTerritoryRecencyList,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
+  selectEnginePartitionNodes,
   normalizePdfTemplateId,
   PROGRAMACAO_UNIT_NAME,
+  type FlatSkeletonEntry,
   type S89Assignment,
   type FieldMappingCandidate,
   type TemplateRecognitionResult,
 } from '@sekundo/core';
 import { deliverFile } from '../utils/deliverFile';
 import { loadPDFMap } from '../storage/localStorage';
+import {
+  loadSavedTerritoryRegistry,
+  collectFullSiteOmniBundleFromStorage,
+} from '../storage/omniStorageBridge';
 import {
   CustomPdfSection,
   TerritoryS13Section,
@@ -62,6 +69,35 @@ export default function PDFFormsConsole() {
     null
   );
   const [fieldMappings, setFieldMappings] = useState<FieldMappingCandidate[]>([]);
+  const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[] | null>(
+    null
+  );
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const saved = await loadSavedTerritoryRegistry();
+        if (!active) return;
+        if (saved && saved.length > 0 && !isSampleTerritorySeedRegistry(saved)) {
+          setSavedTerritoryRegistry(saved);
+          return;
+        }
+        const fullSite = await collectFullSiteOmniBundleFromStorage();
+        if (!active) return;
+        if (fullSite.territoryRegistry && fullSite.territoryRegistry.length > 0) {
+          setSavedTerritoryRegistry(fullSite.territoryRegistry);
+        } else if (saved && saved.length > 0) {
+          setSavedTerritoryRegistry(saved);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const extractedAssignments: S89Assignment[] = flatRegistry
     .filter((entry) => entry.value && entry.value.trim().length > 0)
@@ -80,9 +116,22 @@ export default function PDFFormsConsole() {
       remarks: (entry.meta?.remarks as string) || undefined,
     }));
 
-  const effectiveTerritoryRegistry = flatRegistry.some((e) => e.type === 'territory')
-    ? flatRegistry
-    : buildTerritoriosS13HistoricalRegistry();
+  const effectiveTerritoryRegistry = useMemo(() => {
+    const partitioned = selectEnginePartitionNodes(flatRegistry, 'territory_logistics');
+    if (partitioned.length > 0 && !isSampleTerritorySeedRegistry(partitioned)) {
+      return partitioned;
+    }
+    if (
+      savedTerritoryRegistry &&
+      savedTerritoryRegistry.length > 0 &&
+      !isSampleTerritorySeedRegistry(savedTerritoryRegistry)
+    ) {
+      return savedTerritoryRegistry;
+    }
+    if (partitioned.length > 0) return partitioned;
+    if (savedTerritoryRegistry && savedTerritoryRegistry.length > 0) return savedTerritoryRegistry;
+    return buildTerritoriosS13HistoricalRegistry();
+  }, [flatRegistry, savedTerritoryRegistry]);
 
   const territoryRecencySummary = computeTerritoryRecencyList(
     effectiveTerritoryRegistry,

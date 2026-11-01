@@ -1024,7 +1024,7 @@ export function exportOmniCsvBundle(
         status_or_readiness: meta.worked === 1 ? 'concluido' : 'em_campo',
         capabilities_or_tags: meta.property_type || 'residencial',
         contact_or_location: meta.locality || meta.neighborhood || '',
-        notes_or_payload: meta.territoryNumber || '',
+        notes_or_payload: meta.territoryNumber || meta.territory_number || '',
         _meta_json: JSON.stringify(meta),
       });
     }

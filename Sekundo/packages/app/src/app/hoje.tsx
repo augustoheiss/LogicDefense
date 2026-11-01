@@ -29,9 +29,11 @@ import {
   computeHojeCockpitSummary,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
+  isSampleTerritorySeedRegistry,
   writeUnifiedOutput,
   exportOmniCsvBundle,
   importOmniCsvBundle,
+  type FlatSkeletonEntry,
 } from '@sekundo/core';
 import { loadAppManifestYaml, saveAppManifestYaml } from '../storage/localStorage';
 import { deliverFile } from '../utils/deliverFile';
@@ -40,6 +42,9 @@ import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar'
 import {
   exportFullSiteOmniCsvFromStorage,
   commitOmniCsvBundleToStorage,
+  loadSavedScheduleRegistry,
+  loadSavedTerritoryRegistry,
+  collectFullSiteOmniBundleFromStorage,
 } from '../storage/omniStorageBridge';
 
 type HojeCadToolId =
@@ -60,13 +65,48 @@ export default function HojeCockpitScreen() {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [confirmedRitualId, setConfirmedRitualId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<HojeCadToolId>('compromissos');
+  const [savedScheduleReg, setSavedScheduleReg] = useState<FlatSkeletonEntry[]>(() =>
+    buildProgramacaoReuniaoRegistry()
+  );
+  const [savedTerritoryReg, setSavedTerritoryReg] = useState<FlatSkeletonEntry[]>(() =>
+    buildTerritoriosS13HistoricalRegistry()
+  );
 
   useEffect(() => {
+    let active = true;
     loadAppManifestYaml().then((saved) => {
-      if (saved && saved.trim().length > 0) {
+      if (active && saved && saved.trim().length > 0) {
         setManifestYaml(saved);
       }
     });
+    (async () => {
+      try {
+        const [sched, terr] = await Promise.all([
+          loadSavedScheduleRegistry(),
+          loadSavedTerritoryRegistry(),
+        ]);
+        if (!active) return;
+        if (sched && sched.length > 0) {
+          setSavedScheduleReg(sched);
+        }
+        if (terr && terr.length > 0 && !isSampleTerritorySeedRegistry(terr)) {
+          setSavedTerritoryReg(terr);
+        } else {
+          const fullSite = await collectFullSiteOmniBundleFromStorage();
+          if (!active) return;
+          if (fullSite.territoryRegistry && fullSite.territoryRegistry.length > 0) {
+            setSavedTerritoryReg(fullSite.territoryRegistry);
+          } else if (terr && terr.length > 0) {
+            setSavedTerritoryReg(terr);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleYamlChange = (next: string) => {
@@ -75,10 +115,8 @@ export default function HojeCockpitScreen() {
   };
 
   const combinedRegistry = useMemo(() => {
-    const reuniao = buildProgramacaoReuniaoRegistry();
-    const territorios = buildTerritoriosS13HistoricalRegistry();
-    return [...reuniao, ...territorios];
-  }, []);
+    return [...savedScheduleReg, ...savedTerritoryReg];
+  }, [savedScheduleReg, savedTerritoryReg]);
 
   const { manifest, parseErr } = useMemo(() => {
     try {
@@ -104,9 +142,7 @@ export default function HojeCockpitScreen() {
       const isTerritorios =
         template?.toLowerCase().includes('territorio') ||
         template?.toLowerCase().includes('multiciclo');
-      const targetReg = isTerritorios
-        ? buildTerritoriosS13HistoricalRegistry()
-        : buildProgramacaoReuniaoRegistry();
+      const targetReg = isTerritorios ? savedTerritoryReg : savedScheduleReg;
 
       const out = await writeUnifiedOutput(kind, {
         registry: targetReg,
@@ -201,7 +237,13 @@ export default function HojeCockpitScreen() {
         ) {
           handleYamlChange(bundle.hojeManifestYaml);
         }
-        await commitOmniCsvBundleToStorage(text);
+        const committed = await commitOmniCsvBundleToStorage(text);
+        if (committed.bundle.scheduleRegistry.length > 0) {
+          setSavedScheduleReg(committed.bundle.scheduleRegistry);
+        }
+        if (committed.bundle.territoryRegistry.length > 0) {
+          setSavedTerritoryReg(committed.bundle.territoryRegistry);
+        }
         setStatusMsg(
           `✅ CSV "${file.name}" (${presentSet.size || 1} planilhas) importado!`
         );
