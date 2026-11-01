@@ -16,6 +16,7 @@ import type {
   DashboardConfig,
   SectorSimulationParams,
 } from './types';
+import { filterAndClipRowsByMonths } from './dateUtils';
 import { neutralizeCsvFormula, redactApiKeyForExport } from '../utils/securitySanitizer';
 
 export function serializeDynamicCSV(
@@ -317,10 +318,10 @@ export function serializeGranularCSV(
     filtered = filtered.filter((r) => r.entryType === 'unresolved');
   }
 
-  // 2. Filter by Date / Month
+  // 2. Filter by Date / Month (using consequent-month competence & multi-month spec)
   const targetMonth = options.selectedMonth || (options as any).month;
   if (targetMonth && targetMonth !== 'all') {
-    filtered = filtered.filter((r) => r.date && r.date.startsWith(targetMonth));
+    filtered = filterAndClipRowsByMonths(filtered, targetMonth);
   }
   if (options.startDate) {
     filtered = filtered.filter((r) => r.date && r.date >= options.startDate!);

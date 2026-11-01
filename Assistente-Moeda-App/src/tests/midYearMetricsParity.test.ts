@@ -23,7 +23,7 @@ import {
   formatSelectedMonthsLabel,
   filterAndClipRowsByMonths,
 } from '../core/dateUtils';
-import { buildWhatsAppReport } from '../services/exportService';
+import { buildWhatsAppReport, buildGranularCSV, buildReportHTML } from '../services/exportService';
 import {
   buildLocalAnalysisContext,
   buildLocalWhatsAppReportText,
@@ -181,18 +181,26 @@ describe('Mid-Year Onboarding & Cross-Channel Mathematical Parity (4 Precision L
     expect(m.survivalAnnualCost).toBe(37200);
   });
 
-  it('Lock 2 (Scenario 3): Cross-Channel WhatsApp Weekly Closing clips cross-month weeks and prorates period entries so Sum(Weeks) === grossMonthly', () => {
-    // 2026-05-27 is Wednesday of the week Mon 2026-05-25 .. Sun 2026-05-31
-    // 2026-05-31 is Sunday in May; 2026-06-01 is Monday in June.
-    // Let's test July 2026 where 2026-07-05 is a Sunday whose Monday is 2026-06-29 (June)!
+  it('Lock 2 (Scenario 3): Consequent-Month WhatsApp Weekly Closing consolidates cross-month weeks into the closing Sunday month so Sum(Weeks) === grossMonthly without splitting weeks', () => {
+    // 2026-06-29 is Monday of the week Mon 2026-06-29 .. Sun 2026-07-05.
+    // Because the closing Sunday (2026-07-05) falls in July (2026-07), the entire week
+    // (including 2026-06-29 and 2026-07-02) belongs to the consequent month 2026-07!
     const crossMonthRows: TableRow[] = [
       {
+        id: 'rev_jun_20',
+        date: '2026-06-20', // Saturday of week ending 2026-06-21 (stays in June)
+        value: 500,
+        entryType: 'revenue',
+        category: 'SERVICOS',
+        description: 'Receita Meados de Junho',
+      },
+      {
         id: 'rev_jun_29',
-        date: '2026-06-29', // Monday in June, same week as Sunday 2026-07-05
+        date: '2026-06-29', // Monday in June, same week as Sunday 2026-07-05 (consequent month: July)
         value: 1000,
         entryType: 'revenue',
         category: 'SERVICOS',
-        description: 'Receita Final de Junho',
+        description: 'Receita Transição Junho-Julho',
       },
       {
         id: 'rev_jul_02',
@@ -206,7 +214,7 @@ describe('Mid-Year Onboarding & Cross-Channel Mathematical Parity (4 Precision L
         id: 'rev_jul_period',
         date: '2026-07-10',
         periodStart: '2026-07-10',
-        periodEnd: '2026-07-19', // 10 days across 2 weeks in July, R$ 100/day
+        periodEnd: '2026-07-19', // 10 days across 2 weeks closing in July, R$ 100/day
         value: 1000,
         entryType: 'revenue',
         category: 'CONTRATO',
@@ -224,9 +232,9 @@ describe('Mid-Year Onboarding & Cross-Channel Mathematical Parity (4 Precision L
 
     const m = computeMetrics(crossMonthRows, BASE_GOALS, '2026-07-31');
     const julyGross = m.byMonth['2026-07'].grossMonthly;
-    // July gross should be strictly 2000 + 1000 = 3000 (the 1000 on 2026-06-29 belongs to June!)
-    expect(julyGross).toBe(3000);
-    expect(m.byMonth['2026-06'].grossMonthly).toBe(1000);
+    // July gross consolidates the full cross-month week (1000 + 2000) + period (1000) = 4000
+    expect(julyGross).toBe(4000);
+    expect(m.byMonth['2026-06'].grossMonthly).toBe(500);
 
     const julyWeeks = buildMonthCompetenceWeekGroups(crossMonthRows, BASE_GOALS, '2026-07');
     const sumOfJulyWeeks = Math.round(julyWeeks.reduce((s, w) => s + w.weeklyTotal, 0) * 100) / 100;
@@ -236,19 +244,94 @@ describe('Mid-Year Onboarding & Cross-Channel Mathematical Parity (4 Precision L
     const waExport = buildWhatsAppReport('Planilha Auditoria', m, BASE_GOALS, '2026-07', crossMonthRows);
     const waLocal = buildLocalWhatsAppReportText('Planilha Auditoria', m, BASE_GOALS, '2026-07', crossMonthRows);
 
-    // Neither July report may include the 29/06 entry as part of July's weekly closing
-    expect(waExport.includes('Receita Final de Junho')).toBe(false);
-    expect(waLocal.includes('Receita Final de Junho')).toBe(false);
+    // Both July reports must include the entire 29/06..05/07 week (both 29/06 and 02/07)
+    expect(waExport.includes('Receita Transição Junho-Julho')).toBe(true);
+    expect(waLocal.includes('Receita Transição Junho-Julho')).toBe(true);
     expect(waExport.includes('Receita Início de Julho')).toBe(true);
     expect(waLocal.includes('Receita Início de Julho')).toBe(true);
 
-    // Verify buildLocalAnalysisContext with selectedMonth='2026-07' preserves global metrics (grossTotal = 4000, not 3000)
+    // June report must NOT include the 29/06..05/07 week
+    const waJune = buildWhatsAppReport('Planilha Auditoria', m, BASE_GOALS, '2026-06', crossMonthRows);
+    expect(waJune.includes('Receita Transição Junho-Julho')).toBe(false);
+    expect(waJune.includes('Receita Meados de Junho')).toBe(true);
+
+    // Verify buildLocalAnalysisContext with selectedMonth='2026-07' preserves global metrics (grossTotal = 4500)
     const ctxScoped = buildLocalAnalysisContext(crossMonthRows, BASE_GOALS, 'Planilha Auditoria', {
       selectedMonth: '2026-07',
       asOfDate: '2026-07-31',
     });
-    expect(ctxScoped.metrics.grossTotal).toBe(4000);
-    expect(ctxScoped.metrics.byYear['2026'].grossAnnual).toBe(4000);
+    expect(ctxScoped.metrics.grossTotal).toBe(4500);
+    expect(ctxScoped.metrics.byYear['2026'].grossAnnual).toBe(4500);
+  });
+
+  it('Lock 2B (Week 44 Cross-Month Anti-Duplication): Semana 44 de 2026 (26/10 a 01/11) stays unified in consequent month 2026-11 with zero duplication', () => {
+    const week44Goals: TableGoals = {
+      dailyGoals: { 2026: 85.71 },
+      weeklyGoals: { 2026: 600 },
+      annualCosts: { 2026: 31200 },
+      globalGoals: {
+        dailyGoal: 85.71,
+        weeklyGoal: 600,
+        annualCost: 31200,
+      },
+    };
+
+    const week44Rows: TableRow[] = [
+      { id: 'w44_1', date: '2026-10-26', value: 120, entryType: 'revenue', description: 'PIX OPERADOR 01' },
+      { id: 'w44_2', date: '2026-10-27', value: 125, entryType: 'revenue', description: 'PIX OPERADOR 01' },
+      { id: 'w44_3', date: '2026-10-28', value: 125, entryType: 'revenue', description: 'PIX OPERADOR 01' },
+      { id: 'w44_4', date: '2026-10-30', value: 80, entryType: 'revenue', description: 'PIX OPERADOR 01' },
+      { id: 'w44_5', date: '2026-11-01', value: 125, entryType: 'revenue', description: 'PIX OPERADOR 01' },
+    ];
+
+    // 1. October (2026-10) must NOT contain Week 44 (26/10 a 01/11) because its Sunday is 01/11
+    const octWeeks = buildMonthCompetenceWeekGroups(week44Rows, week44Goals, '2026-10');
+    expect(octWeeks.some((w) => w.mondayKey === '2026-10-26')).toBe(false);
+    expect(octWeeks.reduce((s, w) => s + w.weeklyTotal, 0)).toBe(0);
+
+    // 2. November (2026-11) must contain Week 44 once with all 5 entries totaling R$ 575,00 (missing R$ 25,00 for R$ 600,00 goal)
+    const novWeeks = buildMonthCompetenceWeekGroups(week44Rows, week44Goals, '2026-11');
+    const w44 = novWeeks.find((w) => w.mondayKey === '2026-10-26');
+    expect(w44).toBeDefined();
+    expect(w44!.weekNumber).toBe(44);
+    expect(w44!.dailyEntries.length).toBe(5);
+    expect(w44!.weeklyTotal).toBe(575);
+    expect(w44!.weeklyGoal).toBe(600);
+    expect(w44!.differenceFromGoal).toBe(-25);
+
+    // 3. Metrics engine attributes all R$ 575,00 to consequent month 2026-11
+    const metrics = computeMetrics(week44Rows, week44Goals, '2026-11-01');
+    expect(metrics.byMonth['2026-11']?.grossMonthly).toBe(575);
+    expect(metrics.byMonth['2026-10']?.grossMonthly ?? 0).toBe(0);
+
+    // 4. Filter by month (system filter) puts all 5 entries in 2026-11 and 0 in 2026-10
+    expect(filterAndClipRowsByMonths(week44Rows, '2026-11').length).toBe(5);
+    expect(filterAndClipRowsByMonths(week44Rows, '2026-10').length).toBe(0);
+
+    // 5. WhatsApp report for 2026-11 and multi-month 2026-10,2026-11 renders Semana 44 ONCE with all 5 entries
+    const waNov = buildWhatsAppReport('Planilha Teste', metrics, week44Goals, '2026-11', week44Rows);
+    const waBoth = buildWhatsAppReport('Planilha Teste', metrics, week44Goals, '2026-10,2026-11', week44Rows);
+
+    const headerStr = '🗓️ *Semana 44 de 2026 (26/10 a 01/11)*';
+    expect(waNov.split(headerStr).length - 1).toBe(1);
+    expect(waBoth.split(headerStr).length - 1).toBe(1);
+    expect(waNov.includes('• 26/10:')).toBe(true);
+    expect(waNov.includes('• 01/11:')).toBe(true);
+    expect(waNov.includes('575,00')).toBe(true);
+    expect(waNov.includes('25,00 para a meta')).toBe(true);
+
+    // 6. Granular CSV and PDF HTML reports also consolidate all 5 Week 44 entries into 2026-11
+    const csvNov = buildGranularCSV(week44Rows, { scope: 'revenue', format: 'agent_compact', selectedMonth: '2026-11' });
+    const csvOct = buildGranularCSV(week44Rows, { scope: 'revenue', format: 'agent_compact', selectedMonth: '2026-10' });
+    expect(csvNov.includes('2026-10-26')).toBe(true);
+    expect(csvNov.includes('2026-11-01')).toBe(true);
+    expect(csvOct.includes('2026-10-26')).toBe(false);
+
+    const htmlMulti = buildReportHTML('Planilha Teste', week44Rows, metrics, week44Goals, '2026-10,2026-11');
+    expect(htmlMulti.includes('575,00')).toBe(true);
+
+    const revCatSummary = buildAccrualCategorySummaries(week44Rows, 'revenue', 1, false);
+    expect(revCatSummary[0].activeMonthsCount).toBe(1);
   });
 
   it('Lock 3 (Scenario 4): Clean-Room Sanitizer prevents Category Collapse, masks non-allowlisted PII prefixes, and preserves 100% of statistical distribution across all 5 Agent Profiles', () => {

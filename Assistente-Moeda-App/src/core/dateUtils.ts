@@ -60,6 +60,53 @@ export function toLocalKey(date: Date): string {
   ].join('-');
 }
 
+/**
+ * Returns the competence month (`'YYYY-MM'`) of the week containing `dateStr`,
+ * defined by the week's closing day (Sunday / `weekEndDate`).
+ * When a Mon–Sun week crosses a month boundary (e.g. `26/10` to `01/11`),
+ * the entire week belongs to the consequent month (`'2026-11'`).
+ */
+export function getWeekCompetenceMonth(dateStr: string): string {
+  if (!dateStr || typeof dateStr !== 'string' || dateStr.length < 10) {
+    return (dateStr || '').slice(0, 7);
+  }
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr.slice(0, 7);
+  const monday = getMondayOf(new Date(y, m - 1, d));
+  const sunday = getSundayOf(monday);
+  return toLocalKey(sunday).slice(0, 7);
+}
+
+/**
+ * Returns true if the row represents an operational revenue entry (subject to weekly closing competence).
+ */
+export function isOperationalRevenueRow(row?: TableRow | null): boolean {
+  if (!row || typeof row !== 'object') return false;
+  return (
+    row.generatedBy === undefined &&
+    row.entryType !== 'deposit' &&
+    row.entryType !== 'waiver' &&
+    row.entryType !== 'expense' &&
+    row.entryType !== 'partner_in' &&
+    row.entryType !== 'partner_out' &&
+    row.entryType !== 'unresolved'
+  );
+}
+
+/**
+ * Returns the competence month (`'YYYY-MM'`) for a specific date of a row:
+ * - Operational revenue rows follow their week's closing Sunday (`getWeekCompetenceMonth`),
+ *   keeping cross-month weeks unified in the consequent month.
+ * - Other entry types (expenses, deposits, waivers, partnerships) follow their calendar month.
+ */
+export function getRowEntryCompetenceMonth(dateStr: string, row?: TableRow | null): string {
+  if (!dateStr || typeof dateStr !== 'string') return '';
+  if (!row || isOperationalRevenueRow(row)) {
+    return getWeekCompetenceMonth(dateStr);
+  }
+  return dateStr.slice(0, 7);
+}
+
 // ─── Public helpers ───────────────────────────────────────────────────────────
 
 export function fmtDate(date: Date): string {
@@ -132,8 +179,9 @@ export function getWeeklyGoalForDate(dateStr: string, goals: TableGoals): number
   if (goals.weeklyGoals && goals.weeklyGoals[weekKey] !== undefined) {
     return goals.weeklyGoals[weekKey];
   }
-  const year  = parseInt(dateStr.slice(0, 4), 10);
-  const month = parseInt(dateStr.slice(5, 7), 10);
+  const competenceYm = getWeekCompetenceMonth(dateStr);
+  const year  = parseInt(competenceYm.slice(0, 4), 10);
+  const month = parseInt(competenceYm.slice(5, 7), 10);
   return getEffectiveGoals({ year, month }, goals).weeklyGoal;
 }
 
@@ -142,8 +190,9 @@ export function getDailyGoalForDate(dateStr: string, goals: TableGoals): number 
   if (goals.weeklyGoals && goals.weeklyGoals[weekKey] !== undefined) {
     return goals.weeklyGoals[weekKey] / 7;
   }
-  const year  = parseInt(dateStr.slice(0, 4), 10);
-  const month = parseInt(dateStr.slice(5, 7), 10);
+  const competenceYm = getWeekCompetenceMonth(dateStr);
+  const year  = parseInt(competenceYm.slice(0, 4), 10);
+  const month = parseInt(competenceYm.slice(5, 7), 10);
   return getEffectiveGoals({ year, month }, goals).dailyGoal;
 }
 
@@ -501,6 +550,9 @@ export function formatSelectedMonthsLabel(
  * Filters point rows and clips multi-day/multi-month period rows (`periodStart`..`periodEnd`)
  * strictly to the selected competence months (`selectedSpec`), preserving 100% of Precision Lock 1:
  *   Sum of `grossMonthly` across `selectedMonths` === `computeMetrics(clippedRows).grossTotal`.
+ *
+ * Operational revenue rows use consequent-month weekly competence (`getWeekCompetenceMonth`),
+ * so cross-month weeks stay unified in the month where their closing Sunday falls.
  */
 export function filterAndClipRowsByMonths(
   rows: TableRow[],
@@ -524,30 +576,23 @@ export function filterAndClipRowsByMonths(
       row.periodStart !== row.periodEnd;
 
     if (!hasPeriod) {
-      if (typeof row.date === 'string' && monthSet.has(row.date.slice(0, 7))) {
-        result.push(row);
-      }
-      continue;
-    }
-
-    const startYm = row.periodStart!.slice(0, 7);
-    const endYm = row.periodEnd!.slice(0, 7);
-    if (startYm === endYm) {
-      if (monthSet.has(startYm)) {
+      if (typeof row.date === 'string' && monthSet.has(getRowEntryCompetenceMonth(row.date, row))) {
         result.push(row);
       }
       continue;
     }
 
     const contribs = rowContributions(row);
-    const matching = contribs.filter((c) => c.date && monthSet.has(c.date.slice(0, 7)));
+    const matching = contribs.filter(
+      (c) => c.date && monthSet.has(getRowEntryCompetenceMonth(c.date, row)),
+    );
     if (matching.length === 0) continue;
     if (matching.length === contribs.length) {
       result.push(row);
       continue;
     }
 
-    // Group matching daily contributions into contiguous date segments so no deselected gap month is crossed
+    // Group matching daily contributions into contiguous date segments so no deselected gap is crossed
     const segments: Array<Array<{ date: string; value: number }>> = [];
     for (const c of matching) {
       if (segments.length === 0) {
@@ -603,7 +648,8 @@ export function computeActiveMonthsSpan(
     const normalizedRow = r.value < 0 ? { ...r, value: Math.abs(r.value) } : r;
     for (const contrib of rowContributions(normalizedRow)) {
       if (!contrib.date || contrib.date.length < 7) continue;
-      const ym = contrib.date.slice(0, 7);
+      const ym = getRowEntryCompetenceMonth(contrib.date, normalizedRow);
+      if (!ym || ym.length < 7) continue;
       if (filterMonthSet && !filterMonthSet.has(ym)) continue;
       if (filterYear && !ym.startsWith(filterYear)) continue;
       activeMonths.add(ym);
@@ -618,11 +664,12 @@ export function computeActiveMonthsSpan(
 }
 
 /**
- * Unified Competence-Clipped WhatsApp Weekly Closing (Precision Lock 2):
- * Aggregates prorated daily contributions (`rowContributions`) strictly clipped within
- * the boundaries of `selectedMonth` (`YYYY-MM-01` through the last day of the month),
+ * Unified Consequent-Month WhatsApp Weekly Closing (Precision Lock 2):
+ * Assigns each full calendar week (Monday to Sunday) to the competence month of its
+ * closing day (`weekEndDate` / Sunday). Cross-month weeks are never split or duplicated:
+ * all daily entries from Monday through Sunday stay unified in the consequent month,
  * guaranteeing the invariant:
- *   Sum of `weeklyTotal` across all week groups === `byMonth[selectedMonth].grossMonthly`.
+ *   Sum of `weeklyTotal` across all week groups in `selectedMonth` === `byMonth[selectedMonth].grossMonthly`.
  */
 export function buildMonthCompetenceWeekGroups(
   rows: TableRow[],
@@ -634,17 +681,16 @@ export function buildMonthCompetenceWeekGroups(
   if (isNaN(selY) || isNaN(selM) || selM < 1 || selM > 12) return [];
 
   const totalDays = daysInMonth(selY, selM);
-  const mStart = `${selectedMonth}-01`;
-  const mEnd = `${selectedMonth}-${String(totalDays).padStart(2, '0')}`;
-  const monthStartObj = new Date(selY, selM - 1, 1);
-  const monthEndObj = new Date(selY, selM - 1, totalDays);
 
-  // Collect all chronological Monday keys for weeks touching selectedMonth
+  // Collect all chronological Monday keys for weeks whose closing Sunday falls in selectedMonth
   const mondayKeysOrdered: string[] = [];
   const mondayKeySet = new Set<string>();
   for (let d = 1; d <= totalDays; d++) {
     const curDate = new Date(selY, selM - 1, d);
     const mon = getMondayOf(curDate);
+    const sun = getSundayOf(mon);
+    const sunYm = toLocalKey(sun).slice(0, 7);
+    if (sunYm !== selectedMonth) continue;
     const monKey = toLocalKey(mon);
     if (!mondayKeySet.has(monKey)) {
       mondayKeySet.add(monKey);
@@ -653,19 +699,7 @@ export function buildMonthCompetenceWeekGroups(
   }
 
   // Filter operational revenue rows
-  const revenueRows = (rows || []).filter(
-    (r) =>
-      r &&
-      r.generatedBy === undefined &&
-      r.entryType !== 'deposit' &&
-      r.entryType !== 'waiver' &&
-      r.entryType !== 'expense' &&
-      r.entryType !== 'partner_in' &&
-      r.entryType !== 'partner_out' &&
-      r.entryType !== 'unresolved' &&
-      typeof r.value === 'number' &&
-      r.value > 0,
-  );
+  const revenueRows = (rows || []).filter(isOperationalRevenueRow);
 
   // Map mondayKey -> { rawTotal, entries }
   const weekBuckets = new Map<string, { rawTotal: number; entries: TableRow[] }>();
@@ -674,16 +708,15 @@ export function buildMonthCompetenceWeekGroups(
   }
 
   for (const row of revenueRows) {
-    const contribs = rowContributions(row).filter(
-      (c) => c.date >= mStart && c.date <= mEnd && c.value > 0,
-    );
+    const contribs = rowContributions(row).filter((c) => c.value > 0);
     if (contribs.length === 0) continue;
 
-    // Group this row's clipped contributions by Monday of each contribution date
+    // Group this row's contributions by Monday of each contribution date (for weeks closing in selectedMonth)
     const byWeek = new Map<string, { sum: number; earliestDate: string }>();
     for (const c of contribs) {
       const [cy, cm, cd] = c.date.split('-').map(Number);
       const cMonKey = toLocalKey(getMondayOf(new Date(cy, cm - 1, cd)));
+      if (!mondayKeySet.has(cMonKey)) continue;
       const existing = byWeek.get(cMonKey);
       if (!existing) {
         byWeek.set(cMonKey, { sum: c.value, earliestDate: c.date });
@@ -715,16 +748,17 @@ export function buildMonthCompetenceWeekGroups(
     const sunday = getSundayOf(monday);
     const sundayKey = toLocalKey(sunday);
 
-    const clippedStartDate = monday < monthStartObj ? monthStartObj : monday;
-    const clippedEndDate = sunday > monthEndObj ? monthEndObj : sunday;
-    const clippedStartKey = toLocalKey(clippedStartDate);
-    const clippedEndKey = toLocalKey(clippedEndDate);
+    // Full unclipped Mon-Sun week belongs to the consequent closing month
+    const clippedStartDate = monday;
+    const clippedEndDate = sunday;
+    const clippedStartKey = mondayKey;
+    const clippedEndKey = sundayKey;
 
     const bucket = weekBuckets.get(mondayKey) || { rawTotal: 0, entries: [] };
     const weeklyTotal = Math.round(bucket.rawTotal * 100) / 100;
-    const weekGoal = getWeeklyGoalForDate(clippedEndKey, goals);
+    const weekGoal = getWeeklyGoalForDate(sundayKey, goals);
 
-    const yearStart = new Date(clippedStartDate.getFullYear(), 0, 1);
+    const yearStart = new Date(sunday.getFullYear(), 0, 1);
     const yearStartMonday = getMondayOf(yearStart);
     const weekNumber = Math.floor((monday.getTime() - yearStartMonday.getTime()) / (7 * msPerDay)) + 1;
 

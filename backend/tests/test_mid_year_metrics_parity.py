@@ -18,6 +18,8 @@ from services.coin_date_utils import (
     get_weekly_goal_for_date,
     get_daily_goal_for_date,
     get_effective_period_span_days,
+    get_week_competence_month,
+    get_row_entry_competence_month,
 )
 from services.coin_metrics_engine import compute_metrics
 from services.context_builder import _global_day_span, build_category_summaries
@@ -228,6 +230,80 @@ def test_lock4_mixed_keys_and_hierarchical_time_bank_balance():
     assert m.time_bank_balance == 1.0
 
 
+def test_lock2_week44_cross_month_consequent_competence():
+    """
+    Scenario 5 (Lock 2 — Consequent-Month Weekly Competence):
+    Week 44 of 2026 (26/10 Mon to 01/11 Sun) crosses the October→November boundary.
+    All 5 operational revenue entries (R$ 450 in Oct + R$ 125 on 01/11 = R$ 575 total)
+    belong exclusively to the consequent competence month ('2026-11').
+    """
+    week44_rows = [
+        TableRow(
+            id="w44_mon",
+            date="2026-10-26",
+            value=120.0,
+            entryType=EntryType.REVENUE,
+            category="OPERACIONAL",
+            description="PIX OPERADOR 01 - SEGUNDA",
+        ),
+        TableRow(
+            id="w44_tue",
+            date="2026-10-27",
+            value=125.0,
+            entryType=EntryType.REVENUE,
+            category="OPERACIONAL",
+            description="PIX OPERADOR 01 - TERCA",
+        ),
+        TableRow(
+            id="w44_wed",
+            date="2026-10-28",
+            value=125.0,
+            entryType=EntryType.REVENUE,
+            category="OPERACIONAL",
+            description="PIX OPERADOR 01 - QUARTA",
+        ),
+        TableRow(
+            id="w44_fri",
+            date="2026-10-30",
+            value=80.0,
+            entryType=EntryType.REVENUE,
+            category="OPERACIONAL",
+            description="PIX OPERADOR 01 - SEXTA",
+        ),
+        TableRow(
+            id="w44_sun",
+            date="2026-11-01",
+            value=125.0,
+            entryType=EntryType.REVENUE,
+            category="OPERACIONAL",
+            description="PIX OPERADOR 01 - DOMINGO",
+        ),
+    ]
+
+    assert get_week_competence_month("2026-10-26") == "2026-11"
+    assert get_week_competence_month("2026-10-30") == "2026-11"
+    assert get_week_competence_month("2026-11-01") == "2026-11"
+    for r in week44_rows:
+        assert get_row_entry_competence_month(r.date, r) == "2026-11"
+
+    goals = TableGoals(
+        dailyGoals={},
+        weeklyGoals={},
+        annualCosts={},
+        globalGoals=GoalProfile(
+            dailyGoal=round(600.0 / 7.0, 2),
+            weeklyGoal=600.0,
+            annualCost=12000.0,
+        ),
+    )
+
+    m = compute_metrics(week44_rows, goals, as_of_date="2026-11-01")
+    assert m.gross_total == 575.0
+    assert m.by_week["2026-W44"] == 575.0
+    assert m.by_month["2026-11"].gross_monthly == 575.0
+    assert ("2026-10" not in m.by_month) or (m.by_month["2026-10"].gross_monthly == 0.0)
+
+
 def test_lock4_all_5_specialist_agent_profiles():
     """Verifies all 5 specialist agent prompt builders return non-empty, domain-specific prompts."""
     p_native = get_agent_native_master_prompt("https://api.example.com")
@@ -247,6 +323,7 @@ if __name__ == "__main__":
         test_lock1_mid_year_june_only_full_competence_envelope,
         test_lock1_sparse_months_march_and_october_no_gap_dilution,
         test_lock4_mixed_keys_and_hierarchical_time_bank_balance,
+        test_lock2_week44_cross_month_consequent_competence,
         test_lock4_all_5_specialist_agent_profiles,
     ]
     for t in tests:

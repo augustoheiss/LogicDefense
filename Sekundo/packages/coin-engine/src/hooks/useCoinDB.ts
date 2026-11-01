@@ -30,6 +30,7 @@ import {
   toggleMonthSelection,
   toggleYearSelection,
   filterAndClipRowsByMonths,
+  getRowEntryCompetenceMonth,
   rowContributions,
   daysInMonth,
 } from '../core/dateUtils';
@@ -631,12 +632,14 @@ function useCoinDBInternal(): CoinDBState {
     for (const row of rowsToUse) {
       if (!row || typeof row !== 'object') continue;
       if (typeof row.date === 'string' && row.date.length >= 7) {
-        months.add(row.date.slice(0, 7));
+        const compYm = getRowEntryCompetenceMonth(row.date, row);
+        if (compYm && compYm.length >= 7) months.add(compYm);
       }
       if (row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd) {
         for (const contrib of rowContributions(row)) {
           if (contrib.date && contrib.date.length >= 7 && (!cutoffDate || contrib.date <= cutoffDate)) {
-            months.add(contrib.date.slice(0, 7));
+            const compYm = getRowEntryCompetenceMonth(contrib.date, row);
+            if (compYm && compYm.length >= 7) months.add(compYm);
           }
         }
       }

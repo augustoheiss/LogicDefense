@@ -21,6 +21,8 @@ import {
   daysInMonth,
   parseSelectedMonthsSpec,
   getEffectivePeriodSpanDays,
+  getRowEntryCompetenceMonth,
+  rowContributions,
 } from '@/core/dateUtils';
 import type { TableRow } from '@/core/types';
 
@@ -195,37 +197,35 @@ function getRowProratedValue(
   activeMonthsList: string[],
   activeYearsList: string[],
 ): number {
-  const hasPeriod = !!(row.periodStart && row.periodEnd);
+  const hasPeriod = !!(row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd);
 
   if (hasPeriod) {
-    const lifespan = daysBetween(row.periodStart!, row.periodEnd!);
-    const dailyRate = row.value / lifespan;
-
     if (scope === 'global') {
       return row.value;
-    } else if (scope === 'year') {
-      let daysActive = 0;
-      for (const yr of activeYearsList) {
-        daysActive += getDaysActiveInYear(row.periodStart!, row.periodEnd!, yr);
-      }
-      return dailyRate * daysActive;
+    }
+    const contribs = rowContributions(row);
+    if (scope === 'year') {
+      const yearsSet = new Set(activeYearsList);
+      return contribs
+        .filter((c) => yearsSet.has(getRowEntryCompetenceMonth(c.date, row).slice(0, 4)))
+        .reduce((acc, c) => acc + c.dailyValue, 0);
     } else {
       // scope === 'month' (1 or N selected months)
-      let daysActive = 0;
-      for (const ym of activeMonthsList) {
-        daysActive += getDaysActiveInMonth(row.periodStart!, row.periodEnd!, ym);
-      }
-      return dailyRate * daysActive;
+      const monthsSet = new Set(activeMonthsList);
+      return contribs
+        .filter((c) => monthsSet.has(getRowEntryCompetenceMonth(c.date, row)))
+        .reduce((acc, c) => acc + c.dailyValue, 0);
     }
   } else {
-    // Normal entry
+    // Normal entry: operational revenue rows use Sunday consequent-month competence
+    const compMonth = getRowEntryCompetenceMonth(row.date, row);
     if (scope === 'global') {
       return row.value;
     } else if (scope === 'year') {
-      return activeYearsList.some((yr) => row.date.startsWith(yr)) ? row.value : 0;
+      return activeYearsList.some((yr) => compMonth.startsWith(yr)) ? row.value : 0;
     } else {
       // scope === 'month' (1 or N selected months)
-      return activeMonthsList.some((ym) => row.date.startsWith(ym)) ? row.value : 0;
+      return activeMonthsList.some((ym) => compMonth === ym) ? row.value : 0;
     }
   }
 }

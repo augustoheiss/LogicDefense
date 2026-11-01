@@ -1129,6 +1129,7 @@ export default function SettingsScreen() {
                 <SpreadsheetApiSection 
                   tableId={db.activeTable.id} 
                   activeTable={db.activeTable}
+                  selectedMonth={db.selectedMonth}
                   onShowStore={() => setShowStoreModal(true)} 
                 />
               </Section>
@@ -1426,10 +1427,12 @@ const Section = React.memo(function Section({ title, children }: { title: string
 const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   tableId,
   activeTable,
+  selectedMonth,
   onShowStore,
 }: {
   tableId: string;
   activeTable?: CoinTable | null;
+  selectedMonth?: string;
   onShowStore: () => void;
 }) {
   const router = useRouter();
@@ -1525,6 +1528,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
       format: manualSynthFormat,
       profile: manualSynthProfile,
       anonymizeDescriptions: manualAnonymize,
+      selectedMonth: selectedMonth && selectedMonth !== 'all' ? selectedMonth : undefined,
       userCustomPrompt: manualCustomPrompt,
       investorProfile: activeTable?.investorProfile,
       activeSectors: activeTable?.activeSectors,
@@ -1537,6 +1541,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
     activeTable?.investorProfile,
     activeTable?.activeSectors,
     activeTable?.sectorParams,
+    selectedMonth,
     manualSynthFormat,
     manualSynthProfile,
     manualAnonymize,
@@ -3373,7 +3378,7 @@ const GoalsAccordion = React.memo(function GoalsAccordion({
           {goalTab === 'monthly' && (
             <View style={styles.goalSection}>
               <Text style={styles.subSectionTitle}>🗓️ Sobrescrita por Mês</Text>
-              <Text style={styles.sectionDesc}>🧭 Substitui a meta anual e global para o mês específico (AAAA-MM).</Text>
+              <Text style={styles.sectionDesc}>🧭 Substitui a meta anual e global para o mês específico (AAAA-MM). Semanas que cruzam a virada do mês seguem a competência do mês consequente (domingo de fechamento).</Text>
               {months.map((monthKey) => (
                 <View key={monthKey} style={styles.goalRow}>
                   <Text style={[styles.goalYear, { width: 75 }]}>{monthKey}</Text>

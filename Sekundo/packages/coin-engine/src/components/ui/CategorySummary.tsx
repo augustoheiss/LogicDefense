@@ -21,6 +21,8 @@ import {
   daysInMonth,
   parseSelectedMonthsSpec,
   getEffectivePeriodSpanDays,
+  getRowEntryCompetenceMonth,
+  rowContributions,
 } from '@coin/core/dateUtils';
 import type { TableRow } from '@coin/core/types';
 
@@ -198,34 +200,42 @@ function getRowProratedValue(
   const hasPeriod = !!(row.periodStart && row.periodEnd);
 
   if (hasPeriod) {
-    const lifespan = daysBetween(row.periodStart!, row.periodEnd!);
-    const dailyRate = row.value / lifespan;
-
     if (scope === 'global') {
       return row.value;
-    } else if (scope === 'year') {
-      let daysActive = 0;
-      for (const yr of activeYearsList) {
-        daysActive += getDaysActiveInYear(row.periodStart!, row.periodEnd!, yr);
-      }
-      return dailyRate * daysActive;
+    }
+    const normalizedRow = row.value < 0 ? { ...row, value: Math.abs(row.value) } : row;
+    const sign = row.value < 0 ? -1 : 1;
+    const contribs = rowContributions(normalizedRow);
+    if (scope === 'year') {
+      const yearSet = new Set(activeYearsList);
+      return (
+        sign *
+        contribs.reduce((sum, c) => {
+          const compYm = getRowEntryCompetenceMonth(c.date, row);
+          return yearSet.has(compYm.slice(0, 4)) ? sum + c.value : sum;
+        }, 0)
+      );
     } else {
-      // scope === 'month' (1 or N selected months)
-      let daysActive = 0;
-      for (const ym of activeMonthsList) {
-        daysActive += getDaysActiveInMonth(row.periodStart!, row.periodEnd!, ym);
-      }
-      return dailyRate * daysActive;
+      const monthSet = new Set(activeMonthsList);
+      return (
+        sign *
+        contribs.reduce((sum, c) => {
+          const compYm = getRowEntryCompetenceMonth(c.date, row);
+          return monthSet.has(compYm) ? sum + c.value : sum;
+        }, 0)
+      );
     }
   } else {
     // Normal entry
     if (scope === 'global') {
       return row.value;
-    } else if (scope === 'year') {
-      return activeYearsList.some((yr) => row.date.startsWith(yr)) ? row.value : 0;
+    }
+    const compYm = getRowEntryCompetenceMonth(row.date, row);
+    if (scope === 'year') {
+      return activeYearsList.some((yr) => compYm.startsWith(yr)) ? row.value : 0;
     } else {
       // scope === 'month' (1 or N selected months)
-      return activeMonthsList.some((ym) => row.date.startsWith(ym)) ? row.value : 0;
+      return activeMonthsList.includes(compYm) ? row.value : 0;
     }
   }
 }

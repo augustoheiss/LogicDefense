@@ -18,7 +18,7 @@ import math
 from datetime import date, timedelta
 from typing import Optional
 
-from models.coin_models import TableRow, GoalProfile, TableGoals
+from models.coin_models import TableRow, GoalProfile, TableGoals, EntryType
 
 
 # ── Internal Helpers ─────────────────────────────────────────────────────────
@@ -70,6 +70,57 @@ def _calendar_day_span(date_a: str, date_b: str) -> int:
 def fmt_date(d: date) -> str:
     """Formats a date as 'DD/MM'."""
     return f"{d.day:02d}/{d.month:02d}"
+
+
+def get_week_competence_month(date_str: str) -> str:
+    """
+    Returns the competence 'YYYY-MM' month for the Mon→Sun week containing `date_str`.
+    By domain rule (Lock 2 — Consequent-Month Weekly Competence), a week that crosses
+    a month boundary belongs exclusively to the month of its closing day (Sunday).
+    """
+    if not date_str or len(date_str) < 10:
+        return (date_str or "")[:7]
+    d = _parse_date(date_str[:10])
+    monday = _get_monday_of(d)
+    sunday = _get_sunday_of(monday)
+    return f"{sunday.year:04d}-{sunday.month:02d}"
+
+
+def is_operational_revenue_row(row: Optional[TableRow]) -> bool:
+    """
+    Returns True if the row represents operational revenue (which follows weekly
+    Monday→Sunday closing competence in the consequent month).
+    """
+    if row is None:
+        return True
+    et = getattr(row, "entry_type", None) or getattr(row, "entryType", None)
+    return et not in (
+        EntryType.EXPENSE,
+        EntryType.DEPOSIT,
+        EntryType.WAIVER,
+        EntryType.PARTNER_IN,
+        EntryType.PARTNER_OUT,
+        EntryType.UNRESOLVED,
+        "expense",
+        "deposit",
+        "waiver",
+        "partner_in",
+        "partner_out",
+        "unresolved",
+    )
+
+
+def get_row_entry_competence_month(date_str: str, row: Optional[TableRow] = None) -> str:
+    """
+    Returns the effective 'YYYY-MM' competence month for a specific entry/contribution date.
+    Operational revenue entries follow weekly Sunday-closing competence (`get_week_competence_month`);
+    other entry types (expenses, deposits, waivers, partner) remain in their calendar month.
+    """
+    if not date_str or len(date_str) < 7:
+        return ""
+    if is_operational_revenue_row(row):
+        return get_week_competence_month(date_str)
+    return date_str[:7]
 
 
 def resolve_goal_for_year(goals: dict, year: int) -> float:
@@ -157,6 +208,7 @@ def get_daily_goal_for_date(date_str: str, goals: TableGoals) -> float:
     """
     Resolves the effective daily goal for a specific date using the hierarchy:
       Weekly ("YYYY-Www") → Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+      Uses the week's consequent competence month (Sunday's month) for monthly/yearly resolution.
 
     Mirrors: getDailyGoalForDate() in dateUtils.ts
     """
@@ -166,8 +218,9 @@ def get_daily_goal_for_date(date_str: str, goals: TableGoals) -> float:
         if wk_val > 0:
             return round((wk_val / 7.0) * 100) / 100
 
-    year = int(date_str[:4])
-    month = int(date_str[5:7])
+    comp_ym = get_week_competence_month(date_str)
+    year = int(comp_ym[:4])
+    month = int(comp_ym[5:7])
     return get_effective_goals({"year": year, "month": month}, goals).daily_goal
 
 
@@ -175,6 +228,7 @@ def get_weekly_goal_for_date(date_str: str, goals: TableGoals) -> float:
     """
     Resolves the effective weekly goal for a specific date using the hierarchy:
       Weekly ("YYYY-Www") → Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+      Uses the week's consequent competence month (Sunday's month) for monthly/yearly resolution.
 
     Mirrors: getWeeklyGoalForDate() in dateUtils.ts
     """
@@ -184,8 +238,9 @@ def get_weekly_goal_for_date(date_str: str, goals: TableGoals) -> float:
         if wk_val > 0:
             return wk_val
 
-    year = int(date_str[:4])
-    month = int(date_str[5:7])
+    comp_ym = get_week_competence_month(date_str)
+    year = int(comp_ym[:4])
+    month = int(comp_ym[5:7])
     return get_effective_goals({"year": year, "month": month}, goals).weekly_goal
 
 

@@ -33,6 +33,7 @@ import {
   fmtDate,
   buildMonthCompetenceWeekGroups,
   computeActiveMonthsSpan,
+  filterAndClipRowsByMonths,
   parseSelectedMonthsSpec,
   formatSelectedMonthsLabel,
 } from '../core/dateUtils';
@@ -168,7 +169,13 @@ export function buildWhatsAppReport(
 ): string {
   const parsedMonths = parseSelectedMonthsSpec(selectedMonth);
   const isMultiMonth = parsedMonths.length > 1;
-  const primaryMonth = parsedMonths[0] || selectedMonth.split(',')[0] || new Date().toISOString().slice(0, 7);
+  const fallbackMonth =
+    Object.keys(metrics.byMonth || {}).sort().reverse()[0] ||
+    new Date().toISOString().slice(0, 7);
+  const primaryMonth =
+    parsedMonths[0] ||
+    (selectedMonth && selectedMonth !== 'all' ? selectedMonth.split(',')[0] : '') ||
+    fallbackMonth;
   const monthName = isMultiMonth
     ? formatSelectedMonthsLabel(parsedMonths)
     : formatMonthName(primaryMonth);
@@ -208,11 +215,16 @@ export function buildWhatsAppReport(
   const reportDailyGoal = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, reportYear);
   const reportWeeklyGoal = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, reportYear);
 
-  // Unified competence-clipped weekly groups (Lock 2 — supports 1 or N selected months)
+  // Unified consequent-month weekly groups (Lock 2 — supports 1 or N selected months without duplicating weeks)
   const chronologicalMonths = isMultiMonth ? [...parsedMonths].sort() : [primaryMonth];
-  const weekGroups = chronologicalMonths.flatMap((ym) =>
-    buildMonthCompetenceWeekGroups(rows, goals, ym),
-  );
+  const seenMondayKeys = new Set<string>();
+  const weekGroups = chronologicalMonths
+    .flatMap((ym) => buildMonthCompetenceWeekGroups(rows, goals, ym))
+    .filter((wg) => {
+      if (seenMondayKeys.has(wg.mondayKey)) return false;
+      seenMondayKeys.add(wg.mondayKey);
+      return true;
+    });
 
   const proratedExpenses = prorateExpensesForMonth(rows, selectedMonth);
   const survivalGoals = computeGlobalSurvivalGoals(rows, selectedMonth, metrics);
@@ -262,7 +274,7 @@ export function buildWhatsAppReport(
     for (const week of weekGroups) {
       lines.push('');
       lines.push(
-        `🗓️ *Semana ${week.weekNumber} de ${week.weekStartDate.getFullYear()} (${fmtDate(week.weekStartDate)} a ${fmtDate(week.weekEndDate)})*`,
+        `🗓️ *Semana ${week.weekNumber} de ${week.weekEndDate.getFullYear()} (${fmtDate(week.weekStartDate)} a ${fmtDate(week.weekEndDate)})*`,
       );
 
       if (week.dailyEntries.length === 0) {
@@ -308,10 +320,15 @@ export function buildWhatsAppReport(
       lines.push(`• ${desc}: *-${fmtBRL(rawAbsVal)}*${suffix}`);
     }
     const monthExpenseTotal = proratedExpenses.reduce((sum, pe) => sum + pe.monthlyContribution, 0);
-    const mDays = daysInMonth(selY, selM);
+    const mDays = isMultiMonth
+      ? parsedMonths.reduce((acc, ym) => {
+          const [y, m] = ym.split('-').map(Number);
+          return acc + (y && m ? daysInMonth(y, m) : 0);
+        }, 0)
+      : daysInMonth(selY, selM);
     const expDailyAvg  = mDays > 0 ? monthExpenseTotal / mDays : 0;
     const expWeeklyAvg = expDailyAvg * 7;
-    lines.push(`• *Total de Gastos do Mês:* _-${fmtBRL(monthExpenseTotal)}_`);
+    lines.push(`• *Total de Gastos do ${isMultiMonth ? 'Período' : 'Mês'}:* _-${fmtBRL(monthExpenseTotal)}_`);
     lines.push(`• *Média de Gasto Semanal:* _-${fmtBRL(expWeeklyAvg)}_`);
     lines.push(`• *Média de Gasto Diário:* _-${fmtBRL(expDailyAvg)}_`);
     lines.push(`• *Total de Despesas Anuais: ${fmtBRL(staticYearCost)}* _(${annualPct}% coberto em ${reportYear})_`);
@@ -480,19 +497,57 @@ export function buildReportHTML(
   goals: TableGoals,
   selectedMonth: string,
 ): string {
-  const monthName = formatMonthFull(selectedMonth);
-  const [selY, selM] = selectedMonth.split('-').map(Number);
+  const parsedMonths = parseSelectedMonthsSpec(selectedMonth);
+  const isMultiMonth = parsedMonths.length > 1;
+  const fallbackMonth =
+    Object.keys(metrics.byMonth || {}).sort().reverse()[0] ||
+    new Date().toISOString().slice(0, 7);
+  const primaryMonth =
+    parsedMonths[0] ||
+    (selectedMonth && selectedMonth !== 'all' ? selectedMonth.split(',')[0] : '') ||
+    fallbackMonth;
+  const monthName = isMultiMonth
+    ? formatSelectedMonthsLabel(parsedMonths)
+    : formatMonthFull(primaryMonth);
+  const [selY, selM] = primaryMonth.split('-').map(Number);
   const reportYear = selY;
-  const monthMetrics = metrics.byMonth[selectedMonth];
-  const mDays = daysInMonth(selY, selM);
+  const mDays = isMultiMonth
+    ? parsedMonths.reduce((acc, ym) => {
+        const [y, m] = ym.split('-').map(Number);
+        return acc + (y && m ? daysInMonth(y, m) : 0);
+      }, 0)
+    : daysInMonth(selY, selM);
+  const monthMetrics = isMultiMonth
+    ? (() => {
+        let sumGross = 0;
+        let sumExpense = 0;
+        let lastWk = 0;
+        for (const ym of parsedMonths) {
+          const mm = metrics.byMonth[ym];
+          if (mm) {
+            sumGross += mm.grossMonthly;
+            sumExpense += mm.expense ?? 0;
+            if (lastWk === 0 && mm.lastWeekGross > 0) lastWk = mm.lastWeekGross;
+          }
+        }
+        const safeDays = Math.max(1, mDays);
+        const dAvg = Math.round((sumGross / safeDays) * 100) / 100;
+        return {
+          grossMonthly: Math.round(sumGross * 100) / 100,
+          expense: Math.round(sumExpense * 100) / 100,
+          dailyAvg: dAvg,
+          weeklyAvg: Math.round(dAvg * 7 * 100) / 100,
+          lastWeekGross: lastWk,
+        };
+      })()
+    : metrics.byMonth[primaryMonth];
 
   const effGoals = getEffectiveGoals({ year: selY, month: selM }, goals);
   const reportDailyGoal = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, reportYear);
   const reportWeeklyGoal = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, reportYear);
 
-  // Group rows for this month
-  const monthRows = rows
-    .filter((r) => r.date.startsWith(selectedMonth))
+  // Group rows for this month (using consequent-month competence)
+  const monthRows = filterAndClipRowsByMonths(rows, selectedMonth)
     .sort((a, b) => a.date.localeCompare(b.date));
 
   // Prorated expenses

@@ -16,6 +16,7 @@ from services.coin_date_utils import (
     fmt_date,
     _calendar_day_span,
     get_effective_period_span_days,
+    get_row_entry_competence_month,
 )
 
 log = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ def build_transaction_ledger(
         """Group rows by YYYY-MM and produce count + total per type."""
         buckets: dict[str, list] = defaultdict(list)
         for r in rows:
-            ym = r.date[:7]
+            ym = get_row_entry_competence_month(r.date, r)
             if ym != exclude_ym:
                 buckets[ym].append(r)
         if not buckets:
@@ -165,7 +166,7 @@ def build_transaction_ledger(
 
     def _current_month_ledger(cap: int = 0) -> str:
         cm_rows = sorted(
-            [r for r in rows if r.date[:7] == current_ym],
+            [r for r in rows if get_row_entry_competence_month(r.date, r) == current_ym],
             key=lambda r: r.date,
         )
         if not cm_rows:
@@ -228,8 +229,8 @@ def _global_day_span(rows: list) -> int:
         end = getattr(r, "period_end", None) or getattr(r, "periodEnd", None) or getattr(r, "date", "")
         if not start or len(start) < 7:
             continue
-        start_ym = start[:7]
-        end_ym = end[:7] if end and len(end) >= 7 else start_ym
+        start_ym = get_row_entry_competence_month(start, r)
+        end_ym = get_row_entry_competence_month(end, r) if end and len(end) >= 7 else start_ym
         try:
             sy, sm = map(int, start_ym.split("-"))
             ey, em = map(int, end_ym.split("-"))

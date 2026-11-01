@@ -43,6 +43,7 @@ import {
   type ManualSynthesisFormat,
   type ManualSynthesisProfile,
 } from '@coin/core/localAiAnalystSynthesizer';
+import { filterAndClipRowsByMonths } from '@coin/core/dateUtils';
 import {
   buildGranularCSV,
   shareGranularCSV,
@@ -205,7 +206,7 @@ export function GranularExportModal({
     }
 
     if (useMonthFilter && selectedMonth && selectedMonth !== 'all') {
-      list = list.filter((r) => r.date && r.date.startsWith(selectedMonth));
+      list = filterAndClipRowsByMonths(list, selectedMonth);
     }
     return list.length;
   }, [activeMode, rows, scope, useMonthFilter, selectedMonth]);

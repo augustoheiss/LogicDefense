@@ -48,6 +48,7 @@ import {
   shareGranularCSV,
   shareSynthesisDocument,
 } from '@/services/exportService';
+import { filterAndClipRowsByMonths } from '@/core/dateUtils';
 
 const PREVIEW_CHAR_CAP = 15_000;
 
@@ -205,7 +206,7 @@ export function GranularExportModal({
     }
 
     if (useMonthFilter && selectedMonth && selectedMonth !== 'all') {
-      list = list.filter((r) => r.date && r.date.startsWith(selectedMonth));
+      list = filterAndClipRowsByMonths(list, selectedMonth);
     }
     return list.length;
   }, [activeMode, rows, scope, useMonthFilter, selectedMonth]);

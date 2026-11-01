@@ -23,6 +23,7 @@ import {
   resolveGoalForYear,
   computeActiveMonthsSpan,
   buildMonthCompetenceWeekGroups,
+  getRowEntryCompetenceMonth,
   parseSelectedMonthsSpec,
   formatSelectedMonthsLabel,
   filterAndClipRowsByMonths,
@@ -399,7 +400,7 @@ export function buildAccrualCategorySummaries(
       bucket.totalValue += val;
       grandTotal += val;
       if (c.date && c.date.length >= 7) {
-        bucket.monthsSet.add(c.date.slice(0, 7));
+        bucket.monthsSet.add(getRowEntryCompetenceMonth(c.date, row));
       }
     }
   }
@@ -501,7 +502,13 @@ export function buildLocalWhatsAppReportText(
 
   const parsedReportMonths = parseSelectedMonthsSpec(reportMonth);
   const isMultiMonthReport = parsedReportMonths.length > 1;
-  const primaryReportMonth = parsedReportMonths[0] || reportMonth.split(',')[0] || new Date().toISOString().slice(0, 7);
+  const fallbackReportMonth =
+    Object.keys(metrics.byMonth || {}).sort().reverse()[0] ||
+    new Date().toISOString().slice(0, 7);
+  const primaryReportMonth =
+    parsedReportMonths[0] ||
+    (reportMonth && reportMonth !== 'all' ? reportMonth.split(',')[0] : '') ||
+    fallbackReportMonth;
   const reportLabel = isMultiMonthReport ? formatSelectedMonthsLabel(parsedReportMonths) : primaryReportMonth;
 
   const lines: string[] = [];
@@ -562,11 +569,16 @@ export function buildLocalWhatsAppReportText(
     );
     lines.push('');
 
-    // Unified competence-clipped weekly breakdown inside reportMonth (Lock 2)
+    // Unified consequent-month weekly breakdown inside reportMonth (Lock 2)
     const chronoMonths = isMultiMonthReport ? [...parsedReportMonths].sort() : [primaryReportMonth];
-    const weekGroups = chronoMonths.flatMap((ym) =>
-      buildMonthCompetenceWeekGroups(realRows, goals, ym),
-    );
+    const seenMondayKeys = new Set<string>();
+    const weekGroups = chronoMonths
+      .flatMap((ym) => buildMonthCompetenceWeekGroups(realRows, goals, ym))
+      .filter((wg) => {
+        if (seenMondayKeys.has(wg.mondayKey)) return false;
+        seenMondayKeys.add(wg.mondayKey);
+        return true;
+      });
     const activeWeekGroups = weekGroups.filter((w) => w.dailyEntries.length > 0 || w.weeklyTotal > 0);
 
     if (activeWeekGroups.length > 0) {
@@ -1258,9 +1270,23 @@ export function buildLocalAnalysisContext(
       lines.push(`### Últimas 12 Semanas Detalhadas:`);
     }
 
-    for (const mondayKey of weeksToDisplay) {
-      const wkRev = metrics.byWeek[mondayKey] || 0;
-      const monDate = new Date(mondayKey + 'T12:00:00');
+    for (const rawWeekKey of weeksToDisplay) {
+      const wkRev = metrics.byWeek[rawWeekKey] || 0;
+      const isoMatch = /^(\d{4})-W(\d{2})$/.exec(rawWeekKey);
+      let monDate: Date;
+      if (isoMatch) {
+        const isoY = parseInt(isoMatch[1], 10);
+        const isoW = parseInt(isoMatch[2], 10);
+        const jan4Monday = getMondayOf(new Date(isoY, 0, 4));
+        monDate = new Date(
+          jan4Monday.getFullYear(),
+          jan4Monday.getMonth(),
+          jan4Monday.getDate() + (isoW - 1) * 7,
+        );
+      } else {
+        monDate = new Date(rawWeekKey + 'T12:00:00');
+      }
+      const mondayKey = toLocalKey(monDate);
       const sunDate = getSundayOf(monDate);
       const sunKey = toLocalKey(sunDate);
       const wkGoal = getWeeklyGoalForDate(sunKey, goals);
@@ -1332,7 +1358,7 @@ export function buildLocalAnalysisContext(
       { rev: number; exp: number; dep: number; count: number }
     >();
     for (const r of sortedRows) {
-      const ym = (r.date || '').slice(0, 7) || 'Sem-Data';
+      const ym = getRowEntryCompetenceMonth(r.date || '', r) || 'Sem-Data';
       const cur = monthlyAgg.get(ym) || { rev: 0, exp: 0, dep: 0, count: 0 };
       const et = r.entryType || 'revenue';
       if (et === 'expense') cur.exp += Math.abs(r.value);

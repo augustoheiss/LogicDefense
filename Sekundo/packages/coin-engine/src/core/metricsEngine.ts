@@ -23,6 +23,8 @@ import {
   daysInMonth,
   getDailyGoalForDate,
   getEffectivePeriodSpanDays,
+  getRowEntryCompetenceMonth,
+  getWeekCompetenceMonth,
   getWeeklyGoalForDate,
   rowContributions,
   toLocalKey,
@@ -55,8 +57,8 @@ export function computeMetrics(
   for (const r of validRows) {
     const start = (r.periodStart && typeof r.periodStart === 'string' && r.periodStart.length >= 7) ? r.periodStart : r.date;
     const end = (r.periodEnd && typeof r.periodEnd === 'string' && r.periodEnd.length >= 7) ? r.periodEnd : r.date;
-    const startYM = start.slice(0, 7);
-    const endYM = end.slice(0, 7);
+    const startYM = getRowEntryCompetenceMonth(start, r);
+    const endYM = getRowEntryCompetenceMonth(end, r);
     
     const [startY, startM] = startYM.split('-').map(Number);
     const [endY, endM] = endYM.split('-').map(Number);
@@ -318,8 +320,8 @@ export function computeMetrics(
     }
 
     for (const contrib of rowContributions(row)) {
-      const cYearStr  = contrib.date.slice(0, 4);
-      const yearMonth = contrib.date.slice(0, 7);
+      const yearMonth = getWeekCompetenceMonth(contrib.date);
+      const cYearStr  = yearMonth.slice(0, 4);
       const isoWeek   = getISOWeekKey(contrib.date);
 
       if (!byYearAcc[cYearStr]) {
@@ -645,9 +647,9 @@ export function computeBaselineGoals(rows: Omit<TableRow, 'id'>[]): TableGoals {
   // Determine which years the data spans
   const yearSet = new Set<number>();
   for (const r of revenueRows) {
-    yearSet.add(parseInt((r.periodStart || r.date).slice(0, 4), 10));
+    yearSet.add(parseInt(getWeekCompetenceMonth(r.periodStart || r.date).slice(0, 4), 10));
     if (r.periodEnd) {
-      yearSet.add(parseInt(r.periodEnd.slice(0, 4), 10));
+      yearSet.add(parseInt(getWeekCompetenceMonth(r.periodEnd).slice(0, 4), 10));
     }
   }
   const years = Array.from(yearSet).sort();

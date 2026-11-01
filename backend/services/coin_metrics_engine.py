@@ -40,6 +40,8 @@ from services.coin_date_utils import (
     get_weekly_goal_for_date,
     resolve_goal_for_year,
     get_effective_period_span_days,
+    get_week_competence_month,
+    get_row_entry_competence_month,
 )
 
 
@@ -174,8 +176,10 @@ def compute_metrics(
     for r in rows:
         start = r.period_start or r.date
         end = r.period_end or r.date
-        start_ym = start[:7]
-        end_ym = end[:7]
+        start_ym = get_row_entry_competence_month(start, r)
+        end_ym = get_row_entry_competence_month(end, r)
+        if not start_ym or not end_ym:
+            continue
         start_y, start_m = map(int, start_ym.split("-"))
         end_y, end_m = map(int, end_ym.split("-"))
         
@@ -225,12 +229,14 @@ def compute_metrics(
     total_expenses = sum(row.value for row in expense_rows if row.value > 0)
 
     # ── Survival / Break-Even Goals (Lock 1 — Full Monthly Competence Envelope) ──
+    active_expense_months = [ym for ym, v in monthly_expenses.items() if v > 0]
+    expense_months_for_span = active_expense_months if active_expense_months else list(all_months)
     global_expense_day_span = (
-        get_effective_period_span_days(all_months)
+        get_effective_period_span_days(expense_months_for_span)
         if total_expenses > 0
         else 0
     )
-    effective_expense_months = max(1, len(all_months))
+    effective_expense_months = max(1, len(expense_months_for_span))
     survival_daily = _round2(total_expenses / global_expense_day_span) if global_expense_day_span > 0 else 0.0
     survival_weekly = _round2(survival_daily * 7)
     survival_monthly = _round2(total_expenses / effective_expense_months) if total_expenses > 0 else 0.0
@@ -444,9 +450,11 @@ def compute_metrics(
             gross_total_weeks += row.value / active_weekly_goal
 
         # Distribute value across daily contributions into year, month, week
+        # By domain rule (Lock 2 — Consequent-Month Weekly Competence), operational
+        # revenue weeks (Mon→Sun) belong to the competence month of their Sunday closing date.
         for contrib in row_contributions(row):
-            c_year_str = contrib["date"][:4]
-            year_month = contrib["date"][:7]
+            year_month = get_week_competence_month(contrib["date"])
+            c_year_str = year_month[:4]
             iso_week = get_iso_week_key(contrib["date"])
 
             # byYear
@@ -477,9 +485,13 @@ def compute_metrics(
             by_week_acc[iso_week] = by_week_acc.get(iso_week, 0.0) + contrib["value"]
 
     # ── Global averages (Lock 1 — Full Monthly Competence Envelope) ──────
-    global_daily_avg = _round2(gross_total / global_span_days) if global_span_days > 0 else 0.0
+    active_revenue_months = [ym for ym, acc in by_month_acc.items() if acc["gross"] > 0]
+    revenue_months_for_span = active_revenue_months if active_revenue_months else list(all_months)
+    effective_revenue_span_days = get_effective_period_span_days(revenue_months_for_span)
+    effective_revenue_months_count = max(1, len(revenue_months_for_span))
+    global_daily_avg = _round2(gross_total / effective_revenue_span_days) if effective_revenue_span_days > 0 else 0.0
     global_weekly_avg = _round2(global_daily_avg * 7)
-    global_monthly_avg = _round2(gross_total / effective_global_months)
+    global_monthly_avg = _round2(gross_total / effective_revenue_months_count)
     global_annual_avg = _round2(global_monthly_avg * 12)
 
     # ── Per-year metrics (Lock 1) ────────────────────────────────────────
