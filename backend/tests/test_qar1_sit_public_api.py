@@ -100,8 +100,11 @@ def test_sit02_negative_expense_parity_in_metrics_engine():
     assert m_neg.total_expenses == 300.0
     assert m_neg.total_expenses == m_pos.total_expenses
     assert m_neg.net_balance == 700.0
-    assert m_neg.survival_daily == 30.0
+    # Lock 1 (Full Monthly Competence Envelope): October has 31 days -> 300.0 / 31 = 9.68
+    assert m_neg.survival_daily == 9.68
     assert m_neg.survival_daily == m_pos.survival_daily
+    assert m_neg.survival_monthly == 300.0
+    assert m_neg.survival_monthly == m_pos.survival_monthly
     assert m_neg.by_year["2026"].year_expenses == 300.0
     assert m_neg.by_year["2026"].year_expenses == m_pos.by_year["2026"].year_expenses
 
@@ -698,6 +701,56 @@ def test_sit14_pull_before_push_and_anti_echo_browser_sync():
     assert pull_after.json()["count"] == 0
 
 
+def test_sit15_cross_month_week_consequent_closing_month_in_analysis_context():
+    """SIT-15: Cross-month Week 44 (2026-10-26 to 2026-11-01) consolidates into consequent closing month 2026-11 in /analysis-context."""
+    gen_res = client.post(
+        "/api/v1/api-keys/generate",
+        json={"table_id": "tbl_sit15_cross_month", "permissions": "read:write", "ttl_days": 1},
+    )
+    assert gen_res.status_code == 200
+    api_key = gen_res.json()["apiKey"]
+    headers = {"X-Spreadsheet-Key": api_key}
+
+    sync_res = client.post(
+        "/api/v1/public/transactions/batch-sync",
+        headers=headers,
+        json={
+            "mode": "replace",
+            "transactions": [
+                {
+                    "date": "2026-10-28",
+                    "value": 575.0,
+                    "description": "PIX OPERADOR 01",
+                    "entryType": "revenue",
+                    "externalId": "w44_oct28",
+                }
+            ],
+        },
+    )
+    assert sync_res.status_code == 200
+
+    ctx_res = client.get(
+        "/api/v1/public/analysis-context?as_of_date=2026-11-01",
+        headers=headers,
+    )
+    assert ctx_res.status_code == 200
+    body = ctx_res.json()
+    ctx_md = body["context"]
+    assert "── Mês Atual (2026-11) ──" in ctx_md
+    assert "Faturamento bruto do mês: R$ 575.00" in ctx_md
+    assert "── Mês Atual (2026-10) ──" not in ctx_md
+
+    # Even when queried on Wednesday 2026-10-28 (inside cross-month Week 44), consequent closing month 2026-11 is resolved
+    ctx_res_midweek = client.get(
+        "/api/v1/public/analysis-context?as_of_date=2026-10-28",
+        headers=headers,
+    )
+    assert ctx_res_midweek.status_code == 200
+    ctx_md_midweek = ctx_res_midweek.json()["context"]
+    assert "── Mês Atual (2026-11) ──" in ctx_md_midweek
+    assert "Faturamento bruto do mês: R$ 575.00" in ctx_md_midweek
+
+
 if __name__ == "__main__":
     suite = [
         test_sit01_agent_prompt_profiles_and_openapi,
@@ -714,6 +767,7 @@ if __name__ == "__main__":
         test_sit12_context_builder_negative_expenses_and_unresolved_firewall,
         test_sit13_system_prompt_waiver_credits_and_ledger_v6_parity,
         test_sit14_pull_before_push_and_anti_echo_browser_sync,
+        test_sit15_cross_month_week_consequent_closing_month_in_analysis_context,
     ]
     print("\n=== QAR1 & SIT BACKEND FASTAPI TESTCLIENT SUITE (v6) ===")
     for fn in suite:

@@ -16,6 +16,7 @@ from services.coin_date_utils import (
     fmt_date,
     _calendar_day_span,
     get_effective_period_span_days,
+    get_week_competence_month,
     get_row_entry_competence_month,
 )
 
@@ -582,6 +583,14 @@ def build_financial_context(
     # Current month metrics
     current_ym = today[:7]  # "YYYY-MM"
     current_month_data = metrics.by_month.get(current_ym)
+    if not current_month_data:
+        try:
+            comp_ym = get_week_competence_month(today)
+            if comp_ym in metrics.by_month:
+                current_ym = comp_ym
+                current_month_data = metrics.by_month.get(comp_ym)
+        except Exception:
+            pass
     current_month_block = ""
     if current_month_data:
         current_month_block = f"""
