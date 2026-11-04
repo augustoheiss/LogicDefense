@@ -73,7 +73,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     <header className="cv-math-header">
                       <div className="cv-math-header-profile">
                         {!isFreeCanvas && basics.image && (
-                          <div className="cv-avatar-container cv-math-avatar">
+                          <div className="cv-avatar-container cv-math-avatar has-photo">
                             <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                           </div>
                         )}
@@ -276,6 +276,10 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                   )}
                 </React.Fragment>
               )
+
+            case 'coverLetter':
+            case 'cover_letter':
+              return null
 
             default: {
               const customBlock = data.meta?.universalAST?.blocks?.find(b => b.key === secKey)
