@@ -113,6 +113,21 @@ export const MathChallengeModal: React.FC = () => {
                 <small style={{ fontSize: '0.65rem', opacity: 0.9 }}>
                   +{pol.coinsBonus}🪙 · ×{pol.armyMultiplier}
                 </small>
+                <small
+                  style={{
+                    fontSize: '0.62rem',
+                    fontWeight: 900,
+                    color: t === 4 ? '#facc15' : '#86efac',
+                  }}
+                >
+                  {t === 4
+                    ? '👑 DERROTA TODOS!'
+                    : t === 3
+                      ? '💥 Abate 85%'
+                      : t === 2
+                        ? '💥 Abate 60%'
+                        : '💥 Abate 35%'}
+                </small>
               </button>
             )
           })}

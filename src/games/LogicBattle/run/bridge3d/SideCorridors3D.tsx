@@ -271,11 +271,11 @@ export const SideCorridors3D: React.FC<SideCorridors3DProps> = ({
             'DIREITA ATIVA!',
           )
         : getPlaqueTexture(
-            '🧮 BÔNUS',
+            '🧮 FAZER CONTA',
             '#6d28d9',
             '#facc15',
             '#fef08a',
-            '🧮 ATIVAR DIREITA',
+            '👑 DIFÍCIL = WIPE!',
           )
       if (mathAltarPlaqueMatRef.current.map !== altarNextTex) {
         mathAltarPlaqueMatRef.current.map = altarNextTex

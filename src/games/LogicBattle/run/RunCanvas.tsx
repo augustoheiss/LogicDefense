@@ -719,7 +719,7 @@ export const RunCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* V11: Incentivo de Lógica quando o jogador está em desvantagem contra os Inimigos 10x mais fortes */}
+      {/* V12: Incentivo de Lógica quando o jogador está em desvantagem contra os Inimigos 15x mais fortes */}
       {(phase === 'RUNNING' || phase === 'CALM_WAIT') &&
         !isAnyModalOrDrawerOpen &&
         isLosingAgainstEnemies && (
@@ -733,13 +733,13 @@ export const RunCanvas: React.FC = () => {
             <div className="lb-losing-incentive-banner__text">
               <strong>
                 {isCriticalLosing
-                  ? '🚨 INIMIGOS 10× MAIS FORTES! RESOLVA A LÓGICA PARA VIRAR O JOGO!'
-                  : '⚠️ Horda 10× mais forte que o Centro/Esquerda!'}
+                  ? '🚨 INIMIGOS 15× MAIS FORTES! FAÇA UMA CONTA PARA DERROTÁ-LOS!'
+                  : '⚠️ Monstros 15× mais fortes que o Centro/Esquerda! Faça Contas na Direita ➡️!'}
               </strong>
               <span>
                 {needsRightRouteSteer
                   ? `Super Buff liberado! Deslize para a Rota Direita (➡️) para multiplicar seu exército!`
-                  : `Faltam ${formatArmy(deficitAgainstEnemies, settings.notationMode)} 🛡️ — clique em 🧮 no canto inferior direito e pegue os Super Buffs da Direita (➡️)!`}
+                  : `Faltam ${formatArmy(deficitAgainstEnemies, settings.notationMode)} 🛡️ — resolva uma conta (👑 Muito Difícil derrota TODOS de uma vez!) e pegue a Rota Direita (➡️)!`}
               </span>
             </div>
             <div className="lb-losing-incentive-banner__actions">
@@ -751,7 +751,22 @@ export const RunCanvas: React.FC = () => {
                   openMathChallengeModal()
                 }}
               >
-                🧮 Resolver Conta
+                🧮 Fazer Conta
+              </button>
+              <button
+                type="button"
+                className="lb-losing-incentive-cta"
+                data-testid="lb-losing-incentive-wipe-all-btn"
+                onClick={() => {
+                  openMathChallengeModal(4)
+                }}
+                title="Resolver conta Muito Difícil (Grau IV) para derrotar TODOS os inimigos ativos de uma vez!"
+                style={{
+                  background: 'linear-gradient(180deg, #fde047 0%, #eab308 100%)',
+                  borderColor: '#fef9c3',
+                }}
+              >
+                👑 Muito Difícil (Wipe!)
               </button>
               <button
                 type="button"
@@ -765,6 +780,42 @@ export const RunCanvas: React.FC = () => {
                 ➡️ Rota Direita
               </button>
             </div>
+          </div>
+        )}
+
+      {/* V12: Indicador animado dedicado do lado direito apontando para o botão 🧮 e Rota Direita (fora do dock para manter dock minimalista) */}
+      {(phase === 'RUNNING' || phase === 'CALM_WAIT' || phase === 'PAUSED') &&
+        !isAnyModalOrDrawerOpen && (
+          <div
+            className={`lb-math-callout-pill ${
+              isCriticalLosing ? 'is-critical' : ''
+            }`}
+            data-testid="lb-math-btn-animated-indicator"
+            onClick={() => {
+              openMathChallengeModal()
+            }}
+            style={{
+              position: 'absolute',
+              right: '16px',
+              bottom: '132px',
+              zIndex: 24,
+              pointerEvents: 'auto',
+            }}
+          >
+            <span className="lb-math-callout-pill__badge">
+              {isCriticalLosing
+                ? '🚨 VIRAR O JOGO!'
+                : '⚡ FAZER CONTA ➡️'}
+            </span>
+            <span className="lb-math-callout-pill__sub">
+              👑 Difícil = Wipe Total!
+            </span>
+            <span
+              className="lb-math-callout-pill__arrow"
+              aria-hidden="true"
+            >
+              👇
+            </span>
           </div>
         )}
 
@@ -847,38 +898,13 @@ export const RunCanvas: React.FC = () => {
             <small>{lunetaCharges}</small>
           </button>
 
-          {/* V11: Botão de Fazer Conta no canto inferior direito com Animação Indicadora + Setas */}
+          {/* V11/V12: Botão de Fazer Conta no canto inferior direito com Anéis Pulsantes */}
           <div
             className={`lb-math-cta-corner ${
               isLosingAgainstEnemies ? 'is-urgent' : ''
             } ${mathChallengesSolvedInRun === 0 ? 'is-unopened' : ''}`}
             data-testid="lb-math-cta-corner"
           >
-            <div
-              className={`lb-math-callout-pill ${
-                isCriticalLosing ? 'is-critical' : ''
-              }`}
-              data-testid="lb-math-btn-animated-indicator"
-              onClick={() => {
-                openMathChallengeModal()
-              }}
-            >
-              <span className="lb-math-callout-pill__badge">
-                {isCriticalLosing
-                  ? '🚨 VIRAR O JOGO!'
-                  : '⚡ FAZER CONTA!'}
-              </span>
-              <span className="lb-math-callout-pill__sub">
-                Pegar Super Buffs ➡️
-              </span>
-              <span
-                className="lb-math-callout-pill__arrow"
-                aria-hidden="true"
-              >
-                👇
-              </span>
-            </div>
-
             <div className="lb-math-fab-wrapper">
               <span
                 className="lb-math-fab-pulse-ring"
@@ -913,7 +939,7 @@ export const RunCanvas: React.FC = () => {
                   )
                   openMathChallengeModal()
                 }}
-                title="Bônus de Conta: Escolha Fácil, Médio, Difícil ou Problema para ganhar Super Buffs na Rota Direita"
+                title="Bônus de Conta: Escolha Fácil, Médio, Difícil ou Muito Difícil (Derrota Todos!) para ganhar Super Buffs na Rota Direita"
                 aria-label="Fazer Conta Bônus"
                 style={{
                   borderColor: '#facc15',

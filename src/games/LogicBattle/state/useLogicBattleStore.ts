@@ -1408,7 +1408,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       return
     }
 
-    // Resposta correta! Aplica recompensas de soldados, moedas, combo e buffs!
+    // Resposta correta! Aplica recompensas de soldados, moedas, combo, buffs e ABATE DE INIMIGOS!
     soundEngine.playRedemptionSuccess()
     const policy = MATH_CHALLENGE_TIER_POLICIES[challenge.tier]
     const snap = state.snapshot
@@ -1422,7 +1422,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     )
     const expStreakFactor =
       state.activeEngineId === 'ponte_portoes'
-        ? Math.pow(1.25, Math.min(state.mathChallengesSolvedInRun, 20))
+        ? Math.pow(1.28, Math.min(state.mathChallengesSolvedInRun, 20))
         : 1
     const soldiersAdded = Math.max(
       policy.flatSoldiersBonus,
@@ -1434,12 +1434,42 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
     const nextMult = getComboMultiplier(nextStreak)
     const nextSeq = state.mathChallengesSolvedInRun + 1
 
+    // V12: Reduzir horda/boss proporcionalmente à dificuldade da conta; no Grau IV (👑 Muito Difícil) derrota todos os inimigos ativos de uma vez!
+    const wipeRatio =
+      challenge.tier === 4
+        ? 1.0
+        : challenge.tier === 3
+          ? 0.85
+          : challenge.tier === 2
+            ? 0.6
+            : 0.35
+    const bossCutRatio =
+      challenge.tier === 4
+        ? 0.95
+        : challenge.tier === 3
+          ? 0.7
+          : challenge.tier === 2
+            ? 0.4
+            : 0.2
+    const nextEnemyHorde =
+      challenge.tier >= 4
+        ? 0
+        : Math.max(0, Math.round(snap.enemy.horde * (1 - wipeRatio)))
+    const nextEnemyBossHp = Math.max(
+      10,
+      Math.round(snap.enemy.bossHp * (1 - bossCutRatio)),
+    )
+    const nextEnemyTotalForce = Math.max(10, nextEnemyHorde + nextEnemyBossHp)
+
     const rewardSummary =
       policy.engineRewardSummary[state.activeEngineId] ?? policy.titlePt
 
     const fbMath: FloatingFeedbackItem = {
       id: `fb_math_${Date.now()}_${nextSeq}`,
-      text: `🧮 +${formatArmy(soldiersAdded, state.save.settings.notationMode)} · +${policy.coinsBonus}🪙`,
+      text:
+        challenge.tier === 4
+          ? `👑 WIPE TOTAL! +${formatArmy(soldiersAdded, state.save.settings.notationMode)} · +${policy.coinsBonus}🪙`
+          : `🧮 +${formatArmy(soldiersAdded, state.save.settings.notationMode)} · +${policy.coinsBonus}🪙`,
       subText: rewardSummary,
       tone: 'reinforcement',
       createdAtMs: snap.elapsedMs,
@@ -1455,18 +1485,27 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         sectorIndex: state.bridgeSectorIndex,
         currentArmy: nextArmy,
         bridgeCoinsEarned: nextCoins,
-        bridgeKills: snap.bridgeKills ?? 0,
+        bridgeKills:
+          (snap.bridgeKills ?? 0) + (challenge.tier === 4 ? 18 : challenge.tier * 4),
         mathChallengesSolved: nextSeq,
         seed: state.runPlan.seed,
       },
     )
     SaveRepository.save(nextSave)
 
+    const rescuedPhase =
+      snap.phase === 'DEFEAT' || snap.phase === 'BATTLE'
+        ? nextSave.settings.calmMode
+          ? 'CALM_WAIT'
+          : 'RUNNING'
+        : snap.phase
+
     set({
       save: nextSave,
       activeMathChallenge: null,
       activeMathChallengeScaffold: 1,
       activeMathChallengeDiagnostic: null,
+      battleResolution: snap.phase === 'DEFEAT' ? null : state.battleResolution,
       mathChallengesSolvedInRun: nextSeq,
       lastSolvedMathRewardAt: {
         seq: nextSeq,
@@ -1481,16 +1520,28 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       },
       snapshot: {
         ...snap,
+        phase: rescuedPhase,
         currentArmy: nextArmy,
         crowdNodes: buildCrowdNodes(nextArmy),
         bridgeCoinsEarned: nextCoins,
+        bridgeKills:
+          (snap.bridgeKills ?? 0) + (challenge.tier === 4 ? 18 : challenge.tier * 4),
+        enemy: {
+          ...snap.enemy,
+          horde: nextEnemyHorde,
+          bossHp: nextEnemyBossHp,
+          totalForce: nextEnemyTotalForce,
+        },
         calcComboStreak: nextStreak,
         calcComboMultiplier: nextMult,
         recentFeedback: [...snap.recentFeedback.slice(-4), fbMath],
       },
       captainSpeech: {
         mood: 'proud',
-        text: `Conta resolvida (${policy.titlePt})! Você ganhou +${formatArmy(soldiersAdded, state.save.settings.notationMode)} soldados, +${policy.coinsBonus} 🪙 e ${rewardSummary}!`,
+        text:
+          challenge.tier === 4
+            ? `👑 CONTA MUITO DIFÍCIL RESOLVIDA! TODOS OS INIMIGOS ATIVOS FORAM DERROTADOS DE UMA VEZ! +${formatArmy(soldiersAdded, state.save.settings.notationMode)} soldados, +${policy.coinsBonus} 🪙 e Rota Direita ➡️ liberada!`
+            : `Conta resolvida (${policy.titlePt})! Abatemos ${Math.round(wipeRatio * 100)}% dos inimigos ativos, ganhamos +${formatArmy(soldiersAdded, state.save.settings.notationMode)} soldados, +${policy.coinsBonus} 🪙 e liberamos os Super-Buffs da Rota Direita ➡️!`,
       },
     })
   },
@@ -2157,13 +2208,17 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       }
 
       const armyBefore = clampArmy(snapshot.currentArmy)
-      // V9 (Pilar 2) + V10 (Pilar 1 — QAR1-V10-AUTHENTIC-DEBUFFS):
-      // Portões benéficos (Azuis) mantêm escala ortogonal justa; todo portão negativo/redutor (Vermelho)
-      // ou queda em pegadinha reduz DE VERDADE o exército atual (`nextArmy < armyBefore`).
-      const monsterEvalCap = Math.max(105, Math.round(snapshot.enemy.totalForce * 1.5))
+      // V9 (Pilar 2) + V10 (Pilar 1) + V12:
+      // Os portões passivos do Caminho Central operam em 1/15 da força inimiga (~180 no Setor 1 contra 2700 dos inimigos).
+      // Acima do teto passivo (~220 no Setor 1), usa base ortogonal para impedir vitória sem fazer contas!
+      const passiveRouteForce =
+        snapshot.enemy.totalForce >= 400
+          ? Math.max(105, Math.round(snapshot.enemy.totalForce / 15))
+          : snapshot.enemy.totalForce
+      const monsterEvalCap = Math.max(105, Math.round(passiveRouteForce * 1.22))
       const monsterRefBase = Math.max(
         25,
-        Math.min(120, Math.round(snapshot.enemy.totalForce * 0.35)),
+        Math.min(120, Math.round(passiveRouteForce * 0.35)),
       )
       const useOrthogonalMonsterBase =
         armyBefore > monsterEvalCap ||
@@ -3258,16 +3313,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
         seg.trapId ? { ...seg, showDetectorWarning: true } : seg,
       )
     }
-    // Sincronizar evolução da Cidadela com o Bastião das Torres da Ponte (reforça a torre de menor nível)
-    let minIdx = 0
-    for (let i = 1; i < 4; i++) {
-      if (nextBridgeTowers[i] < nextBridgeTowers[minIdx]) {
-        minIdx = i
-      }
-    }
-    if (nextBridgeTowers[minIdx] < PLAYER_BRIDGE_BASE_POLICY.maxTowerLevel) {
-      nextBridgeTowers[minIdx] += 1
-    }
+    // V12: Evoluir prédios da Cidadela NÃO evolui Torres da Ponte de graça (torres têm seu próprio custo 100× maior)
 
     soundEngine.playRedemptionSuccess()
     const fbCitadel: FloatingFeedbackItem = {

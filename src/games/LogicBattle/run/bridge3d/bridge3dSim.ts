@@ -260,7 +260,7 @@ export function computeSegmentWorldZ(segZPosition: number, progress: number): nu
 
 
 export function createInitialBridge3DSimState(
-  initialBossHp = 1500,
+  initialBossHp = 2250,
   seed = 42,
 ): Bridge3DSimState {
   const baseBossHp = Math.max(150, initialBossHp)
@@ -269,7 +269,8 @@ export function createInitialBridge3DSimState(
     const isMiniBoss = idx === 2 || idx === 7 || idx === 11 || idx === 14
     const row = Math.floor(idx / 4)
     const col = (idx % 4) - 1.5
-    const maxHp = isMiniBoss ? 680 : 85
+    // V12: Inimigos e Mini-Bosses 10×+ mais resistentes e letais que os buffs passivos do centro/esquerda
+    const maxHp = isMiniBoss ? 2200 : 380
     return {
       id: idx + 1,
       x: col * 1.6,
@@ -277,17 +278,17 @@ export function createInitialBridge3DSimState(
       hp: maxHp,
       maxHp,
       isMiniBoss,
-      speedZ: isMiniBoss ? 2.65 : 2.75 + (idx % 3) * 0.25,
-      contactDamage: isMiniBoss ? 26 : 8,
+      speedZ: isMiniBoss ? 2.75 : 2.85 + (idx % 3) * 0.25,
+      contactDamage: isMiniBoss ? 65 : 22,
       hitFlashMs: 0,
     }
   })
 
   const barrels: ExplosiveBarrel3DEntity[] = [
-    { id: 1, x: -3.2, z: -18, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
-    { id: 2, x: 3.2, z: -34, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
-    { id: 3, x: -3.2, z: -48, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
-    { id: 4, x: 3.2, z: -62, hp: 450, maxHp: 450, active: true, explosionFlashMs: 0 },
+    { id: 1, x: -3.2, z: -18, hp: 1400, maxHp: 1400, active: true, explosionFlashMs: 0 },
+    { id: 2, x: 3.2, z: -34, hp: 1400, maxHp: 1400, active: true, explosionFlashMs: 0 },
+    { id: 3, x: -3.2, z: -48, hp: 1400, maxHp: 1400, active: true, explosionFlashMs: 0 },
+    { id: 4, x: 3.2, z: -62, hp: 1400, maxHp: 1400, active: true, explosionFlashMs: 0 },
   ]
 
   // V9 Pilar 2 & 3: Apenas 2 portões espaçados na Rota Esquerda, 100% ancorados no Nível dos Monstros do Setor
@@ -464,11 +465,11 @@ export function createInitialBridge3DSimState(
       z: 9.0,
       vx: 0,
       vz: -38,
-      damage: 8,
+      damage: 2,
       slotIndex: idx % 4,
       active: false,
     })),
-    towerFireCooldownsMs: [450, 650, 850, 1050],
+    towerFireCooldownsMs: [1800, 2100, 2400, 2700],
     towerShotsFiredCount: 0,
     towerKillsCount: 0,
     bossVanguardShieldActive: true,
@@ -538,9 +539,9 @@ export function evolveEnemyLivingBase(sim: Bridge3DSimState): {
 
   // Fortalece a onda da horda inimiga ao evoluir a Base Inimiga
   for (const en of sim.enemies) {
-    en.maxHp = Math.round(en.maxHp * 1.12)
-    en.hp = Math.min(en.maxHp, en.hp + 6)
-    en.speedZ = Math.min(4.2, en.speedZ * 1.05)
+    en.maxHp = Math.round(en.maxHp * 1.15)
+    en.hp = Math.min(en.maxHp, en.hp + 45)
+    en.speedZ = Math.min(4.4, en.speedZ * 1.06)
   }
 
   return {
@@ -551,12 +552,12 @@ export function evolveEnemyLivingBase(sim: Bridge3DSimState): {
 
 
 /**
- * V9 Pilar 1: Ativa por alguns segundos (12s a 24s conforme o grau da conta) as cores,
- * os 2 Super-Portões exponenciais e os benefícios de arma prometidos no modal:
- * - Grau I (🟢 12s): +20% Soldados e +15% Cadência na Ponte
- * - Grau II (🔵 15s): +45% Soldados e Tiro Duplo na Ponte
- * - Grau III (🟣 18s): +75% Soldados e Canhão Perfurante
- * - Grau IV (👑 24s): DOBRA O EXÉRCITO (×2 + 55) e Salva Real contra o Boss
+ * V9 Pilar 1 + V12: Ativa por alguns segundos (12s a 24s conforme o grau da conta) as cores,
+ * os 2 Super-Portões exponenciais, os benefícios de arma e o ABATE IMEDIATO DE INIMIGOS:
+ * - Grau I (🟢 12s): Abate 35% dos inimigos ativos + 20% dano no Boss + Turbo de Cadência
+ * - Grau II (🔵 15s): Abate 60% dos inimigos ativos + 40% dano no Boss + Tiro Duplo
+ * - Grau III (🟣 18s): Abate 85% dos inimigos ativos + 70% dano no Boss + Canhão Perfurante
+ * - Grau IV (👑 24s - Muito Difícil): DERROTA TODOS OS INIMIGOS DE UMA VEZ (100% da Horda, Mini-Bosses, Demolidores e Boss na Ponte)!
  */
 export function applyMathBonusToRightWeapon(
   sim: Bridge3DSimState,
@@ -572,6 +573,8 @@ export function applyMathBonusToRightWeapon(
   bonusSoldiersFromPendingGate: number
   activeDurationMs: number
   royalVolleyBossDamage: number
+  enemiesWipedCount: number
+  bossWiped: boolean
 } {
   sim.mathChallengesSolved += 1
   const tierSpec =
@@ -591,26 +594,91 @@ export function applyMathBonusToRightWeapon(
   sim.rightActiveBuffLabel = tierSpec.activeHudSummaryPt
   sim.rightPiercingShots = tierSpec.piercingShots
 
-  // Salva Real contra o Boss (Grau IV): dispara rajada imediata que drena 25% do HP máximo do Boss!
+  // Limpar projéteis de debuff inimigos em voo para dar fôlego imediato ao jogador
+  for (const dBolt of sim.enemyDebuffBolts) {
+    dBolt.active = false
+  }
+
+  // V12: Abate proporcional de inimigos ativos na ponte (e 100% DE UMA VEZ no Grau IV Muito Difícil!)
+  const sortedEnemies = [...sim.enemies].sort((a, b) => b.z - a.z)
+  const wipeTargetCount =
+    tier >= 4 || tierSpec.enemyWipeRatio >= 1.0
+      ? sortedEnemies.length
+      : Math.max(1, Math.round(sortedEnemies.length * tierSpec.enemyWipeRatio))
+
+  let enemiesWipedCount = 0
+  for (let i = 0; i < sortedEnemies.length; i++) {
+    const en = sortedEnemies[i]
+    if (i < wipeTargetCount) {
+      enemiesWipedCount += 1
+      en.hitFlashMs = 420
+      en.z = -88 - i * 2.6
+      en.x = ((en.id % 4) - 1.5) * 1.6
+      en.maxHp = en.isMiniBoss
+        ? 2200 + (sim.sectorIndex - 1) * 1100
+        : 380 + (sim.sectorIndex - 1) * 240
+      en.hp = en.maxHp
+    } else {
+      // Empurra os inimigos sobreviventes para trás e reduz seu HP
+      en.z = Math.max(-82, en.z - (10 + tier * 4))
+      en.hp = Math.max(15, Math.round(en.hp * (1 - tierSpec.enemyWipeRatio * 0.55)))
+      en.hitFlashMs = 300
+    }
+  }
+
+  // No Grau III/IV também limpa ou empurra os Barris/Demolidores blindados
+  for (let bIdx = 0; bIdx < sim.barrels.length; bIdx++) {
+    const barrel = sim.barrels[bIdx]
+    if (!barrel.active) continue
+    if (tier >= 4 || bIdx < tier) {
+      barrel.explosionFlashMs = 380
+      barrel.z = -86 - bIdx * 4.5
+      barrel.maxHp = 1400 + (sim.sectorIndex - 1) * 650
+      barrel.hp = barrel.maxHp
+    } else {
+      barrel.z = Math.max(-78, barrel.z - 12)
+    }
+  }
+
+  // Impacto contra o Boss (Grau IV Muito Difícil DERROTA O BOSS E TODOS OS INIMIGOS DE UMA VEZ!)
   let royalVolleyBossDamage = 0
-  if (
-    tierSpec.bossRoyalVolleyRatio > 0 &&
-    sim.bossLifecycle !== 'INTERMISSION' &&
-    sim.bossHp > 1
-  ) {
-    royalVolleyBossDamage = Math.max(
-      25,
-      Math.round(sim.bossMaxHp * tierSpec.bossRoyalVolleyRatio),
-    )
-    const vanguardFloor =
-      sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
-        ? Math.max(
-            18,
-            Math.round(sim.bossMaxHp * PLAYER_BRIDGE_BASE_POLICY.bossVanguardMinHpRatio),
-          )
-        : 1
-    sim.bossHp = Math.max(vanguardFloor, sim.bossHp - royalVolleyBossDamage)
-    sim.bossHitFlashMs = 420
+  let bossWiped = false
+  if (sim.bossLifecycle !== 'INTERMISSION' && sim.bossHp > 0) {
+    if (tier >= 4 || tierSpec.bossRoyalVolleyRatio >= 1.0) {
+      royalVolleyBossDamage = sim.bossHp
+      bossWiped = true
+      const defeatedSpec = computeSectorBossSpec(sim.sectorIndex)
+      sim.bossHp = 0
+      sim.bossHitFlashMs = 600
+      sim.bossVanguardShieldActive = false
+      sim.sectorIndex += 1
+      const nextSpec = computeSectorBossSpec(sim.sectorIndex)
+      sim.bossLifecycle = 'INTERMISSION'
+      sim.bossRespawnTimerMs = 7500
+      sim.bossArchetypeIndex = nextSpec.archetype.index
+      sim.bossArchetypeId = nextSpec.archetype.id
+      sim.bossArchetypeName = nextSpec.archetype.namePt
+      sim.supplyCaravan = {
+        active: true,
+        x: 0,
+        z: Math.max(-24, Math.min(-14, sim.bossZ - 2)),
+        hp: Math.max(100, Math.round(defeatedSpec.bossHp * 0.25)),
+        maxHp: Math.max(100, Math.round(defeatedSpec.bossHp * 0.25)),
+        hitFlashMs: 260,
+        rewardsGrantedCount: 0,
+      }
+    } else if (tierSpec.bossRoyalVolleyRatio > 0) {
+      royalVolleyBossDamage = Math.max(
+        80,
+        Math.round(sim.bossMaxHp * tierSpec.bossRoyalVolleyRatio),
+      )
+      sim.bossHp = Math.max(1, sim.bossHp - royalVolleyBossDamage)
+      sim.bossZ = Math.max(-68, sim.bossZ - (4 + tier * 2.5))
+      if (sim.bossZ < BRIDGE_3D_DIMENSIONS.zPlayerLine - 2.8) {
+        sim.bossLifecycle = 'MARCHING'
+      }
+      sim.bossHitFlashMs = 450
+    }
   }
 
   // Atualizar imediatamente os 2 Super-Portões da Rota Direita conforme a questão resolvida e o Grau!
@@ -678,6 +746,8 @@ export function applyMathBonusToRightWeapon(
     bonusSoldiersFromPendingGate: pendingBonus,
     activeDurationMs: durationMs,
     royalVolleyBossDamage,
+    enemiesWipedCount,
+    bossWiped,
   }
 }
 
@@ -755,7 +825,7 @@ export function stepBridge3DSim(
     sim.rightRoutePromptCooldownMs = Math.max(0, sim.rightRoutePromptCooldownMs - dtMs)
   }
 
-  // 2. Perfil dinâmico de tiro escalado pelos pontos atuais + bônus de armas coletadas nas rotas laterais + Torres Aliadas da Ponte (V10)
+  // 2. Perfil dinâmico de tiro escalado pelos pontos atuais + bônus de armas coletadas nas rotas laterais + Torres Aliadas da Ponte (V12)
   const baseProfile = computeShotProfile(input.currentArmy)
   const hasLeftBoost = sim.leftFrozenBlock.unlocked || sim.leftCannonLevel > 0
   const hasRightBoost =
@@ -767,21 +837,21 @@ export function stepBridge3DSim(
   const extraBarrels =
     (hasLeftBoost ? 1 : 0) +
     (hasRightBoost ? activeTierSpec.extraParallelBarrels : 0) +
-    Math.floor(alliedTowerStats.activeTowersCount / 2)
+    Math.floor(alliedTowerStats.activeTowersCount / 4)
   const dmgMult =
     (hasRightBoost
-      ? activeTierSpec.weaponDmgMult + sim.rightWeaponLevel * 0.45
-      : 1.0) * (hasLeftBoost ? 1.15 + sim.leftCannonLevel * 0.12 : 1.0)
+      ? activeTierSpec.weaponDmgMult + sim.rightWeaponLevel * 0.65
+      : 1.0) * (hasLeftBoost ? 1.05 + sim.leftCannonLevel * 0.04 : 1.0)
   const fireRateBonus =
-    (hasLeftBoost ? 1.4 + Math.min(2.0, sim.leftCannonLevel * 0.3) : 0) +
-    alliedTowerStats.activeTowersCount * 0.35
+    (hasLeftBoost ? 0.35 + Math.min(0.65, sim.leftCannonLevel * 0.1) : 0) +
+    alliedTowerStats.activeTowersCount * 0.08
   const rightFireRateMult = hasRightBoost ? activeTierSpec.fireRateMult : 1.0
 
   sim.shotProfile = {
     ...baseProfile,
     damagePerShot: Math.max(
       1,
-      baseProfile.damagePerShot * dmgMult + alliedTowerStats.bonusDamagePerHit,
+      Math.round(baseProfile.damagePerShot * dmgMult + alliedTowerStats.bonusDamagePerHit),
     ),
     shotsPerSecond: Math.min(
       20,
@@ -1012,7 +1082,11 @@ export function stepBridge3DSim(
       slot.scale = sim.shotProfile.projectileScale
       slot.active = true
       slot.pierceRemaining =
-        sim.rightBuffActiveTimerMs > 0 && sim.rightPiercingShots ? 1 : 0
+        input.currentArmy >= sim.bossMaxHp * 0.75
+          ? 2
+          : sim.rightBuffActiveTimerMs > 0 && sim.rightPiercingShots
+            ? 1
+            : 0
     }
   }
 
@@ -1256,7 +1330,7 @@ export function stepBridge3DSim(
       continue
     }
 
-    // 5c. Colisão na Rota Central: Demolidores / Barris Blindados em Marcha (112 HP) com Detonação AoE
+    // 5c. Colisão na Rota Central: Demolidores / Barris Blindados em Marcha (1400+ HP) com Detonação AoE moderada
     if (boltRoute === 'CENTER') {
       let hitBarrel = false
       for (const barrel of sim.barrels) {
@@ -1269,26 +1343,26 @@ export function stepBridge3DSim(
           damageDealtThisFrame += Math.min(bolt.damage, 4)
           if (barrel.hp <= 0) {
             coinsEarnedThisFrame += 4
-            // Detonação AoE: atinge todos os monstros num raio de 10.5m
+            // Detonação AoE: atinge monstros num raio de 7.5m com dano controlado (não limpa a onda de graça!)
             for (const en of sim.enemies) {
               const dist = Math.hypot(en.x - barrel.x, en.z - barrel.z)
-              if (dist <= 10.5) {
-                en.hp -= 480
+              if (dist <= 7.5) {
+                en.hp -= 120
                 en.hitFlashMs = 240
                 if (en.hp <= 0) {
                   coinsEarnedThisFrame += en.isMiniBoss ? 5 : 1
                   damageDealtThisFrame += en.isMiniBoss ? 8 : 2
                   en.z = -84 - nextSimRandom(sim) * 14
                   en.maxHp = en.isMiniBoss
-                    ? 680 + (sim.sectorIndex - 1) * 360
-                    : 85 + (sim.sectorIndex - 1) * 55
+                    ? 2200 + (sim.sectorIndex - 1) * 1100
+                    : 380 + (sim.sectorIndex - 1) * 240
                   en.hp = en.maxHp
                 }
               }
             }
             // Respawn imediato no fundo da ponte para marchar novamente sem travar nem inflar no lugar!
             barrel.z = -80 - nextSimRandom(sim) * 14
-            barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
+            barrel.maxHp = 1400 + (sim.sectorIndex - 1) * 650
             barrel.hp = barrel.maxHp
             barrel.active = true
             barrel.explosionFlashMs = 200
@@ -1321,8 +1395,8 @@ export function stepBridge3DSim(
             en.z = -84 - nextSimRandom(sim) * 16
             en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
             en.maxHp = en.isMiniBoss
-              ? 680 + (sim.sectorIndex - 1) * 360
-              : 85 + (sim.sectorIndex - 1) * 55
+              ? 2200 + (sim.sectorIndex - 1) * 1100
+              : 380 + (sim.sectorIndex - 1) * 240
             en.hp = en.maxHp
           }
           break
@@ -1366,7 +1440,11 @@ export function stepBridge3DSim(
         Math.abs(bolt.z - sim.bossZ) < 3.4 &&
         Math.abs(bolt.x) < 3.4
       ) {
+        const hasMathOverpower =
+          sim.rightBuffActiveTimerMs > 0 ||
+          input.currentArmy >= sim.bossMaxHp * 0.75
         const isVanguardShielded =
+          !hasMathOverpower &&
           sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
         const rawBossDmg = Math.max(1, bolt.damage)
         const effectiveBossDmg = isVanguardShielded
@@ -1427,7 +1505,7 @@ export function stepBridge3DSim(
           // Reativar barris para o novo setor
           for (const barrel of sim.barrels) {
             barrel.active = true
-            barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
+            barrel.maxHp = 1400 + (sim.sectorIndex - 1) * 650
             barrel.hp = barrel.maxHp
           }
           callbacks.onSectorBossDefeated(sim.sectorIndex, sectorReward)
@@ -1446,7 +1524,7 @@ export function stepBridge3DSim(
 
   // 6. Avanço da Horda, Mini-Bosses e Demolidores (+Z) e Dano Real de Contato SOMENTE se acertar a posição X do Herói (permite desviar!)
   let hordeContactLoss = 0
-  const barrelMarchSpeedZ = 2.35 + (sim.sectorIndex - 1) * 0.15
+  const barrelMarchSpeedZ = 2.45 + (sim.sectorIndex - 1) * 0.16
   for (const barrel of sim.barrels) {
     if (!barrel.active) continue
     barrel.z += barrelMarchSpeedZ * clampedDt
@@ -1454,11 +1532,11 @@ export function stepBridge3DSim(
       const isDirectHitOnHero =
         sim.activeRoute === 'CENTER' && Math.abs(barrel.x - sim.heroWorldX) <= 1.35
       if (isDirectHitOnHero) {
-        hordeContactLoss += 16 + (sim.sectorIndex - 1) * 8
+        hordeContactLoss += 38 + (sim.sectorIndex - 1) * 18
         sim.playerHitFlashMs = 280
       }
       barrel.z = -80 - nextSimRandom(sim) * 14
-      barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
+      barrel.maxHp = 1400 + (sim.sectorIndex - 1) * 650
       barrel.hp = barrel.maxHp
       barrel.active = true
     }
@@ -1478,31 +1556,28 @@ export function stepBridge3DSim(
       en.z = -84 - nextSimRandom(sim) * 14
       en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
       en.maxHp = en.isMiniBoss
-        ? 680 + (sim.sectorIndex - 1) * 360
-        : 85 + (sim.sectorIndex - 1) * 55
+        ? 2200 + (sim.sectorIndex - 1) * 1100
+        : 380 + (sim.sectorIndex - 1) * 240
       en.hp = en.maxHp
     }
   }
   if (hordeContactLoss > 0 && !input.isBattlePhase) {
-    // V11: Assim que o Boss avança para z >= -36 (ou em MELEE_CLASH / segmentos resolvidos), a Horda 10× também causa dano letal real!
-    const isLethalWavePressure =
-      sim.bossLifecycle === 'MELEE_CLASH' ||
-      Boolean(input.allSegmentsResolved) ||
-      sim.bossZ >= -36
+    // V12: A Horda 15× drena rapidamente todo o exército passivo até 1 soldado e, em MELEE_CLASH, finaliza para 0 (DEFEAT)!
+    const isLethalWavePressure = sim.bossLifecycle === 'MELEE_CLASH'
     const effectiveHordeLoss = isLethalWavePressure
       ? hordeContactLoss
-      : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 5))
+      : Math.min(hordeContactLoss, Math.max(0, input.currentArmy - 1))
     attritionLossThisFrame += effectiveHordeLoss
   }
 
-  // 6b. Disparos Ativos das 4 Torres Aliadas da Ponte (Miram e Abatem Mini-Bosses, Horda e Boss!)
+  // 6b. Disparos de Suporte das 4 Torres Aliadas da Ponte (V12: Dano e cadência muito reduzidos; não carregam sem fazer contas!)
   if (input.isRunningOrBattle) {
     for (let slotIdx = 0; slotIdx < 4; slotIdx++) {
       const lvl = sim.playerBridgeTowerLevels[slotIdx] ?? 0
       if (lvl <= 0) continue
       sim.towerFireCooldownsMs[slotIdx] -= timerDtMs
       if (sim.towerFireCooldownsMs[slotIdx] <= 0) {
-        sim.towerFireCooldownsMs[slotIdx] = Math.max(300, 1020 - lvl * 145)
+        sim.towerFireCooldownsMs[slotIdx] = Math.max(1500, 2800 - lvl * 240)
         const freeTurretBolt = sim.alliedTowerBolts.find((b) => !b.active)
         if (freeTurretBolt) {
           const slotSpec = PLAYER_BRIDGE_BASE_POLICY.slots[slotIdx]
@@ -1555,9 +1630,10 @@ export function stepBridge3DSim(
           freeTurretBolt.z = spawnZ
           freeTurretBolt.vz = vz
           freeTurretBolt.vx = (targetX - spawnX) / travelTime
+          // V12: Torres causam dano de suporte leve (1 a 10 por tiro), jamais matando inimigos de 380-2200 HP sozinhas!
           freeTurretBolt.damage = Math.max(
-            6,
-            lvl * 8 + Math.round(sim.shotProfile.damagePerShot * 0.65 * lvl),
+            1,
+            lvl * 2 + Math.round(sim.shotProfile.damagePerShot * 0.04 * lvl),
           )
           sim.towerShotsFiredCount += 1
         }
@@ -1581,23 +1657,15 @@ export function stepBridge3DSim(
           barrel.explosionFlashMs = 160
           tBolt.active = false
           hitTarget = true
-          damageDealtThisFrame += Math.min(tBolt.damage, 5)
+          damageDealtThisFrame += Math.min(tBolt.damage, 3)
           if (barrel.hp <= 0) {
             sim.towerKillsCount += 1
-            coinsEarnedThisFrame += 4
+            coinsEarnedThisFrame += 2
             barrel.z = -80 - nextSimRandom(sim) * 14
-            barrel.maxHp = 450 + (sim.sectorIndex - 1) * 220
+            barrel.maxHp = 1400 + (sim.sectorIndex - 1) * 650
             barrel.hp = barrel.maxHp
             barrel.active = true
             barrel.explosionFlashMs = 200
-            if (sim.towerKillsCount % 2 === 0) {
-              const towerReinforce = Math.max(3, alliedTowerStats.totalLevel * 2)
-              callbacks.onSideRouteReward(
-                'LEFT',
-                towerReinforce,
-                `🗼 Torre Aliada Abateu Mini-Boss (+${towerReinforce} 🛡️)`,
-              )
-            }
           }
           break
         }
@@ -1612,24 +1680,16 @@ export function stepBridge3DSim(
           en.hitFlashMs = 160
           tBolt.active = false
           hitTarget = true
-          damageDealtThisFrame += Math.min(tBolt.damage, 4)
+          damageDealtThisFrame += Math.min(tBolt.damage, 3)
           if (en.hp <= 0) {
             sim.towerKillsCount += 1
-            coinsEarnedThisFrame += en.isMiniBoss ? 5 : 2
+            coinsEarnedThisFrame += en.isMiniBoss ? 4 : 1
             en.z = -84 - nextSimRandom(sim) * 16
             en.x = ((en.id % 4) - 1.5) * 1.6 + (nextSimRandom(sim) - 0.5) * 0.45
             en.maxHp = en.isMiniBoss
-              ? 680 + (sim.sectorIndex - 1) * 360
-              : 85 + (sim.sectorIndex - 1) * 55
+              ? 2200 + (sim.sectorIndex - 1) * 1100
+              : 380 + (sim.sectorIndex - 1) * 240
             en.hp = en.maxHp
-            if (sim.towerKillsCount % 2 === 0) {
-              const towerReinforce = Math.max(3, alliedTowerStats.totalLevel * 2)
-              callbacks.onSideRouteReward(
-                'LEFT',
-                towerReinforce,
-                `🗼 Torre Aliada Reforçou Esquadrão (+${towerReinforce} 🛡️)`,
-              )
-            }
           }
           break
         }
@@ -1642,7 +1702,11 @@ export function stepBridge3DSim(
         Math.abs(tBolt.z - sim.bossZ) < 3.6 &&
         Math.abs(tBolt.x) < 3.6
       ) {
+        const hasMathOverpower =
+          sim.rightBuffActiveTimerMs > 0 ||
+          input.currentArmy >= sim.bossMaxHp * 0.75
         const isVanguardShielded =
+          !hasMathOverpower &&
           sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
         const effectiveTowerBossDmg = isVanguardShielded
           ? Math.max(
@@ -1668,7 +1732,7 @@ export function stepBridge3DSim(
         sim.bossHp = Math.max(minBossHpFloor, sim.bossHp - effectiveTowerBossDmg)
         sim.bossHitFlashMs = 150
         tBolt.active = false
-        damageDealtThisFrame += Math.min(effectiveTowerBossDmg, 6)
+        damageDealtThisFrame += Math.min(effectiveTowerBossDmg, 4)
       }
     }
   }

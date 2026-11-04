@@ -88,7 +88,7 @@ def run_v10_fase3_verification():
                         playerBridgeTowerLevels: [1, 0, 0, 0],
                         save: {
                             ...st.save,
-                            reserveTroops: 600,
+                            reserveTroops: 60000,
                         },
                     });
                 }"""

@@ -233,7 +233,7 @@ def run_v10_fase1_verification():
                         snapshot: {
                             ...st.snapshot,
                             currentArmy: 200,
-                            bridgeCoinsEarned: 120,
+                            bridgeCoinsEarned: 12000,
                         },
                     });
                     const evo1 = window.__lbEvolveEnemyBaseForAudit

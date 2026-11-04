@@ -427,9 +427,9 @@ function createDefaultEnemyForBiome(
 
   const spec = baseByBiome[biomeId]
   const scale = Math.max(1, Math.round(n0 / 5))
-  // V11: Inimigos 10× mais fortes do que a rota central e esquerda para exigir resolução de contas (🧮) e buffs da Rota Direita
-  const horde = spec.horde * scale * 10
-  const bossHp = spec.bossHp * scale * 10
+  // V12: Inimigos 15× mais fortes do que a rota central e esquerda para exigir resolução de contas (🧮) e buffs da Rota Direita
+  const horde = spec.horde * scale * 15
+  const bossHp = spec.bossHp * scale * 15
   return {
     horde,
     bossHp,
@@ -454,12 +454,12 @@ function tryBuildRunWithSeed(
   const enemy =
     params.enemy ?? createDefaultEnemyForBiome(params.biomeId, rawInputN0)
 
-  // V11: Proporção 10× dos inimigos vs. buffs passivos do caminho central e esquerdo!
-  // Os portões do Caminho Central entregam apenas 1/10 da força total do inimigo,
-  // tornando obrigatório resolver as contas (🧮) e pegar os Super-Buffs da Rota Direita para vencer!
+  // V12: Proporção 10×+ dos inimigos vs. buffs passivos do caminho central e esquerdo!
+  // Os portões do Caminho Central entregam apenas uma fração (~1/38 no Setor 1, ~77 vs 2925) da força total do inimigo,
+  // mantendo ORACLE BEST na faixa [80, 220] e tornando impossível vencer sem resolver as contas (🧮) da Rota Direita!
   const passiveCenterTargetForce =
     enemy.totalForce >= 400
-      ? Math.max(70, Math.round(enemy.totalForce / 10))
+      ? Math.max(70, Math.round(enemy.totalForce / 38))
       : enemy.totalForce
 
   const monsterBaselineN0 =
@@ -714,7 +714,7 @@ export function generateRun(params: GenerateRunParams): RunPlan {
     params.enemy ?? createDefaultEnemyForBiome(params.biomeId, rawInputN0)
   const passiveCenterTargetForce =
     enemy.totalForce >= 400
-      ? Math.max(70, Math.round(enemy.totalForce / 10))
+      ? Math.max(70, Math.round(enemy.totalForce / 38))
       : enemy.totalForce
   const monsterBaselineN0 =
     passiveCenterTargetForce <= 120

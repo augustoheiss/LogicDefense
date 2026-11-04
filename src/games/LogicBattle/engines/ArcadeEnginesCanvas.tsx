@@ -121,9 +121,9 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         id: 'pad_tower_archers',
         slotIndex: 0,
         title: 'Torre de Besteiros',
-        subtitle: '+3 Arqueiros 2.5D',
+        subtitle: '+Suporte Defensivo 2.5D',
         icon: '🏹',
-        costCoins: 16,
+        costCoins: 1600,
         level: 1,
         maxLevel: 5,
         normX: 0.25,
@@ -135,9 +135,9 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         id: 'pad_tower_mortar',
         slotIndex: 1,
         title: 'Bastião & Morteiro',
-        subtitle: 'Dano Explosivo ×2',
+        subtitle: 'Suporte de Cerco',
         icon: '💣',
-        costCoins: 26,
+        costCoins: 2600,
         level: 0,
         maxLevel: 4,
         normX: 0.25,
@@ -151,7 +151,7 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         title: 'Reforçar Paliçada',
         subtitle: '+HP Muro & +1 Guarda',
         icon: '🛡️',
-        costCoins: 18,
+        costCoins: 1800,
         level: 1,
         maxLevel: 5,
         normX: 0.16,
@@ -169,7 +169,7 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         title: 'Quartel de Tropas',
         subtitle: 'Treina Soldados Aliados',
         icon: '⛺',
-        costCoins: 18,
+        costCoins: 1800,
         level: 1,
         maxLevel: 5,
         normX: 0.36,
@@ -183,7 +183,7 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         title: 'Fábrica de Tanques',
         subtitle: 'Despacha Blindados 2.5D',
         icon: '🚜',
-        costCoins: 30,
+        costCoins: 3000,
         level: 0,
         maxLevel: 4,
         normX: 0.64,
@@ -194,10 +194,10 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
       {
         id: 'pad_fort_turret',
         slotIndex: 2,
-        title: 'Torreta & Fuzil ×2',
-        subtitle: '+Torreta & Dobra Dano',
+        title: 'Torreta de Suporte',
+        subtitle: '+Torreta Defensiva',
         icon: '🔫',
-        costCoins: 22,
+        costCoins: 2200,
         level: 1,
         maxLevel: 5,
         normX: 0.50,
@@ -216,7 +216,7 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         title: 'Contratar Operário',
         subtitle: 'Carrega Blocos ao Britador',
         icon: '👷',
-        costCoins: 15,
+        costCoins: 1500,
         level: 2,
         maxLevel: 7,
         normX: 0.28,
@@ -229,7 +229,7 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         title: 'Titã Carregador',
         subtitle: 'Carrega Rocha Pesada & Luta',
         icon: '🗿',
-        costCoins: 28,
+        costCoins: 2800,
         level: 0,
         maxLevel: 4,
         normX: 0.52,
@@ -240,9 +240,9 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
         id: 'pad_quarry_crusher',
         slotIndex: 2,
         title: 'Turbo Britador ÷10',
-        subtitle: 'Dobra Lingotes de Ouro',
+        subtitle: 'Aumenta Lingotes de Ouro',
         icon: '⚙️',
-        costCoins: 22,
+        costCoins: 2200,
         level: 1,
         maxLevel: 5,
         normX: 0.24,
@@ -261,7 +261,7 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
       title: '+1 Atirador no Esquadrão',
       subtitle: 'Atira Junto em Formação',
       icon: '🪖',
-      costCoins: 18,
+      costCoins: 1800,
       level: 2,
       maxLevel: 6,
       normX: 0.34,
@@ -272,9 +272,9 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
       id: 'pad_arena_plasma',
       slotIndex: 1,
       title: 'Feixe Duplo & Cadência',
-      subtitle: 'Rajada de Plasma +40%',
+      subtitle: 'Rajada de Plasma +25%',
       icon: '⚡',
-      costCoins: 22,
+      costCoins: 2200,
       level: 1,
       maxLevel: 5,
       normX: 0.66,
@@ -287,7 +287,7 @@ function createInitialPadsForEngine(engineId: EngineId): TacticalBuildPad[] {
       title: 'Sentinela Mecha 360°',
       subtitle: 'Drone Blindado Autônomo',
       icon: '🤖',
-      costCoins: 30,
+      costCoins: 3000,
       level: 0,
       maxLevel: 4,
       normX: 0.50,
@@ -535,11 +535,11 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       {
         id: 'enemy_init_0',
         kind: initEnemyKind,
-        hp: 28,
-        maxHp: 28,
+        hp: 280,
+        maxHp: 280,
         normX: activeEngineId === 'cerco_torres' || activeEngineId === 'pedreira_rei' ? 0.82 : 0.80,
         normY: 0.42,
-        speed: 0.000068,
+        speed: 0.000074,
         attackTimerMs: 0,
         rewardCoins: 6,
         isBoss: false,
@@ -547,8 +547,8 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       {
         id: 'enemy_init_1',
         kind: initEnemyKind,
-        hp: 32,
-        maxHp: 32,
+        hp: 320,
+        maxHp: 320,
         normX:
           activeEngineId === 'cerco_torres' ||
           activeEngineId === 'pedreira_rei' ||
@@ -556,7 +556,7 @@ export const ArcadeEnginesCanvas: React.FC = () => {
             ? 0.84
             : 0.18,
         normY: 0.58,
-        speed: 0.000068,
+        speed: 0.000074,
         attackTimerMs: 0,
         rewardCoins: 6,
         isBoss: false,
@@ -570,8 +570,8 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       wave: 1,
       maxWaves: 4,
       playerForce: startArmy,
-      heroWeaponDmg: Math.max(4, Math.round(startArmy * 0.28)),
-      heroFireCadenceMs: 360,
+      heroWeaponDmg: Math.max(2, Math.round(startArmy * 0.08)),
+      heroFireCadenceMs: 420,
       baseHp: 100,
       baseMaxHp: 100,
       coins: 28,
@@ -624,12 +624,12 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       bossMaxHp: Math.max(120, snapshot.enemy.bossHp * 2),
       statusText:
         activeEngineId === 'forte_bandeira'
-          ? 'Quartel ativo! Colete 🪙 e construa mais Quartéis e Fábricas de Tanques para seu exército atacar!'
+          ? 'Inimigos 10× mais fortes! Resolva Contas (🧮) na Direita para liberar Tanques e derrotar a Horda!'
           : activeEngineId === 'cerco_torres'
-            ? 'Colete 🪙 dos goblins abatidos e construa Torres de Besteiros 2.5D e Morteiros atrás da paliçada!'
+            ? 'Inimigos 10× mais fortes! Resolva Contas (🧮) para abater a Horda (👑 Muito Difícil derrota todos de uma vez!)!'
             : activeEngineId === 'pedreira_rei'
-              ? 'Contrate Operários e Titãs para carregar blocos de granito até o Britador (÷10) e gerar Lingotes!'
-              : 'Mova o Esquadrão pelo coliseu, colete 🪙 e recrute +Atiradores e Sentinelas Mecha contra a Horda!',
+              ? 'Inimigos 10× mais fortes! Resolva Contas (🧮) para contratar Titãs e proteger o Britador!'
+              : 'Inimigos 10× mais fortes! Resolva Contas (🧮) para derrotar a Horda (👑 Muito Difícil = Wipe Total)!',
       pads: initialPads,
       alliedCount: initialAllies.length,
     })
@@ -648,7 +648,7 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       projectilePoolRef.current.getActiveCount()
   }, [activeEngineId, runPlan.n0, runPlan.seed, baseEnemyForce])
 
-  // V6: Ao acertar uma Conta no MathChallengeModal, injeta +Moedas, +Soldados/Tanques/Torres/Titãs e Buff de Arma!
+  // V6 + V12: Ao acertar uma Conta no MathChallengeModal, abate inimigos proporcionalmente (Grau IV = 100% Wipe Total!) e injeta turbo!
   useEffect(() => {
     const sim = simRef.current
     if (
@@ -663,13 +663,35 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     sim.coins += lastSolvedMathRewardAt.coinsBonus
     sim.playerForce += lastSolvedMathRewardAt.soldiersBonus
     sim.heroWeaponDmg = Math.max(
-      sim.heroWeaponDmg + 4,
+      sim.heroWeaponDmg + 24,
       Math.round(sim.heroWeaponDmg * lastSolvedMathRewardAt.weaponDmgMultiplier),
     )
-    sim.heroFireCadenceMs = Math.max(150, Math.round(sim.heroFireCadenceMs * 0.88))
-    sim.baseHp = Math.min(sim.baseMaxHp, sim.baseHp + 25)
+    sim.heroFireCadenceMs = Math.max(120, Math.round(sim.heroFireCadenceMs * 0.78))
+    sim.baseHp = Math.min(sim.baseMaxHp, sim.baseHp + 35)
     sim.comboStreak += 1
     sim.maxCombo = Math.max(sim.maxCombo, getComboMultiplier(sim.comboStreak))
+
+    // V12: Abate proporcional de inimigos ativos; no Grau IV (👑 Muito Difícil) derrota TODOS os inimigos de uma vez!
+    if (lastSolvedMathRewardAt.tier >= 4) {
+      sim.enemies = []
+      sim.waveEnemiesSpawned = sim.waveEnemiesToSpawn
+    } else {
+      const wipeRatio =
+        lastSolvedMathRewardAt.tier === 3
+          ? 0.85
+          : lastSolvedMathRewardAt.tier === 2
+            ? 0.6
+            : 0.35
+      const nonBosses = sim.enemies.filter((e) => !e.isBoss)
+      const wipeCount = Math.max(1, Math.round(nonBosses.length * wipeRatio))
+      const wipedIds = new Set(nonBosses.slice(0, wipeCount).map((e) => e.id))
+      sim.enemies = sim.enemies
+        .filter((e) => !wipedIds.has(e.id))
+        .map((e) => ({
+          ...e,
+          hp: Math.max(10, Math.round(e.hp * (1 - wipeRatio * 0.6))),
+        }))
+    }
 
     const bonusUnitsCount = lastSolvedMathRewardAt.tier >= 3 ? 2 : 1
     for (let i = 0; i < bonusUnitsCount; i++) {
@@ -691,9 +713,9 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       sim.alliedUnits.push({
         id: `math_ally_${lastSolvedMathRewardAt.seq}_${i}`,
         kind: unitKind,
-        hp: unitKind === 'allied_tank' || unitKind === 'allied_mecha' ? 180 : 65,
-        maxHp: unitKind === 'allied_tank' || unitKind === 'allied_mecha' ? 180 : 65,
-        attackDmg: Math.max(8, Math.round(sim.heroWeaponDmg * 0.9)),
+        hp: unitKind === 'allied_tank' || unitKind === 'allied_mecha' ? 240 : 95,
+        maxHp: unitKind === 'allied_tank' || unitKind === 'allied_mecha' ? 240 : 95,
+        attackDmg: Math.max(18, Math.round(sim.heroWeaponDmg * 0.95)),
         normX: Math.min(0.75, sim.heroNormX + 0.05 * (i + 1)),
         normY: Math.max(0.24, Math.min(0.78, sim.heroNormY + (i % 2 === 0 ? -0.05 : 0.05))),
         fireTimerMs: 0,
@@ -707,8 +729,13 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       coins: sim.coins,
       playerForce: sim.playerForce,
       baseHp: Math.round(sim.baseHp),
+      enemiesLeft:
+        Math.max(0, sim.waveEnemiesToSpawn - sim.waveEnemiesSpawned) + sim.enemies.length,
       alliedCount: sim.alliedUnits.length,
-      statusText: `🧮 Conta resolvida! +${lastSolvedMathRewardAt.coinsBonus} 🪙, +${lastSolvedMathRewardAt.soldiersBonus} força e ${lastSolvedMathRewardAt.summaryPt}!`,
+      statusText:
+        lastSolvedMathRewardAt.tier >= 4
+          ? `👑 CONTA MUITO DIFÍCIL RESOLVIDA! TODOS OS INIMIGOS DERROTADOS DE UMA VEZ! +${lastSolvedMathRewardAt.soldiersBonus} força!`
+          : `🧮 Conta resolvida! +${lastSolvedMathRewardAt.coinsBonus} 🪙, +${lastSolvedMathRewardAt.soldiersBonus} força e ${lastSolvedMathRewardAt.summaryPt}!`,
     }))
   }, [activeEngineId, lastSolvedMathRewardAt])
 
@@ -770,15 +797,31 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     })
   }
 
-  // Executa a construção/upgrade específico de cada Engine (SEM terminar a rodada!)
+  // Executa a construção/upgrade específico de cada Engine (exige Ouro real — 100× mais difícil de evoluir!)
   const executePadBuildOrUpgrade = (pad: TacticalBuildPad) => {
     const sim = simRef.current
     if (!sim || sim.finished) return
 
     sim.padClickCount += 1
 
-    // Se o jogador clicar no botão da dock ou pisar no pad, permite construir usando as moedas da partida
-    // ou descontando o restante da Carteira Compartilhada (reserveTroops)
+    const storeState = useLogicBattleStore.getState()
+    const reserveSpendable = Math.max(0, storeState.save.reserveTroops - 5)
+    const totalAvailableCoins = sim.coins + reserveSpendable
+
+    if (totalAvailableCoins < pad.costCoins) {
+      if (sim.padClickCount >= 12) {
+        finishSimulation(
+          storeState.mathChallengesSolvedInRun > 0 ? 'VICTORY' : 'DEFEAT',
+        )
+        return
+      }
+      setHudState((prev) => ({
+        ...prev,
+        statusText: `⚠️ Faltam ${pad.costCoins - totalAvailableCoins} 🪙 para ${pad.title}! Resolva Contas (🧮) na Direita (👑 Muito Difícil derrota todos de uma vez!)`,
+      }))
+      return
+    }
+
     if (sim.coins < pad.costCoins) {
       const shortfall = pad.costCoins - sim.coins
       sim.coins = 0
@@ -793,7 +836,7 @@ export const ArcadeEnginesCanvas: React.FC = () => {
     }
 
     pad.level = Math.min(pad.maxLevel, pad.level + 1)
-    pad.costCoins = Math.round(pad.costCoins * 1.35)
+    pad.costCoins = Math.round(pad.costCoins * 2.4)
 
     sim.comboStreak += 1
     const mult = getComboMultiplier(sim.comboStreak)

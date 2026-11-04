@@ -152,32 +152,38 @@ export function computeShotProfile(armyPoints: number): DynamicShotProfile {
   const netGain = Math.max(0, safePts - 5)
   const logPower = Math.log10(Math.max(1, netGain + 1))
 
+  // Sem fazer contas matemáticas (exército passivo <= 220, 1/15 da força inimiga),
+  // o dano de tiro é propositalmente baixo (1 a 6) para que seja impossível vencer
+  // a Horda 10×+ e o Mega-Boss sem resolver as contas (🧮) e pegar o Turbo da Direita (➡️).
   const damagePerShot = Math.max(
     1,
     netGain >= 1e12
-      ? netGain * 0.14
+      ? netGain * 0.16
       : safePts < 35
         ? Math.max(1, Math.round(1 + netGain * 0.03))
-        : Math.round(1 + netGain * 0.14 + Math.pow(logPower, 1.85) * 4),
+        : safePts <= 220
+          ? Math.max(2, Math.round(2 + (safePts - 35) * 0.022))
+          : Math.round(8 + netGain * 0.16 + Math.pow(logPower, 1.95) * 5),
   )
 
-  const shotsPerSecond = Math.min(
-    14,
-    Number((3.2 + logPower * 2.15 + Math.min(2.5, netGain * 0.02)).toFixed(2)),
-  )
+  const shotsPerSecond =
+    safePts <= 220
+      ? Number((2.4 + logPower * 0.65).toFixed(2))
+      : Math.min(
+          16,
+          Number((3.8 + logPower * 2.35 + Math.min(3.0, netGain * 0.02)).toFixed(2)),
+        )
 
   const parallelBarrels =
     safePts >= 1000
       ? 6
-      : safePts >= 350
+      : safePts >= 450
         ? 5
-        : safePts >= 100
+        : safePts >= 240
           ? 4
-          : safePts >= 45
-            ? 3
-            : safePts >= 25
-              ? 2
-              : 1
+          : safePts >= 110
+            ? 2
+            : 1
 
   const projectileSpeed = Math.min(72, 38 + logPower * 7.5)
   const projectileScale = Math.min(1.85, 0.72 + logPower * 0.24)
@@ -185,19 +191,19 @@ export function computeShotProfile(armyPoints: number): DynamicShotProfile {
   const projectileColor =
     safePts >= 1000
       ? '#facc15' // Ouro Quiliarca (1k+)
-      : safePts >= 100
-        ? '#f97316' // Plasma Centurião (0,1k+)
-        : safePts >= 25
+      : safePts >= 240
+        ? '#f97316' // Plasma Centurião (Pós-Conta)
+        : safePts >= 60
           ? '#38bdf8' // Laser Ciano (Esquadrão)
           : '#bae6fd' // Disparo Base
 
   const tierLabel =
     safePts >= 1000
       ? 'Canhão Titã 1k'
-      : safePts >= 100
-        ? 'Bateria Centurião 0,1k'
-        : safePts >= 10
-          ? 'Rifle Duplo de Pelotão'
+      : safePts >= 240
+        ? 'Bateria Centurião Turbo'
+        : safePts >= 35
+          ? 'Rifle de Pelotão'
           : 'Atirador Solo'
 
   return {
@@ -212,19 +218,18 @@ export function computeShotProfile(armyPoints: number): DynamicShotProfile {
 }
 
 /**
- * Políticas de ativação temporizada e Buffs Dinâmicos da Rota Direita (V9):
+ * Políticas de ativação temporizada e Buffs Dinâmicos da Rota Direita (V9/V12):
  * Os buffs e armas da Rota Direita ficam congelados/cinzas por padrão e só
  * ativam por alguns segundos após o jogador resolver uma conta matemática (🧮).
- * Quando ativa, os 2 Super-Portões e a Arma da Rota Direita mudam dinamicamente
- * conforme o Grau (1..4), o valor da questão resolvida e o benefício descrito no modal,
- * sendo a ÚNICA rota com crescimento exponencial.
+ * Além de liberar a Rota Direita, resolver a conta dispara um Golpe Matemático
+ * proporcional à dificuldade escolhida (no Grau 4 "Muito Difícil" derrota TODOS os inimigos de uma vez!).
  */
 export const RIGHT_CORRIDOR_TIMED_POLICIES = {
   durationMsByTier: {
     1: 12000, // Fácil: 12s de Rota Direita ativa
     2: 15000, // Médio: 15s de Rota Direita ativa
     3: 18000, // Difícil: 18s de Rota Direita ativa
-    4: 24000, // Problema: 24s de Rota Direita ativa
+    4: 24000, // Muito Difícil: 24s de Rota Direita ativa
   } as Record<1 | 2 | 3 | 4, number>,
 } as const
 
@@ -239,6 +244,7 @@ export interface RightTierBuffPolicySpec {
   readonly fireRateMult: number
   readonly extraParallelBarrels: number
   readonly piercingShots: boolean
+  readonly enemyWipeRatio: number
   readonly bossRoyalVolleyRatio: number
   readonly gate0SubLabelPt: string
   readonly gate1SubLabelPt: string
@@ -257,17 +263,18 @@ export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
     icon: '🟢',
     badgePt: '🟢 Fácil',
     durationMs: 12000,
-    armyBonusRatio: 0.45,
-    minFlatSoldiers: 120,
-    weaponDmgMult: 2.2,
-    fireRateMult: 1.25,
+    armyBonusRatio: 0.65,
+    minFlatSoldiers: 260,
+    weaponDmgMult: 2.8,
+    fireRateMult: 1.3,
     extraParallelBarrels: 1,
     piercingShots: false,
-    bossRoyalVolleyRatio: 0,
-    gate0SubLabelPt: '🟢 CONTA · CADÊNCIA +25%',
-    gate1SubLabelPt: '🟢 +45% EXÉRCITO',
-    gate1RatioLabelPt: '+45%',
-    activeHudSummaryPt: '🟢 +45% Soldados e +25% Cadência',
+    enemyWipeRatio: 0.35,
+    bossRoyalVolleyRatio: 0.2,
+    gate0SubLabelPt: '🟢 CONTA · ABATE 35%',
+    gate1SubLabelPt: '🟢 +65% EXÉRCITO',
+    gate1RatioLabelPt: '+65%',
+    activeHudSummaryPt: '🟢 Abate 35% Inimigos + 65% Soldados',
     plaqueBorderColor: '#4ade80',
     plaqueAccentColor: '#bbf7d0',
   },
@@ -276,17 +283,18 @@ export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
     icon: '🔵',
     badgePt: '🔵 Médio',
     durationMs: 15000,
-    armyBonusRatio: 0.85,
-    minFlatSoldiers: 280,
-    weaponDmgMult: 3.1,
-    fireRateMult: 1.35,
+    armyBonusRatio: 1.25,
+    minFlatSoldiers: 580,
+    weaponDmgMult: 4.2,
+    fireRateMult: 1.45,
     extraParallelBarrels: 2,
     piercingShots: false,
-    bossRoyalVolleyRatio: 0,
-    gate0SubLabelPt: '🔵 CONTA · TIRO DUPLO',
-    gate1SubLabelPt: '🔵 +85% · TIRO DUPLO',
-    gate1RatioLabelPt: '+85%',
-    activeHudSummaryPt: '🔵 +85% Soldados e Tiro Duplo',
+    enemyWipeRatio: 0.6,
+    bossRoyalVolleyRatio: 0.4,
+    gate0SubLabelPt: '🔵 CONTA · ABATE 60%',
+    gate1SubLabelPt: '🔵 +125% · TIRO DUPLO',
+    gate1RatioLabelPt: '+125%',
+    activeHudSummaryPt: '🔵 Abate 60% Inimigos + Tiro Duplo',
     plaqueBorderColor: '#38bdf8',
     plaqueAccentColor: '#bae6fd',
   },
@@ -295,36 +303,38 @@ export const RIGHT_CORRIDOR_TIER_BUFF_POLICIES: Record<
     icon: '🟣',
     badgePt: '🟣 Difícil',
     durationMs: 18000,
-    armyBonusRatio: 1.35,
-    minFlatSoldiers: 560,
-    weaponDmgMult: 4.4,
-    fireRateMult: 1.45,
-    extraParallelBarrels: 2,
+    armyBonusRatio: 2.1,
+    minFlatSoldiers: 1250,
+    weaponDmgMult: 6.5,
+    fireRateMult: 1.65,
+    extraParallelBarrels: 3,
     piercingShots: true,
-    bossRoyalVolleyRatio: 0.12,
-    gate0SubLabelPt: '🟣 CONTA · PERFURANTE',
-    gate1SubLabelPt: '🟣 +135% · PERFURANTE',
-    gate1RatioLabelPt: '+135%',
-    activeHudSummaryPt: '🟣 +135% Soldados e Canhão Perfurante',
+    enemyWipeRatio: 0.85,
+    bossRoyalVolleyRatio: 0.7,
+    gate0SubLabelPt: '🟣 CONTA · ABATE 85%',
+    gate1SubLabelPt: '🟣 +210% · PERFURANTE',
+    gate1RatioLabelPt: '+210%',
+    activeHudSummaryPt: '🟣 Abate 85% Inimigos + Canhão Perfurante',
     plaqueBorderColor: '#c084fc',
     plaqueAccentColor: '#e9d5ff',
   },
   4: {
     tier: 4,
     icon: '👑',
-    badgePt: '👑 Problema',
+    badgePt: '👑 Muito Difícil',
     durationMs: 24000,
-    armyBonusRatio: 2.2,
-    minFlatSoldiers: 1100,
-    weaponDmgMult: 6.2,
-    fireRateMult: 1.6,
-    extraParallelBarrels: 3,
+    armyBonusRatio: 3.5,
+    minFlatSoldiers: 2800,
+    weaponDmgMult: 9.5,
+    fireRateMult: 1.9,
+    extraParallelBarrels: 4,
     piercingShots: true,
-    bossRoyalVolleyRatio: 0.3,
-    gate0SubLabelPt: '👑 PROBLEMA · SALVA REAL',
-    gate1SubLabelPt: '👑 TRIPLICA ×3 · SALVA REAL',
-    gate1RatioLabelPt: '×3 SUPER',
-    activeHudSummaryPt: '👑 SUPER-BUFF (×3) e Salva Real',
+    enemyWipeRatio: 1.0,
+    bossRoyalVolleyRatio: 1.0,
+    gate0SubLabelPt: '👑 WIPE 100% · TODOS ABATIDOS',
+    gate1SubLabelPt: '👑 ×4,5 SUPER · SALVA TOTAL',
+    gate1RatioLabelPt: '×4,5 WIPE',
+    activeHudSummaryPt: '👑 DERROTA TODOS DE UMA VEZ + ×4,5 Exército',
     plaqueBorderColor: '#facc15',
     plaqueAccentColor: '#fef08a',
   },
@@ -437,15 +447,15 @@ export const BOSS_ARCHETYPES_3D: readonly BossArchetype3DSpec[] = [
 
 /**
  * Proporção 10× dos Inimigos vs. Buffs Passivos do Caminho Central e da Esquerda:
- * Os inimigos (Boss + Horda + Mini-Bosses) são 10× mais fortes do que o orçamento
- * passivo da Rota Central e da Rota Esquerda, tornando obrigatório resolver os
- * desafios de lógica (🧮) e coletar os Super-Buffs da Rota Direita para vencer!
+ * Os inimigos (Boss + Horda + Mini-Bosses) são 15× mais fortes do que o orçamento
+ * passivo da Rota Central e da Rota Esquerda, tornando impossível vencer sem resolver
+ * os desafios de lógica (🧮) e coletar os Super-Buffs da Rota Direita!
  */
-export const ENEMY_VS_PASSIVE_ROUTE_RATIO = 10
+export const ENEMY_VS_PASSIVE_ROUTE_RATIO = 15
 
 /**
- * V8 Fase 3 + V11: Curva pura de HP do Boss 100% determinada pelo Setor (`sectorIndex`),
- * 10× mais forte que a capacidade passiva da Rota Central/Esquerda e 0% dependente de `currentArmy`.
+ * V8 Fase 3 + V12: Curva pura de HP do Boss 100% determinada pelo Setor (`sectorIndex`),
+ * 15× mais forte que a capacidade passiva da Rota Central/Esquerda e 0% dependente de `currentArmy`.
  * Fazer contas na Rota Direita é indispensável para superar a força inimiga!
  */
 export function computeSectorBossHp(sectorIndex: number): number {
@@ -454,10 +464,10 @@ export function computeSectorBossHp(sectorIndex: number): number {
     Math.floor(Number.isFinite(sectorIndex) ? sectorIndex : 1),
   )
   const basePassiveBossHp = 150
-  const scaledBaseBossHp = basePassiveBossHp * ENEMY_VS_PASSIVE_ROUTE_RATIO // 1500 HP no Setor 1
+  const scaledBaseBossHp = basePassiveBossHp * ENEMY_VS_PASSIVE_ROUTE_RATIO // 2250 HP no Setor 1
   if (s === 1) return scaledBaseBossHp
   return Math.round(
-    scaledBaseBossHp * Math.pow(s, 1.45) * Math.pow(1.22, Math.min(s - 1, 25)),
+    scaledBaseBossHp * Math.pow(s, 1.55) * Math.pow(1.26, Math.min(s - 1, 25)),
   )
 }
 
@@ -482,7 +492,7 @@ export function computeSectorBossSpec(
     Math.floor(Number.isFinite(sectorIndex) ? sectorIndex : 1),
   )
   const bossHp = computeSectorBossHp(s)
-  const hordeHp = s === 1 ? 300 : Math.max(250, Math.round(bossHp * 0.25))
+  const hordeHp = s === 1 ? 450 : Math.max(400, Math.round(bossHp * 0.28))
   const totalForce = bossHp + hordeHp
   const passiveRouteBaselineForce = Math.max(
     150,
@@ -491,13 +501,13 @@ export function computeSectorBossSpec(
   const archetype =
     BOSS_ARCHETYPES_3D[(s - 1) % BOSS_ARCHETYPES_3D.length] ??
     BOSS_ARCHETYPES_3D[0]
-  const marchSpeedZ = Number(Math.min(4.2, 2.75 + (s - 1) * 0.16).toFixed(2))
-  const meleeDamagePerStrike = Math.max(35, Math.round(bossHp * 0.085))
+  const marchSpeedZ = Number(Math.min(4.4, 2.85 + (s - 1) * 0.18).toFixed(2))
+  const meleeDamagePerStrike = Math.max(48, Math.round(bossHp * 0.095))
   const sectorClearRewardSoldiers = Math.max(
     60,
     Math.round(passiveRouteBaselineForce * 0.55 + s * 25),
   )
-  const sectorClearRewardCoins = 35 + s * 25
+  const sectorClearRewardCoins = 45 + s * 30
   return {
     sectorIndex: s,
     bossHp,
@@ -522,9 +532,9 @@ export interface LeftCorridorMonsterScaleSpec {
 }
 
 /**
- * V9 Pilar 2 + V11: Escala da Rota Esquerda mantida em 1/10 da força inimiga
+ * V9 Pilar 2 + V12: Escala da Rota Esquerda mantida em 1/15 da força inimiga
  * (`spec.bossHp / ENEMY_VS_PASSIVE_ROUTE_RATIO`), garantindo que os inimigos sejam
- * 10× mais fortes do que os buffs passivos da esquerda e do centro!
+ * 15× mais fortes do que os buffs passivos da esquerda e do centro!
  */
 export function computeLeftCorridorMonsterScaling(
   sectorIndex: number,
@@ -553,9 +563,9 @@ export function computeLeftCorridorMonsterScaling(
 }
 
 /**
- * V9 Pilar 1 + V11: Escala Exponencial Exclusiva da Rota Direita vinculada ao Grau (1..4)
+ * V9 Pilar 1 + V12: Escala Exponencial Exclusiva da Rota Direita vinculada ao Grau (1..4)
  * e à resposta da questão resolvida (`solvedQuestionValue`).
- * Concede os Super-Buffs capazes de superar a vantagem de 10× dos inimigos!
+ * Concede os Super-Buffs capazes de superar a vantagem de 15× dos inimigos!
  */
 export function computeRightCorridorExponentialGates(params: {
   sectorIndex: number
@@ -574,7 +584,7 @@ export function computeRightCorridorExponentialGates(params: {
     RIGHT_CORRIDOR_TIER_BUFF_POLICIES[params.activeTier] ??
     RIGHT_CORRIDOR_TIER_BUFF_POLICIES[2]
   const k = Math.max(0, Math.floor(params.mathChallengesSolved))
-  const expBase = 1.42 + params.activeTier * 0.14
+  const expBase = 1.48 + params.activeTier * 0.16
   const exponentialFactor = Math.pow(expBase, Math.min(k, 40))
   const qVal = Math.max(
     6,
@@ -582,21 +592,21 @@ export function computeRightCorridorExponentialGates(params: {
   )
   const monsterSpec = computeSectorBossSpec(params.sectorIndex)
   const safeArmy = Number.isFinite(params.currentArmy) ? params.currentArmy : 5
-  const armyRef = Math.max(safeArmy, monsterSpec.bossHp * 0.45, 280)
+  const armyRef = Math.max(safeArmy, monsterSpec.bossHp * 0.55, 380)
 
   const raw0 = Math.round(
-    qVal * 2.5 * exponentialFactor +
-      armyRef * tierSpec.armyBonusRatio * 0.65 * Math.pow(1.25, Math.min(k, 25)),
+    qVal * 2.8 * exponentialFactor +
+      armyRef * tierSpec.armyBonusRatio * 0.72 * Math.pow(1.28, Math.min(k, 25)),
   )
   const gate0Soldiers = Math.max(tierSpec.minFlatSoldiers, raw0)
 
   const raw1 = Math.round(
-    armyRef * tierSpec.armyBonusRatio * Math.pow(1.38, Math.min(k, 25)) +
-      qVal * 3.5 * exponentialFactor,
+    armyRef * tierSpec.armyBonusRatio * Math.pow(1.42, Math.min(k, 25)) +
+      qVal * 4.0 * exponentialFactor,
   )
   const gate1Soldiers = Math.max(
-    gate0Soldiers + 45,
-    Math.round(Math.max(raw1, gate0Soldiers * 1.65)),
+    gate0Soldiers + 65,
+    Math.round(Math.max(raw1, gate0Soldiers * 1.75)),
   )
 
   return {
@@ -652,19 +662,20 @@ export interface BridgeTowerSlotSpec {
 
 export const PLAYER_BRIDGE_BASE_POLICY = {
   maxTowerLevel: 5,
-  baseUpgradeCost: 15,
-  costGrowthFactor: 1.75,
-  shieldInterceptCooldownBaseMs: 3600,
+  /** V12: Torres 100× mais caras de construir e evoluir (de 15 para 1500 moedas base, progressão 2.5×). */
+  baseUpgradeCost: 1500,
+  costGrowthFactor: 2.5,
+  shieldInterceptCooldownBaseMs: 4800,
   /** V11: HP estrutural máximo de cada Torre Aliada da Ponte por nível (0..5). */
   towerMaxHpByLevel: [0, 120, 220, 340, 480, 650] as const,
-  /** V11: Limite Z da Couraça de Vanguarda do Boss (-16m). Antes disso o Boss tem 70% redução de dano e piso de 35% HP para nunca morrer longe das torres. */
+  /** V12: Limite Z da Couraça de Vanguarda do Boss (-16m). Sem Super-Buff da Rota Direita, o Boss tem 80% redução de dano e piso de 45% HP. */
   bossVanguardShieldEndZ: -16.0,
-  bossVanguardMinHpRatio: 0.35,
-  bossVanguardDamageMultiplier: 0.3,
+  bossVanguardMinHpRatio: 0.45,
+  bossVanguardDamageMultiplier: 0.2,
   /** V11: Zona de Cerco (-6.0m..+7.7m) onde o Boss começa a atacar e destruir as Torres Aliadas da Ponte. */
   bossSiegeStartZ: -6.0,
   /** V11: Dano base por golpe de cerco do Boss contra uma Torre Aliada ativa. */
-  bossTowerStrikeDamageBase: 45,
+  bossTowerStrikeDamageBase: 55,
   slots: [
     {
       slotIndex: 0,
@@ -672,7 +683,7 @@ export const PLAYER_BRIDGE_BASE_POLICY = {
       namePt: 'Balista Oeste',
       x: -5.0,
       z: 8.6,
-      rolePt: 'Disparo Automático + Escudo Anti-Debuff',
+      rolePt: 'Disparo de Suporte + Escudo Anti-Debuff',
     },
     {
       slotIndex: 1,
@@ -680,7 +691,7 @@ export const PLAYER_BRIDGE_BASE_POLICY = {
       namePt: 'Sentinela Centro-Oeste',
       x: -2.8,
       z: 9.4,
-      rolePt: 'Fogo Rápido na Horda Central',
+      rolePt: 'Suporte Defensivo Central',
     },
     {
       slotIndex: 2,
@@ -696,7 +707,7 @@ export const PLAYER_BRIDGE_BASE_POLICY = {
       namePt: 'Balista Leste',
       x: 5.0,
       z: 8.6,
-      rolePt: 'Canhão Defensivo de Longo Alcance',
+      rolePt: 'Canhão Defensivo de Suporte',
     },
   ] as const satisfies readonly BridgeTowerSlotSpec[],
 } as const
@@ -739,11 +750,12 @@ export function computeAlliedBridgeTowerStats(
   return {
     totalLevel,
     activeTowersCount,
-    bonusProjectilesPerVolley: Math.min(8, activeTowersCount + Math.floor(totalLevel / 2)),
-    bonusDamagePerHit: Math.max(1, Math.ceil(totalLevel * 1.6)),
+    /** V12: Torres dão suporte leve e jamais substituem o turbo matemático da Rota Direita. */
+    bonusProjectilesPerVolley: Math.min(2, Math.floor(totalLevel / 6)),
+    bonusDamagePerHit: Math.max(0, Math.floor(totalLevel * 0.2)),
     shieldInterceptCooldownMs: Math.max(
-      900,
-      PLAYER_BRIDGE_BASE_POLICY.shieldInterceptCooldownBaseMs - totalLevel * 280,
+      1400,
+      PLAYER_BRIDGE_BASE_POLICY.shieldInterceptCooldownBaseMs - totalLevel * 220,
     ),
   }
 }

@@ -95,7 +95,7 @@ export const SerpentCanvas: React.FC = () => {
     }))
   }, [seed])
 
-  // V6: Ao resolver uma Conta Matemática, ganha +Besteiros, +Dano na Besta, +Moedas e estoura escamas do Dragão!
+  // V6 + V12: Ao resolver uma Conta Matemática, corta a Serpente proporcionalmente (Grau IV = 100% Wipe Total!) e ganha turbo!
   useEffect(() => {
     const sim = simRef.current
     if (
@@ -109,14 +109,29 @@ export const SerpentCanvas: React.FC = () => {
 
     sim.coinsEarned += lastSolvedMathRewardAt.coinsBonus
     sim.hero.armyPower += lastSolvedMathRewardAt.soldiersBonus
-    sim.hero.arrowDamage += Math.max(2, lastSolvedMathRewardAt.tier * 2)
+    sim.hero.arrowDamage += Math.max(4, lastSolvedMathRewardAt.tier * 6)
     sim.hero.hearts = Math.min(3, sim.hero.hearts + 1)
 
-    const targetSegs = sim
-      .getAliveSegments()
-      .slice(-Math.min(3, lastSolvedMathRewardAt.tier))
-    for (const seg of targetSegs) {
-      seg.hp = Math.max(1, seg.hp - 12 * lastSolvedMathRewardAt.tier)
+    const aliveSegs = sim.getAliveSegments()
+    if (lastSolvedMathRewardAt.tier >= 4) {
+      for (const seg of aliveSegs) {
+        seg.hp = 0
+        seg.popped = true
+      }
+      sim.status = 'VICTORY'
+    } else {
+      const cutRatio =
+        lastSolvedMathRewardAt.tier === 3
+          ? 0.75
+          : lastSolvedMathRewardAt.tier === 2
+            ? 0.5
+            : 0.25
+      const cutCount = Math.max(1, Math.round(aliveSegs.length * cutRatio))
+      const targetSegs = aliveSegs.slice(-cutCount)
+      for (const seg of targetSegs) {
+        seg.hp = 0
+        seg.popped = true
+      }
     }
 
     setHeartsUi(sim.hero.hearts)
