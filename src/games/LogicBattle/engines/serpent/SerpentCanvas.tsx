@@ -116,7 +116,7 @@ export const SerpentCanvas: React.FC = () => {
     if (lastSolvedMathRewardAt.tier >= 4) {
       for (const seg of aliveSegs) {
         seg.hp = 0
-        seg.popped = true
+        sim.segmentsDestroyed += 1
       }
       sim.status = 'VICTORY'
     } else {
@@ -130,7 +130,7 @@ export const SerpentCanvas: React.FC = () => {
       const targetSegs = aliveSegs.slice(-cutCount)
       for (const seg of targetSegs) {
         seg.hp = 0
-        seg.popped = true
+        sim.segmentsDestroyed += 1
       }
     }
 
