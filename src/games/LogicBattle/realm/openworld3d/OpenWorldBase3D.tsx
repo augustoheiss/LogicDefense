@@ -24,6 +24,21 @@ import {
   spawnEnemyCounterInvasionWave,
   stepOpenWorldRealmSim,
 } from './openWorldPolicies'
+import { SANDBOX_STEPPING_PORTALS } from '../../sandbox/sandboxCatalog'
+import {
+  createInitialSandboxVoxelSim,
+  executeSandboxBrushStroke,
+  SandboxPortalTransitionState,
+  SandboxVoxelSimState,
+  stepSandboxVoxelSim,
+  toggleSandboxHoverboard,
+  triggerSandboxDash,
+  triggerSandboxJump,
+  triggerSandboxSwordSlash,
+  walkAndStepOnPortalBlock,
+} from '../../sandbox/sandboxVoxelSim'
+import { SharedVoxelIslandAndPortals3D } from '../../sandbox/SandboxVoxelStage3D'
+import { VoxelBlockId, VoxelBrushMode } from '../../sandbox/voxelChunkGrid'
 
 function canCreateWebGLContext(): boolean {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -43,9 +58,13 @@ function canCreateWebGLContext(): boolean {
 
 interface OpenWorldSceneProps {
   simRef: React.MutableRefObject<OpenWorldSimState>
+  sandboxSimRef: React.MutableRefObject<SandboxVoxelSimState>
 }
 
-const OpenWorldSceneContent: React.FC<OpenWorldSceneProps> = ({ simRef }) => {
+const OpenWorldSceneContent: React.FC<OpenWorldSceneProps> = ({
+  simRef,
+  sandboxSimRef,
+}) => {
   const save = useLogicBattleStore((s) => s.save)
   const activeEngineId = useLogicBattleStore((s) => s.activeEngineId)
   const playerBridgeTowerLevels = useLogicBattleStore(
@@ -141,7 +160,14 @@ const OpenWorldSceneContent: React.FC<OpenWorldSceneProps> = ({ simRef }) => {
       />
       <hemisphereLight args={['#bae6fd', '#1e293b', 0.55]} />
 
-      {/* ── 1. PLANO RECEPTOR DE SOMBRAS 3D TRANSPARENTE ── */}
+      {/* ── 1. TERRENO VOXEL SANDBOX 48×12×48 + 7 BLOCOS-PORTAIS FÍSICOS 3D ── */}
+      <SharedVoxelIslandAndPortals3D
+        simRef={sandboxSimRef}
+        yOffset={-1.8}
+        renderAvatar={false}
+      />
+
+      {/* ── PLANO RECEPTOR DE SOMBRAS 3D TRANSPARENTE ── */}
       <mesh
         position={[0, -0.02, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -333,6 +359,9 @@ export const OpenWorldBase3D: React.FC = () => {
   const simRef = useRef<OpenWorldSimState>(
     createInitialOpenWorldSimState(enemyBaseLevel),
   )
+  const sandboxSimRef = useRef<SandboxVoxelSimState>(
+    createInitialSandboxVoxelSim(42, 'cidadela_realm'),
+  )
   const [, setHudTick] = useState(0)
 
   // Sempre que o jogador seleciona uma província ou construção, o Comandante 3D caminha na direção dela!
@@ -382,7 +411,6 @@ export const OpenWorldBase3D: React.FC = () => {
 
   // Loop Determinístico 60Hz do Mundo Aberto 3D + Telemetria e Hooks E2E
   useEffect(() => {
-    let rafId = 0
     let lastTime = performance.now()
     let uiCounter = 0
 
@@ -418,6 +446,11 @@ export const OpenWorldBase3D: React.FC = () => {
         sim.commanderTargetZ = z
         sim.commanderX = x
         sim.commanderZ = z
+        sandboxSimRef.current.avatarX = x
+        sandboxSimRef.current.avatarZ = z
+        sandboxSimRef.current.avatarTargetX = x
+        sandboxSimRef.current.avatarTargetZ = z
+        sandboxSimRef.current.portalArrivalCooldownMs = 0
         publishTelemetry()
       }
 
@@ -493,6 +526,105 @@ export const OpenWorldBase3D: React.FC = () => {
         sharedWalletBalance: st.getSharedWalletBalance(),
         citadelLevels: { ...st.save.citadelLevels },
         playerBridgeTowerLevels: [...st.playerBridgeTowerLevels],
+        instancedVoxelCount: sandboxSimRef.current.visibleInstances.length,
+      }
+
+      const sbx = sandboxSimRef.current
+      const winSbx = window as unknown as {
+        __lbSandboxTelemetry?: Record<string, unknown>
+        __lbStepOnSandboxPortal?: (targetPortalOrZone: string) => {
+          triggered: boolean
+          portalId: string | null
+          targetZoneKey: string | null
+          sharedWalletBalance: number
+        }
+        __lbApplySandboxVoxelBrush?: (
+          width: number,
+          height: number,
+          depth: number,
+          blockId?: VoxelBlockId,
+          mode?: VoxelBrushMode,
+        ) => {
+          modifiedCount: number
+          terrainVersion: number
+          instancedVoxelCount: number
+          rleLength: number
+        }
+        __lbTriggerSandboxCombatAction?: (
+          action: 'sword' | 'dash' | 'jump' | 'hoverboard',
+        ) => void
+      }
+
+      winSbx.__lbStepOnSandboxPortal = (targetPortalOrZone: string) => {
+        const portal = walkAndStepOnPortalBlock(sbx, targetPortalOrZone)
+        if (portal) {
+          sim.commanderX = portal.worldX
+          sim.commanderZ = portal.worldZ
+          sim.commanderTargetX = portal.worldX
+          sim.commanderTargetZ = portal.worldZ
+        }
+        publishTelemetry()
+        return {
+          triggered: Boolean(portal),
+          portalId: portal?.id ?? null,
+          targetZoneKey: portal?.targetZoneKey ?? null,
+          sharedWalletBalance: st.getSharedWalletBalance(),
+        }
+      }
+
+      winSbx.__lbApplySandboxVoxelBrush = (
+        width: number,
+        height: number,
+        depth: number,
+        blockId: VoxelBlockId = 6,
+        mode: VoxelBrushMode = 'ADD',
+      ) => {
+        sbx.brushSize = { width, height, depth }
+        sbx.selectedBlockId = blockId
+        sbx.brushMode = mode
+        const res = executeSandboxBrushStroke(sbx, 0, 0, mode)
+        publishTelemetry()
+        return {
+          ...res,
+          rleLength: sbx.rleSnapshot.length,
+        }
+      }
+
+      winSbx.__lbTriggerSandboxCombatAction = (action) => {
+        if (action === 'sword') triggerSandboxSwordSlash(sbx)
+        else if (action === 'dash') triggerSandboxDash(sbx)
+        else if (action === 'jump') triggerSandboxJump(sbx)
+        else if (action === 'hoverboard') toggleSandboxHoverboard(sbx)
+        publishTelemetry()
+      }
+
+      winSbx.__lbSandboxTelemetry = {
+        webglSupported,
+        zoneKey: sbx.zoneKey,
+        activeEngineId: st.activeEngineId,
+        world: st.world,
+        gridDimensions: `${sbx.grid.width}x${sbx.grid.height}x${sbx.grid.depth}`,
+        terrainVersion: sbx.grid.version,
+        instancedVoxelCount: sbx.visibleInstances.length,
+        rleLength: sbx.rleSnapshot.length,
+        avatarX: Number(sim.commanderX.toFixed(2)),
+        avatarY: Number(sbx.avatarY.toFixed(2)),
+        avatarZ: Number(sim.commanderZ.toFixed(2)),
+        avatarHp: sbx.avatarHp,
+        avatarEnergy: Math.round(sbx.avatarEnergy),
+        hoverboardActive: sbx.hoverboardActive,
+        speedKmh: sbx.speedKmh,
+        swordSlashCount: sbx.swordSlashCount,
+        dashCount: sbx.dashCount,
+        jumpCount: sbx.jumpCount,
+        brushSize: { ...sbx.brushSize },
+        brushActionsCount: sbx.brushActionsCount,
+        placedEntitiesCount: sbx.placedEntities.length,
+        steppingPortalsCount: SANDBOX_STEPPING_PORTALS.length,
+        portalTransitionActive: Boolean(sbx.portalTransition?.active),
+        portalTransitionTarget: sbx.portalTransition?.targetZoneKey ?? null,
+        portalTransitionsCompletedCount: sbx.portalTransitionsCompletedCount,
+        sharedWalletBalance: st.getSharedWalletBalance(),
       }
     }
 
@@ -541,17 +673,35 @@ export const OpenWorldBase3D: React.FC = () => {
         },
       )
 
+      // V13: Sincronizar posição do Comandante com os Blocos-Portais Físicos 3D e executar transição ao pisar!
+      if (!sandboxSimRef.current.portalTransition) {
+        sandboxSimRef.current.avatarX = simRef.current.commanderX
+        sandboxSimRef.current.avatarZ = simRef.current.commanderZ
+        sandboxSimRef.current.avatarTargetX = simRef.current.commanderTargetX
+        sandboxSimRef.current.avatarTargetZ = simRef.current.commanderTargetZ
+      }
+      stepSandboxVoxelSim(sandboxSimRef.current, dt, {
+        onPortalTransitionCompleted: (portal: SandboxPortalTransitionState) => {
+          const cur = useLogicBattleStore.getState()
+          if (portal.targetEngineId) {
+            cur.selectEngine(portal.targetEngineId)
+            cur.switchWorld('run')
+          }
+        },
+      })
+
       publishTelemetry()
       uiCounter += 1
       if (uiCounter % 12 === 0) {
         setHudTick((v) => (v + 1) % 1000)
       }
-      rafId = window.requestAnimationFrame(tick)
     }
 
     publishTelemetry()
-    rafId = window.requestAnimationFrame(tick)
-    return () => window.cancelAnimationFrame(rafId)
+    const timerId = window.setInterval(() => {
+      tick(performance.now())
+    }, 40)
+    return () => window.clearInterval(timerId)
   }, [webglSupported])
 
   const selectedRegion =
@@ -607,10 +757,42 @@ export const OpenWorldBase3D: React.FC = () => {
               pointerEvents: 'none',
             }}
           >
-            <OpenWorldSceneContent simRef={simRef} />
+            <OpenWorldSceneContent
+              simRef={simRef}
+              sandboxSimRef={sandboxSimRef}
+            />
           </Canvas>
         </div>
       )}
+
+      {/* V13: Banner de Transição 3D quando o Comandante pisa em um Bloco-Portal no Mundo Aberto */}
+      {sandboxSimRef.current.portalTransition &&
+        sandboxSimRef.current.portalTransition.active && (
+          <div
+            data-testid="lb-sandbox-portal-transition-banner"
+            style={{
+              position: 'absolute',
+              top: '44%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 35,
+              padding: '12px 22px',
+              borderRadius: '16px',
+              background: 'rgba(15, 23, 42, 0.95)',
+              border: `2px solid ${sandboxSimRef.current.portalTransition.colorHex}`,
+              color: '#f8fafc',
+              fontWeight: 900,
+              fontSize: '0.92rem',
+              textAlign: 'center',
+              boxShadow: '0 0 32px rgba(56, 189, 248, 0.75)',
+            }}
+          >
+            🌀 Bloco-Portal Ativado →{' '}
+            {sandboxSimRef.current.portalTransition.icon}{' '}
+            {sandboxSimRef.current.portalTransition.labelPt} (
+            {Math.round(sandboxSimRef.current.portalTransition.progress * 100)}%)
+          </div>
+        )}
 
       {/* Barra Tática Compacta do Mundo Aberto 3D (Conquista Direta + Defesa Territorial) */}
       <div
@@ -663,6 +845,54 @@ export const OpenWorldBase3D: React.FC = () => {
         >
           ⚔️ Expedição 3D ({surgicalTroops})
         </button>
+      </div>
+
+      {/* V13: Barra de Blocos-Portais Físicos 3D no Mundo Aberto para caminhar e pisar nos Portais */}
+      <div
+        data-testid="lb-sandbox-portal-walk-bar"
+        style={{
+          position: 'absolute',
+          top: '90px',
+          left: '12px',
+          zIndex: 25,
+          pointerEvents: 'auto',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px',
+          maxWidth: 'calc(100vw - 260px)',
+        }}
+      >
+        {SANDBOX_STEPPING_PORTALS.map((portal) => {
+          const isCurrent = portal.targetZoneKey === 'cidadela_realm'
+          return (
+            <button
+              key={portal.id}
+              type="button"
+              data-testid={`lb-step-portal-${portal.targetZoneKey}`}
+              onClick={() => {
+                const win = window as unknown as {
+                  __lbStepOnSandboxPortal?: (id: string) => void
+                }
+                win.__lbStepOnSandboxPortal?.(portal.id)
+              }}
+              title={`Caminhar e pisar no Bloco-Portal 3D para ir a ${portal.labelPt} (Carteira Compartilhada)`}
+              style={{
+                padding: '3px 8px',
+                borderRadius: '999px',
+                fontSize: '10px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background: isCurrent
+                  ? 'linear-gradient(135deg, #0284c7, #0369a1)'
+                  : 'rgba(15, 23, 42, 0.86)',
+                border: `1px solid ${portal.colorHex}`,
+                color: isCurrent ? '#ffffff' : '#e2e8f0',
+              }}
+            >
+              {portal.shortBadge}
+            </button>
+          )
+        })}
       </div>
     </div>
   )

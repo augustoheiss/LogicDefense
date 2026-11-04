@@ -2097,7 +2097,7 @@ export const useLogicBattleStore = create<LogicBattleStoreState>((set, get) => (
       return
     }
 
-    const safeDt = Math.min(80, Math.max(0, dtMs))
+    const safeDt = Math.min(130, Math.max(0, dtMs))
     const nextElapsed = snapshot.elapsedMs + safeDt
 
     // V10 Fase 1 (UAT-V10-CENTER-CADENCE-10S):

@@ -55,7 +55,7 @@ export class SerpentSimulation {
     y: 24,
     hearts: 3,
     maxHearts: 3,
-    invulnMs: 0,
+    invulnMs: 1800,
     arrowDamage: 2,
     armyPower: 12,
     speedCellsPerSec: 4.4,
@@ -310,7 +310,23 @@ export class SerpentSimulation {
     while (this.dragonStepProgress >= 1) {
       this.dragonStepProgress -= 1
       this.recalculateChasePath()
-      const nextCell = this.dragon.lastChasePath?.nextStep
+      let nextCell = this.dragon.lastChasePath?.nextStep
+      if (
+        nextCell &&
+        nextCell.x === Math.round(this.hero.x) &&
+        nextCell.y === Math.round(this.hero.y) &&
+        this.dragon.headX === Math.round(this.hero.x) &&
+        this.dragon.headY === Math.round(this.hero.y)
+      ) {
+        const nbs = getPassableNeighbors(
+          this.grid,
+          this.dragon.headX,
+          this.dragon.headY,
+        )
+        if (nbs.length > 0) {
+          nextCell = nbs[this.dragon.trail.length % nbs.length]
+        }
+      }
       if (nextCell) {
         this.dragon.headX = nextCell.x
         this.dragon.headY = nextCell.y
@@ -440,7 +456,7 @@ export class SerpentSimulation {
       )
       if (headDist <= 0.95 || bodyHit) {
         this.hero.hearts = Math.max(0, this.hero.hearts - 1)
-        this.hero.invulnMs = 1500
+        this.hero.invulnMs = 2600
         this.hero.armyPower = Math.max(0, this.hero.armyPower - 3)
         if (this.hero.hearts <= 0) {
           this.status = 'DEFEAT'

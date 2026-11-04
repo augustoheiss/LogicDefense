@@ -972,17 +972,22 @@ export function stepBridge3DSim(
       sim.bossZ < PLAYER_BRIDGE_BASE_POLICY.bossVanguardShieldEndZ
 
     if (sim.bossZ < meleeLineZ) {
-      sim.bossLifecycle = 'MARCHING'
       sim.bossZ = Math.min(
         meleeLineZ,
         sim.bossZ + currentSectorSpec.marchSpeedZ * marchDt,
       )
+      if (sim.bossZ >= meleeLineZ) {
+        sim.bossLifecycle = 'MELEE_CLASH'
+        sim.bossMeleeCooldownMs = Math.max(sim.bossMeleeCooldownMs, 650)
+      } else {
+        sim.bossLifecycle = 'MARCHING'
+      }
     } else {
       sim.bossZ = meleeLineZ
       sim.bossLifecycle = 'MELEE_CLASH'
     }
 
-    // V11 Fase 3: Cerco do Boss contra as Torres Aliadas (Z >= -6.0) e Dano Corpo a Corpo Real no Herói (Z >= +4.5)
+    // V11 Fase 3: Cerco do Boss contra as Torres Aliadas (Z >= -6.0) e Dano Corpo a Corpo Real no Herói (Z >= +7.7)
     if (sim.bossZ >= PLAYER_BRIDGE_BASE_POLICY.bossSiegeStartZ) {
       sim.bossMeleeCooldownMs -= timerDtMs
       if (sim.bossMeleeCooldownMs <= 0) {
@@ -1045,9 +1050,9 @@ export function stepBridge3DSim(
           }
         }
 
-        // 2. Quando o Boss chega na linha corpo a corpo (Z >= +4.5) e o Herói está na frente dele, causa dano real SEM trava artificial de 3 soldados!
+        // 2. Quando o Boss chega na linha corpo a corpo (Z >= meleeLineZ) e o Herói está na frente dele, causa dano real SEM trava artificial de 3 soldados!
         const isHeroInBossReach =
-          sim.bossZ >= meleeLineZ - 3.2 &&
+          sim.bossZ >= meleeLineZ &&
           sim.activeRoute === 'CENTER' &&
           Math.abs(sim.heroWorldX) <= 3.3
         if (isHeroInBossReach && !input.isBattlePhase) {

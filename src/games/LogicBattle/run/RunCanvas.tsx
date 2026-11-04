@@ -31,6 +31,7 @@ import {
 } from './renderer/gateRenderer'
 import { createBridgeProjection, projectBridgePoint } from './renderer/perspective'
 import { ProjectilePool } from './renderer/projectilePool'
+import { SANDBOX_STEPPING_PORTALS } from '../sandbox/sandboxCatalog'
 
 function detectWebGLAvailable(): boolean {
   try {
@@ -848,16 +849,7 @@ export const RunCanvas: React.FC = () => {
                   type="button"
                   data-testid={`lb-gate-choice-${laneIdx}`}
                   className={`lb-gate-choice-btn ${isSelected ? 'is-selected' : ''}`}
-                  onClick={(e) => {
-                    if (webglActive && !showVisibleTapPills && e.detail > 0) {
-                      const rect = canvasRef.current?.getBoundingClientRect()
-                      if (rect && rect.width > 0) {
-                        const rel = (e.clientX - rect.left) / rect.width
-                        const targetNormX = Math.max(-0.96, Math.min(0.96, (rel - 0.5) * 2.1))
-                        useLogicBattleStore.getState().setSteeringX(targetNormX)
-                      }
-                      return
-                    }
+                  onClick={() => {
                     chooseLaneAndAdvance(laneIdx)
                   }}
                   aria-label={`Escolher faixa ${laneIdx + 1}: ${primary?.label ?? ''}`}
@@ -960,6 +952,63 @@ export const RunCanvas: React.FC = () => {
       {/* V10 Fase 1: Comando da Base da Ponte + Carteira Compartilhada + Desconstrução 3D */}
       {(phase === 'RUNNING' || phase === 'CALM_WAIT' || phase === 'PAUSED') && (
         <BridgeBaseCommandBar />
+      )}
+
+      {/* V13: Camada HUD Sandbox com Blocos-Portais Físicos 3D na Ponte (fora de .lb-minimal-hud e .lb-tactical-dock) */}
+      {(phase === 'RUNNING' || phase === 'CALM_WAIT' || phase === 'PAUSED') && (
+        <div
+          className="lb-sandbox-hud-layer"
+          data-testid="lb-sandbox-hud-layer"
+          style={{
+            position: 'absolute',
+            top: '42px',
+            left: '12px',
+            zIndex: 23,
+            pointerEvents: 'auto',
+          }}
+        >
+          <div
+            data-testid="lb-sandbox-portal-walk-bar"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '4px',
+              maxWidth: 'calc(100vw - 260px)',
+            }}
+          >
+            {SANDBOX_STEPPING_PORTALS.map((portal) => {
+              const isCurrent = portal.targetZoneKey === 'ponte_portoes'
+              return (
+                <button
+                  key={portal.id}
+                  type="button"
+                  data-testid={`lb-step-portal-${portal.targetZoneKey}`}
+                  onClick={() => {
+                    const win = window as unknown as {
+                      __lbStepOnSandboxPortal?: (id: string) => void
+                    }
+                    win.__lbStepOnSandboxPortal?.(portal.id)
+                  }}
+                  title={`Caminhar e pisar no Bloco-Portal 3D para ir a ${portal.labelPt} (Carteira Compartilhada)`}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '999px',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    background: isCurrent
+                      ? 'linear-gradient(135deg, #0284c7, #0369a1)'
+                      : 'rgba(15, 23, 42, 0.86)',
+                    border: `1px solid ${portal.colorHex}`,
+                    color: isCurrent ? '#ffffff' : '#e2e8f0',
+                  }}
+                >
+                  {portal.shortBadge}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
   )

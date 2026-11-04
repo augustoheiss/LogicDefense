@@ -487,7 +487,7 @@
   background: transparent;
   border: none;
   box-shadow: none;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .lb-lane-choice-grid.is-visible-pills .lb-gate-choice-btn {
@@ -861,7 +861,7 @@
 
 .lb-trap-toast-floating {
   position: fixed;
-  top: 62px;
+  top: 94px;
   left: 0;
   right: 0;
   display: flex;
@@ -1076,6 +1076,7 @@
   justify-content: space-between;
   gap: 6px;
   color: #0f172a;
+  pointer-events: none;
 }
 
 .lb-trap-compact-card--diegetic-pill .lb-ghost-rewind-banner {

@@ -24,6 +24,10 @@ import {
   getPropSprite,
   getUnitSprite,
 } from '../renderer/engineSpriteFactory'
+import {
+  SandboxDynamicSceneBridge,
+  SandboxVoxelStage3D,
+} from '../../sandbox/SandboxVoxelStage3D'
 
 const CELL_PX = 44
 
@@ -32,6 +36,12 @@ export const SerpentCanvas: React.FC = () => {
   const minimapRef = useRef<HTMLCanvasElement | null>(null)
   const projectilePoolRef = useRef<ProjectilePool>(new ProjectilePool())
   const particlePoolRef = useRef<ParticlePool>(new ParticlePool())
+  const sandboxBridgeRef = useRef<SandboxDynamicSceneBridge>({
+    buildings: [],
+    allies: [],
+    enemies: [],
+    dragonSegments: [],
+  })
 
   const seed = useLogicBattleStore((s) => s.runPlan.seed)
   const phase = useLogicBattleStore((s) => s.snapshot.phase)
@@ -186,7 +196,8 @@ export const SerpentCanvas: React.FC = () => {
       const liveStore = useLogicBattleStore.getState()
       const isPaused =
         liveStore.snapshot.phase === 'PAUSED' ||
-        liveStore.activeMathChallenge !== null
+        liveStore.activeMathChallenge !== null ||
+        liveStore.bridgeBaseDrawerOpen
       const sim = simRef.current
 
       if (!isPaused && sim.status === 'RUNNING') {
@@ -855,6 +866,25 @@ export const SerpentCanvas: React.FC = () => {
           winSerp.__lbSerpentEngineTelemetry = serpPayload
           winSerp.__lbMultiEngineV10Telemetry = serpPayload
 
+          // V13 Padrão Global Unificado: Sincronizar Dragão e Herói com o Palco 3D Voxel Sandbox
+          const aliveSegs3D = sim.getAliveSegments()
+          sandboxBridgeRef.current = {
+            heroWorldX: (sim.hero.x / SERPENT_GRID_SIZE - 0.5) * 34,
+            heroWorldZ: (sim.hero.y / SERPENT_GRID_SIZE - 0.5) * 34,
+            buildings: [],
+            allies: [],
+            enemies: [],
+            dragonSegments: aliveSegs3D.slice(0, 32).map((seg, sIdx) => ({
+              id: `dseg_${sIdx}`,
+              isHead: Boolean(seg.isHead),
+              hp: seg.hp,
+              maxHp: seg.maxHp,
+              colorHex: seg.isHead ? '#ef4444' : '#a855f7',
+              worldX: (seg.x / SERPENT_GRID_SIZE - 0.5) * 34,
+              worldZ: (seg.y / SERPENT_GRID_SIZE - 0.5) * 34,
+            })),
+          }
+
           particlePoolRef.current.updateAndDraw(ctx, isPaused ? 0 : dtMs)
           ctx.restore()
         }
@@ -932,7 +962,8 @@ export const SerpentCanvas: React.FC = () => {
         ref={canvasRef}
         className="lb-run-canvas"
         data-testid="logic-battle-canvas"
-        aria-label="Serpente do Labirinto Infinito — Controle o herói pelo labirinto toroidal"
+        aria-label="Serpente do Labirinto Infinito 3D Voxel Sandbox"
+        style={{ opacity: 0, zIndex: 1 }}
         onPointerDown={(e) => {
           const rect = e.currentTarget.getBoundingClientRect()
           const dx = e.clientX - (rect.left + rect.width * 0.5)
@@ -955,6 +986,24 @@ export const SerpentCanvas: React.FC = () => {
         }}
         onPointerUp={() => {
           pointerTargetVecRef.current = null
+        }}
+      />
+
+      {/* V13: Palco 3D Voxel Sandbox Unificado renderizando o Labirinto Voxel e o Dragão 3D em Cubos */}
+      <SandboxVoxelStage3D
+        zoneKey="serpente_numeros"
+        seed={seed}
+        externalBridgeRef={sandboxBridgeRef}
+        onOpenMathModal={() => openMathChallengeModal()}
+        onKillSomeEnemiesBySword={() => {
+          const sim = simRef.current
+          if (!sim) return
+          const alive = sim.getAliveSegments()
+          const tail = alive[alive.length - 1]
+          if (tail) {
+            tail.hp = Math.max(0, tail.hp - Math.max(12, sim.hero.arrowDamage * 2))
+            if (tail.hp === 0) sim.segmentsDestroyed += 1
+          }
         }}
       />
 

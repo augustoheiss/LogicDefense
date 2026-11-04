@@ -29,6 +29,11 @@ import {
   getUnitSprite,
   UnitSpriteKind,
 } from './renderer/engineSpriteFactory'
+import {
+  SandboxDynamicSceneBridge,
+  SandboxVoxelStage3D,
+} from '../sandbox/SandboxVoxelStage3D'
+import { SandboxZoneKey } from '../sandbox/voxelChunkGrid'
 
 interface TacticalBuildPad {
   id: string
@@ -316,6 +321,11 @@ export const ArcadeEnginesCanvas: React.FC = () => {
   const projectilePoolRef = useRef(new ProjectilePool())
   const particlePoolRef = useRef(new ParticlePool())
   const keysPressedRef = useRef<Set<string>>(new Set())
+  const sandboxBridgeRef = useRef<SandboxDynamicSceneBridge>({
+    buildings: [],
+    allies: [],
+    enemies: [],
+  })
 
   const initialArmy = Math.max(12, runPlan.n0)
   const baseEnemyForce = Math.max(40, snapshot.enemy.totalForce)
@@ -2088,6 +2098,39 @@ export const ArcadeEnginesCanvas: React.FC = () => {
           }
           winObj.__lbArcadeEngineTelemetry = telPayload
           winObj.__lbMultiEngineV10Telemetry = telPayload
+
+          // V13 Padrão Global Unificado: Sincronizar entidades com o Palco 3D Voxel Sandbox (<SandboxVoxelStage3D />)
+          sandboxBridgeRef.current = {
+            heroWorldX: (sim.heroNormX - 0.5) * 32,
+            heroWorldZ: (sim.heroNormY - 0.5) * 26,
+            buildings: sim.buildings.map((b) => ({
+              id: b.id,
+              label: b.label,
+              kind: b.kind,
+              tier: b.tier,
+              worldX: (b.normX - 0.5) * 32,
+              worldZ: (b.normY - 0.5) * 26,
+            })),
+            allies: sim.alliedUnits.map((a) => ({
+              id: a.id,
+              kind: a.kind,
+              hp: a.hp,
+              maxHp: a.maxHp,
+              worldX: (a.normX - 0.5) * 32,
+              worldZ: (a.normY - 0.5) * 26,
+              carryingRock: a.carryingState === 'to_crusher',
+            })),
+            enemies: sim.enemies.map((e) => ({
+              id: e.id,
+              kind: e.kind,
+              isBoss: e.isBoss,
+              hp: e.hp,
+              maxHp: e.maxHp,
+              worldX: (e.normX - 0.5) * 32,
+              worldZ: (e.normY - 0.5) * 26,
+            })),
+          }
+
           ctx.restore()
         }
 
@@ -2172,7 +2215,23 @@ export const ArcadeEnginesCanvas: React.FC = () => {
       <canvas
         ref={canvasRef}
         className="lb-run-canvas"
-        aria-label={`Palco 2.5D da engine ${engineSpec.name}`}
+        aria-label={`Palco 3D Voxel Sandbox da engine ${engineSpec.name}`}
+        style={{ opacity: 0, pointerEvents: 'none' }}
+      />
+
+      {/* V13: Palco 3D Voxel Sandbox Unificado (Padrão Global Único para todos os Minigames!) */}
+      <SandboxVoxelStage3D
+        zoneKey={(activeEngineId as SandboxZoneKey) ?? 'cerco_torres'}
+        seed={runPlan.seed}
+        externalBridgeRef={sandboxBridgeRef}
+        onOpenMathModal={() => openMathChallengeModal()}
+        onKillSomeEnemiesBySword={() => {
+          const sim = simRef.current
+          if (!sim) return
+          for (const en of sim.enemies.slice(0, 2)) {
+            en.hp = Math.max(0, en.hp - Math.max(15, sim.heroWeaponDmg * 2))
+          }
+        }}
       />
 
       {/* Fase 4 V7: Controle Widescreen de Tela Cheia (⛶) harmonizado em todas as Engines */}

@@ -38,6 +38,21 @@ import { getPlaqueTexture } from './plaqueTextureCache'
 import { PlayerBattalion3D } from './PlayerBattalion3D'
 import { SideCorridors3D } from './SideCorridors3D'
 import { getSpriteAtlasCacheStats, getUnitSpriteTexture } from './spriteAtlasCache3D'
+import { SANDBOX_STEPPING_PORTALS } from '../../sandbox/sandboxCatalog'
+import {
+  createInitialSandboxVoxelSim,
+  executeSandboxBrushStroke,
+  SandboxPortalTransitionState,
+  SandboxVoxelSimState,
+  stepSandboxVoxelSim,
+  toggleSandboxHoverboard,
+  triggerSandboxDash,
+  triggerSandboxJump,
+  triggerSandboxSwordSlash,
+  walkAndStepOnPortalBlock,
+} from '../../sandbox/sandboxVoxelSim'
+import { SharedVoxelIslandAndPortals3D } from '../../sandbox/SandboxVoxelStage3D'
+import { VoxelBlockId, VoxelBrushMode } from '../../sandbox/voxelChunkGrid'
 
 export interface Bridge3DEnvironmentProps {
   readonly smoothedLaneXRef: React.MutableRefObject<number>
@@ -118,6 +133,139 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   )
   const lastMathSeqRef = useRef<number>(mathSolvedSeq)
   const lastRunIdRef = useRef<string>(useLogicBattleStore.getState().snapshot.runId)
+  const sandboxSimRef = useRef<SandboxVoxelSimState>(
+    createInitialSandboxVoxelSim(
+      useLogicBattleStore.getState().runPlan.seed,
+      'ponte_portoes',
+    ),
+  )
+
+  React.useEffect(() => {
+    let lastNow = performance.now()
+
+    const publishBridgeSandboxTelemetry = () => {
+      if (typeof window === 'undefined') return
+      const live = useLogicBattleStore.getState()
+      const sbx = sandboxSimRef.current
+      const winSbx = window as unknown as {
+        __lbSandboxTelemetry?: Record<string, unknown>
+        __lbStepOnSandboxPortal?: (targetPortalOrZone: string) => {
+          triggered: boolean
+          portalId: string | null
+          targetZoneKey: string | null
+          sharedWalletBalance: number
+        }
+        __lbApplySandboxVoxelBrush?: (
+          width: number,
+          height: number,
+          depth: number,
+          blockId?: VoxelBlockId,
+          mode?: VoxelBrushMode,
+        ) => {
+          modifiedCount: number
+          terrainVersion: number
+          instancedVoxelCount: number
+          rleLength: number
+        }
+        __lbTriggerSandboxCombatAction?: (
+          action: 'sword' | 'dash' | 'jump' | 'hoverboard',
+        ) => void
+      }
+
+      winSbx.__lbStepOnSandboxPortal = (targetPortalOrZone: string) => {
+        const portal = walkAndStepOnPortalBlock(sbx, targetPortalOrZone)
+        publishBridgeSandboxTelemetry()
+        return {
+          triggered: Boolean(portal),
+          portalId: portal?.id ?? null,
+          targetZoneKey: portal?.targetZoneKey ?? null,
+          sharedWalletBalance: live.getSharedWalletBalance(),
+        }
+      }
+
+      winSbx.__lbApplySandboxVoxelBrush = (
+        width: number,
+        height: number,
+        depth: number,
+        blockId: VoxelBlockId = 6,
+        mode: VoxelBrushMode = 'ADD',
+      ) => {
+        sbx.brushSize = { width, height, depth }
+        sbx.selectedBlockId = blockId
+        sbx.brushMode = mode
+        const res = executeSandboxBrushStroke(sbx, -16, -6, mode)
+        publishBridgeSandboxTelemetry()
+        return {
+          ...res,
+          rleLength: sbx.rleSnapshot.length,
+        }
+      }
+
+      winSbx.__lbTriggerSandboxCombatAction = (action) => {
+        if (action === 'sword') triggerSandboxSwordSlash(sbx)
+        else if (action === 'dash') triggerSandboxDash(sbx)
+        else if (action === 'jump') triggerSandboxJump(sbx)
+        else if (action === 'hoverboard') toggleSandboxHoverboard(sbx)
+        publishBridgeSandboxTelemetry()
+      }
+
+      winSbx.__lbSandboxTelemetry = {
+        webglSupported: true,
+        zoneKey: sbx.zoneKey,
+        activeEngineId: live.activeEngineId,
+        world: live.world,
+        gridDimensions: `${sbx.grid.width}x${sbx.grid.height}x${sbx.grid.depth}`,
+        terrainVersion: sbx.grid.version,
+        instancedVoxelCount: sbx.visibleInstances.length,
+        rleLength: sbx.rleSnapshot.length,
+        avatarX: Number(sbx.avatarX.toFixed(2)),
+        avatarY: Number(sbx.avatarY.toFixed(2)),
+        avatarZ: Number(sbx.avatarZ.toFixed(2)),
+        avatarHp: sbx.avatarHp,
+        avatarEnergy: Math.round(sbx.avatarEnergy),
+        hoverboardActive: sbx.hoverboardActive,
+        speedKmh: sbx.speedKmh,
+        swordSlashCount: sbx.swordSlashCount,
+        dashCount: sbx.dashCount,
+        jumpCount: sbx.jumpCount,
+        brushSize: { ...sbx.brushSize },
+        brushActionsCount: sbx.brushActionsCount,
+        placedEntitiesCount: sbx.placedEntities.length,
+        steppingPortalsCount: SANDBOX_STEPPING_PORTALS.length,
+        portalTransitionActive: Boolean(sbx.portalTransition?.active),
+        portalTransitionTarget: sbx.portalTransition?.targetZoneKey ?? null,
+        portalTransitionsCompletedCount: sbx.portalTransitionsCompletedCount,
+        sharedWalletBalance: live.getSharedWalletBalance(),
+      }
+    }
+
+    publishBridgeSandboxTelemetry()
+    const timerId = window.setInterval(() => {
+      const now = performance.now()
+      const dt = Math.min(0.25, Math.max(0.016, (now - lastNow) / 1000))
+      lastNow = now
+      const sbx = sandboxSimRef.current
+      if (!sbx.portalTransition) {
+        sbx.avatarX = simRef.current.heroWorldX
+        sbx.avatarTargetX = simRef.current.heroWorldX
+      }
+      stepSandboxVoxelSim(sbx, dt, {
+        onPortalTransitionCompleted: (portal: SandboxPortalTransitionState) => {
+          const stNow = useLogicBattleStore.getState()
+          if (portal.targetWorld === 'realm') {
+            stNow.switchWorld('realm')
+          } else if (portal.targetEngineId) {
+            stNow.selectEngine(portal.targetEngineId)
+            if (stNow.world !== 'run') {
+              stNow.switchWorld('run')
+            }
+          }
+        },
+      })
+      publishBridgeSandboxTelemetry()
+    }, 40)
+    return () => window.clearInterval(timerId)
+  }, [])
 
   // Árvores 3D (Pinheiros Nevados) nas ilhas costeiras esquerda e direita
   const coastalPines = useMemo(() => {
@@ -134,7 +282,7 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
   }, [])
 
   useFrame((state, delta) => {
-    const dt = Math.min(0.5, Math.max(0.004, delta))
+    const dt = Math.min(0.11, Math.max(0.004, delta))
     const live = useLogicBattleStore.getState()
     const snap = live.snapshot
 
@@ -448,6 +596,13 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         hasCenturion01k: snap.currentArmy >= 100,
         hasChampion1k: snap.currentArmy >= 1000,
       }
+
+      // V13: Sincroniza a coordenada X do herói da ponte com o Avatar Voxel quando não está em transição de portal
+      const sbx = sandboxSimRef.current
+      if (!sbx.portalTransition) {
+        sbx.avatarX = sim.heroWorldX
+        sbx.avatarTargetX = sim.heroWorldX
+      }
     }
 
     // Animar ondas da água/lava ao redor da ponte 3D
@@ -606,8 +761,14 @@ export const Bridge3DEnvironment: React.FC<Bridge3DEnvironmentProps> = ({
         <meshBasicMaterial color="#e0f2fe" transparent opacity={0.55} />
       </mesh>
 
-      {/* ── ILHAS COSTEIRAS 3D E PINHEIROS NEVADOS (ESQUERDA E DIREITA) ──────── */}
+      {/* ── ILHAS COSTEIRAS 3D VOXEL SANDBOX (48×12×48 INSTANCED MESH + 7 BLOCOS-PORTAIS) ── */}
       <group name="CoastalIslands3D">
+        <SharedVoxelIslandAndPortals3D
+          simRef={sandboxSimRef}
+          yOffset={-1.2}
+          renderAvatar={false}
+          onOpenMathModal={onOpenMathBonus}
+        />
         <mesh position={[-25, -1.2, -42]} receiveShadow castShadow>
           <boxGeometry args={[20, 2.6, 135]} />
           <meshStandardMaterial color={islandRockColor} roughness={0.88} />
