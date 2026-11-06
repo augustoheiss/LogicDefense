@@ -1,0 +1,8 @@
+# CODEOWNERS — Proteção de Arquitetura Multi-Projeto (LogicDefense Monorepo)
+* @augustoheiss
+/.github/ @augustoheiss
+/backend/ @augustoheiss
+/Assistente-Moeda-App/ @augustoheiss
+/Sekundo/ @augustoheiss
+/src/ @augustoheiss
+/scripts/ @augustoheiss

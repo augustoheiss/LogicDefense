@@ -213,8 +213,9 @@ function main() {
       const subAppIndexPath = path.join(distDir, subAppRel, 'index.html')
       if (fs.existsSync(subAppIndexPath)) {
         fs.copyFileSync(subAppIndexPath, siblingHtmlPath)
+        continue
       }
-      continue
+      // Fallback em builds isolados (build:vite em CI sem export Expo Web prévio): gera shell SEO padrão
     }
 
     // Caso 2: Rotas SPA do Portal Principal (Vite + React Router)
