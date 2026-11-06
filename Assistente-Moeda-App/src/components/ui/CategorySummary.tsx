@@ -208,13 +208,13 @@ function getRowProratedValue(
       const yearsSet = new Set(activeYearsList);
       return contribs
         .filter((c) => yearsSet.has(getRowEntryCompetenceMonth(c.date, row).slice(0, 4)))
-        .reduce((acc, c) => acc + c.dailyValue, 0);
+        .reduce((acc, c) => acc + c.value, 0);
     } else {
       // scope === 'month' (1 or N selected months)
       const monthsSet = new Set(activeMonthsList);
       return contribs
         .filter((c) => monthsSet.has(getRowEntryCompetenceMonth(c.date, row)))
-        .reduce((acc, c) => acc + c.dailyValue, 0);
+        .reduce((acc, c) => acc + c.value, 0);
     }
   } else {
     // Normal entry: operational revenue rows use Sunday consequent-month competence

@@ -141,6 +141,16 @@ class PlaywrightPDFService:
             )
             page = await context.new_page()
             try:
+                # 0. Bloqueio SSRF (impede requisições a metadados de nuvem, file:// ou IPs internos/localhost)
+                async def _ssrf_guard(route):
+                    req_url = route.request.url.lower()
+                    if req_url.startswith(("file://", "http://169.254.", "https://169.254.", "http://127.", "https://127.", "http://localhost", "https://localhost", "http://0.0.0.0", "http://[::1]", "http://metadata.google.internal")):
+                        await route.abort()
+                    else:
+                        await route.continue_()
+
+                await page.route("**/*", _ssrf_guard)
+
                 # 1. Configurar emulação de mídia de impressão (@media print)
                 await page.emulate_media(media="print")
 

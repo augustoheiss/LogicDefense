@@ -169,7 +169,7 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
     # 3. Tenta buscar como Chave de Planilha / API Key de Agente (am_sheet_... ou am_live_...)
     if clean_k.startswith("am_sheet_") or clean_k.startswith("am_live_"):
         sheet_rec = get_spreadsheet_api_key(hash_key(clean_k)) or get_spreadsheet_api_key(clean_k)
-        if sheet_rec or len(clean_k) > 20:
+        if sheet_rec and not sheet_rec.get("is_expired"):
             return {"tier": "sheet_api", "token_balance": 999999999, "key_hash": "sheet_api"}
 
     raise HTTPException(

@@ -15,7 +15,8 @@ FROM_EMAIL = os.getenv("FROM_EMAIL", "Assistente Moeda <onboarding@resend.dev>")
 async def send_license_key_email(to_email: str, license_key: str, tier: str = "PRO") -> bool:
     """Sends license key to buyer email."""
     if not RESEND_API_KEY:
-        logger.warning(f"RESEND_API_KEY not configured. License key for {to_email}: {license_key}")
+        masked_key = f"...{license_key[-4:]}" if len(license_key) > 4 else "[REDACTED]"
+        logger.warning(f"RESEND_API_KEY not configured. License key for {to_email}: {masked_key}")
         return False
         
     subject = f"🔑 Sua Chave de Acesso PRO — Assistente Moeda ({tier})"
