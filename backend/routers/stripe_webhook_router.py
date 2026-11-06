@@ -6,6 +6,7 @@ Zero Supabase dependency — generates license keys and saves to SQLite/Turso.
 """
 
 import os
+import hmac
 import json
 import logging
 import stripe  # type: ignore
@@ -85,15 +86,17 @@ async def stripe_webhook(
             auth_token = authorization.strip()
             if auth_token.startswith("Bearer "):
                 auth_token = auth_token[7:].strip()
-            if secret and auth_token != secret:
+            if secret and not hmac.compare_digest(auth_token.encode("utf-8"), secret.encode("utf-8")):
                 raise stripe.error.SignatureVerificationError("Invalid auth token bypass", stripe_signature)
             
             payload_json = json.loads(payload_bytes.decode("utf-8"))
             event = stripe.Event.construct_from(payload_json, stripe.api_key)
-        else:
-            # Fallback for dev mode if secret is not set yet
+        elif not secret:
+            # Fallback only when STRIPE_WEBHOOK_SECRET is unset in local test environment
             payload_json = json.loads(payload_bytes.decode("utf-8"))
             event = stripe.Event.construct_from(payload_json, stripe.api_key)
+        else:
+            raise stripe.error.SignatureVerificationError("Missing Stripe-Signature header", stripe_signature)
     except Exception as e:
         logger.error(f"Stripe webhook payload verification failed: {e}")
         raise HTTPException(

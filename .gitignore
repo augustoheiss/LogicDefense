@@ -10,7 +10,7 @@ src/tools/ocorrencias/output/
 backend/.venv/
 *.pyc
 venv/
-# Testes locais de QA (ContÃªm credenciais e tokens)
+# Testes locais de QA (Contêm credenciais e tokens)
 backend/test_stripe_webhook.py
 test_web_subscription.js
 scripts/test_public_api.js
@@ -28,7 +28,6 @@ public/laboratorio/
 backend/analyze_sherlock.py
 backend/sherlock_report.txt
 backend/analysis_output.txt
-backend/*.txt
 Assistente-Moeda-App/api_workspace/
 api_workspace/
 api-workspace/
@@ -57,12 +56,24 @@ scripts/youtube_batch_uploader.py
 youtube_uploaded_log.json
 youtube_token.json
 
-# Chaves e Licencas Secretas
+# Chaves, Keystores Mobile e Licencas Secretas
 *CHAVES*.md
 CHAVES_PRO_CV_MAKER_E_MOEDA.md
 generate_batch_keys_fast.py
 generate_batch_keys.py
 backend/rotate_keys.py
+Assistente-Moeda-App/print_keys.js
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+google-services.json
+**/google-services.json
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+*service-account*.json
 
 # PR Lens writes its previews here. They are rebuilt on demand.
 .pr-lens/

@@ -6,6 +6,7 @@ Zero Supabase dependency — saves directly to SQLite database.
 """
 
 import os
+import hmac
 import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Header, HTTPException, status
@@ -33,7 +34,7 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
         token = authorization.strip()
         if token.startswith("Bearer "):
             token = token[7:].strip()
-        if token != secret:
+        if not hmac.compare_digest(token.encode("utf-8"), secret.encode("utf-8")):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook secret")
         
     try:

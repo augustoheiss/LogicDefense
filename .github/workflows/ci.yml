@@ -1,0 +1,208 @@
+name: LogicDefense Multi-Architecture CI, E2E & Clean-Room Security Suite
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Supply-Chain Security (agency-devops-automator): Least-privilege GITHUB_TOKEN
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # PILLAR 1: Security, Secrets, Supply-Chain & LGPD Clean-Room Gate
+  # ──────────────────────────────────────────────────────────────────────────
+  security-and-clean-room-gate:
+    name: Secret, Credential, Supply-Chain & LGPD Clean-Room Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: '22'
+
+      - name: Block committed .env, SQLite DBs, OAuth JSONs, Keystores & Batch Key Scripts
+        run: |
+          echo "Auditing git index against sensitive credential and database files..."
+          if git ls-files | grep -E '(^|/)\.env(\..+)?$' | grep -vE '\.env\.example$'; then
+            echo "::error::Committed .env file detected in git index!"
+            exit 1
+          fi
+          if git ls-files | grep -iE '(\.(db|sqlite|sqlite3|jks|keystore|p8|p12|pem)|client_secret\.json|youtube_token\.json|google-services\.json|GoogleService-Info\.plist|CHAVES.*\.md|generate_batch_keys.*\.py)$'; then
+            echo "::error::Sensitive database, keystore, OAuth credential, or key-generator file tracked in Git!"
+            exit 1
+          fi
+          echo "Git index sensitive file check passed."
+
+      - name: Scan Source Code for Hardcoded Private Keys, Live Tokens & Auth Bypasses
+        run: |
+          echo "Scanning source directories for private keys, live tokens, and auth bypass regressions..."
+          if grep -rnE '(BEGIN (RSA|OPENSSH|EC|PGP|PRIVATE) KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk_live_[A-Za-z0-9]{20,})' src/ backend/ Assistente-Moeda-App/src/ Sekundo/packages/ 2>/dev/null; then
+            echo "::error::Hardcoded private key or live provider token detected!"
+            exit 1
+          fi
+          if grep -rnE 'len\(clean_k\)\s*>\s*20' backend/ 2>/dev/null; then
+            echo "::error::CRITICAL regression: API key length-check auth bypass detected in backend/!"
+            exit 1
+          fi
+          echo "Source secret & auth invariant scan passed."
+
+      - name: Run Clean-Room & LGPD Data Hygiene Audit (Assistente-Moeda + Backend)
+        working-directory: ./Assistente-Moeda-App
+        run: node ./scripts/cleanRoomAudit.mjs
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PILLAR 2: Root Web Portal, 6 Cognitive Games, CV Maker 3.0 & SEO Gate
+  # ──────────────────────────────────────────────────────────────────────────
+  portal-and-games-ci:
+    name: Root Web Hub, 6 Games, CV Maker 3.0 & SEO Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Deterministic Dependency Install (Root Web Hub)
+        run: npm ci
+
+      - name: Run ESLint & TypeScript Strict Verification (6 Games + 3 SaaS Studios)
+        run: npm run lint
+
+      - name: Run Deterministic ATS X-Y-Z Math Engine Verification
+        run: node scripts/verify_ats_math.js
+
+      - name: Build Vite Portal & Prerender 37 Static/Dynamic SEO Shells
+        run: npm run build:vite
+
+      - name: Run Reality Checker SEO, OpenGraph, JSON-LD & Sitemap Audit (37 Routes)
+        run: npm run verify:seo
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PILLAR 3: Assistente Moeda App (Play Store & React Native Web Engine)
+  # ──────────────────────────────────────────────────────────────────────────
+  assistente-moeda-ci:
+    name: Assistente Moeda Play Store & Web Engine Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: ./Assistente-Moeda-App
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: Assistente-Moeda-App/package-lock.json
+
+      - name: Deterministic Dependency Install (Assistente-Moeda-App)
+        run: npm ci
+
+      - name: Run TypeScript 6.0 Strict Typecheck
+        run: npx tsc --noEmit
+
+      - name: Run 36 Financial & SIT Test Suites (170 Assertions)
+        env:
+          NODE_OPTIONS: "--experimental-strip-types"
+        run: npm test
+
+      - name: Run 100k-Row Big-O Stress Benchmark & Quota Quarantine Gate
+        env:
+          NODE_OPTIONS: "--experimental-strip-types"
+        run: node ./scripts/stressBenchmark.mjs
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PILLAR 4: Sekundo v2 Monorepo (@sekundo/core, @sekundo/coin-engine, @sekundo/app)
+  # ──────────────────────────────────────────────────────────────────────────
+  sekundo-monorepo-ci:
+    name: "Sekundo v2 Monorepo — Core, Coin-Engine & App Gate"
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: ./Sekundo
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: Sekundo/package-lock.json
+
+      - name: Deterministic Workspace Install (Sekundo Monorepo)
+        run: npm ci
+
+      - name: Typecheck @sekundo/core (10 Universal Law Engines, HLC CRDT, Crypto & PDF)
+        run: npm run typecheck:core
+
+      - name: Typecheck @sekundo/app & @sekundo/coin-engine (Expo SDK 56)
+        run: npm run typecheck:app
+
+      - name: Run Sekundo Core (323 Vitest Tests) & Coin-Engine (171 Tests) Suites
+        env:
+          NODE_OPTIONS: "--experimental-strip-types"
+        run: npm test
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PILLAR 5: Python FastAPI Backends (Unified Gateway v3.0 & Sekundo Signaling)
+  # ──────────────────────────────────────────────────────────────────────────
+  python-backends-ci:
+    name: Unified FastAPI Gateway v3.0 & Sekundo Signaling Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            backend/requirements.txt
+            Sekundo/packages/backend/requirements.txt
+
+      - name: Install Backend & Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r Sekundo/packages/backend/requirements.txt pytest pytest-asyncio ruff
+
+      - name: Run Ruff Static Syntax & Undefined-Symbol Audit
+        run: ruff check backend/ Sekundo/packages/backend/ --select E9,F63,F7,F82
+
+      - name: Run Assistente Moeda Backend Mathematical Parity & 15-Test QAR1/SIT Suite
+        env:
+          TURSO_DATABASE_URL: ""
+          TURSO_AUTH_TOKEN: ""
+          LICENSE_DB_PATH: "/tmp/ci_logicdefense_license.db"
+        run: |
+          python backend/tests/test_mid_year_metrics_parity.py
+          python backend/tests/test_qar1_sit_public_api.py
+
+      - name: Run Sekundo Zero-Knowledge WebRTC & Encrypted Relay Hardening Suite (9 Tests)
+        working-directory: ./Sekundo/packages/backend
+        run: python -m pytest tests/ -v
