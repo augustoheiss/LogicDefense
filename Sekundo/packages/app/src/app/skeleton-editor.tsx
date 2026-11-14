@@ -27,6 +27,7 @@ import { TransformerStudioModal } from '../components/transformer/TransformerStu
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { CadToolDock, type CadToolDefinition } from '../components/ui/CadToolDock';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
+import { TerritoryMultiFormatButtons } from '../components/territory/TerritoryMultiFormatButtons';
 import {
   serializeCSV,
   engineRegistry,
@@ -106,6 +107,7 @@ export default function SkeletonEditor() {
   const [nodeType, setNodeType] = useState<NodeType>('slot');
   const [nodeValue, setNodeValue] = useState('');
   const [nodeEmail, setNodeEmail] = useState('');
+  const [exportToast, setExportToast] = useState<string | null>(null);
 
   if (loading && flatRegistry.length === 0) {
     return (
@@ -283,24 +285,38 @@ export default function SkeletonEditor() {
     {
       id: 'csv-import',
       icon: '📥',
-      label: 'Importar Planilha CSV / Excel',
+      label: 'Importar Planilha / GIS (.CSV, .XLSX, .KML, .GeoJSON, .JSON)',
       shortcut: 'I',
       accentColor: '#10B981',
       description:
-        'Importa linhas estruturadas de arquivos CSV ou planilhas diretamente para a árvore hierárquica.',
-      confirmLabel: '📥 Abrir Importador CSV',
+        'Importa linhas estruturadas (.csv, .xlsx), polígonos (.kml, .geojson) ou backups (.json) diretamente para a árvore.',
+      confirmLabel: '📥 Abrir Importador Multi-Formato',
       onConfirm: () => router.push(`/csv-import?id=${eventId}`),
     },
     {
       id: 'csv-export',
       icon: '📤',
-      label: 'Exportar CSV Modular (LEGO)',
+      label: 'Exportar Multi-Formato (LEGO: .ZIP GIS, .XLSX, .KML, .GeoJSON, .CSV)',
       shortcut: 'E',
       accentColor: '#10B981',
       description:
-        'Exporta subárvores, colunas selecionadas ou toda a estrutura em formato CSV compatível com Excel.',
-      confirmLabel: '📤 Abrir Exportador CSV',
+        'Exporte subárvores, polígonos numerados ou planilhas compatíveis (.zip, .kml, .geojson, .xlsx, .json, .csv, .yaml).',
+      confirmLabel: '📤 Abrir Exportador Granular Multi-Formato',
       onConfirm: () => setExportModalVisible(true),
+      renderCustomControls: (closePopover) => (
+        <View style={{ marginBottom: 8 }}>
+          <TerritoryMultiFormatButtons
+            nodes={flatRegistry}
+            compact
+            testIdPrefix="skel-export"
+            onFeedback={(msg) => {
+              setExportToast(msg);
+              setTimeout(() => setExportToast(null), 4000);
+            }}
+            onAfterAction={closePopover}
+          />
+        </View>
+      ),
     },
     {
       id: 'transformer',
@@ -327,6 +343,22 @@ export default function SkeletonEditor() {
           </View>
         }
       />
+
+      {exportToast ? (
+        <View
+          style={{
+            backgroundColor: 'rgba(16, 185, 129, 0.16)',
+            borderColor: '#10B981',
+            borderBottomWidth: 1,
+            paddingHorizontal: 14,
+            paddingVertical: 6,
+          }}
+        >
+          <Text style={{ color: '#34D399', fontSize: 12, fontWeight: '700' }}>
+            {exportToast}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Engine Metrics & Universal Law Context Bar */}
       <View style={styles.engineBar}>

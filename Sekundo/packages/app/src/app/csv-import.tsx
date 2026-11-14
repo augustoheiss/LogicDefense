@@ -60,6 +60,7 @@ import {
   persistTerritoryRegistryMutation,
 } from '../storage/omniStorageBridge';
 import { deliverFile } from '../utils/deliverFile';
+import { TerritoryMultiFormatButtons } from '../components/territory/TerritoryMultiFormatButtons';
 
 const ENGINE_ICONS: Record<string, string> = {
   territory_logistics: '🗺️',
@@ -401,15 +402,15 @@ export default function CSVImport() {
           >
             <Text style={styles.iconGlyph}>🏠</Text>
           </Pressable>
-          <Text style={styles.ribbonTitle}>📐 CSV GERAL & ENGINES</Text>
+          <Text style={styles.ribbonTitle}>📐 IMPORT & EXPORT MULTI (.CSV/.XLSX/.KML/.GeoJSON)</Text>
         </View>
 
         <View style={styles.topActions}>
           <Pressable
             testID="csv-import-pick-file-btn"
             accessibilityRole="button"
-            accessibilityLabel="Selecionar Arquivo .CSV p/ Importar"
-            {...webTitle('Selecionar Arquivo .CSV p/ Importar')}
+            accessibilityLabel="Selecionar Arquivo (.CSV, .XLSX, .KML, .GeoJSON, .JSON)"
+            {...webTitle('Selecionar Arquivo (.CSV, .XLSX, .KML, .GeoJSON, .JSON) p/ Importar')}
             onPress={handlePickCsvFile}
             style={[styles.iconBtn, styles.cadBtnBlue]}
           >
@@ -716,13 +717,34 @@ export default function CSVImport() {
                 <Pressable
                   testID="tpl-pick-file-inline-btn"
                   accessibilityRole="button"
-                  accessibilityLabel="Selecionar Arquivo CSV"
-                  {...webTitle('Selecionar Arquivo .CSV do Computador')}
+                  accessibilityLabel="Selecionar Arquivo Multi-Formato"
+                  {...webTitle('Selecionar Arquivo .CSV, .XLSX, .KML, .GeoJSON ou .JSON')}
                   onPress={handlePickCsvFile}
                   style={[styles.iconBtn, styles.cadBtnBlue]}
                 >
                   <Text style={styles.iconGlyph}>📂</Text>
                 </Pressable>
+              </View>
+
+              <View
+                style={{
+                  marginTop: 6,
+                  paddingTop: 8,
+                  borderTopWidth: 1,
+                  borderTopColor: 'rgba(148, 163, 184, 0.2)',
+                  gap: 6,
+                }}
+              >
+                <Text style={styles.sectionLabel}>
+                  🧩 EXPORTAR TERRITÓRIOS SALVOS (MULTI-FORMATO / GIS):
+                </Text>
+                <TerritoryMultiFormatButtons
+                  nodes={flatRegistry}
+                  compact
+                  presets={['zip_gis', 'kml_numbered', 'xlsx_18col', 'kml_full', 'geojson_gis', 'csv_18col', 'json']}
+                  onFeedback={(msg) => setStatusMessage(msg)}
+                  testIdPrefix="csv-station-multi"
+                />
               </View>
 
               {showInfoBox && (

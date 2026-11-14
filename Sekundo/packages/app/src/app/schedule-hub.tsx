@@ -1044,8 +1044,8 @@ export default function ScheduleHubConsole() {
             testID="schedule-btn-import"
             onPress={handlePickLocalScheduleFile}
             style={[styles.cadCommandBtn, styles.cadBtnBlue]}
-            accessibilityLabel="Importar CSV, JSON ou TXT"
-            {...({ title: 'Importar (.csv/.json/.txt)' } as any)}
+            accessibilityLabel="Importar CSV, XLSX, KML, GeoJSON, JSON ou TXT"
+            {...({ title: 'Importar (.csv/.xlsx/.kml/.geojson/.json/.txt)' } as any)}
           >
             <Text style={styles.cadCommandBtnText}>📥</Text>
           </Pressable>

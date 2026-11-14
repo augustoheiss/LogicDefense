@@ -88,6 +88,7 @@ import { DeltaSyncModal } from '../components/territory/DeltaSyncModal';
 import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
 import type { LatLngTuple, MapEditSession, MapPin } from '../components/map/mapTypes';
 import { CadToolDock, type CadToolDefinition } from '../components/ui/CadToolDock';
+import { TerritoryMultiFormatButtons } from '../components/territory/TerritoryMultiFormatButtons';
 import { TerritoryFloatingLegend } from '../components/territory/TerritoryFloatingLegend';
 import {
   DEFAULT_MAP_SYMBOLOGY_CONFIG,
@@ -1939,77 +1940,89 @@ export default function TerritoryMapScreen() {
       {
         id: 'manage',
         icon: '🗂️',
-        label: 'Gerenciar Territórios, Endereços, Compartilhar & Exportar CSV',
+        label: 'Gerenciar Territórios, Endereços, Importar & Exportar Multi-Formato',
         shortcut: 'E',
         accentColor: '#10B981',
         description:
-          'Altere o nome ou número dos territórios, crie novos territórios ou endereços direto no app (salvo na memória), compartilhe links de localização (WhatsApp / Google Maps) sem burocracia ou exporte a nova planilha CSV atualizada.',
-        confirmLabel: '🗂️ Abrir Gerenciador de Territórios & CSV',
+          'Altere nome/número dos territórios, crie novos endereços, importe (.xlsx/.kml/.geojson/.csv) ou exporte polígonos numerados e planilhas (.zip GIS, .kml, .geojson, .xlsx, .json, .csv).',
+        confirmLabel: '🗂️ Abrir Gerenciador / Multi-Formato',
         onConfirm: () => {
           openTerritoryManager('edit');
         },
         renderCustomControls: (closePopover) => (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <Pressable
-              testID="cad-manage-edit-territory"
-              onPress={() => {
-                closePopover();
-                openTerritoryManager('edit');
-              }}
-              style={[
-                styles.mergeTerritoryBtn,
-                { marginTop: 0, borderColor: '#FFB800', backgroundColor: 'rgba(255, 184, 0, 0.14)' },
-              ]}
-            >
-              <Text style={[styles.mergeTerritoryBtnText, { color: '#FFB800' }]}>
-                ✏️ Mudar Nome / Nº do Território
-              </Text>
-            </Pressable>
-            <Pressable
-              testID="cad-manage-new-territory"
-              onPress={() => {
-                closePopover();
-                openTerritoryManager('new_territory');
-              }}
-              style={[
-                styles.mergeTerritoryBtn,
-                { marginTop: 0, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.14)' },
-              ]}
-            >
-              <Text style={[styles.mergeTerritoryBtnText, { color: '#34D399' }]}>
-                ➕ Criar Novo Território
-              </Text>
-            </Pressable>
-            <Pressable
-              testID="cad-manage-new-address"
-              onPress={() => {
-                closePopover();
-                openTerritoryManager('new_address');
-              }}
-              style={[
-                styles.mergeTerritoryBtn,
-                { marginTop: 0, borderColor: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.14)' },
-              ]}
-            >
-              <Text style={[styles.mergeTerritoryBtnText, { color: '#38BDF8' }]}>
-                🏠 + Adicionar Endereço
-              </Text>
-            </Pressable>
-            <Pressable
-              testID="cad-manage-share"
-              onPress={() => {
-                closePopover();
-                openTerritoryManager('share_export');
-              }}
-              style={[
-                styles.mergeTerritoryBtn,
-                { marginTop: 0, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.22)' },
-              ]}
-            >
-              <Text style={[styles.mergeTerritoryBtnText, { color: '#34D399' }]}>
-                📲 Compartilhar Localização / 📤 Exportar CSV
-              </Text>
-            </Pressable>
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              <Pressable
+                testID="cad-manage-edit-territory"
+                onPress={() => {
+                  closePopover();
+                  openTerritoryManager('edit');
+                }}
+                style={[
+                  styles.mergeTerritoryBtn,
+                  { marginTop: 0, borderColor: '#FFB800', backgroundColor: 'rgba(255, 184, 0, 0.14)' },
+                ]}
+              >
+                <Text style={[styles.mergeTerritoryBtnText, { color: '#FFB800' }]}>
+                  ✏️ Mudar Nome / Nº do Território
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="cad-manage-new-territory"
+                onPress={() => {
+                  closePopover();
+                  openTerritoryManager('new_territory');
+                }}
+                style={[
+                  styles.mergeTerritoryBtn,
+                  { marginTop: 0, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.14)' },
+                ]}
+              >
+                <Text style={[styles.mergeTerritoryBtnText, { color: '#34D399' }]}>
+                  ➕ Criar Novo Território
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="cad-manage-new-address"
+                onPress={() => {
+                  closePopover();
+                  openTerritoryManager('new_address');
+                }}
+                style={[
+                  styles.mergeTerritoryBtn,
+                  { marginTop: 0, borderColor: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.14)' },
+                ]}
+              >
+                <Text style={[styles.mergeTerritoryBtnText, { color: '#38BDF8' }]}>
+                  🏠 + Adicionar Endereço
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="cad-manage-share"
+                onPress={() => {
+                  closePopover();
+                  openTerritoryManager('share_export');
+                }}
+                style={[
+                  styles.mergeTerritoryBtn,
+                  { marginTop: 0, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.22)' },
+                ]}
+              >
+                <Text style={[styles.mergeTerritoryBtnText, { color: '#34D399' }]}>
+                  📲 Compartilhar / 📤 Multi-Formato
+                </Text>
+              </Pressable>
+            </View>
+            <TerritoryMultiFormatButtons
+              nodes={flatRegistry}
+              compact
+              presets={['zip_gis', 'kml_numbered', 'xlsx_18col', 'geojson_gis', 'csv_18col', 'csv_19col']}
+              showImportButton
+              onPressImport={() => router.push(`/csv-import?id=${eventId}` as any)}
+              onFeedback={(msg) => showToast(msg)}
+              onAfterAction={closePopover}
+              testIdPrefix="map-cad-fmt"
+            />
           </View>
         ),
       },
@@ -2168,10 +2181,28 @@ export default function TerritoryMapScreen() {
                 paddingHorizontal: 8,
                 marginLeft: 4,
               }}
-              accessibilityLabel="Gerenciar territórios, endereços, compartilhar ou exportar CSV"
+              accessibilityLabel="Gerenciar territórios, endereços, compartilhar ou exportar"
             >
               <Text style={{ color: '#34D399', fontSize: 11, fontWeight: '800' }}>
-                ✏️ Territórios / 📤 CSV
+                ✏️ Territórios / 📤 Multi
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="map-quick-multi-export-btn"
+              onPress={() => openTerritoryManager('share_export')}
+              style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.16)',
+                borderColor: 'rgba(56, 189, 248, 0.55)',
+                borderWidth: 1,
+                borderRadius: 7,
+                paddingVertical: 5,
+                paddingHorizontal: 8,
+                marginLeft: 4,
+              }}
+              accessibilityLabel="Exportar .ZIP GIS, .KML, .GeoJSON, .XLSX ou .CSV"
+            >
+              <Text style={{ color: '#38BDF8', fontSize: 11, fontWeight: '800' }}>
+                🧩 .ZIP / .KML / .XLSX
               </Text>
             </Pressable>
           </View>

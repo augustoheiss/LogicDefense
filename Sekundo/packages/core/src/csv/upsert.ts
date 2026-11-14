@@ -3,7 +3,7 @@
  *
  * Implements intelligent batch ingestion that preserves operational history
  * (e.g. worked: 1, lastWorkedAt, notes, assignments) when re-importing updated
- * spreadsheets. This solves the core pain point of legacy tools (like Hourglass)
+ * spreadsheets. This solves the core pain point of legacy external tools
  * that either prevent re-importing or wipe out field records upon ingestion.
  */
 

@@ -32,7 +32,6 @@ import {
   formatShareTerritoryOrQuadraLocationsText,
   resolveTerritoryNumber,
   importTerritoryMultiFormat,
-  exportTerritoryMultiFormat,
   buildCleanRoomTerritoryImportSample,
   stripSampleTerritorySeedNodes,
   isOmniCsvText,
@@ -49,6 +48,10 @@ import {
   loadTerritoryRegistryBackupSnapshot,
 } from '../../storage/omniStorageBridge';
 import { openExternalGoogleMaps } from '../../hooks/useLiveGpsLocation';
+import {
+  deliverTerritoryMultiFormatPreset,
+  type TerritoryExportPresetId,
+} from '../../utils/territoryExportDelivery';
 
 export type TerritoryManageTab =
   | 'edit'
@@ -457,27 +460,33 @@ export function TerritoryManageModal({
 
   const handleMultiFormatExport = async (
     format: TerritoryMultiIoFormat,
-    spreadsheetSchema?: 'external_18col' | 'sekundo_19col'
+    spreadsheetSchema?: 'external_18col' | 'sekundo_19col',
+    presetOverride?: TerritoryExportPresetId
   ) => {
     setBusy(true);
     setFeedback(null);
     try {
-      const payload = exportTerritoryMultiFormat(cleanNodes, {
-        format,
+      const preset: TerritoryExportPresetId =
+        presetOverride ||
+        (format === 'zip'
+          ? 'zip_gis'
+          : format === 'xlsx'
+          ? 'xlsx_18col'
+          : format === 'kml'
+          ? 'kml_full'
+          : format === 'geojson'
+          ? 'geojson'
+          : format === 'json'
+          ? 'json'
+          : spreadsheetSchema === 'sekundo_19col'
+          ? 'csv_19col'
+          : 'csv_18col');
+
+      const res = await deliverTerritoryMultiFormatPreset(cleanNodes, preset, {
         privacySafeMode: exportPrivacySafeMode,
-        spreadsheetSchema,
         includeKmlPoints,
       });
-      if (payload.bytes) {
-        triggerBinaryFileDownload(payload.bytes, payload.fileName, payload.mimeType);
-      } else if (payload.text) {
-        await triggerCsvFileDownloadOrCopy(payload.text, payload.fileName);
-      }
-      setFeedback(
-        `📥 Arquivo "${payload.fileName}" (${format.toUpperCase()}) exportado${
-          exportPrivacySafeMode ? ' com Escudo LGPD / C-25/17 ativo!' : '!'
-        }`
-      );
+      setFeedback(res.message);
     } catch (err: any) {
       setFeedback(`⚠️ Erro ao exportar ${format.toUpperCase()}: ${err?.message || 'Falha'}`);
     } finally {
@@ -1847,10 +1856,10 @@ export function TerritoryManageModal({
 
                 <View style={styles.sectionCard}>
                   <Text style={styles.sectionTitle}>
-                    📤 EXPORTAR MULTI-FORMATO (.XLSX, .CSV, .KML, .GEOJSON, .JSON) & ESCUDO LGPD / C-25/17
+                    📤 EXPORTAR MULTI-FORMATO (.ZIP GIS, .XLSX, .CSV, .KML, .GEOJSON, .JSON) & ESCUDO LGPD
                   </Text>
                   <Text style={styles.helperText}>
-                    Exporte os territórios e polígonos da memória para Excel (.xlsx), Google Earth / GIS (.kml), GeoJSON, JSON ou CSV. O Escudo LGPD / C-25/17 omite nomes pessoais e notas comportamentais por padrão.
+                    Exporte os territórios e polígonos da memória para Pacote GIS (.zip individual + consolidado), Excel (.xlsx), Google Earth / GIS (.kml), GeoJSON, JSON ou CSV. O Escudo LGPD / C-25/17 omite nomes pessoais e notas comportamentais por padrão.
                   </Text>
 
                   <View style={styles.scopeRow}>
@@ -1890,6 +1899,43 @@ export function TerritoryManageModal({
                   </View>
 
                   <View style={{ gap: 8 }}>
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        testID="export-territory-zip-gis-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('zip', undefined, 'zip_gis')}
+                        style={[styles.primaryBtn, { flex: 1, backgroundColor: '#10B981' }]}
+                      >
+                        <Text style={[styles.primaryBtnText, { color: '#052E16' }]}>
+                          🧩 Exportar Pacote GIS (.ZIP Individual + Consolidado)
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        testID="export-territory-kml-numbered-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('kml', undefined, 'kml_numbered')}
+                        style={[styles.secondaryBtn, { flex: 1, borderColor: '#38BDF8' }]}
+                      >
+                        <Text style={[styles.secondaryBtnText, { color: '#38BDF8' }]}>
+                          🏷️ .KML Numerado (Somente Polígonos)
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        testID="export-territory-geojson-gis-btn"
+                        disabled={busy}
+                        onPress={() => handleMultiFormatExport('geojson', undefined, 'geojson_gis')}
+                        style={[styles.secondaryBtn, { flex: 1, borderColor: '#A78BFA' }]}
+                      >
+                        <Text style={[styles.secondaryBtnText, { color: '#A78BFA' }]}>
+                          🌍 .GeoJSON Numerado (GIS Externo)
+                        </Text>
+                      </Pressable>
+                    </View>
+
                     <View style={styles.actionRow}>
                       <Pressable
                         testID="export-territory-xlsx-btn"

@@ -96,7 +96,7 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
     const formPrefix = String.fromCharCode(83);
     const forbiddenFormCodePattern = new RegExp(`\\b${formPrefix}-?(13|89)\\b`, 'i');
     const forbiddenExternalToolPattern = new RegExp(
-      `\\b(${['Territory\\s+Helper', 'NW\\s+(Publisher|Scheduler)'].join('|')})\\b`,
+      `\\b(${['Territory\\s+Helper', 'NW\\s+(Publisher|Scheduler)', `Hour${'glass'}`].join('|')})\\b`,
       'i'
     );
     const forbiddenPiiPattern = new RegExp(

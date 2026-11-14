@@ -222,8 +222,8 @@ export default function Dashboard() {
           <Pressable
             testID="home-import-omni-csv-btn"
             accessibilityRole="button"
-            accessibilityLabel="Importar CSV Geral"
-            {...webTitle('Importar CSV Geral ou Planilha')}
+            accessibilityLabel="Importar CSV, XLSX, KML, GeoJSON ou JSON"
+            {...webTitle('Importar / Exportar (.CSV, .XLSX, .KML, .GeoJSON, .JSON)')}
             onPress={() => router.push('/csv-import')}
             style={[styles.iconRibbonBtn, styles.ribbonBtnEmerald]}
           >
@@ -441,15 +441,15 @@ export default function Dashboard() {
             <Pressable
               testID="quick-action-csv-import"
               accessibilityRole="button"
-              accessibilityLabel="Import CSV Template"
-              {...webTitle('Importar / Exportar CSV Geral')}
+              accessibilityLabel="Importar ou Exportar Multi-Formato"
+              {...webTitle('Importar / Exportar (.CSV, .XLSX, .KML, .GeoJSON, .ZIP)')}
               onPress={() => {
                 setSelectedToolInfo({
                   code: 'CSV',
-                  title: '📥 Central Omni-CSV',
-                  desc: 'Abre múltiplas Engines (Territórios + Programação + Privilégios) com 1 único CSV.',
+                  title: '📥 Central Multi-Formato (.CSV / .XLSX / .KML / .GeoJSON)',
+                  desc: 'Importa e exporta múltiplas Engines e polígonos numerados (.csv, .xlsx, .kml, .geojson, .zip).',
                   route: '/csv-import',
-                  badge: 'OMNI-CSV',
+                  badge: 'MULTI-IO',
                 });
                 router.push('/csv-import');
               }}
@@ -461,7 +461,7 @@ export default function Dashboard() {
             >
               <Text style={styles.actionBigIcon}>📥</Text>
               <Text style={[styles.actionShortLabel, { color: '#34D399' }]} numberOfLines={1}>
-                CSV Geral
+                CSV & GIS
               </Text>
             </Pressable>
 

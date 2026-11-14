@@ -62,6 +62,7 @@ import {
 } from '../components/territory/TerritoryManageModal';
 import { QuickShareSheet } from '../components/share/QuickShareSheet';
 import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
+import { TerritoryMultiFormatButtons } from '../components/territory/TerritoryMultiFormatButtons';
 import {
   loadSavedTerritoryRegistry,
   saveTerritoryRegistry,
@@ -881,6 +882,31 @@ export default function TerritoryChecklistScreen() {
               <Text style={styles.mapLinkBtnText}>🗺️</Text>
             </Pressable>
           </View>
+        </View>
+
+        <View
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.72)',
+            borderWidth: 1,
+            borderColor: 'rgba(148, 163, 184, 0.18)',
+            borderRadius: 8,
+            paddingHorizontal: 8,
+            paddingVertical: 6,
+            marginBottom: 4,
+          }}
+        >
+          <TerritoryMultiFormatButtons
+            nodes={flatRegistry}
+            compact
+            presets={['zip_gis', 'kml_numbered', 'xlsx_18col', 'kml_full', 'geojson_gis', 'csv_18col']}
+            showImportButton
+            onPressImport={() => router.push(`/csv-import?id=${eventId}` as any)}
+            onFeedback={(msg) => {
+              setActionToast(msg);
+              setTimeout(() => setActionToast(null), 4000);
+            }}
+            testIdPrefix="checklist-multi"
+          />
         </View>
 
         {actionToast ? (
