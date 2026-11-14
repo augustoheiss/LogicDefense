@@ -370,8 +370,8 @@ export default function CreateEvent() {
           <Pressable
             testID="create-event-pick-csv-btn"
             accessibilityRole="button"
-            accessibilityLabel="Importar CSV"
-            {...webTitle('Selecionar Arquivo .CSV (Geral ou Engine)')}
+            accessibilityLabel="Importar (.CSV, .XLSX, .KML, .GeoJSON, .JSON)"
+            {...webTitle('Selecionar Arquivo (.CSV, .XLSX, .KML, .GeoJSON, .JSON)')}
             onPress={handlePickCsvFile}
             style={[styles.iconBtn, styles.cadBtnBlue]}
           >

@@ -340,6 +340,8 @@ export {
   exportCleanTerritoryNodesToKml,
   parseGeoJsonToCleanTerritoryNodes,
   exportCleanTerritoryNodesToGeoJson,
+  exportTerritoryExternalGisZip,
+  extractZipEntries,
   importTerritoryGeoJsonToCleanNodes,
   exportCleanTerritoryNodesToGeoJsonText,
   detectTerritoryFileFormat,

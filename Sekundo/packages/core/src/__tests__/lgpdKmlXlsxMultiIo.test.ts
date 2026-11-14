@@ -20,6 +20,8 @@ import {
   exportCleanTerritoryNodesToKml,
   parseGeoJsonToCleanTerritoryNodes,
   exportCleanTerritoryNodesToGeoJson,
+  exportTerritoryExternalGisZip,
+  extractZipEntries,
   importTerritoryMultiFormat,
   exportTerritoryMultiFormat,
   importTerritoryUniversalFile,
@@ -373,6 +375,107 @@ describe('Sekundo Audit — LGPD / CJEU C-25/17 Privacy, Offline Routing & Multi
         spreadsheetSchema: 'external_18col',
       });
       expect(kmlCsv18.text).toContain('polygon_quadra');
+    });
+
+    it('exports consolidated polygon-only KML, external_gis GeoJSON, and non-destructive per-territory ZIP bundles', () => {
+      const sampleXlsx = buildCleanRoomTerritoryImportSample('xlsx_18col');
+      const parsed = importTerritoryMultiFormat({
+        bytes: sampleXlsx.bytes,
+        fileName: sampleXlsx.fileName,
+      });
+      expect(parsed.territoriesCount).toBe(2);
+
+      // Add a second quadra inside T01.01.01 to verify territory-level polygon merge
+      const multiQuadraNodes = [
+        ...parsed.nodes,
+        {
+          key: 'T01-01-01-q2-u1',
+          label: 'Rua das Magnólias, 40',
+          type: 'text' as const,
+          meta: {
+            territory_number: 'T01.01.01',
+            quadra: 'Q2',
+            locality: 'Setor Demo Central',
+            lat: -23.5515,
+            lng: -46.6342,
+            worked: 0,
+            notes: 'Morador ausente',
+          },
+        },
+      ];
+
+      // 1) Consolidated Polygon-Only KML numbered cleanly by territory code
+      const numberedKml = exportTerritoryMultiFormat(multiQuadraNodes, {
+        format: 'kml',
+        consolidateByTerritory: true,
+        kmlLabelMode: 'territory_number',
+        privacySafeMode: true,
+      });
+      expect(numberedKml.fileName).toContain('sekundo-territorios-numerados-');
+      expect(numberedKml.text).toContain('<name>T01.01.01</name>');
+      expect(numberedKml.text).toContain('<name>T01.02.01</name>');
+      expect(numberedKml.text).not.toContain('<Point>');
+      // Merged T01.01.01 + T01.02.01 = exactly 2 <Placemark> entries
+      expect((numberedKml.text?.match(/<Placemark>/g) || []).length).toBe(2);
+
+      // 2) Consolidated External GIS GeoJSON (Polygon-only, closed [lng, lat] ring)
+      const extGeo = exportTerritoryMultiFormat(multiQuadraNodes, {
+        format: 'geojson',
+        consolidateByTerritory: true,
+        geojsonProfile: 'external_gis',
+        privacySafeMode: true,
+      });
+      const extFc = JSON.parse(extGeo.text || '{}');
+      expect(extFc.type).toBe('FeatureCollection');
+      expect(extFc.features).toHaveLength(2);
+      expect(extFc.features[0].geometry.type).toBe('Polygon');
+      expect(extFc.features[0].properties.TerritoryNumber).toBe('T01.01.01');
+      expect(extFc.features[0].properties.name).toBe('T01.01.01');
+      expect(extFc.features[0].properties.TerritoryType).toBe('Quadras');
+      const ring = extFc.features[0].geometry.coordinates[0];
+      expect(ring[0]).toEqual(ring[ring.length - 1]);
+      expect(ring[0][0]).toBeLessThan(-40); // longitude
+      expect(ring[0][1]).toBeLessThan(-20); // latitude
+
+      // 3) ZIP bundle with excludeTerritoryNumbers filter
+      const zipPayload = exportTerritoryExternalGisZip(multiQuadraNodes, {
+        privacySafeMode: true,
+        excludeTerritoryNumbers: ['T01.02.01'],
+      });
+      expect(zipPayload.format).toBe('zip');
+      expect(zipPayload.mimeType).toBe('application/zip');
+      expect(zipPayload.bytes?.[0]).toBe(0x50);
+      expect(zipPayload.bytes?.[1]).toBe(0x4b);
+
+      const entries = extractZipEntries(zipPayload.bytes!);
+      const decoder = new TextDecoder('utf-8');
+      expect(entries.has('00-LEIA-ME.txt')).toBe(true);
+      expect(entries.has('01-consolidado-poligonos.kml')).toBe(true);
+      expect(entries.has('02-consolidado-poligonos.geojson')).toBe(true);
+      expect(entries.has('por-territorio-kml/T01.01.01.kml')).toBe(true);
+      expect(entries.has('por-territorio-geojson/T01.01.01.geojson')).toBe(true);
+      expect(entries.has('por-territorio-kml/T01.02.01.kml')).toBe(false);
+      expect(entries.has('por-territorio-geojson/T01.02.01.geojson')).toBe(false);
+
+      const singleKml = decoder.decode(entries.get('por-territorio-kml/T01.01.01.kml')!);
+      expect(singleKml).toContain('<name>T01.01.01</name>');
+      expect(singleKml).toContain('<Polygon>');
+      expect(singleKml).not.toContain('<Point>');
+
+      const singleGeo = JSON.parse(
+        decoder.decode(entries.get('por-territorio-geojson/T01.01.01.geojson')!)
+      );
+      expect(singleGeo.features).toHaveLength(1);
+      expect(singleGeo.features[0].properties.TerritoryNumber).toBe('T01.01.01');
+      expect(singleGeo.features[0].geometry.type).toBe('Polygon');
+
+      // Also reachable via unified exportTerritoryMultiFormat({ format: 'zip' })
+      const viaDispatcher = exportTerritoryMultiFormat(multiQuadraNodes, {
+        format: 'zip',
+      });
+      expect(viaDispatcher.format).toBe('zip');
+      const fullEntries = extractZipEntries(viaDispatcher.bytes!);
+      expect(fullEntries.has('por-territorio-kml/T01.02.01.kml')).toBe(true);
     });
   });
 });

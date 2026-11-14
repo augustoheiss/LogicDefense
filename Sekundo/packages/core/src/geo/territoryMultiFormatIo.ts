@@ -19,9 +19,12 @@
 
 import type { FlatSkeletonEntry } from '../skeleton/types';
 import {
+  computeMergedTerritoryPolygon,
+  DEFAULT_AUTO_BUFFER_METERS,
   extractQuadrasFromRegistry,
   parseAddressLine,
 } from './quadraPolygonEngine';
+import { bufferPolygonMeters } from './geoUtils';
 import { ensureLatLngRing } from './geoJsonAdapter';
 import {
   buildTerritoryModelCsvText,
@@ -44,7 +47,7 @@ function normalizeTerritoryId(raw: string): string {
   return trimmed;
 }
 
-export type TerritoryMultiIoFormat = 'xlsx' | 'csv' | 'kml' | 'geojson' | 'json';
+export type TerritoryMultiIoFormat = 'xlsx' | 'csv' | 'kml' | 'geojson' | 'json' | 'zip';
 
 export type TerritorySpreadsheetSchemaType =
   | 'external_18col'
@@ -74,6 +77,11 @@ export interface TerritoryMultiExportOptions {
   privacySafeMode?: boolean;
   spreadsheetSchema?: 'external_18col' | 'sekundo_19col';
   includeKmlPoints?: boolean;
+  kmlLabelMode?: 'full' | 'territory_number';
+  consolidateByTerritory?: boolean;
+  geojsonProfile?: 'standard' | 'external_gis';
+  includeGeoJsonPoints?: boolean;
+  excludeTerritoryNumbers?: string[];
   documentName?: string;
 }
 
@@ -339,7 +347,7 @@ function writeUint32LE(buf: Uint8Array, offset: number, val: number): void {
   buf[offset + 3] = (val >>> 24) & 0xff;
 }
 
-function extractZipEntries(zipBytes: Uint8Array): Map<string, Uint8Array> {
+export function extractZipEntries(zipBytes: Uint8Array): Map<string, Uint8Array> {
   const entries = new Map<string, Uint8Array>();
   const decoder = new TextDecoder('utf-8');
 
@@ -1566,6 +1574,182 @@ export function parseKmlToCleanTerritoryNodes(
   };
 }
 
+interface PolygonExportItem {
+  key: string;
+  territoryNumber: string;
+  locality: string;
+  label: string;
+  boundaryPolygon: [number, number][];
+  isCompleted: boolean;
+  coveragePercent: number;
+  totalUnits: number;
+}
+
+function buildExcludedTerritorySet(excludeTerritoryNumbers?: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const raw of excludeTerritoryNumbers || []) {
+    const norm = normalizeTerritoryId(raw);
+    if (norm) out.add(norm.toUpperCase());
+  }
+  return out;
+}
+
+function buildConsolidatedTerritoryPolygons(
+  quadras: ReturnType<typeof extractQuadrasFromRegistry>,
+  excludeTerritoryNumbers?: string[]
+): PolygonExportItem[] {
+  const excluded = buildExcludedTerritorySet(excludeTerritoryNumbers);
+  const byTerritory = new Map<string, typeof quadras>();
+
+  for (const q of quadras) {
+    const code = normalizeTerritoryId(q.territoryNumber || q.key);
+    if (excluded.has(code.toUpperCase())) continue;
+    const list = byTerritory.get(code) || [];
+    list.push(q);
+    byTerritory.set(code, list);
+  }
+
+  const items: PolygonExportItem[] = [];
+  for (const [territoryNumber, qList] of Array.from(byTerritory.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0])
+  )) {
+    const validQuadras = qList.filter(
+      (q) =>
+        (q.boundaryPolygon && q.boundaryPolygon.length >= 3) ||
+        (q.centroid && (q.centroid[0] !== 0 || q.centroid[1] !== 0))
+    );
+    if (validQuadras.length === 0) continue;
+
+    let boundaryPolygon: [number, number][] = [];
+    if (validQuadras.length === 1 && validQuadras[0].boundaryPolygon.length >= 3) {
+      boundaryPolygon = validQuadras[0].boundaryPolygon;
+    } else {
+      boundaryPolygon = computeMergedTerritoryPolygon(validQuadras, 0);
+      if (boundaryPolygon.length > 0 && boundaryPolygon.length < 3) {
+        boundaryPolygon = bufferPolygonMeters(boundaryPolygon, DEFAULT_AUTO_BUFFER_METERS);
+      }
+    }
+    if (boundaryPolygon.length < 3) continue;
+
+    const locality =
+      qList.find((q) => (q.locality || '').trim().length > 0)?.locality?.trim() || 'Setor Geral';
+    let totalUnits = 0;
+    let workedUnits = 0;
+    for (const q of qList) {
+      totalUnits += q.totalUnits;
+      for (const st of q.streets) {
+        for (const u of st.units) {
+          if (u.worked === 1) workedUnits++;
+        }
+      }
+    }
+    const isCompleted =
+      totalUnits > 0 ? workedUnits === totalUnits : qList.every((q) => q.isCompleted);
+    const coveragePercent =
+      totalUnits > 0
+        ? Math.round((workedUnits / totalUnits) * 1000) / 10
+        : isCompleted
+        ? 100
+        : 0;
+
+    items.push({
+      key: territoryNumber,
+      territoryNumber,
+      locality,
+      label: territoryNumber,
+      boundaryPolygon,
+      isCompleted,
+      coveragePercent,
+      totalUnits,
+    });
+  }
+
+  return items;
+}
+
+function buildKmlPolygonPlacemarkXml(
+  item: PolygonExportItem,
+  labelMode: 'full' | 'territory_number'
+): string {
+  const closedRing = [...item.boundaryPolygon, item.boundaryPolygon[0]];
+  const coordsStr = closedRing.map(([lat, lng]) => `${lng},${lat},0`).join(' ');
+  const styleId = item.isCompleted ? '#polyWorked' : '#polyPending';
+  const rawName =
+    labelMode === 'territory_number'
+      ? item.territoryNumber
+      : item.label.includes(item.territoryNumber)
+      ? item.label
+      : `${item.territoryNumber} — ${item.label}`;
+  const pmName = escapeXmlEntities(rawName);
+  const locality = item.locality || 'Setor Geral';
+  const desc = escapeXmlEntities(
+    `Território ${item.territoryNumber} (${locality}) • Cobertura: ${item.coveragePercent}%`
+  );
+
+  return `      <Placemark>
+        <name>${pmName}</name>
+        <description>${desc}</description>
+        <styleUrl>${styleId}</styleUrl>
+        <ExtendedData>
+          <Data name="territory_number"><value>${escapeXmlEntities(item.territoryNumber)}</value></Data>
+          <Data name="locality"><value>${escapeXmlEntities(locality)}</value></Data>
+          <Data name="quadra_key"><value>${escapeXmlEntities(item.key)}</value></Data>
+          <Data name="worked"><value>${item.isCompleted ? '1' : '0'}</value></Data>
+          <Data name="total_units"><value>${item.totalUnits}</value></Data>
+        </ExtendedData>
+        <Polygon>
+          <outerBoundaryIs>
+            <LinearRing>
+              <coordinates>${coordsStr}</coordinates>
+            </LinearRing>
+          </outerBoundaryIs>
+        </Polygon>
+      </Placemark>`;
+}
+
+function buildKmlDocumentXml(documentTitle: string, foldersXml: string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${escapeXmlEntities(documentTitle)}</name>
+    <Style id="polyPending">
+      <LineStyle><color>ff4444ef</color><width>2</width></LineStyle>
+      <PolyStyle><color>4d4444ef</color></PolyStyle>
+    </Style>
+    <Style id="polyWorked">
+      <LineStyle><color>ff81b910</color><width>2</width></LineStyle>
+      <PolyStyle><color>4d81b910</color></PolyStyle>
+    </Style>
+${foldersXml.join('\n')}
+  </Document>
+</kml>`;
+}
+
+function buildKmlFromPolygonItems(
+  items: PolygonExportItem[],
+  labelMode: 'full' | 'territory_number',
+  documentTitle: string
+): string {
+  const byLocality = new Map<string, PolygonExportItem[]>();
+  for (const item of items) {
+    const loc = (item.locality || 'Setor Geral').trim();
+    const list = byLocality.get(loc) || [];
+    list.push(item);
+    byLocality.set(loc, list);
+  }
+  const folderXmlParts: string[] = [];
+  for (const [locality, list] of Array.from(byLocality.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0])
+  )) {
+    const placemarks = list.map((item) => buildKmlPolygonPlacemarkXml(item, labelMode));
+    folderXmlParts.push(`    <Folder>
+      <name>${escapeXmlEntities(locality)}</name>
+${placemarks.join('\n')}
+    </Folder>`);
+  }
+  return buildKmlDocumentXml(documentTitle, folderXmlParts);
+}
+
 /**
  * Exports `cleanTerritoryNodes` to a Google Earth / My Maps / GIS
  * compatible `.kml` file organized by `<Folder>` (Bairro/Locality) -> `<Placemark>` (Polygons & Optional Points).
@@ -1575,15 +1759,37 @@ export function exportCleanTerritoryNodesToKml(
   options: {
     privacySafeMode?: boolean;
     includePoints?: boolean;
+    labelMode?: 'full' | 'territory_number';
+    consolidateByTerritory?: boolean;
+    excludeTerritoryNumbers?: string[];
     documentName?: string;
   } = {}
 ): string {
   const privacySafeMode = options.privacySafeMode !== false; // Default TRUE
+  const labelMode = options.labelMode || (options.consolidateByTerritory ? 'territory_number' : 'full');
   const effectiveNodes = privacySafeMode
     ? cleanTerritoryNodes.map((n) => sanitizeTerritoryNodeForPrivacy(n))
     : cleanTerritoryNodes;
 
-  const quadras = extractQuadrasFromRegistry(effectiveNodes);
+  const docTitle =
+    options.documentName ||
+    (options.consolidateByTerritory
+      ? 'Sekundo — Polígonos Numerados por Território'
+      : 'Sekundo — Mapa de Territórios e Quadras');
+
+  const allQuadras = extractQuadrasFromRegistry(effectiveNodes);
+  if (options.consolidateByTerritory) {
+    const consolidated = buildConsolidatedTerritoryPolygons(
+      allQuadras,
+      options.excludeTerritoryNumbers
+    );
+    return buildKmlFromPolygonItems(consolidated, labelMode, docTitle);
+  }
+
+  const excluded = buildExcludedTerritorySet(options.excludeTerritoryNumbers);
+  const quadras = excluded.size > 0
+    ? allQuadras.filter((q) => !excluded.has(normalizeTerritoryId(q.territoryNumber || q.key).toUpperCase()))
+    : allQuadras;
   const byLocality = new Map<string, typeof quadras>();
 
   for (const q of quadras) {
@@ -1594,7 +1800,6 @@ export function exportCleanTerritoryNodesToKml(
     byLocality.get(loc)!.push(q);
   }
 
-  const docTitle = escapeXmlEntities(options.documentName || 'Sekundo — Mapa de Territórios e Quadras');
   const folderXmlParts: string[] = [];
 
   for (const [locality, qList] of Array.from(byLocality.entries()).sort((a, b) =>
@@ -1604,35 +1809,21 @@ export function exportCleanTerritoryNodesToKml(
 
     for (const q of qList) {
       if (q.boundaryPolygon && q.boundaryPolygon.length >= 3) {
-        const closedRing = [...q.boundaryPolygon, q.boundaryPolygon[0]];
-        const coordsStr = closedRing.map(([lat, lng]) => `${lng},${lat},0`).join(' ');
-        const styleId = q.isCompleted ? '#polyWorked' : '#polyPending';
-        const pmName = escapeXmlEntities(
-          q.label.includes(q.territoryNumber) ? q.label : `${q.territoryNumber} — ${q.label}`
+        placemarkParts.push(
+          buildKmlPolygonPlacemarkXml(
+            {
+              key: q.key,
+              territoryNumber: q.territoryNumber,
+              locality,
+              label: q.label,
+              boundaryPolygon: q.boundaryPolygon,
+              isCompleted: q.isCompleted,
+              coveragePercent: q.coveragePercent,
+              totalUnits: q.totalUnits,
+            },
+            labelMode
+          )
         );
-        const desc = escapeXmlEntities(
-          `Território ${q.territoryNumber} (${locality}) • Cobertura: ${q.coveragePercent}%`
-        );
-
-        placemarkParts.push(`      <Placemark>
-        <name>${pmName}</name>
-        <description>${desc}</description>
-        <styleUrl>${styleId}</styleUrl>
-        <ExtendedData>
-          <Data name="territory_number"><value>${escapeXmlEntities(q.territoryNumber)}</value></Data>
-          <Data name="locality"><value>${escapeXmlEntities(locality)}</value></Data>
-          <Data name="quadra_key"><value>${escapeXmlEntities(q.key)}</value></Data>
-          <Data name="worked"><value>${q.isCompleted ? '1' : '0'}</value></Data>
-          <Data name="total_units"><value>${q.totalUnits}</value></Data>
-        </ExtendedData>
-        <Polygon>
-          <outerBoundaryIs>
-            <LinearRing>
-              <coordinates>${coordsStr}</coordinates>
-            </LinearRing>
-          </outerBoundaryIs>
-        </Polygon>
-      </Placemark>`);
       }
 
       if (options.includePoints) {
@@ -1663,21 +1854,7 @@ ${placemarkParts.join('\n')}
     </Folder>`);
   }
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>${docTitle}</name>
-    <Style id="polyPending">
-      <LineStyle><color>ff4444ef</color><width>2</width></LineStyle>
-      <PolyStyle><color>4d4444ef</color></PolyStyle>
-    </Style>
-    <Style id="polyWorked">
-      <LineStyle><color>ff81b910</color><width>2</width></LineStyle>
-      <PolyStyle><color>4d81b910</color></PolyStyle>
-    </Style>
-${folderXmlParts.join('\n')}
-  </Document>
-</kml>`;
+  return buildKmlDocumentXml(docTitle, folderXmlParts);
 }
 
 // ============================================================================
@@ -1812,58 +1989,113 @@ export function parseGeoJsonToCleanTerritoryNodes(
   };
 }
 
+function buildGeoJsonPolygonFeature(
+  item: PolygonExportItem,
+  profile: 'standard' | 'external_gis'
+) {
+  const closedLngLat = [...item.boundaryPolygon, item.boundaryPolygon[0]].map(([lat, lng]) => [
+    lng,
+    lat,
+  ]);
+  const properties: Record<string, unknown> = {
+    _key: item.key,
+    label: item.label,
+    territory_number: item.territoryNumber,
+    locality: item.locality || '',
+    worked: item.isCompleted ? 1 : 0,
+    coveragePercent: item.coveragePercent,
+    totalUnits: item.totalUnits,
+  };
+  if (profile === 'external_gis') {
+    properties.name = item.territoryNumber;
+    properties.TerritoryNumber = item.territoryNumber;
+    properties.TerritoryType = 'Quadras';
+    properties.TerritoryNotes = `${item.locality || 'Setor Geral'} (${item.totalUnits} unid.)`;
+  }
+  return {
+    type: 'Feature',
+    properties,
+    geometry: {
+      type: 'Polygon',
+      coordinates: [closedLngLat],
+    },
+  };
+}
+
 export function exportCleanTerritoryNodesToGeoJson(
   cleanTerritoryNodes: FlatSkeletonEntry[],
-  options: { privacySafeMode?: boolean } = {}
+  options: {
+    privacySafeMode?: boolean;
+    profile?: 'standard' | 'external_gis';
+    consolidateByTerritory?: boolean;
+    includePoints?: boolean;
+    excludeTerritoryNumbers?: string[];
+  } = {}
 ): string {
   const privacySafeMode = options.privacySafeMode !== false;
+  const profile = options.profile || (options.consolidateByTerritory ? 'external_gis' : 'standard');
+  const includePoints =
+    options.includePoints !== undefined ? options.includePoints : !options.consolidateByTerritory;
+
   const effectiveNodes = privacySafeMode
     ? cleanTerritoryNodes.map((n) => sanitizeTerritoryNodeForPrivacy(n))
     : cleanTerritoryNodes;
-  const quadras = extractQuadrasFromRegistry(effectiveNodes);
+  const allQuadras = extractQuadrasFromRegistry(effectiveNodes);
   const features: any[] = [];
 
-  for (const q of quadras) {
-    if (q.boundaryPolygon && q.boundaryPolygon.length >= 3) {
-      const closedLngLat = [...q.boundaryPolygon, q.boundaryPolygon[0]].map(([lat, lng]) => [
-        lng,
-        lat,
-      ]);
-      features.push({
-        type: 'Feature',
-        properties: {
-          _key: q.key,
-          label: q.label,
-          territory_number: q.territoryNumber,
-          locality: q.locality || '',
-          worked: q.isCompleted ? 1 : 0,
-          coveragePercent: q.coveragePercent,
-          totalUnits: q.totalUnits,
-        },
-        geometry: {
-          type: 'Polygon',
-          coordinates: [closedLngLat],
-        },
-      });
+  if (options.consolidateByTerritory) {
+    const consolidated = buildConsolidatedTerritoryPolygons(
+      allQuadras,
+      options.excludeTerritoryNumbers
+    );
+    for (const item of consolidated) {
+      features.push(buildGeoJsonPolygonFeature(item, profile));
     }
-    for (const st of q.streets) {
-      for (const u of st.units) {
-        if (typeof u.lat === 'number' && typeof u.lng === 'number') {
-          features.push({
-            type: 'Feature',
-            properties: {
-              _key: u.key,
-              label: `${u.street}, ${u.numberOrComplement}`,
-              territory_number: q.territoryNumber,
+  } else {
+    const excluded = buildExcludedTerritorySet(options.excludeTerritoryNumbers);
+    const quadras = excluded.size > 0
+      ? allQuadras.filter((q) => !excluded.has(normalizeTerritoryId(q.territoryNumber || q.key).toUpperCase()))
+      : allQuadras;
+
+    for (const q of quadras) {
+      if (q.boundaryPolygon && q.boundaryPolygon.length >= 3) {
+        features.push(
+          buildGeoJsonPolygonFeature(
+            {
+              key: q.key,
+              territoryNumber: q.territoryNumber,
               locality: q.locality || '',
-              worked: u.worked,
-              propertyType: u.propertyType || 'residencial',
+              label: q.label,
+              boundaryPolygon: q.boundaryPolygon,
+              isCompleted: q.isCompleted,
+              coveragePercent: q.coveragePercent,
+              totalUnits: q.totalUnits,
             },
-            geometry: {
-              type: 'Point',
-              coordinates: [u.lng, u.lat],
-            },
-          });
+            profile
+          )
+        );
+      }
+      if (includePoints) {
+        for (const st of q.streets) {
+          for (const u of st.units) {
+            if (typeof u.lat === 'number' && typeof u.lng === 'number') {
+              features.push({
+                type: 'Feature',
+                properties: {
+                  _key: u.key,
+                  label: `${u.street}, ${u.numberOrComplement}`,
+                  territory_number: q.territoryNumber,
+                  locality: q.locality || '',
+                  worked: u.worked,
+                  propertyType: u.propertyType || 'residencial',
+                },
+                geometry: {
+                  type: 'Point',
+                  coordinates: [u.lng, u.lat],
+                },
+              });
+            }
+          }
         }
       }
     }
@@ -1879,6 +2111,108 @@ export function exportCleanTerritoryNodesToGeoJson(
   );
 }
 
+/**
+ * Generates a ZIP bundle optimized for non-destructive GIS import:
+ * - Consolidated polygon-only KML & GeoJSON (numbered by territory code, zero <Point> noise)
+ * - Individual per-territory `.kml` and `.geojson` files so single territories can be uploaded
+ *   safely one by one without overwriting overall map boundaries or existing sectors.
+ */
+export function exportTerritoryExternalGisZip(
+  cleanTerritoryNodes: FlatSkeletonEntry[],
+  options: {
+    privacySafeMode?: boolean;
+    excludeTerritoryNumbers?: string[];
+    documentName?: string;
+  } = {}
+): TerritoryMultiExportPayload {
+  const privacySafeMode = options.privacySafeMode !== false;
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const effectiveNodes = privacySafeMode
+    ? cleanTerritoryNodes.map((n) => sanitizeTerritoryNodeForPrivacy(n))
+    : cleanTerritoryNodes;
+  const quadras = extractQuadrasFromRegistry(effectiveNodes);
+  const consolidated = buildConsolidatedTerritoryPolygons(
+    quadras,
+    options.excludeTerritoryNumbers
+  );
+
+  const docTitle = options.documentName || 'Sekundo — Polígonos Numerados por Território';
+  const consolidatedKml = buildKmlFromPolygonItems(
+    consolidated,
+    'territory_number',
+    docTitle
+  );
+  const consolidatedGeoJson = JSON.stringify(
+    {
+      type: 'FeatureCollection',
+      features: consolidated.map((item) => buildGeoJsonPolygonFeature(item, 'external_gis')),
+    },
+    null,
+    2
+  );
+
+  const excludedList = Array.from(buildExcludedTerritorySet(options.excludeTerritoryNumbers)).sort();
+  const readmeLines = [
+    'Sekundo — Pacote de Poligonos Numerados (GIS Externo Seguro)',
+    `Exportado em: ${new Date().toISOString()}`,
+    `Territorios incluidos neste pacote: ${consolidated.length}`,
+    ...(excludedList.length > 0
+      ? [`Territorios preservados/excluidos do lote (${excludedList.length}): ${excludedList.join(', ')}`]
+      : []),
+    '',
+    'COMO IMPORTAR SEM SOBRESCREVER DADOS EXISTENTES:',
+    '1) Para carregar territorio por territorio em plataformas externas sem alterar',
+    '   o limite geral nem territorios ja desenhados:',
+    '   - Entre no editor do territorio desejado e envie o arquivo correspondente em',
+    '     por-territorio-geojson/<CODIGO>.geojson ou por-territorio-kml/<CODIGO>.kml.',
+    '2) Para mapas novos ou ferramentas GIS consolidadas (Google Earth, My Maps, QGIS):',
+    '   - Use 01-consolidado-poligonos.kml ou 02-consolidado-poligonos.geojson.',
+    '   - Todos os poligonos carregam apenas a geometria consolidada com o codigo oficial',
+    '     do territorio (ex.: T01.01.01), sem pinos individuais de enderecos (LGPD).',
+    '',
+  ];
+
+  const encoder = new TextEncoder();
+  const archiveEntries: Array<{ name: string; data: Uint8Array }> = [
+    { name: '00-LEIA-ME.txt', data: encoder.encode(readmeLines.join('\n')) },
+    { name: '01-consolidado-poligonos.kml', data: encoder.encode(consolidatedKml) },
+    { name: '02-consolidado-poligonos.geojson', data: encoder.encode(consolidatedGeoJson) },
+  ];
+
+  for (const item of consolidated) {
+    const safeCode = item.territoryNumber.replace(/[^A-Za-z0-9._-]+/g, '_');
+    const singleKml = buildKmlFromPolygonItems(
+      [item],
+      'territory_number',
+      `Sekundo — ${item.territoryNumber}`
+    );
+    const singleGeoJson = JSON.stringify(
+      {
+        type: 'FeatureCollection',
+        features: [buildGeoJsonPolygonFeature(item, 'external_gis')],
+      },
+      null,
+      2
+    );
+    archiveEntries.push({
+      name: `por-territorio-kml/${safeCode}.kml`,
+      data: encoder.encode(singleKml),
+    });
+    archiveEntries.push({
+      name: `por-territorio-geojson/${safeCode}.geojson`,
+      data: encoder.encode(singleGeoJson),
+    });
+  }
+
+  return {
+    format: 'zip',
+    fileName: `sekundo-gis-poligonos-numerados-${dateStamp}.zip`,
+    mimeType: 'application/zip',
+    bytes: buildStoredZipArchive(archiveEntries),
+    privacySanitized: privacySafeMode,
+  };
+}
+
 // ============================================================================
 // 5. Unified Multi-Format Import & Export Dispatcher + Clean-Room Samples
 // ============================================================================
@@ -1888,6 +2222,7 @@ export function detectTerritoryFileFormat(
   contentPreview?: string
 ): TerritoryMultiIoFormat {
   const lowerName = String(fileName || '').trim().toLowerCase();
+  if (lowerName.endsWith('.zip')) return 'zip';
   if (lowerName.endsWith('.xlsx')) return 'xlsx';
   if (lowerName.endsWith('.kml')) return 'kml';
   if (lowerName.endsWith('.geojson')) return 'geojson';
@@ -1909,13 +2244,24 @@ export function importTerritoryMultiFormat(
   },
   options: TerritoryMultiImportOptions = {}
 ): TerritoryMultiImportResult {
+  const lowerName = String(input.fileName || '').trim().toLowerCase();
   const format =
     options.format ||
-    (input.bytes && input.bytes.length >= 4 && input.bytes[0] === 0x50 && input.bytes[1] === 0x4b
+    (input.bytes &&
+    input.bytes.length >= 4 &&
+    input.bytes[0] === 0x50 &&
+    input.bytes[1] === 0x4b &&
+    !lowerName.endsWith('.zip')
       ? 'xlsx'
       : detectTerritoryFileFormat(input.fileName, input.text));
 
   const privacySafeMode = Boolean(options.privacySafeMode);
+
+  if (format === 'zip') {
+    throw new Error(
+      'Extraia o pacote .zip e importe diretamente o arquivo .kml, .geojson, .xlsx ou .csv desejado.'
+    );
+  }
 
   if (format === 'xlsx') {
     if (!input.bytes) {
@@ -2030,15 +2376,30 @@ export function exportTerritoryMultiFormat(
     };
   }
 
+  if (options.format === 'zip') {
+    return exportTerritoryExternalGisZip(cleanTerritoryNodes, {
+      privacySafeMode,
+      excludeTerritoryNumbers: options.excludeTerritoryNumbers,
+      documentName: options.documentName,
+    });
+  }
+
   if (options.format === 'kml') {
+    const consolidate = Boolean(options.consolidateByTerritory);
+    const labelMode = options.kmlLabelMode || (consolidate ? 'territory_number' : 'full');
     const text = exportCleanTerritoryNodesToKml(cleanTerritoryNodes, {
       privacySafeMode,
-      includePoints: options.includeKmlPoints,
+      includePoints: consolidate ? options.includeKmlPoints === true : options.includeKmlPoints,
+      labelMode,
+      consolidateByTerritory: consolidate,
+      excludeTerritoryNumbers: options.excludeTerritoryNumbers,
       documentName: options.documentName,
     });
     return {
       format: 'kml',
-      fileName: `sekundo-territorios-${dateStamp}.kml`,
+      fileName: consolidate
+        ? `sekundo-territorios-numerados-${dateStamp}.kml`
+        : `sekundo-territorios-${dateStamp}.kml`,
       mimeType: 'application/vnd.google-earth.kml+xml;charset=utf-8',
       text,
       privacySanitized: privacySafeMode,
@@ -2046,10 +2407,20 @@ export function exportTerritoryMultiFormat(
   }
 
   if (options.format === 'geojson') {
-    const text = exportCleanTerritoryNodesToGeoJson(cleanTerritoryNodes, { privacySafeMode });
+    const consolidate = Boolean(options.consolidateByTerritory);
+    const profile = options.geojsonProfile || (consolidate ? 'external_gis' : 'standard');
+    const text = exportCleanTerritoryNodesToGeoJson(cleanTerritoryNodes, {
+      privacySafeMode,
+      profile,
+      consolidateByTerritory: consolidate,
+      includePoints: options.includeGeoJsonPoints,
+      excludeTerritoryNumbers: options.excludeTerritoryNumbers,
+    });
     return {
       format: 'geojson',
-      fileName: `sekundo-territorios-${dateStamp}.geojson`,
+      fileName: consolidate
+        ? `sekundo-territorios-numerados-${dateStamp}.geojson`
+        : `sekundo-territorios-${dateStamp}.geojson`,
       mimeType: 'application/geo+json;charset=utf-8',
       text,
       privacySanitized: privacySafeMode,
