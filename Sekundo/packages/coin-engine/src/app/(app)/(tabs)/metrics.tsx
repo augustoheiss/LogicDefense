@@ -25,7 +25,7 @@ import {
   getEffectivePeriodSpanDays,
   formatSelectedMonthsLabel,
 } from '@coin/core/dateUtils';
-import { CategorySummary, AddRowModal, InvestorPortfolioWidget } from '@coin/components/ui';
+import { CategorySummary, AddRowModal, InvestorPortfolioWidget, SearchableVerticalFilter } from '@coin/components/ui';
 import { SectorSettingsPanel } from '@coin/components/ui/SectorSettingsPanel';
 import {
   PersonalFinanceSectorWidget,
@@ -451,28 +451,23 @@ export default function MetricsScreen() {
 
       {/* ── Central AutoCAD Cockpit Wrapper (Centered on Screen) ── */}
       <View style={styles.cockpitOuter}>
-        {/* 1. DOCK DE BOTÕES SOMENTE-ÍCONE (Sem descrições longas que poluem a tela) */}
+        {/* 1. FILTRO VERTICAL PESQUISAVEL DE ESTACOES (Combobox Vertical) */}
         <View style={styles.stationBarWrapper} testID="metrics-station-bar">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.stationBarScroll}
-          >
-            {visibleNodes.map((node) => {
-              const active = activeStation === node.id;
-              return (
-                <Pressable
-                  key={node.id}
-                  testID={`metrics-station-${node.id}`}
-                  style={[styles.iconOnlyNode, active && styles.iconOnlyNodeActive]}
-                  onPress={() => setActiveStation(node.id)}
-                >
-                  <Text style={styles.iconOnlyEmoji}>{node.icon}</Text>
-                  {active && <View style={styles.iconActiveIndicator} />}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <SearchableVerticalFilter
+            label="Estação de Métricas"
+            placeholder="Filtrar ou selecionar estação de métricas..."
+            options={visibleNodes.map((node) => ({
+              id: node.id,
+              label: `${node.icon} ${node.title}`,
+              subtitle: node.guide,
+              keywords: [node.title, node.id, node.guide],
+            }))}
+            selectedId={activeStation}
+            allowClear={false}
+            onSelect={(id) => setActiveStation(id as any)}
+            emptyMessage="Nenhuma estação encontrada."
+            testID="metrics-station-vertical-filter"
+          />
         </View>
 
         {/* 2. VISOR GUIA INTERATIVO AUTOCAD ("Vai te guiando o que é aquele botão") */}

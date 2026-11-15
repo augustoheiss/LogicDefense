@@ -32,6 +32,7 @@ import {
   type SourceMode,
   type CloneConfig,
 } from '@coin/core/predictionEngine';
+import { SearchableVerticalFilter } from './SearchableVerticalFilter';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -264,12 +265,6 @@ export function PredictionPanel({
     }
   };
 
-  const toggleSourceMonthKey = (ym: string) => {
-    setSourceMonthKeys((prev) =>
-      prev.includes(ym) ? prev.filter((x) => x !== ym) : [...prev, ym]
-    );
-  };
-
   const sourceOptions = [
     { id: 'month' as const, label: 'Mês' },
     { id: 'year'  as const, label: 'Ano' },
@@ -359,76 +354,75 @@ export function PredictionPanel({
               </View>
             </View>
 
-            {/* Source Selector UI */}
+            {/* Source Selector UI (Combobox Vertical Pesquisável) */}
             <View style={styles.selectorWrapper}>
               {sourceType === 'month' && (
                 <View style={styles.subControl}>
-                  <Text style={styles.subLabel}>Selecione o mês de origem</Text>
                   {months.length === 0 ? (
                     <Text style={styles.emptyText}>Sem dados no histórico</Text>
                   ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPills}>
-                      {months.map((m) => (
-                        <Pressable
-                          key={m}
-                          onPress={() => setSourceMonth(m)}
-                          style={[styles.selectorPill, sourceMonth === m && styles.selectorPillActive]}
-                        >
-                          <Text style={[styles.selectorPillText, sourceMonth === m && styles.selectorPillTextActive]}>
-                            {formatMonthShort(m)}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
+                    <SearchableVerticalFilter
+                      label="Selecione o mês de origem"
+                      placeholder="Filtrar ou escolher mês de origem..."
+                      options={months.map((m) => ({
+                        id: m,
+                        label: formatMonthShort(m),
+                        subtitle: m,
+                        keywords: [m, formatMonthShort(m)],
+                      }))}
+                      selectedId={sourceMonth || null}
+                      allowClear={false}
+                      onSelect={(m) => setSourceMonth(m)}
+                      emptyMessage="Nenhum mês de origem encontrado."
+                      testID="prediction-source-month-filter"
+                    />
                   )}
                 </View>
               )}
 
               {sourceType === 'year' && (
                 <View style={styles.subControl}>
-                  <Text style={styles.subLabel}>Selecione o ano de origem</Text>
                   {years.length === 0 ? (
                     <Text style={styles.emptyText}>Sem dados no histórico</Text>
                   ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPills}>
-                      {years.map((y) => (
-                        <Pressable
-                          key={y}
-                          onPress={() => setSourceYear(y)}
-                          style={[styles.selectorPill, sourceYear === y && styles.selectorPillActive]}
-                        >
-                          <Text style={[styles.selectorPillText, sourceYear === y && styles.selectorPillTextActive]}>
-                            {y}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
+                    <SearchableVerticalFilter
+                      label="Selecione o ano de origem"
+                      placeholder="Filtrar ou escolher ano de origem..."
+                      options={years.map((y) => ({
+                        id: y,
+                        label: y,
+                        keywords: [y],
+                      }))}
+                      selectedId={sourceYear || null}
+                      allowClear={false}
+                      onSelect={(y) => setSourceYear(y)}
+                      emptyMessage="Nenhum ano de origem encontrado."
+                      testID="prediction-source-year-filter"
+                    />
                   )}
                 </View>
               )}
 
               {sourceType === 'range' && (
                 <View style={styles.subControl}>
-                  <Text style={styles.subLabel}>Selecione múltiplos meses (Cherry-pick)</Text>
                   {months.length === 0 ? (
                     <Text style={styles.emptyText}>Sem dados no histórico</Text>
                   ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPills}>
-                      {months.map((m) => {
-                        const isSelected = sourceMonthKeys.includes(m);
-                        return (
-                          <Pressable
-                            key={m}
-                            onPress={() => toggleSourceMonthKey(m)}
-                            style={[styles.selectorPill, isSelected && styles.selectorPillActiveRange]}
-                          >
-                            <Text style={[styles.selectorPillText, isSelected && styles.selectorPillTextActiveRange]}>
-                              {formatMonthShort(m)} {isSelected ? '✓' : ''}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
+                    <SearchableVerticalFilter
+                      label="Selecione múltiplos meses (Cherry-pick)"
+                      placeholder="Filtrar ou escolher meses..."
+                      options={months.map((m) => ({
+                        id: m,
+                        label: formatMonthShort(m),
+                        subtitle: m,
+                        keywords: [m, formatMonthShort(m)],
+                      }))}
+                      multiSelect
+                      selectedIds={sourceMonthKeys}
+                      onChangeSelectedIds={(nextIds) => setSourceMonthKeys(nextIds)}
+                      emptyMessage="Nenhum mês encontrado."
+                      testID="prediction-source-range-filter"
+                    />
                   )}
                 </View>
               )}
@@ -458,20 +452,21 @@ export function PredictionPanel({
             {/* Target Settings */}
             <View style={styles.targetWrapper}>
               <View style={styles.targetCol}>
-                <Text style={styles.label}>Mês Destino</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPills}>
-                  {targetMonths.map((m) => (
-                    <Pressable
-                      key={m}
-                      onPress={() => setTargetStart(m)}
-                      style={[styles.selectorPill, targetStart === m && styles.selectorPillActiveTarget]}
-                    >
-                      <Text style={[styles.selectorPillText, targetStart === m && styles.selectorPillTextActiveTarget]}>
-                        {formatMonthShort(m)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                <SearchableVerticalFilter
+                  label="Mês Destino"
+                  placeholder="Filtrar ou escolher mês destino..."
+                  options={targetMonths.map((m) => ({
+                    id: m,
+                    label: formatMonthShort(m),
+                    subtitle: m,
+                    keywords: [m, formatMonthShort(m)],
+                  }))}
+                  selectedId={targetStart || null}
+                  allowClear={false}
+                  onSelect={(m) => setTargetStart(m)}
+                  emptyMessage="Nenhum mês destino encontrado."
+                  testID="prediction-target-month-filter"
+                />
               </View>
 
               <View style={styles.counterRow}>
@@ -790,50 +785,6 @@ const styles = StyleSheet.create({
   },
   subControl: {
     gap: spacing.xs,
-  },
-  subLabel: {
-    fontSize: 10,
-    color: colors.text.disabled,
-  },
-  horizontalPills: {
-    gap: spacing.xs,
-    paddingVertical: 2,
-  },
-  selectorPill: {
-    backgroundColor: colors.background.secondary,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  selectorPillActive: {
-    borderColor: colors.accent.purple,
-    backgroundColor: colors.accent.purpleLight,
-  },
-  selectorPillActiveRange: {
-    borderColor: colors.accent.purple,
-    backgroundColor: colors.accent.purple,
-  },
-  selectorPillActiveTarget: {
-    borderColor: colors.warning.main,
-    backgroundColor: colors.warning.light,
-  },
-  selectorPillText: {
-    fontSize: 11,
-    color: colors.text.tertiary,
-  },
-  selectorPillTextActive: {
-    color: colors.accent.purple,
-    fontWeight: '600',
-  },
-  selectorPillTextActiveRange: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  selectorPillTextActiveTarget: {
-    color: colors.warning.main,
-    fontWeight: '600',
   },
 
   counterRow: {

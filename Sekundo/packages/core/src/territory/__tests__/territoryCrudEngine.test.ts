@@ -15,6 +15,7 @@ import {
 import { buildTerritoriosS13HistoricalRegistry } from '../../schedule/programacaoReuniaoSeed';
 import { resolveTerritoryNumber } from '../../geo/geoUtils';
 import { selectEnginePartitionNodes } from '../../csv/omniCsvBundle';
+import { importGranularCSV } from '../../csv/granularImport';
 import type { FlatSkeletonEntry } from '../../skeleton/types';
 
 describe('territoryCrudEngine', () => {
@@ -284,5 +285,25 @@ describe('territoryCrudEngine', () => {
     expect(csvText).toContain('Rua Beta');
     expect(csvText).toContain('Rua Gama');
     expect(csvText).not.toContain(';01;Bairro Origem;');
+  });
+
+  it('excludes synthetic tree ancestor folders (Área/Setor) generated during CSV import from extractTerritorySummaries', () => {
+    const csv18 = [
+      'territory_number,territory_locality,line,line2,city,state,postalcode,dnc,lang,locationType,status,latitude,longitude,sortOrder,hideOnMap,lastWorked,notes,tags',
+      'T01.01.01,Setor Alfa,"Rua Sintética 01, 101",Quadra Q01,Florianópolis Demo,SC,88000-000,FALSE,,residence,valid,-27.60,-48.55,1,FALSE,,,',
+      'T02.01.01,Setor Beta,"Rua Sintética 02, 102",Quadra Q02,Florianópolis Demo,SC,88000-000,FALSE,,residence,valid,-27.61,-48.56,2,FALSE,,,',
+      'T03.01.01,Setor Gama,"Rua Sintética 03, 103",Quadra Q03,Florianópolis Demo,SC,88000-000,FALSE,,residence,worked,-27.62,-48.57,3,FALSE,2026-10-12,,',
+    ].join('\n');
+
+    const imported = importGranularCSV([], csv18, { forceOverwriteState: true });
+    expect(imported.success).toBe(true);
+    // Ancestor headers (01, 01-01, ...) remain in registry for hierarchical compatibility,
+    // but extractTerritorySummaries must list strictly the 3 actual territories without phantom 01..03 duplicates.
+    const summaries = extractTerritorySummaries(imported.updatedRegistry);
+    expect(summaries.map((s) => s.territoryNumber)).toEqual([
+      'T01.01.01',
+      'T02.01.01',
+      'T03.01.01',
+    ]);
   });
 });

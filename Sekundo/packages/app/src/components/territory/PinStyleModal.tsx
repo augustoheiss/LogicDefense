@@ -23,6 +23,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 export type PinShape = 'circle' | 'triangle' | 'square' | 'pentagon' | 'hexagon' | 'diamond' | 'star' | 'pin';
 
@@ -336,57 +337,51 @@ export function PinStyleModal({
               {/* Scope specific sub-selector */}
               {scope === 'territory' ? (
                 <View style={styles.subSelectorBox}>
-                  <Text style={styles.subSelectorLabel}>Selecione o Território:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-                    {territoryList.map((tNum) => {
-                      const active = selectedTerritory === tNum;
-                      return (
-                        <Pressable
-                          key={tNum}
-                          onPress={() => setSelectedTerritory(tNum)}
-                          style={[styles.chip, active && styles.chipActive]}
-                        >
-                          <Text style={[styles.chipText, active && styles.chipTextActive]}>{tNum}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                  <SearchableVerticalFilter
+                    label="Selecione o Território"
+                    testID="pin-style-territory-filter"
+                    placeholder="🔍 Buscar território por número..."
+                    selectedId={selectedTerritory || ''}
+                    allowClear={false}
+                    onSelect={(id) => setSelectedTerritory(id)}
+                    options={territoryList.map((tNum) => ({
+                      id: tNum,
+                      label: `Território ${tNum}`,
+                      keywords: [tNum],
+                    }))}
+                  />
                 </View>
               ) : scope === 'neighborhood' ? (
                 <View style={styles.subSelectorBox}>
-                  <Text style={styles.subSelectorLabel}>Selecione o Bairro:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-                    {neighborhoodList.map((neigh) => {
-                      const active = selectedNeighborhood === neigh;
-                      return (
-                        <Pressable
-                          key={neigh}
-                          onPress={() => setSelectedNeighborhood(neigh)}
-                          style={[styles.chip, active && styles.chipActive]}
-                        >
-                          <Text style={[styles.chipText, active && styles.chipTextActive]}>{neigh}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                  <SearchableVerticalFilter
+                    label="Selecione o Bairro"
+                    testID="pin-style-neighborhood-filter"
+                    placeholder="🔍 Buscar bairro..."
+                    selectedId={selectedNeighborhood || ''}
+                    allowClear={false}
+                    onSelect={(id) => setSelectedNeighborhood(id)}
+                    options={neighborhoodList.map((neigh) => ({
+                      id: neigh,
+                      label: neigh,
+                      keywords: [neigh],
+                    }))}
+                  />
                 </View>
               ) : scope === 'city' ? (
                 <View style={styles.subSelectorBox}>
-                  <Text style={styles.subSelectorLabel}>Selecione a Cidade:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-                    {cityList.map((cName) => {
-                      const active = selectedCity === cName;
-                      return (
-                        <Pressable
-                          key={cName}
-                          onPress={() => setSelectedCity(cName)}
-                          style={[styles.chip, active && styles.chipActive]}
-                        >
-                          <Text style={[styles.chipText, active && styles.chipTextActive]}>{cName}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                  <SearchableVerticalFilter
+                    label="Selecione a Cidade"
+                    testID="pin-style-city-filter"
+                    placeholder="🔍 Buscar cidade..."
+                    selectedId={selectedCity || ''}
+                    allowClear={false}
+                    onSelect={(id) => setSelectedCity(id)}
+                    options={cityList.map((cName) => ({
+                      id: cName,
+                      label: cName,
+                      keywords: [cName],
+                    }))}
+                  />
                 </View>
               ) : (
                 <View style={styles.singleAddressNotice}>

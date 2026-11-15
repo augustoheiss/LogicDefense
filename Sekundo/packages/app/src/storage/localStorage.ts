@@ -69,19 +69,22 @@ async function idbGet(key: string): Promise<string | null> {
   }
 }
 
-async function idbSet(key: string, value: string): Promise<void> {
-  if (!isWebIndexedDBAvailable()) return;
+async function idbSet(key: string, value: string): Promise<boolean> {
+  if (!isWebIndexedDBAvailable()) return false;
   try {
     const db = await openSovereignIDB();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IDB_STORE, 'readwrite');
       const store = tx.objectStore(IDB_STORE);
       const req = store.put(value, key);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || req.error || new Error('IndexedDB write failed'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+      req.onerror = () => reject(req.error || new Error('IndexedDB put failed'));
     });
+    return true;
   } catch {
-    // Non-fatal fallback
+    return false;
   }
 }
 
@@ -127,11 +130,19 @@ export const storage = {
     return null;
   },
   async setItem(key: string, value: string): Promise<void> {
-    await idbSet(key, value);
+    const savedIdb = await idbSet(key, value);
     try {
       await AsyncStorage.setItem(key, value);
       lastQuotaWarning = null;
     } catch (err: any) {
+      if (!savedIdb) {
+        const quotaErr = new Error(
+          `Armazenamento local cheio ou indisponível: ${err?.message || 'QuotaExceededError'}`
+        );
+        quotaErr.name = 'StorageQuotaError';
+        lastQuotaWarning = quotaErr.message;
+        throw quotaErr;
+      }
       lastQuotaWarning =
         'Limite do localStorage (5MB) atingido; dados salvos com segurança no IndexedDB local do navegador.';
       console.warn('[Sekundo Storage]', lastQuotaWarning, err);

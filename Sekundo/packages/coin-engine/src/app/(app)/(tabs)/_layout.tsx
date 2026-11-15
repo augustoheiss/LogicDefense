@@ -10,6 +10,7 @@
  * Design: Translucent dark tab bar matching the app's premium aesthetic.
  */
 
+import { useEffect, useState } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, StyleSheet, Platform, View, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,7 +40,11 @@ const NAV_ITEMS = [
 
 export default function TabsLayout() {
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isDesktop = isHydrated && width >= 1024;
   const pathname = usePathname();
   const router = useRouter();
   const db = useCoinDB();

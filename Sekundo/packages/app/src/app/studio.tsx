@@ -40,7 +40,11 @@ export default function StudioScreen() {
   const params = useLocalSearchParams<{ id?: string; preset?: string }>();
   const eventId = params.id || 'seed-programacao';
   const { width: windowWidth } = useWindowDimensions();
-  const isWide = windowWidth >= 960;
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isWide = isHydrated && windowWidth >= 960;
   const [mobileTab, setMobileTab] = useState<'fill' | 'yaml' | 'canvas' | 'inspector'>('canvas');
   const [rightSidebarTab, setRightSidebarTab] = useState<'fill' | 'inspector'>('fill');
   const [dataSourceMode, setDataSourceMode] = useState<'reuniao' | 'territorios' | 'avulso'>(

@@ -27,7 +27,7 @@ import {
   engineRegistry,
   detectEnginesFromCSV,
   importGranularCSV,
-  importTerritoryMultiFormat,
+  importTerritoryMultiFormatAsync,
   isSampleTerritorySeedRegistry,
   selectEnginePartitionNodes,
   exportTemplateCSV,
@@ -35,11 +35,14 @@ import {
   generateOmniMasterSampleCsv,
   exportSingleEngineSampleCsv,
   isOmniCsvText,
-  importOmniCsvBundle,
+  importOmniCsvBundleAsync,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
   buildCombinedMultiEngineSkeleton,
   autoAssignScheduleRegistry,
+  ImportCancelledError,
+  mapImportErrorToDiagnostics,
+  yieldToUiFrame,
   type Frequency,
   type EngineId,
   type FlatSkeletonEntry,
@@ -56,6 +59,11 @@ import {
   persistTerritoryRegistryMutation,
 } from '../storage/omniStorageBridge';
 import { deliverFile } from '../utils/deliverFile';
+import {
+  pickBrowserSpreadsheetFile,
+  useSekundoImportPipeline,
+} from '../hooks/useSekundoImportPipeline';
+import { SekundoImportModal } from '../components/csv/SekundoImportModal';
 
 const ENGINE_ICONS: Record<string, string> = {
   territory_logistics: '🗺️',
@@ -94,6 +102,7 @@ export default function CreateEvent() {
   const [uploadedMultiNodes, setUploadedMultiNodes] = useState<FlatSkeletonEntry[] | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const importPipeline = useSekundoImportPipeline<string>();
 
   const availableEngines = engineRegistry.list();
   const inspectedEngine =
@@ -152,81 +161,208 @@ export default function CreateEvent() {
     setAutoDetectNotice(`🧪 Exemplo somente da Planilha "${inspectedEngine?.name}" baixado!`);
   };
 
-  const handlePickCsvFile = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv,.xlsx,.kml,.geojson,.json';
-      input.onchange = async (e: any) => {
-        const file = e.target?.files?.[0];
-        if (!file) return;
-        const lowerName = file.name.toLowerCase();
-        setUploadedFileName(file.name);
+  const handlePickCsvFile = async () => {
+    let trackedId: number | null = null;
+    try {
+      const outcome = await pickBrowserSpreadsheetFile({
+        accept: '.csv,.xlsx,.kml,.geojson,.json',
+        allowXlsxBinary: true,
+        onFileSelected: async ({ fileName, sizeBytes }) => {
+          setUploadedFileName(fileName);
+          trackedId = importPipeline.beginTracking({
+            fileName,
+            sizeBytes,
+            initialStage: 'reading_file',
+            initialDetail: 'Lendo arquivo selecionado e verificando codificação...',
+          });
+        },
+      });
 
-        if (
-          lowerName.endsWith('.xlsx') ||
-          lowerName.endsWith('.kml') ||
-          lowerName.endsWith('.geojson') ||
-          lowerName.endsWith('.json')
-        ) {
-          try {
-            const bytes = lowerName.endsWith('.xlsx')
-              ? new Uint8Array(await file.arrayBuffer())
-              : undefined;
-            const text = !lowerName.endsWith('.xlsx') ? await file.text() : undefined;
-            const parsedMulti = importTerritoryMultiFormat(
+      if (outcome.kind === 'cancelled') {
+        importPipeline.dismiss();
+        return;
+      }
+
+      if (outcome.kind === 'error') {
+        const errId =
+          trackedId ??
+          importPipeline.beginTracking({
+            fileName: outcome.fileName,
+            sizeBytes: outcome.sizeBytes,
+            initialStage: 'reading_file',
+          });
+        importPipeline.failExternal(errId, outcome.error, {
+          fileName: outcome.fileName,
+          binarySignature: outcome.binarySignature,
+          stageFailed: 'reading_file',
+        });
+        return;
+      }
+
+      const picked = outcome.file;
+      const lowerName = picked.fileName.toLowerCase();
+
+      await importPipeline.run(
+        {
+          fileName: picked.fileName,
+          sizeBytes: picked.sizeBytes,
+          initialStage: 'decoding',
+          initialDetail:
+            picked.decoded.detectedEncoding === 'windows-1252'
+              ? 'Codificação ANSI/Windows-1252 convertida automaticamente para UTF-8.'
+              : 'Analisando estrutura do arquivo selecionado...',
+          diagnosticContext: {
+            fileName: picked.fileName,
+            binarySignature: picked.binarySignature,
+            allowXlsxBinary: true,
+            detectedEncoding: picked.decoded.detectedEncoding,
+          },
+        },
+        async ({ signal, reportProgress, requestWarningReview }) => {
+          if (
+            lowerName.endsWith('.xlsx') ||
+            lowerName.endsWith('.kml') ||
+            lowerName.endsWith('.geojson') ||
+            lowerName.endsWith('.json') ||
+            picked.binarySignature === 'zip_or_xlsx'
+          ) {
+            const parsedMulti = await importTerritoryMultiFormatAsync(
               {
-                bytes,
-                text,
-                fileName: file.name,
+                bytes: picked.binarySignature === 'zip_or_xlsx' ? picked.bytes : undefined,
+                text: picked.binarySignature === 'zip_or_xlsx' ? undefined : picked.decoded.text,
+                fileName: picked.fileName,
               },
-              { privacySafeMode: false }
+              {
+                privacySafeMode: false,
+                signal,
+                onProgress: (p) => reportProgress(p),
+              }
             );
+            if (!parsedMulti.nodes || parsedMulti.nodes.length === 0) {
+              throw new Error(
+                `Nenhum território ou endereço válido foi encontrado em "${picked.fileName}".`
+              );
+            }
             setUploadedMultiNodes(parsedMulti.nodes);
             setUploadedCsvText(null);
             setSelectedEngines(['territory_logistics']);
             setInspectedEngineId('territory_logistics');
             if (!name.trim()) {
-              const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+              const cleanName = picked.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
               setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
             }
             setAutoDetectNotice(
-              `✅ "${file.name}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços)`
+              `✅ "${picked.fileName}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços)`
             );
             setValidationError(null);
-          } catch (err: any) {
-            setValidationError(`Erro ao ler "${file.name}": ${err?.message || err}`);
+            return {
+              result: picked.fileName,
+              summary: `${parsedMulti.territoriesCount} territórios prontos para criação do evento.`,
+              suppressSuccessModal: true,
+            };
           }
-          return;
-        }
 
-        const text = await file.text();
-        setUploadedCsvText(text);
-        setUploadedMultiNodes(null);
+          const text = picked.decoded.text;
+          if (!text.trim()) {
+            throw new Error(`O arquivo "${picked.fileName}" está vazio.`);
+          }
 
-        if (isOmniCsvText(text)) {
-          const bundle = importOmniCsvBundle(text);
-          if (!name.trim()) setName(`${bundle.unitName} — Multi-Engine`);
-          setAutoDetectNotice(
-            `🌐 "${file.name}" (${bundle.presentSheets?.length || 1} planilhas): ${bundle.participants.length} 👤 • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️ • ${(bundle.coinLedgerRows || []).length} 🪙`
-          );
+          if (isOmniCsvText(text)) {
+            const bundle = await importOmniCsvBundleAsync(text, {
+              signal,
+              onProgress: (p) => reportProgress(p),
+            });
+            setUploadedCsvText(text);
+            setUploadedMultiNodes(null);
+            if (!name.trim()) setName(`${bundle.unitName} — Multi-Engine`);
+            setAutoDetectNotice(
+              `🌐 "${picked.fileName}" (${bundle.presentSheets?.length || 1} planilhas): ${bundle.participants.length} 👤 • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️ • ${(bundle.coinLedgerRows || []).length} 🪙`
+            );
+            setValidationError(null);
+            return {
+              result: picked.fileName,
+              summary: 'CSV Geral reconhecido com sucesso.',
+              suppressSuccessModal: true,
+            };
+          }
+
+          reportProgress({
+            stage: 'parsing_rows',
+            stageLabel: 'Identificando engine e validando linhas CSV...',
+            percent: 45,
+          });
+          await yieldToUiFrame();
+
+          const report = detectEnginesFromCSV(text);
+          const previewImport = importGranularCSV([], text, { forceOverwriteState: true });
+
+          reportProgress({
+            stage: 'validating',
+            stageLabel: 'Validando colunas e registros...',
+            processedCount: previewImport.validRows.length,
+            totalCount: previewImport.validRows.length + previewImport.quarantinedRows.length,
+            percent: 82,
+          });
+          await yieldToUiFrame();
+
+          if (previewImport.validRows.length === 0) {
+            const reasons = previewImport.quarantinedRows
+              .slice(0, 6)
+              .map((q) => `Linha ${q.rowNumber}: ${q.reason}`)
+              .join('\n');
+            throw new Error(
+              reasons ||
+                'Nenhuma linha válida encontrada. Confira o cabeçalho (_key/_type ou colunas de endereço/território).'
+            );
+          }
+
+          if (previewImport.quarantinedRows.length > 0) {
+            const qMsgs = previewImport.quarantinedRows
+              .slice(0, 8)
+              .map((q) => `Linha ${q.rowNumber}: ${q.reason}`);
+            const issues = mapImportErrorToDiagnostics(qMsgs, {
+              fileName: picked.fileName,
+              stageFailed: 'validating',
+            });
+            const proceed = await requestWarningReview({
+              summary: `${previewImport.validRows.length} linhas válidas prontas, mas ${previewImport.quarantinedRows.length} linha(s) ficaram em quarentena.`,
+              validCount: previewImport.validRows.length,
+              skippedCount: previewImport.quarantinedRows.length,
+              issues,
+            });
+            if (!proceed) {
+              throw new ImportCancelledError();
+            }
+          }
+
+          setUploadedCsvText(text);
+          setUploadedMultiNodes(null);
+          if (report.suggestedEngines.length > 0) {
+            setSelectedEngines(report.suggestedEngines);
+            setInspectedEngineId(report.suggestedEngines[0]);
+          }
+          if (!name.trim()) {
+            const cleanName = picked.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+            setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+          }
+          setAutoDetectNotice(`✅ CSV "${picked.fileName}" pronto!`);
           setValidationError(null);
-          return;
-        }
 
-        const report = detectEnginesFromCSV(text);
-        if (report.suggestedEngines.length > 0) {
-          setSelectedEngines(report.suggestedEngines);
-          setInspectedEngineId(report.suggestedEngines[0]);
+          return {
+            result: picked.fileName,
+            summary: `${previewImport.validRows.length} linhas validadas.`,
+            suppressSuccessModal: true,
+          };
         }
-        if (!name.trim()) {
-          const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-          setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
-        }
-        setAutoDetectNotice(`✅ CSV "${file.name}" pronto!`);
-        setValidationError(null);
-      };
-      input.click();
+      );
+    } catch (err) {
+      const errId =
+        trackedId ??
+        importPipeline.beginTracking({
+          fileName: uploadedFileName || 'planilha.csv',
+          initialStage: 'reading_file',
+        });
+      importPipeline.failExternal(errId, err, { stageFailed: 'reading_file' });
     }
   };
 
@@ -244,66 +380,139 @@ export default function CreateEvent() {
 
     // 1. Check if uploaded CSV is a Multi-Planilha Omni-CSV Bundle
     if (uploadedCsvText && isOmniCsvText(uploadedCsvText)) {
-      const { primaryEventId } = await commitOmniCsvBundleToStorage(uploadedCsvText, {
-        customEventName: finalName,
-      });
-      await refreshEvents();
-      router.replace(`/schedule-hub?id=${primaryEventId}` as any);
+      const targetRoute = await importPipeline.run<string>(
+        {
+          fileName: uploadedFileName || `${finalName}.csv`,
+          sizeBytes: uploadedCsvText.length,
+          initialStage: 'saving_storage',
+          initialDetail: 'Gravando multi-planilha no armazenamento local...',
+        },
+        async ({ signal, reportProgress }) => {
+          const { primaryEventId } = await commitOmniCsvBundleToStorage(uploadedCsvText, {
+            customEventName: finalName,
+            signal,
+            onProgress: (p) => reportProgress({ ...p, cancellable: false }),
+          });
+          await refreshEvents();
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Abrindo workspace do evento...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+          return {
+            result: `/schedule-hub?id=${primaryEventId}`,
+            summary: 'Evento criado e importado!',
+            suppressSuccessModal: true,
+          };
+        }
+      );
+      if (targetRoute) {
+        router.replace(targetRoute as any);
+      }
+      return;
+    }
+
+    // 2A. If multi-format (.xlsx, .kml, .geojson, .json) territory file was uploaded, commit it
+    if (uploadedMultiNodes && uploadedMultiNodes.length > 0) {
+      const targetRoute = await importPipeline.run<string>(
+        {
+          fileName: uploadedFileName || `${finalName}.xlsx`,
+          initialStage: 'saving_storage',
+          initialDetail: 'Gravando territórios e endereços no cofre local...',
+        },
+        async ({ reportProgress }) => {
+          const state = await addEvent(finalName, frequency, ['01'], selectedEngines);
+          await storage.saveSkeleton(state.config.id, uploadedMultiNodes);
+          await saveTerritoryRegistry(uploadedMultiNodes);
+          await persistTerritoryRegistryMutation({
+            eventId: state.config.id,
+            rawRegistry: uploadedMultiNodes,
+            cleanTerritoryNodes: uploadedMultiNodes,
+          });
+          await refreshEvents();
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Abrindo territórios...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+          return {
+            result: `/territory-checklist?id=${state.config.id}`,
+            summary: 'Territórios importados com sucesso!',
+            suppressSuccessModal: true,
+          };
+        }
+      );
+      if (targetRoute) {
+        router.replace(targetRoute as any);
+      }
+      return;
+    }
+
+    // 2B. If single-engine CSV was uploaded, commit it (fail loudly with diagnostics instead of navigating empty!)
+    if (uploadedCsvText) {
+      const targetRoute = await importPipeline.run<string>(
+        {
+          fileName: uploadedFileName || `${finalName}.csv`,
+          sizeBytes: uploadedCsvText.length,
+          initialStage: 'saving_storage',
+          initialDetail: 'Gravando registros CSV no armazenamento local...',
+        },
+        async ({ reportProgress }) => {
+          const importRes = importGranularCSV([], uploadedCsvText, { forceOverwriteState: true });
+          const updatedRegistry = importRes.updatedRegistry;
+          if (!updatedRegistry || updatedRegistry.length === 0) {
+            throw new Error(
+              'Nenhum nó válido foi gerado a partir do CSV fornecido para criar o evento.'
+            );
+          }
+
+          const state = await addEvent(finalName, frequency, ['01'], selectedEngines);
+          await storage.saveSkeleton(state.config.id, updatedRegistry);
+
+          const isTerritoryImport =
+            selectedEngines.includes('territory_logistics') ||
+            updatedRegistry.some(
+              (n) =>
+                n.type === 'territory' ||
+                Boolean(n.meta?.territory_number || n.meta?.territoryNumber)
+            );
+
+          let dest = `/skeleton-editor?id=${state.config.id}`;
+          if (isTerritoryImport && updatedRegistry.length > 0) {
+            const terrNodes = selectEnginePartitionNodes(updatedRegistry, 'territory_logistics');
+            const effectiveTerrNodes = terrNodes.length > 0 ? terrNodes : updatedRegistry;
+            await saveTerritoryRegistry(effectiveTerrNodes);
+            await persistTerritoryRegistryMutation({
+              eventId: state.config.id,
+              rawRegistry: updatedRegistry,
+              cleanTerritoryNodes: effectiveTerrNodes,
+            });
+            dest = `/territory-checklist?id=${state.config.id}`;
+          }
+
+          await refreshEvents();
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Preparando e abrindo planilha...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+          return {
+            result: dest,
+            summary: 'Planilha criada com sucesso!',
+            suppressSuccessModal: true,
+          };
+        }
+      );
+      if (targetRoute) {
+        router.replace(targetRoute as any);
+      }
       return;
     }
 
     const state = await addEvent(finalName, frequency, ['01'], selectedEngines);
-
-    // 2A. If multi-format (.xlsx, .kml, .geojson, .json) territory file was uploaded, commit it
-    if (uploadedMultiNodes && uploadedMultiNodes.length > 0) {
-      await storage.saveSkeleton(state.config.id, uploadedMultiNodes);
-      await saveTerritoryRegistry(uploadedMultiNodes);
-      await persistTerritoryRegistryMutation({
-        eventId: state.config.id,
-        rawRegistry: uploadedMultiNodes,
-        cleanTerritoryNodes: uploadedMultiNodes,
-      });
-      await refreshEvents();
-      router.replace(`/territory-checklist?id=${state.config.id}` as any);
-      return;
-    }
-
-    // 2B. If single-engine CSV was uploaded, commit it
-    if (uploadedCsvText) {
-      try {
-        const importRes = importGranularCSV([], uploadedCsvText, { forceOverwriteState: true });
-        const updatedRegistry = importRes.updatedRegistry;
-        await storage.saveSkeleton(state.config.id, updatedRegistry);
-
-        const isTerritoryImport =
-          selectedEngines.includes('territory_logistics') ||
-          updatedRegistry.some(
-            (n) =>
-              n.type === 'territory' ||
-              Boolean(n.meta?.territory_number || n.meta?.territoryNumber)
-          );
-
-        if (isTerritoryImport && updatedRegistry.length > 0) {
-          const terrNodes = selectEnginePartitionNodes(updatedRegistry, 'territory_logistics');
-          const effectiveTerrNodes = terrNodes.length > 0 ? terrNodes : updatedRegistry;
-          await saveTerritoryRegistry(effectiveTerrNodes);
-          await persistTerritoryRegistryMutation({
-            eventId: state.config.id,
-            rawRegistry: updatedRegistry,
-            cleanTerritoryNodes: effectiveTerrNodes,
-          });
-          await refreshEvents();
-          router.replace(`/territory-checklist?id=${state.config.id}` as any);
-          return;
-        }
-
-        await refreshEvents();
-        router.replace(`/skeleton-editor?id=${state.config.id}`);
-        return;
-      } catch (err) {
-        console.warn('[Sekundo] Erro ao salvar CSV:', err);
-      }
-    }
 
     // 3. Auto-Fill Multi-Engine Workspace (Schedule + Territory + Privileges)
     if (autoFillWithPrivileges) {
@@ -612,6 +821,18 @@ export default function CreateEvent() {
           )}
         </View>
       </View>
+
+      <SekundoImportModal
+        state={importPipeline.state}
+        technicalReport={importPipeline.technicalReport}
+        onCancel={importPipeline.cancelImport}
+        onResolveWarning={importPipeline.resolveWarningReview}
+        onRetry={() => {
+          importPipeline.dismiss();
+          handlePickCsvFile();
+        }}
+        onDismiss={importPipeline.dismiss}
+      />
     </SafeAreaView>
   );
 }

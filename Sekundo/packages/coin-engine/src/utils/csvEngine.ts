@@ -1,7 +1,14 @@
 import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
 import { detectSectorsFromRows } from './sectorTagDetector';
-import { parseDynamicCSV } from '../core/dynamicCsvParser';
+import { parseDynamicCSV, parseDynamicCSVAsync } from '../core/dynamicCsvParser';
 import { neutralizeCsvFormula } from './securitySanitizer';
+import {
+  type AsyncImportControllerOptions,
+  IMPORT_STAGE_LABELS_PT,
+  throwIfImportAborted,
+  yieldToEventLoop,
+  yieldToUiFrame,
+} from '../services/importPipelineContract';
 
 // Delimiter detection helper
 export function detectDelimiter(line: string): string {
@@ -168,6 +175,7 @@ export interface CSVParseOutput {
    * é retornada separadamente para impedir a fusão indevida de valores.
    */
   tablePartitions?: CSVTablePartitionOutput[];
+  detectedHeaders?: string[];
 }
 
 function findHeaderIdx(headers: string[], aliases: string[]): number {
@@ -183,46 +191,39 @@ function findHeaderIdx(headers: string[], aliases: string[]): number {
   return -1;
 }
 
-export function parseCSVText(
-  csvText: string,
-  options?: {
-    fallbackEntryType?: TableRow['entryType'];
-    forceEntryType?: TableRow['entryType'];
-  }
-): CSVParseOutput {
-  const errors: string[] = [];
-  let skippedCount = 0;
-  const rows: (TableRow | Omit<TableRow, 'id'>)[] = [];
+interface PreparedCsvPreamble {
+  cleaned: string;
+  allLines: string[];
+  transactionLines: string[];
+  schemaMarkerLineIdx: number;
+  metaObj: NonNullable<CSVParseOutput['metadata']>;
+}
 
+function isPlainCsvCommentLine(line: string): boolean {
+  const t = line.trim();
+  if (!t.startsWith('#')) return false;
+  if (t.startsWith('##')) return false;
+  if (/^#(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)(?:[,:\s]|$)/i.test(t)) return false;
+  return true;
+}
+
+function prepareCsvPreamble(csvText: string): PreparedCsvPreamble | null {
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
-  
-  // Split all lines safely
+
   const allLines = cleaned
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+    .filter((l) => l.length > 0 && !isPlainCsvCommentLine(l));
 
   if (allLines.length === 0) {
-    return {
-      rows,
-      errors: ['O CSV está vazio.'],
-      skippedCount: 0,
-      detectedSectors: ['personal_finance'],
-      metadata: {
-        name: 'Minha Planilha',
-        description: '',
-        goals: {},
-        tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
-      },
-    };
+    return null;
   }
 
   const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
   const amountAliases = ['amount', 'valor', 'value', 'valor_cents', 'amount_in_cents', 'preco'];
 
-  // Check if ## SCHEMA_COLUMNS ##, ## INVESTOR_PROFILE ##, and ## ROWS ## markers exist
   const schemaMarkerRegex = /##\s*SCHEMA_COLUMNS\s*##/i;
   const investorMarkerRegex = /##\s*INVESTOR_PROFILE\s*##/i;
   const rowsMarkerRegex = /##\s*ROWS\s*##/i;
@@ -253,7 +254,6 @@ export function parseCSVText(
       transactionLines = allLines.slice(rowsMarkerLineIdx + 1);
     }
   } else {
-    // Dynamic Header Search: scan lines to find the actual transaction header row containing date and amount columns
     let transactionHeaderIdx = -1;
     for (let i = 0; i < allLines.length; i++) {
       const lineDelim = detectDelimiter(allLines[i]);
@@ -270,26 +270,11 @@ export function parseCSVText(
       metadataLines = allLines.slice(0, transactionHeaderIdx);
       transactionLines = allLines.slice(transactionHeaderIdx);
     } else {
-      // Fallback: line 0 as header
       transactionLines = allLines;
     }
   }
 
-  // Parse metadata from metadataLines (flexible delimiter per line)
-  const metaObj: {
-    tableId?: string;
-    apiKey?: string;
-    lastEventSeq?: number;
-    name?: string;
-    description?: string;
-    goals: Record<string, number | string>;
-    tableGoals: TableGoals;
-    schema?: DynamicTableSchema;
-    investorProfile?: InvestorProfileConfig;
-    activeSectors?: string[];
-    dashboardConfig?: import('../core/types').DashboardConfig;
-    sectorParams?: import('../core/types').SectorSimulationParams;
-  } = {
+  const metaObj: NonNullable<CSVParseOutput['metadata']> = {
     name: 'Minha Planilha',
     description: '',
     goals: {},
@@ -302,8 +287,10 @@ export function parseCSVText(
     },
   };
 
-  // Parse ## INVESTOR_PROFILE ## block even when ## SCHEMA_COLUMNS ## is not present
-  if (investorMarkerLineIdx !== -1 && (rowsMarkerLineIdx === -1 || investorMarkerLineIdx < rowsMarkerLineIdx)) {
+  if (
+    investorMarkerLineIdx !== -1 &&
+    (rowsMarkerLineIdx === -1 || investorMarkerLineIdx < rowsMarkerLineIdx)
+  ) {
     const invEndIdx = rowsMarkerLineIdx !== -1 ? rowsMarkerLineIdx : allLines.length;
     const invLines = allLines.slice(investorMarkerLineIdx + 1, invEndIdx);
     let pType: import('../core/types').InvestorProfileType = 'safety';
@@ -380,60 +367,55 @@ export function parseCSVText(
           if (parsed && typeof parsed === 'object') metaObj.sectorParams = parsed;
         } catch {}
       } else if (keyLower === 'exported_at') {
-        // Ignore timestamp metadata key from polluting goals
+        // Ignore timestamp metadata key
       } else {
         const finalVal = !isNaN(numVal) ? numVal : valStr;
-        metaObj.goals[rawKey] = finalVal;
+        metaObj.goals![rawKey] = finalVal;
 
         if (!isNaN(numVal)) {
-          const dGoals = metaObj.tableGoals.dailyGoals as Record<number | string, number>;
-          const wGoals = metaObj.tableGoals.weeklyGoals as Record<number | string, number>;
-          const aCosts = metaObj.tableGoals.annualCosts as Record<number | string, number>;
+          const dGoals = metaObj.tableGoals!.dailyGoals as Record<number | string, number>;
+          const wGoals = metaObj.tableGoals!.weeklyGoals as Record<number | string, number>;
+          const aCosts = metaObj.tableGoals!.annualCosts as Record<number | string, number>;
 
-          if (!metaObj.tableGoals.globalGoals) {
-            metaObj.tableGoals.globalGoals = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
+          if (!metaObj.tableGoals!.globalGoals) {
+            metaObj.tableGoals!.globalGoals = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
           }
-          if (!metaObj.tableGoals.monthlyGoals) {
-            metaObj.tableGoals.monthlyGoals = {};
+          if (!metaObj.tableGoals!.monthlyGoals) {
+            metaObj.tableGoals!.monthlyGoals = {};
           }
 
-          // 1. Explicit Global Keys: goal_global_daily, goal_global_weekly, goal_global_annual
           if (keyLower === 'goal_global_daily' || keyLower === 'meta_global_diaria') {
-            metaObj.tableGoals.globalGoals.dailyGoal = numVal;
+            metaObj.tableGoals!.globalGoals.dailyGoal = numVal;
             dGoals['global'] = numVal;
             dGoals[currentYear] = numVal;
           } else if (keyLower === 'goal_global_weekly' || keyLower === 'meta_global_semanal') {
-            metaObj.tableGoals.globalGoals.weeklyGoal = numVal;
+            metaObj.tableGoals!.globalGoals.weeklyGoal = numVal;
             wGoals['global'] = numVal;
             wGoals[currentYear] = numVal;
           } else if (keyLower === 'goal_global_annual' || keyLower === 'meta_global_anual') {
-            metaObj.tableGoals.globalGoals.annualCost = numVal;
+            metaObj.tableGoals!.globalGoals.annualCost = numVal;
             aCosts['global'] = numVal;
             aCosts[currentYear] = numVal;
-          }
-          // 2. Weekly ISO Override Keys: goal_weekly_2026-W30 or meta_semanal_2026-W30
-          else if (/^(?:goal_weekly_|meta_semanal_)(\d{4}-W\d{2})$/i.test(keyLower)) {
+          } else if (/^(?:goal_weekly_|meta_semanal_)(\d{4}-W\d{2})$/i.test(keyLower)) {
             const match = keyLower.match(/^(?:goal_weekly_|meta_semanal_)(\d{4}-W\d{2})$/i);
             if (match) {
               wGoals[match[1].toUpperCase()] = numVal;
             }
-          }
-          // 3. Monthly Goals: goal_monthly_daily_2026-07, goal_monthly_weekly_2026-07, goal_monthly_annual_2026-07
-          else if (/^goal_monthly_(daily|weekly|annual)_(\d{4}-\d{2})$/i.test(keyLower)) {
+          } else if (/^goal_monthly_(daily|weekly|annual)_(\d{4}-\d{2})$/i.test(keyLower)) {
             const match = keyLower.match(/^goal_monthly_(daily|weekly|annual)_(\d{4}-\d{2})$/i);
             if (match) {
               const [, gType, mKey] = match;
-              if (!metaObj.tableGoals.monthlyGoals[mKey]) {
-                metaObj.tableGoals.monthlyGoals[mKey] = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
+              if (!metaObj.tableGoals!.monthlyGoals[mKey]) {
+                metaObj.tableGoals!.monthlyGoals[mKey] = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
               }
-              if (gType === 'daily') metaObj.tableGoals.monthlyGoals[mKey].dailyGoal = numVal;
-              if (gType === 'weekly') metaObj.tableGoals.monthlyGoals[mKey].weeklyGoal = numVal;
-              if (gType === 'annual') metaObj.tableGoals.monthlyGoals[mKey].annualCost = numVal;
+              if (gType === 'daily') metaObj.tableGoals!.monthlyGoals[mKey].dailyGoal = numVal;
+              if (gType === 'weekly') metaObj.tableGoals!.monthlyGoals[mKey].weeklyGoal = numVal;
+              if (gType === 'annual') metaObj.tableGoals!.monthlyGoals[mKey].annualCost = numVal;
             }
-          }
-          // 4. Annual Goals: goal_daily_2026, goal_weekly_2026, goal_annual_2026, meta_diaria_2026
-          else if (/^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/i.test(keyLower)) {
-            const annualMatch = keyLower.match(/^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/i);
+          } else if (/^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/i.test(keyLower)) {
+            const annualMatch = keyLower.match(
+              /^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/i
+            );
             if (annualMatch) {
               const [, typeStr, yearStr] = annualMatch;
               const year = parseInt(yearStr, 10);
@@ -445,7 +427,7 @@ export function parseCSVText(
               if (goalType === 'weekly') wGoals[year] = numVal;
               if (goalType === 'annual') aCosts[year] = numVal;
 
-              const currentYg = metaObj.tableGoals.yearlyGoals![year] || {
+              const currentYg = metaObj.tableGoals!.yearlyGoals![year] || {
                 dailyGoal: 0,
                 weeklyGoal: 0,
                 annualCost: 0,
@@ -453,12 +435,12 @@ export function parseCSVText(
               if (goalType === 'daily') currentYg.dailyGoal = numVal;
               if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
               if (goalType === 'annual') currentYg.annualCost = numVal;
-              metaObj.tableGoals.yearlyGoals![year] = currentYg;
+              metaObj.tableGoals!.yearlyGoals![year] = currentYg;
             }
-          }
-          // 5. Global Fallback Keys (without year or suffix): goal_daily, goal_weekly, goal_annual, meta_diaria, meta_semanal, custo_anual
-          else if (/^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/i.test(keyLower)) {
-            const globalMatch = keyLower.match(/^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/i);
+          } else if (/^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/i.test(keyLower)) {
+            const globalMatch = keyLower.match(
+              /^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/i
+            );
             if (globalMatch) {
               const typeStr = globalMatch[1];
               let goalType = 'daily';
@@ -466,20 +448,20 @@ export function parseCSVText(
               if (typeStr === 'annual' || typeStr === 'anual') goalType = 'annual';
 
               if (goalType === 'daily') {
-                metaObj.tableGoals.globalGoals.dailyGoal = numVal;
+                metaObj.tableGoals!.globalGoals.dailyGoal = numVal;
                 dGoals['global'] = numVal;
                 dGoals[currentYear] = numVal;
               } else if (goalType === 'weekly') {
-                metaObj.tableGoals.globalGoals.weeklyGoal = numVal;
+                metaObj.tableGoals!.globalGoals.weeklyGoal = numVal;
                 wGoals['global'] = numVal;
                 wGoals[currentYear] = numVal;
               } else if (goalType === 'annual') {
-                metaObj.tableGoals.globalGoals.annualCost = numVal;
+                metaObj.tableGoals!.globalGoals.annualCost = numVal;
                 aCosts['global'] = numVal;
                 aCosts[currentYear] = numVal;
               }
 
-              const currentYg = metaObj.tableGoals.yearlyGoals![currentYear] || {
+              const currentYg = metaObj.tableGoals!.yearlyGoals![currentYear] || {
                 dailyGoal: 0,
                 weeklyGoal: 0,
                 annualCost: 0,
@@ -487,7 +469,7 @@ export function parseCSVText(
               if (goalType === 'daily') currentYg.dailyGoal = numVal;
               if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
               if (goalType === 'annual') currentYg.annualCost = numVal;
-              metaObj.tableGoals.yearlyGoals![currentYear] = currentYg;
+              metaObj.tableGoals!.yearlyGoals![currentYear] = currentYg;
             }
           }
         }
@@ -495,6 +477,799 @@ export function parseCSVText(
     }
   });
 
+  return {
+    cleaned,
+    allLines,
+    transactionLines,
+    schemaMarkerLineIdx,
+    metaObj,
+  };
+}
+
+interface StandardCsvColumnIndices {
+  delimiter: string;
+  headers: string[];
+  nodeKindIdx: number;
+  idIdx: number;
+  dateIdx: number;
+  descriptionIdx: number;
+  amountIdx: number;
+  categoryIdx: number;
+  tagsIdx: number;
+  metadataIdx: number;
+  typeIdx: number;
+  monthlyValueIdx: number;
+  monthCountIdx: number;
+  periodStartIdx: number;
+  periodEndIdx: number;
+  tickerIdx: number;
+  quantityIdx: number;
+  unitPriceIdx: number;
+  generatedByIdx: number;
+  clonedFromIdx: number;
+  isCentsColumn: boolean;
+  headerSectors: Set<string>;
+}
+
+function buildStandardCsvColumnIndices(headerLine: string): StandardCsvColumnIndices {
+  const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
+  const amountAliases = ['amount', 'valor', 'value', 'valor_cents', 'amount_in_cents', 'preco'];
+  const delimiter = detectDelimiter(headerLine);
+  const headers = splitCSVLine(headerLine, delimiter).map((h) => cleanCell(h).toLowerCase());
+
+  const idIdx = findHeaderIdx(headers, [
+    'id',
+    'uuid',
+    'transaction_id',
+    'id_transacao',
+    'external_id',
+    '_key',
+    'key',
+  ]);
+  const dateIdx = findHeaderIdx(headers, dateAliases);
+  const descriptionIdx = findHeaderIdx(headers, [
+    'description',
+    'descricao',
+    'descrição',
+    'historico',
+    'memo',
+    'title',
+    'label',
+  ]);
+  const amountIdx = findHeaderIdx(headers, amountAliases);
+  const categoryIdx = findHeaderIdx(headers, ['category', 'categoria']);
+  const tagsIdx = findHeaderIdx(headers, [
+    'tags',
+    'sector_tags',
+    'etiquetas',
+    'metodo_pagamento',
+    'payment_method',
+  ]);
+  const metadataIdx = findHeaderIdx(headers, [
+    'metadata_json',
+    'metadatajson',
+    'metadata',
+    'metadados',
+    '_meta_json',
+  ]);
+  const explicitEntryTypeIdx = findHeaderIdx(headers, ['entry_type', 'entrytype']);
+  const typeIdx =
+    explicitEntryTypeIdx !== -1
+      ? explicitEntryTypeIdx
+      : findHeaderIdx(headers, ['entrytype', 'entry_type', 'tipo', 'type']);
+  const nodeKindIdx = findHeaderIdx(headers, ['_type', 'tipo']);
+  const monthlyValueIdx = findHeaderIdx(headers, [
+    'monthlyvalue',
+    'valor_mensal',
+    'monthly_value',
+    'valor mensal',
+  ]);
+  const monthCountIdx = findHeaderIdx(headers, [
+    'monthcount',
+    'qtd_meses',
+    'month_count',
+    'months',
+    'meses',
+  ]);
+  const periodStartIdx = findHeaderIdx(headers, [
+    'period_start',
+    'periodstart',
+    'inicio_periodo',
+    'period_inicio',
+    'período início',
+  ]);
+  const periodEndIdx = findHeaderIdx(headers, [
+    'period_end',
+    'periodend',
+    'fim_periodo',
+    'period_fim',
+    'período fim',
+  ]);
+  const tickerIdx = findHeaderIdx(headers, ['ticker', 'ativo', 'codigo_ativo']);
+  const quantityIdx = findHeaderIdx(headers, ['quantity', 'quantidade', 'qtd']);
+  const unitPriceIdx = findHeaderIdx(headers, [
+    'unitprice',
+    'unit_price',
+    'preco_unitario',
+    'preço unitário',
+  ]);
+  const generatedByIdx = findHeaderIdx(headers, [
+    'generatedby',
+    'generated_by',
+    'gerado_por',
+    'gerado por',
+  ]);
+  const clonedFromIdx = findHeaderIdx(headers, [
+    'clonedfrom',
+    'cloned_from',
+    'clonado_de',
+    'clonado de',
+  ]);
+
+  const matchedAmountHeader = headers[amountIdx] || '';
+  const isCentsColumn =
+    matchedAmountHeader === 'valor_cents' || matchedAmountHeader === 'amount_in_cents';
+
+  const headerSectors = new Set<string>();
+  const headerSectorsMap: Record<string, string[]> = {
+    smb_accounting: [
+      'ncg',
+      'fap_rat',
+      'lucro_real',
+      'cfar',
+      'massa_salarial_12',
+      'receita_bruta_12',
+    ],
+    legal_taxes: [
+      'fator_r',
+      'taxa_legal',
+      'irpf_2026',
+      'simples_nacional',
+      'tipo_debito',
+      'data_ajuizamento',
+    ],
+    real_estate: ['tabela_price', 'sistema_sac', 'cap_rate', 'rental_income'],
+    vehicles: [
+      'cpk',
+      'weibull',
+      'ubi',
+      'tco_vehicle',
+      'milhas_km',
+      'receita_bruta',
+      'tipo_viagem',
+    ],
+  };
+
+  headers.forEach((h) => {
+    for (const [sec, keywords] of Object.entries(headerSectorsMap)) {
+      if (keywords.some((kw) => h.includes(kw))) {
+        headerSectors.add(sec);
+      }
+    }
+  });
+
+  return {
+    delimiter,
+    headers,
+    nodeKindIdx,
+    idIdx,
+    dateIdx,
+    descriptionIdx,
+    amountIdx,
+    categoryIdx,
+    tagsIdx,
+    metadataIdx,
+    typeIdx,
+    monthlyValueIdx,
+    monthCountIdx,
+    periodStartIdx,
+    periodEndIdx,
+    tickerIdx,
+    quantityIdx,
+    unitPriceIdx,
+    generatedByIdx,
+    clonedFromIdx,
+    isCentsColumn,
+    headerSectors,
+  };
+}
+
+function stepStandardTransactionLine(
+  lineText: string,
+  lineNum: number,
+  todayStr: string,
+  colMap: StandardCsvColumnIndices,
+  options: {
+    fallbackEntryType?: TableRow['entryType'];
+    forceEntryType?: TableRow['entryType'];
+  } | undefined,
+  metaObj: NonNullable<CSVParseOutput['metadata']>,
+  rows: (TableRow | Omit<TableRow, 'id'>)[],
+  errors: string[]
+): number {
+  const cols = splitCSVLine(lineText, colMap.delimiter);
+  if (cols.length === 0 || (cols.length === 1 && cols[0] === '')) {
+    return 1;
+  }
+
+  if (colMap.nodeKindIdx !== -1 && cols[colMap.nodeKindIdx]) {
+    const nk = cleanCell(cols[colMap.nodeKindIdx]).toLowerCase();
+    if (
+      nk === 'header' ||
+      nk === 'root' ||
+      nk === 'branch' ||
+      nk === 'group' ||
+      nk === 'raiz' ||
+      nk === 'bloco'
+    ) {
+      if (colMap.descriptionIdx !== -1 && cols[colMap.descriptionIdx]) {
+        metaObj.name = cleanCell(cols[colMap.descriptionIdx]);
+      }
+      return 0;
+    }
+  }
+
+  try {
+    let rowId: string | undefined = undefined;
+    if (colMap.idIdx !== -1 && cols[colMap.idIdx] !== undefined && cols[colMap.idIdx] !== null) {
+      const cleanedId = cleanCell(cols[colMap.idIdx]);
+      if (cleanedId.length > 0) {
+        rowId = cleanedId;
+      }
+    }
+
+    const rawDate = cols[colMap.dateIdx] || '';
+    const normalizedDate = parseAndNormalizeDate(rawDate) || todayStr;
+
+    const rawAmount = cols[colMap.amountIdx] || '0';
+    let parsedVal = parseValue(rawAmount, colMap.isCentsColumn);
+    if (parsedVal === null || isNaN(parsedVal)) {
+      parsedVal = 0;
+    }
+
+    let entryType: TableRow['entryType'] =
+      options?.forceEntryType || options?.fallbackEntryType || 'revenue';
+    if (!options?.forceEntryType) {
+      if (colMap.typeIdx !== -1 && cols[colMap.typeIdx]) {
+        entryType = normalizeEntryType(cols[colMap.typeIdx]);
+      } else if (
+        colMap.categoryIdx !== -1 &&
+        cols[colMap.categoryIdx] &&
+        cols[colMap.categoryIdx].trim()
+      ) {
+        const inferredFromCat = normalizeEntryType(cols[colMap.categoryIdx]);
+        if (
+          inferredFromCat &&
+          ['revenue', 'expense', 'deposit', 'waiver', 'partner_in', 'partner_out', 'unresolved'].includes(
+            inferredFromCat
+          )
+        ) {
+          entryType = inferredFromCat;
+        }
+      }
+    }
+
+    let description = '';
+    if (
+      colMap.descriptionIdx !== -1 &&
+      cols[colMap.descriptionIdx] !== undefined &&
+      cols[colMap.descriptionIdx] !== null
+    ) {
+      description = cleanCell(cols[colMap.descriptionIdx]);
+    }
+    if (description === '' && colMap.descriptionIdx === -1) {
+      description = 'IMPORTADO VIA PLANILHA';
+    }
+
+    const category =
+      colMap.categoryIdx !== -1 && cols[colMap.categoryIdx]
+        ? cleanCell(cols[colMap.categoryIdx])
+        : 'Geral';
+
+    const tags =
+      colMap.tagsIdx !== -1 && cols[colMap.tagsIdx] ? cleanCell(cols[colMap.tagsIdx]) : '';
+
+    let metadataJson = '{}';
+    const customValues: Record<string, string | number | boolean> = {};
+    if (
+      colMap.metadataIdx !== -1 &&
+      cols[colMap.metadataIdx] !== undefined &&
+      cols[colMap.metadataIdx] !== null
+    ) {
+      const rawMeta = cleanCell(cols[colMap.metadataIdx]);
+      if (rawMeta.length > 0) {
+        try {
+          const parsedObj = JSON.parse(rawMeta);
+          if (typeof parsedObj === 'object' && parsedObj !== null) {
+            metadataJson = JSON.stringify(parsedObj);
+            Object.entries(parsedObj).forEach(([k, v]) => {
+              if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                customValues[k] = v;
+              }
+            });
+          } else {
+            metadataJson = '{}';
+          }
+        } catch {
+          metadataJson = '{}';
+        }
+      }
+    }
+
+    let monthlyValue: number | undefined = undefined;
+    if (colMap.monthlyValueIdx !== -1 && cols[colMap.monthlyValueIdx]) {
+      const parsedMv = parseValue(cols[colMap.monthlyValueIdx]);
+      if (parsedMv !== null && !isNaN(parsedMv)) monthlyValue = parsedMv;
+    }
+
+    let monthCount: number | undefined = undefined;
+    if (colMap.monthCountIdx !== -1 && cols[colMap.monthCountIdx]) {
+      const parsedMc = parseInt(cleanCell(cols[colMap.monthCountIdx]), 10);
+      if (!isNaN(parsedMc)) monthCount = parsedMc;
+    }
+
+    let periodStart: string | undefined = undefined;
+    if (colMap.periodStartIdx !== -1 && cols[colMap.periodStartIdx]) {
+      const parsedPs = parseAndNormalizeDate(cols[colMap.periodStartIdx]);
+      if (parsedPs) periodStart = parsedPs;
+    }
+
+    let periodEnd: string | undefined = undefined;
+    if (colMap.periodEndIdx !== -1 && cols[colMap.periodEndIdx]) {
+      const parsedPe = parseAndNormalizeDate(cols[colMap.periodEndIdx]);
+      if (parsedPe) periodEnd = parsedPe;
+    }
+
+    let ticker: string | undefined = undefined;
+    if (colMap.tickerIdx !== -1 && cols[colMap.tickerIdx]) {
+      const t = cleanCell(cols[colMap.tickerIdx]).toUpperCase();
+      if (t) ticker = t;
+    }
+
+    let quantity: number | undefined = undefined;
+    if (colMap.quantityIdx !== -1 && cols[colMap.quantityIdx]) {
+      const q = parseFloat(cleanCell(cols[colMap.quantityIdx]));
+      if (!isNaN(q)) quantity = q;
+    }
+
+    let unitPrice: number | undefined = undefined;
+    if (colMap.unitPriceIdx !== -1 && cols[colMap.unitPriceIdx]) {
+      const p = parseValue(cols[colMap.unitPriceIdx]);
+      if (p !== null && !isNaN(p)) unitPrice = p;
+    }
+
+    let generatedBy: string | undefined = undefined;
+    if (colMap.generatedByIdx !== -1 && cols[colMap.generatedByIdx]) {
+      const g = cleanCell(cols[colMap.generatedByIdx]);
+      if (g) generatedBy = g;
+    }
+
+    let clonedFrom: string | undefined = undefined;
+    if (colMap.clonedFromIdx !== -1 && cols[colMap.clonedFromIdx]) {
+      const c = cleanCell(cols[colMap.clonedFromIdx]);
+      if (c) clonedFrom = c;
+    }
+
+    rows.push({
+      ...(rowId ? { id: rowId } : {}),
+      date: normalizedDate,
+      value: parsedVal,
+      description,
+      entryType,
+      category: category || 'Geral',
+      tags: tags || '',
+      metadataJson,
+      monthlyValue,
+      monthCount,
+      periodStart,
+      periodEnd,
+      ...(ticker ? { ticker } : {}),
+      ...(quantity !== undefined ? { quantity } : {}),
+      ...(unitPrice !== undefined ? { unitPrice } : {}),
+      ...(generatedBy ? { generatedBy } : {}),
+      ...(clonedFrom ? { clonedFrom } : {}),
+      ...(Object.keys(customValues).length > 0 ? { customValues } : {}),
+    } as TableRow | Omit<TableRow, 'id'>);
+    return 0;
+  } catch (err: any) {
+    errors.push(`Linha ${lineNum}: ${err.message}`);
+    return 1;
+  }
+}
+
+interface OmniRouterAccumulator {
+  currentSheet: string;
+  activeOmniHeaders: string[];
+  hasSheetMarkers: boolean;
+  partitionsMap: Map<
+    string,
+    {
+      tableId: string;
+      explicitName?: string;
+      metadata: NonNullable<CSVParseOutput['metadata']>;
+      rows: TableRow[];
+    }
+  >;
+  rows: (TableRow | Omit<TableRow, 'id'>)[];
+}
+
+function detectCsvVariantFlags(allLines: string[]): {
+  isSekundoOmniCsv: boolean;
+  isSekundoCanonicalTree: boolean;
+} {
+  const firstRawLine = allLines[0] || '';
+  const isSekundoOmniCsv =
+    /^#?(PLANILHA|ABA_PLANILHA)[,:]/i.test(firstRawLine) ||
+    allLines.some(
+      (l) => /^_container_id,_key,_type,_engines/i.test(l) || /^_record_kind,_container_id/i.test(l)
+    );
+  const isSekundoCanonicalTree =
+    !isSekundoOmniCsv && allLines.some((l) => /^_?key,_?type,label,value/i.test(l));
+  return { isSekundoOmniCsv, isSekundoCanonicalTree };
+}
+
+function createOmniRouterAccumulator(allLines: string[]): OmniRouterAccumulator {
+  return {
+    currentSheet: '',
+    activeOmniHeaders: [],
+    hasSheetMarkers: allLines.some((l) => /^#?PLANILHA[,:]/i.test(l)),
+    partitionsMap: new Map(),
+    rows: [],
+  };
+}
+
+function stepOmniRouterLine(
+  line: string,
+  todayStr: string,
+  options: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] } | undefined,
+  acc: OmniRouterAccumulator
+): void {
+  if (/^#?PLANILHA[,:]/i.test(line)) {
+    const parts = splitCSVLine(line, ',');
+    acc.currentSheet = (parts[1] || '').trim().toLowerCase();
+    return;
+  }
+  if (/^#?(ABA_PLANILHA|FIM_PLANILHA)[,:]/i.test(line)) {
+    acc.currentSheet = '';
+    return;
+  }
+  if (/^(_container_id,_key|_record_kind,_container_id)/i.test(line)) {
+    acc.activeOmniHeaders = splitCSVLine(line, ',').map((h) => cleanCell(h).toLowerCase());
+    return;
+  }
+  if (acc.activeOmniHeaders.length === 0) return;
+
+  const cols = splitCSVLine(line, ',');
+  const rowMap: Record<string, string> = {};
+  acc.activeOmniHeaders.forEach((h, idx) => {
+    rowMap[h] = cols[idx] !== undefined ? cleanCell(cols[idx]) : '';
+  });
+
+  const isCoinRow =
+    acc.currentSheet === 'coin_ledger_row' ||
+    acc.currentSheet === 'financial_ledger' ||
+    rowMap._record_kind === 'coin_ledger_row' ||
+    (!acc.hasSheetMarkers && rowMap._engines === 'financial_ledger');
+
+  if (!isCoinRow) return;
+
+  let meta: Record<string, any> = {};
+  if (rowMap._meta_json) {
+    try {
+      meta = JSON.parse(rowMap._meta_json);
+    } catch {
+      meta = {};
+    }
+  }
+
+  const rawContainerCell = (rowMap._container_id || '').trim();
+  const [parsedContainerId, explicitContainerName] = rawContainerCell.includes('::')
+    ? rawContainerCell.split('::').map((s) => s.trim())
+    : [rawContainerCell, ''];
+  const metaTableId = typeof meta.tableId === 'string' ? meta.tableId.trim() : '';
+  const resolvedTableId = parsedContainerId || metaTableId || 'coin-default';
+  const containerChangedManually = Boolean(
+    parsedContainerId && metaTableId && parsedContainerId !== metaTableId
+  );
+
+  let partition = acc.partitionsMap.get(resolvedTableId);
+  if (!partition) {
+    partition = {
+      tableId: resolvedTableId,
+      explicitName: undefined,
+      metadata: {
+        tableId: resolvedTableId,
+        name: 'Minha Planilha',
+        description: '',
+        goals: {},
+        tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+      },
+      rows: [],
+    };
+    acc.partitionsMap.set(resolvedTableId, partition);
+  }
+
+  const candidateTableName =
+    explicitContainerName ||
+    (!containerChangedManually && meta.tableName ? String(meta.tableName) : '') ||
+    (!containerChangedManually && meta.tableEnvelope?.tableName
+      ? String(meta.tableEnvelope.tableName)
+      : '') ||
+    (containerChangedManually ? parsedContainerId : '');
+
+  if (
+    candidateTableName &&
+    (!partition.explicitName ||
+      partition.explicitName === 'Minha Planilha' ||
+      partition.explicitName === 'Assistente Moeda — Geral')
+  ) {
+    partition.explicitName = candidateTableName;
+    partition.metadata.name = candidateTableName;
+  }
+
+  if (
+    !containerChangedManually &&
+    meta.tableEnvelope &&
+    typeof meta.tableEnvelope === 'object'
+  ) {
+    const env = meta.tableEnvelope;
+    if (env.description) partition.metadata.description = String(env.description);
+    if (env.goals) partition.metadata.tableGoals = env.goals;
+    if (env.investorProfile) partition.metadata.investorProfile = env.investorProfile;
+    if (env.schema) partition.metadata.schema = env.schema;
+    if (env.activeSectors) partition.metadata.activeSectors = env.activeSectors;
+    if (env.dashboardConfig) partition.metadata.dashboardConfig = env.dashboardConfig;
+    if (env.sectorParams) partition.metadata.sectorParams = env.sectorParams;
+  }
+
+  const isHeaderSentinel =
+    (rowMap._type || '').trim().toLowerCase() === 'header' ||
+    Boolean(meta.isTableHeaderOnly) ||
+    (rowMap._key || '').startsWith('__table_header__');
+
+  if (isHeaderSentinel) return;
+
+  const parsedVal =
+    parseValue(
+      rowMap.primary_assignee ||
+        rowMap.notes_or_payload ||
+        String(meta.amount ?? meta.amountBRL ?? meta.value ?? 0)
+    ) ?? 0;
+  const normalizedDate =
+    parseAndNormalizeDate(rowMap.date_or_cycle || meta.date || '') || todayStr;
+  const entryType = options?.forceEntryType
+    ? options.forceEntryType
+    : normalizeEntryType(
+        rowMap.secondary_assignee || meta.entryType || options?.fallbackEntryType || 'revenue'
+      );
+
+  const newRow: TableRow = {
+    id: rowMap._key || meta.id || `coin-omni-${acc.rows.length + 1}`,
+    date: normalizedDate,
+    value: parsedVal,
+    description: neutralizeCsvFormula(
+      rowMap.title_or_name || meta.description || 'Lançamento Importado'
+    ),
+    category: neutralizeCsvFormula(rowMap.group_or_tier || meta.category || 'Geral'),
+    tags: neutralizeCsvFormula(
+      rowMap.capabilities_or_tags ||
+        (Array.isArray(meta.tags) ? meta.tags.join(',') : meta.tags) ||
+        meta.paymentMethod ||
+        'PIX'
+    ),
+    entryType,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (typeof meta.monthlyValue === 'number') newRow.monthlyValue = meta.monthlyValue;
+  if (typeof meta.monthCount === 'number') newRow.monthCount = meta.monthCount;
+  if (meta.periodStart || meta.period_start) {
+    newRow.periodStart = String(meta.periodStart || meta.period_start);
+  }
+  if (meta.periodEnd || meta.period_end) {
+    newRow.periodEnd = String(meta.periodEnd || meta.period_end);
+  }
+  if (meta.ticker) newRow.ticker = String(meta.ticker);
+  if (typeof meta.quantity === 'number') newRow.quantity = meta.quantity;
+  if (typeof meta.unitPrice === 'number') newRow.unitPrice = meta.unitPrice;
+  if (meta.customValues && typeof meta.customValues === 'object') {
+    newRow.customValues = meta.customValues;
+  }
+
+  partition.rows.push(newRow);
+  acc.rows.push(newRow);
+}
+
+function finalizeOmniRouterOutput(
+  acc: OmniRouterAccumulator,
+  metaObj: NonNullable<CSVParseOutput['metadata']>,
+  errors: string[],
+  skippedCount: number
+): CSVParseOutput {
+  const tablePartitions: CSVTablePartitionOutput[] = [];
+  const usedNames = new Map<string, number>();
+  let partIdx = 0;
+  for (const part of acc.partitionsMap.values()) {
+    partIdx += 1;
+    let resolvedName =
+      part.explicitName ||
+      (acc.partitionsMap.size > 1
+        ? `Planilha Financeira #${partIdx} (${part.tableId})`
+        : 'Minha Planilha');
+    const count = usedNames.get(resolvedName) || 0;
+    usedNames.set(resolvedName, count + 1);
+    if (count > 0 && acc.partitionsMap.size > 1) {
+      resolvedName = `${resolvedName} (${part.tableId})`;
+    }
+    part.metadata.name = resolvedName;
+
+    const partRowSectors = detectSectorsFromRows(part.rows);
+    const partDetectedSectors = Array.from(
+      new Set(['personal_finance', ...(part.metadata.activeSectors || []), ...partRowSectors])
+    );
+
+    tablePartitions.push({
+      tableId: part.tableId,
+      rows: part.rows,
+      metadata: part.metadata,
+      detectedSectors: partDetectedSectors,
+    });
+  }
+
+  if (tablePartitions.length > 0) {
+    const firstPart = tablePartitions[0];
+    metaObj.tableId = firstPart.metadata.tableId;
+    metaObj.name = firstPart.metadata.name;
+    if (firstPart.metadata.description) metaObj.description = firstPart.metadata.description;
+    if (firstPart.metadata.tableGoals) metaObj.tableGoals = firstPart.metadata.tableGoals;
+    if (firstPart.metadata.investorProfile) {
+      metaObj.investorProfile = firstPart.metadata.investorProfile;
+    }
+    if (firstPart.metadata.schema) metaObj.schema = firstPart.metadata.schema;
+    if (firstPart.metadata.activeSectors) metaObj.activeSectors = firstPart.metadata.activeSectors;
+    if (firstPart.metadata.dashboardConfig) {
+      metaObj.dashboardConfig = firstPart.metadata.dashboardConfig;
+    }
+    if (firstPart.metadata.sectorParams) metaObj.sectorParams = firstPart.metadata.sectorParams;
+  }
+
+  const rowSectors = detectSectorsFromRows(acc.rows as TableRow[]);
+  const detectedSectors = Array.from(
+    new Set(['personal_finance', ...(metaObj.activeSectors || []), ...rowSectors])
+  );
+  return {
+    rows: acc.rows,
+    errors,
+    skippedCount,
+    detectedSectors,
+    metadata: metaObj,
+    tablePartitions,
+  };
+}
+
+interface CanonicalTreeContext {
+  canonHeaderIdx: number;
+  canonDelim: string;
+  kIdx: number;
+  tIdx: number;
+  lIdx: number;
+  vIdx: number;
+  mIdx: number;
+}
+
+function createCanonicalTreeContext(allLines: string[]): CanonicalTreeContext {
+  const canonHeaderIdx = allLines.findIndex((l) => /^_?key,_?type,label,value/i.test(l));
+  const canonDelim = detectDelimiter(allLines[canonHeaderIdx]);
+  const canonHeaders = splitCSVLine(allLines[canonHeaderIdx], canonDelim).map((h) =>
+    cleanCell(h).toLowerCase()
+  );
+  return {
+    canonHeaderIdx,
+    canonDelim,
+    kIdx: findHeaderIdx(canonHeaders, ['_key', 'key']),
+    tIdx: findHeaderIdx(canonHeaders, ['_type', 'type', 'tipo']),
+    lIdx: findHeaderIdx(canonHeaders, ['label', 'descricao', 'description', 'nome']),
+    vIdx: findHeaderIdx(canonHeaders, ['value', 'valor', 'amount']),
+    mIdx: findHeaderIdx(canonHeaders, ['_meta_json', 'meta_json', 'metadata_json']),
+  };
+}
+
+function stepCanonicalTreeLine(
+  line: string,
+  ctx: CanonicalTreeContext,
+  todayStr: string,
+  options: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] } | undefined,
+  metaObj: NonNullable<CSVParseOutput['metadata']>,
+  rows: (TableRow | Omit<TableRow, 'id'>)[]
+): void {
+  const cols = splitCSVLine(line, ctx.canonDelim);
+  const rawKey = ctx.kIdx !== -1 && cols[ctx.kIdx] ? cleanCell(cols[ctx.kIdx]) : '';
+  const rawNodeType = ctx.tIdx !== -1 && cols[ctx.tIdx] ? cleanCell(cols[ctx.tIdx]).toLowerCase() : '';
+  const rawLabel = ctx.lIdx !== -1 && cols[ctx.lIdx] ? cleanCell(cols[ctx.lIdx]) : '';
+  const rawVal = ctx.vIdx !== -1 && cols[ctx.vIdx] ? cleanCell(cols[ctx.vIdx]) : '';
+  const rawMeta = ctx.mIdx !== -1 && cols[ctx.mIdx] ? cleanCell(cols[ctx.mIdx]) : '';
+
+  if (
+    rawNodeType === 'header' ||
+    rawNodeType === 'root' ||
+    rawNodeType === 'branch' ||
+    rawNodeType === 'group' ||
+    rawNodeType === 'raiz' ||
+    rawNodeType === 'bloco'
+  ) {
+    if (rawKey === '01' && rawLabel) {
+      metaObj.name = rawLabel;
+    }
+    return;
+  }
+
+  let meta: Record<string, any> = {};
+  if (rawMeta) {
+    try {
+      meta = JSON.parse(rawMeta);
+    } catch {
+      meta = {};
+    }
+  }
+
+  const parsedVal =
+    parseValue(rawVal || String(meta.amountBRL ?? meta.amount ?? meta.value ?? 0)) ?? 0;
+  const normalizedDate =
+    parseAndNormalizeDate(meta.date || meta.data || '') || todayStr;
+  const entryType = options?.forceEntryType
+    ? options.forceEntryType
+    : normalizeEntryType(
+        meta.entryType || meta.entry_type || options?.fallbackEntryType || 'revenue'
+      );
+
+  const newRow: TableRow = {
+    id: rawKey || meta.id || `coin-canon-${rows.length + 1}`,
+    date: normalizedDate,
+    value: parsedVal,
+    description: neutralizeCsvFormula(rawLabel || meta.description || 'Lançamento Importado'),
+    category: neutralizeCsvFormula(meta.category || meta.categoria || 'Geral'),
+    tags: neutralizeCsvFormula(meta.paymentMethod || meta.tags || 'PIX'),
+    entryType,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (typeof meta.monthlyValue === 'number') newRow.monthlyValue = meta.monthlyValue;
+  if (typeof meta.monthCount === 'number') newRow.monthCount = meta.monthCount;
+  if (meta.ticker) newRow.ticker = String(meta.ticker);
+  if (typeof meta.quantity === 'number') newRow.quantity = meta.quantity;
+  if (typeof meta.unitPrice === 'number') newRow.unitPrice = meta.unitPrice;
+
+  rows.push(newRow);
+}
+
+export function parseCSVText(
+  csvText: string,
+  options?: {
+    fallbackEntryType?: TableRow['entryType'];
+    forceEntryType?: TableRow['entryType'];
+  }
+): CSVParseOutput {
+  const errors: string[] = [];
+  let skippedCount = 0;
+  const rows: (TableRow | Omit<TableRow, 'id'>)[] = [];
+
+  const preamble = prepareCsvPreamble(csvText);
+  if (!preamble) {
+    return {
+      rows,
+      errors: ['O CSV está vazio.'],
+      skippedCount: 0,
+      detectedSectors: ['personal_finance'],
+      metadata: {
+        name: 'Minha Planilha',
+        description: '',
+        goals: {},
+        tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+      },
+    };
+  }
+
+  const { cleaned, allLines, transactionLines, schemaMarkerLineIdx, metaObj } = preamble;
   const metadata = metaObj;
 
   // If Backup v3 explicit schema marker is detected, delegate to dynamic CSV parser
@@ -532,321 +1307,20 @@ export function parseCSVText(
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // --- Sekundo Cross-Engine Router: Multi-Planilha Omni-CSV (`#PLANILHA,coin_ledger_row`) & Canonical E09 (`_key,_type,label,value,email,_meta_json`) ---
-  const firstRawLine = allLines[0] || '';
-  const isSekundoOmniCsv =
-    /^#?(PLANILHA|ABA_PLANILHA)[,:]/i.test(firstRawLine) ||
-    allLines.some((l) => /^_container_id,_key,_type,_engines/i.test(l) || /^_record_kind,_container_id/i.test(l));
-  const isSekundoCanonicalTree =
-    !isSekundoOmniCsv &&
-    allLines.some((l) => /^_?key,_?type,label,value/i.test(l));
+  const { isSekundoOmniCsv, isSekundoCanonicalTree } = detectCsvVariantFlags(allLines);
 
   if (isSekundoOmniCsv) {
-    let currentSheet = '';
-    let activeOmniHeaders: string[] = [];
-    const hasSheetMarkers = allLines.some((l) => /^#?PLANILHA[,:]/i.test(l));
-    const partitionsMap = new Map<
-      string,
-      {
-        tableId: string;
-        explicitName?: string;
-        metadata: NonNullable<CSVParseOutput['metadata']>;
-        rows: TableRow[];
-      }
-    >();
-
+    const acc = createOmniRouterAccumulator(allLines);
     for (let i = 0; i < allLines.length; i++) {
-      const line = allLines[i];
-      if (/^#?PLANILHA[,:]/i.test(line)) {
-        const parts = splitCSVLine(line, ',');
-        currentSheet = (parts[1] || '').trim().toLowerCase();
-        continue;
-      }
-      if (/^#?(ABA_PLANILHA|FIM_PLANILHA)[,:]/i.test(line)) {
-        currentSheet = '';
-        continue;
-      }
-      if (/^(_container_id,_key|_record_kind,_container_id)/i.test(line)) {
-        activeOmniHeaders = splitCSVLine(line, ',').map((h) => cleanCell(h).toLowerCase());
-        continue;
-      }
-      if (activeOmniHeaders.length === 0) continue;
-
-      const cols = splitCSVLine(line, ',');
-      const rowMap: Record<string, string> = {};
-      activeOmniHeaders.forEach((h, idx) => {
-        rowMap[h] = cols[idx] !== undefined ? cleanCell(cols[idx]) : '';
-      });
-
-      const isCoinRow =
-        currentSheet === 'coin_ledger_row' ||
-        currentSheet === 'financial_ledger' ||
-        rowMap._record_kind === 'coin_ledger_row' ||
-        (!hasSheetMarkers && rowMap._engines === 'financial_ledger');
-
-      if (!isCoinRow) continue;
-
-      let meta: Record<string, any> = {};
-      if (rowMap._meta_json) {
-        try {
-          meta = JSON.parse(rowMap._meta_json);
-        } catch {
-          meta = {};
-        }
-      }
-
-      const rawContainerCell = (rowMap._container_id || '').trim();
-      const [parsedContainerId, explicitContainerName] = rawContainerCell.includes('::')
-        ? rawContainerCell.split('::').map((s) => s.trim())
-        : [rawContainerCell, ''];
-      const metaTableId = typeof meta.tableId === 'string' ? meta.tableId.trim() : '';
-      const resolvedTableId = parsedContainerId || metaTableId || 'coin-default';
-      const containerChangedManually = Boolean(
-        parsedContainerId && metaTableId && parsedContainerId !== metaTableId
-      );
-
-      let partition = partitionsMap.get(resolvedTableId);
-      if (!partition) {
-        partition = {
-          tableId: resolvedTableId,
-          explicitName: undefined,
-          metadata: {
-            tableId: resolvedTableId,
-            name: 'Minha Planilha',
-            description: '',
-            goals: {},
-            tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
-          },
-          rows: [],
-        };
-        partitionsMap.set(resolvedTableId, partition);
-      }
-
-      const candidateTableName =
-        explicitContainerName ||
-        (!containerChangedManually && meta.tableName ? String(meta.tableName) : '') ||
-        (!containerChangedManually && meta.tableEnvelope?.tableName
-          ? String(meta.tableEnvelope.tableName)
-          : '') ||
-        (containerChangedManually ? parsedContainerId : '');
-
-      if (
-        candidateTableName &&
-        (!partition.explicitName ||
-          partition.explicitName === 'Minha Planilha' ||
-          partition.explicitName === 'Assistente Moeda — Geral')
-      ) {
-        partition.explicitName = candidateTableName;
-        partition.metadata.name = candidateTableName;
-      }
-
-      if (
-        !containerChangedManually &&
-        meta.tableEnvelope &&
-        typeof meta.tableEnvelope === 'object'
-      ) {
-        const env = meta.tableEnvelope;
-        if (env.description) partition.metadata.description = String(env.description);
-        if (env.goals) partition.metadata.tableGoals = env.goals;
-        if (env.investorProfile) partition.metadata.investorProfile = env.investorProfile;
-        if (env.schema) partition.metadata.schema = env.schema;
-        if (env.activeSectors) partition.metadata.activeSectors = env.activeSectors;
-        if (env.dashboardConfig) partition.metadata.dashboardConfig = env.dashboardConfig;
-        if (env.sectorParams) partition.metadata.sectorParams = env.sectorParams;
-      }
-
-      const isHeaderSentinel =
-        (rowMap._type || '').trim().toLowerCase() === 'header' ||
-        Boolean(meta.isTableHeaderOnly) ||
-        (rowMap._key || '').startsWith('__table_header__');
-
-      if (isHeaderSentinel) {
-        continue;
-      }
-
-      const parsedVal =
-        parseValue(
-          rowMap.primary_assignee ||
-            rowMap.notes_or_payload ||
-            String(meta.amount ?? meta.amountBRL ?? meta.value ?? 0)
-        ) ?? 0;
-      const normalizedDate =
-        parseAndNormalizeDate(rowMap.date_or_cycle || meta.date || '') || todayStr;
-      const entryType = options?.forceEntryType
-        ? options.forceEntryType
-        : normalizeEntryType(
-            rowMap.secondary_assignee || meta.entryType || options?.fallbackEntryType || 'revenue'
-          );
-
-      const newRow: TableRow = {
-        id: rowMap._key || meta.id || `coin-omni-${rows.length + 1}`,
-        date: normalizedDate,
-        value: parsedVal,
-        description: neutralizeCsvFormula(
-          rowMap.title_or_name || meta.description || 'Lançamento Importado'
-        ),
-        category: neutralizeCsvFormula(rowMap.group_or_tier || meta.category || 'Geral'),
-        tags: neutralizeCsvFormula(
-          rowMap.capabilities_or_tags ||
-            (Array.isArray(meta.tags) ? meta.tags.join(',') : meta.tags) ||
-            meta.paymentMethod ||
-            'PIX'
-        ),
-        entryType,
-        createdAt: new Date().toISOString(),
-      };
-
-      if (typeof meta.monthlyValue === 'number') newRow.monthlyValue = meta.monthlyValue;
-      if (typeof meta.monthCount === 'number') newRow.monthCount = meta.monthCount;
-      if (meta.periodStart || meta.period_start) {
-        newRow.periodStart = String(meta.periodStart || meta.period_start);
-      }
-      if (meta.periodEnd || meta.period_end) {
-        newRow.periodEnd = String(meta.periodEnd || meta.period_end);
-      }
-      if (meta.ticker) newRow.ticker = String(meta.ticker);
-      if (typeof meta.quantity === 'number') newRow.quantity = meta.quantity;
-      if (typeof meta.unitPrice === 'number') newRow.unitPrice = meta.unitPrice;
-      if (meta.customValues && typeof meta.customValues === 'object') {
-        newRow.customValues = meta.customValues;
-      }
-
-      partition.rows.push(newRow);
-      rows.push(newRow);
+      stepOmniRouterLine(allLines[i], todayStr, options, acc);
     }
-
-    const tablePartitions: CSVTablePartitionOutput[] = [];
-    const usedNames = new Map<string, number>();
-    let partIdx = 0;
-    for (const part of partitionsMap.values()) {
-      partIdx += 1;
-      let resolvedName =
-        part.explicitName ||
-        (partitionsMap.size > 1
-          ? `Planilha Financeira #${partIdx} (${part.tableId})`
-          : 'Minha Planilha');
-      const count = usedNames.get(resolvedName) || 0;
-      usedNames.set(resolvedName, count + 1);
-      if (count > 0 && partitionsMap.size > 1) {
-        resolvedName = `${resolvedName} (${part.tableId})`;
-      }
-      part.metadata.name = resolvedName;
-
-      const partRowSectors = detectSectorsFromRows(part.rows);
-      const partDetectedSectors = Array.from(
-        new Set(['personal_finance', ...(part.metadata.activeSectors || []), ...partRowSectors])
-      );
-
-      tablePartitions.push({
-        tableId: part.tableId,
-        rows: part.rows,
-        metadata: part.metadata,
-        detectedSectors: partDetectedSectors,
-      });
-    }
-
-    if (tablePartitions.length > 0) {
-      const firstPart = tablePartitions[0];
-      metaObj.tableId = firstPart.metadata.tableId;
-      metaObj.name = firstPart.metadata.name;
-      if (firstPart.metadata.description) metaObj.description = firstPart.metadata.description;
-      if (firstPart.metadata.tableGoals) metaObj.tableGoals = firstPart.metadata.tableGoals;
-      if (firstPart.metadata.investorProfile) {
-        metaObj.investorProfile = firstPart.metadata.investorProfile;
-      }
-      if (firstPart.metadata.schema) metaObj.schema = firstPart.metadata.schema;
-      if (firstPart.metadata.activeSectors) metaObj.activeSectors = firstPart.metadata.activeSectors;
-      if (firstPart.metadata.dashboardConfig) {
-        metaObj.dashboardConfig = firstPart.metadata.dashboardConfig;
-      }
-      if (firstPart.metadata.sectorParams) metaObj.sectorParams = firstPart.metadata.sectorParams;
-    }
-
-    const rowSectors = detectSectorsFromRows(rows as TableRow[]);
-    const detectedSectors = Array.from(
-      new Set(['personal_finance', ...(metaObj.activeSectors || []), ...rowSectors])
-    );
-    return {
-      rows,
-      errors,
-      skippedCount,
-      detectedSectors,
-      metadata: metaObj,
-      tablePartitions,
-    };
+    return finalizeOmniRouterOutput(acc, metaObj, errors, skippedCount);
   }
 
   if (isSekundoCanonicalTree) {
-    const canonHeaderIdx = allLines.findIndex((l) => /^_?key,_?type,label,value/i.test(l));
-    const canonDelim = detectDelimiter(allLines[canonHeaderIdx]);
-    const canonHeaders = splitCSVLine(allLines[canonHeaderIdx], canonDelim).map((h) =>
-      cleanCell(h).toLowerCase()
-    );
-    const kIdx = findHeaderIdx(canonHeaders, ['_key', 'key']);
-    const tIdx = findHeaderIdx(canonHeaders, ['_type', 'type', 'tipo']);
-    const lIdx = findHeaderIdx(canonHeaders, ['label', 'descricao', 'description', 'nome']);
-    const vIdx = findHeaderIdx(canonHeaders, ['value', 'valor', 'amount']);
-    const mIdx = findHeaderIdx(canonHeaders, ['_meta_json', 'meta_json', 'metadata_json']);
-
-    for (let i = canonHeaderIdx + 1; i < allLines.length; i++) {
-      const cols = splitCSVLine(allLines[i], canonDelim);
-      const rawKey = kIdx !== -1 && cols[kIdx] ? cleanCell(cols[kIdx]) : '';
-      const rawNodeType = tIdx !== -1 && cols[tIdx] ? cleanCell(cols[tIdx]).toLowerCase() : '';
-      const rawLabel = lIdx !== -1 && cols[lIdx] ? cleanCell(cols[lIdx]) : '';
-      const rawVal = vIdx !== -1 && cols[vIdx] ? cleanCell(cols[vIdx]) : '';
-      const rawMeta = mIdx !== -1 && cols[mIdx] ? cleanCell(cols[mIdx]) : '';
-
-      if (
-        rawNodeType === 'header' ||
-        rawNodeType === 'root' ||
-        rawNodeType === 'branch' ||
-        rawNodeType === 'group' ||
-        rawNodeType === 'raiz' ||
-        rawNodeType === 'bloco'
-      ) {
-        if (rawKey === '01' && rawLabel) {
-          metaObj.name = rawLabel;
-        }
-        continue;
-      }
-
-      let meta: Record<string, any> = {};
-      if (rawMeta) {
-        try {
-          meta = JSON.parse(rawMeta);
-        } catch {
-          meta = {};
-        }
-      }
-
-      const parsedVal =
-        parseValue(rawVal || String(meta.amountBRL ?? meta.amount ?? meta.value ?? 0)) ?? 0;
-      const normalizedDate =
-        parseAndNormalizeDate(meta.date || meta.data || '') || todayStr;
-      const entryType = options?.forceEntryType
-        ? options.forceEntryType
-        : normalizeEntryType(
-            meta.entryType || meta.entry_type || options?.fallbackEntryType || 'revenue'
-          );
-
-      const newRow: TableRow = {
-        id: rawKey || meta.id || `coin-canon-${rows.length + 1}`,
-        date: normalizedDate,
-        value: parsedVal,
-        description: neutralizeCsvFormula(rawLabel || meta.description || 'Lançamento Importado'),
-        category: neutralizeCsvFormula(meta.category || meta.categoria || 'Geral'),
-        tags: neutralizeCsvFormula(meta.paymentMethod || meta.tags || 'PIX'),
-        entryType,
-        createdAt: new Date().toISOString(),
-      };
-
-      if (typeof meta.monthlyValue === 'number') newRow.monthlyValue = meta.monthlyValue;
-      if (typeof meta.monthCount === 'number') newRow.monthCount = meta.monthCount;
-      if (meta.ticker) newRow.ticker = String(meta.ticker);
-      if (typeof meta.quantity === 'number') newRow.quantity = meta.quantity;
-      if (typeof meta.unitPrice === 'number') newRow.unitPrice = meta.unitPrice;
-
-      rows.push(newRow);
+    const canonCtx = createCanonicalTreeContext(allLines);
+    for (let i = canonCtx.canonHeaderIdx + 1; i < allLines.length; i++) {
+      stepCanonicalTreeLine(allLines[i], canonCtx, todayStr, options, metaObj, rows);
     }
 
     const rowSectors = detectSectorsFromRows(rows as TableRow[]);
@@ -862,260 +1336,45 @@ export function parseCSVText(
     };
   }
 
-  const delimiter = detectDelimiter(transactionLines[0]);
-  const headers = splitCSVLine(transactionLines[0], delimiter).map((h) => cleanCell(h).toLowerCase());
+  const colMap = buildStandardCsvColumnIndices(transactionLines[0]);
+  const { headers, typeIdx, headerSectors } = colMap;
 
-  const idAliases = ['id', 'uuid', 'transaction_id', 'id_transacao', 'external_id', '_key', 'key'];
-  const descriptionAliases = ['description', 'descricao', 'descrição', 'historico', 'memo', 'title', 'label'];
-  const categoryAliases = ['category', 'categoria'];
-  const tagsAliases = ['tags', 'sector_tags', 'etiquetas', 'metodo_pagamento', 'payment_method'];
-  const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados', '_meta_json'];
-  const typeAliases = ['entrytype', 'entry_type', 'tipo', 'type'];
-  const nodeKindIdx = findHeaderIdx(headers, ['_type', 'tipo']);
-  const explicitEntryTypeIdx = findHeaderIdx(headers, ['entry_type', 'entrytype']);
-  const monthlyValueAliases = ['monthlyvalue', 'valor_mensal', 'monthly_value', 'valor mensal'];
-  const monthCountAliases = ['monthcount', 'qtd_meses', 'month_count', 'months', 'meses'];
-  const periodStartAliases = ['period_start', 'periodstart', 'inicio_periodo', 'period_inicio', 'período início'];
-  const periodEndAliases = ['period_end', 'periodend', 'fim_periodo', 'period_fim', 'período fim'];
-  const tickerAliases = ['ticker', 'ativo', 'codigo_ativo'];
-  const quantityAliases = ['quantity', 'quantidade', 'qtd'];
-  const unitPriceAliases = ['unitprice', 'unit_price', 'preco_unitario', 'preço unitário'];
-  const generatedByAliases = ['generatedby', 'generated_by', 'gerado_por', 'gerado por'];
-  const clonedFromAliases = ['clonedfrom', 'cloned_from', 'clonado_de', 'clonado de'];
-
-  const idIdx = findHeaderIdx(headers, idAliases);
-  const dateIdx = findHeaderIdx(headers, dateAliases);
-  const descriptionIdx = findHeaderIdx(headers, descriptionAliases);
-  const amountIdx = findHeaderIdx(headers, amountAliases);
-  const categoryIdx = findHeaderIdx(headers, categoryAliases);
-  const tagsIdx = findHeaderIdx(headers, tagsAliases);
-  const metadataIdx = findHeaderIdx(headers, metadataAliases);
-  const typeIdx = explicitEntryTypeIdx !== -1 ? explicitEntryTypeIdx : findHeaderIdx(headers, typeAliases);
-  const monthlyValueIdx = findHeaderIdx(headers, monthlyValueAliases);
-  const monthCountIdx = findHeaderIdx(headers, monthCountAliases);
-  const periodStartIdx = findHeaderIdx(headers, periodStartAliases);
-  const periodEndIdx = findHeaderIdx(headers, periodEndAliases);
-  const tickerIdx = findHeaderIdx(headers, tickerAliases);
-  const quantityIdx = findHeaderIdx(headers, quantityAliases);
-  const unitPriceIdx = findHeaderIdx(headers, unitPriceAliases);
-  const generatedByIdx = findHeaderIdx(headers, generatedByAliases);
-  const clonedFromIdx = findHeaderIdx(headers, clonedFromAliases);
-
-  if (dateIdx === -1 || amountIdx === -1) {
+  if (colMap.dateIdx === -1 || colMap.amountIdx === -1) {
     return {
       rows,
-      errors: ['Cabeçalhos inválidos. O CSV precisa conter ao menos as colunas de data ("data", "date") e valor ("valor", "amount").'],
+      errors: [
+        'Cabeçalhos inválidos. O CSV precisa conter ao menos as colunas de data ("data", "date") e valor ("valor", "amount").',
+      ],
       skippedCount: 0,
       detectedSectors: ['personal_finance'],
       metadata,
+      detectedHeaders: headers,
     };
   }
 
-  const matchedAmountHeader = headers[amountIdx] || '';
-  const isCentsColumn = matchedAmountHeader === 'valor_cents' || matchedAmountHeader === 'amount_in_cents';
-
-  // Scan headers for sector keywords
-  const headerSectors = new Set<string>();
-  const headerSectorsMap: Record<string, string[]> = {
-    smb_accounting: ['ncg', 'fap_rat', 'lucro_real', 'cfar', 'massa_salarial_12', 'receita_bruta_12'],
-    legal_taxes: ['fator_r', 'taxa_legal', 'irpf_2026', 'simples_nacional', 'tipo_debito', 'data_ajuizamento'],
-    real_estate: ['tabela_price', 'sistema_sac', 'cap_rate', 'rental_income'],
-    vehicles: ['cpk', 'weibull', 'ubi', 'tco_vehicle', 'milhas_km', 'receita_bruta', 'tipo_viagem'],
-  };
-
-  headers.forEach((h) => {
-    for (const [sec, keywords] of Object.entries(headerSectorsMap)) {
-      if (keywords.some((kw) => h.includes(kw))) {
-        headerSectors.add(sec);
-      }
-    }
-  });
-
   for (let i = 1; i < transactionLines.length; i++) {
-    const lineNum = i + 1;
-    const cols = splitCSVLine(transactionLines[i], delimiter);
-    if (cols.length === 0 || (cols.length === 1 && cols[0] === '')) {
-      skippedCount++;
-      continue;
-    }
-
-    // Skip Sekundo Clean-Human structural tree header rows (e.g. `01,header,🪙 Assistente Moeda...`)
-    if (nodeKindIdx !== -1 && cols[nodeKindIdx]) {
-      const nk = cleanCell(cols[nodeKindIdx]).toLowerCase();
-      if (
-        nk === 'header' ||
-        nk === 'root' ||
-        nk === 'branch' ||
-        nk === 'group' ||
-        nk === 'raiz' ||
-        nk === 'bloco'
-      ) {
-        if (descriptionIdx !== -1 && cols[descriptionIdx]) {
-          metaObj.name = cleanCell(cols[descriptionIdx]);
-        }
-        continue;
-      }
-    }
-
-    try {
-      let rowId: string | undefined = undefined;
-      if (idIdx !== -1 && cols[idIdx] !== undefined && cols[idIdx] !== null) {
-        const cleanedId = cleanCell(cols[idIdx]);
-        if (cleanedId.length > 0) {
-          rowId = cleanedId;
-        }
-      }
-
-      const rawDate = cols[dateIdx] || '';
-      const normalizedDate = parseAndNormalizeDate(rawDate) || todayStr;
-
-      const rawAmount = cols[amountIdx] || '0';
-      let parsedVal = parseValue(rawAmount, isCentsColumn);
-      if (parsedVal === null || isNaN(parsedVal)) {
-        parsedVal = 0;
-      }
-
-      let entryType: TableRow['entryType'] = options?.forceEntryType || options?.fallbackEntryType || 'revenue';
-      if (!options?.forceEntryType) {
-        if (typeIdx !== -1 && cols[typeIdx]) {
-          entryType = normalizeEntryType(cols[typeIdx]);
-        } else if (categoryIdx !== -1 && cols[categoryIdx] && cols[categoryIdx].trim()) {
-          const inferredFromCat = normalizeEntryType(cols[categoryIdx]);
-          if (inferredFromCat && ['revenue', 'expense', 'deposit', 'waiver', 'partner_in', 'partner_out', 'unresolved'].includes(inferredFromCat)) {
-            entryType = inferredFromCat;
-          }
-        }
-      }
-
-      let description = '';
-      if (descriptionIdx !== -1 && cols[descriptionIdx] !== undefined && cols[descriptionIdx] !== null) {
-        description = cleanCell(cols[descriptionIdx]);
-      }
-      if (description === '' && descriptionIdx === -1) {
-        description = 'IMPORTADO VIA PLANILHA';
-      }
-
-      const category = categoryIdx !== -1 && cols[categoryIdx]
-        ? cleanCell(cols[categoryIdx])
-        : 'Geral';
-
-      const tags = tagsIdx !== -1 && cols[tagsIdx]
-        ? cleanCell(cols[tagsIdx])
-        : '';
-
-      let metadataJson = '{}';
-      const customValues: Record<string, string | number | boolean> = {};
-      if (metadataIdx !== -1 && cols[metadataIdx] !== undefined && cols[metadataIdx] !== null) {
-        const rawMeta = cleanCell(cols[metadataIdx]);
-        if (rawMeta.length > 0) {
-          try {
-            const parsedObj = JSON.parse(rawMeta);
-            if (typeof parsedObj === 'object' && parsedObj !== null) {
-              metadataJson = JSON.stringify(parsedObj);
-              Object.entries(parsedObj).forEach(([k, v]) => {
-                if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-                  customValues[k] = v;
-                }
-              });
-            } else {
-              metadataJson = '{}';
-            }
-          } catch {
-            metadataJson = '{}';
-          }
-        }
-      }
-
-      // Recurrence and period fields
-      let monthlyValue: number | undefined = undefined;
-      if (monthlyValueIdx !== -1 && cols[monthlyValueIdx]) {
-        const parsedMv = parseValue(cols[monthlyValueIdx]);
-        if (parsedMv !== null && !isNaN(parsedMv)) monthlyValue = parsedMv;
-      }
-
-      let monthCount: number | undefined = undefined;
-      if (monthCountIdx !== -1 && cols[monthCountIdx]) {
-        const parsedMc = parseInt(cleanCell(cols[monthCountIdx]), 10);
-        if (!isNaN(parsedMc)) monthCount = parsedMc;
-      }
-
-      let periodStart: string | undefined = undefined;
-      if (periodStartIdx !== -1 && cols[periodStartIdx]) {
-        const parsedPs = parseAndNormalizeDate(cols[periodStartIdx]);
-        if (parsedPs) periodStart = parsedPs;
-      }
-
-      let periodEnd: string | undefined = undefined;
-      if (periodEndIdx !== -1 && cols[periodEndIdx]) {
-        const parsedPe = parseAndNormalizeDate(cols[periodEndIdx]);
-        if (parsedPe) periodEnd = parsedPe;
-      }
-
-      // Investment and lineage fields
-      let ticker: string | undefined = undefined;
-      if (tickerIdx !== -1 && cols[tickerIdx]) {
-        const t = cleanCell(cols[tickerIdx]).toUpperCase();
-        if (t) ticker = t;
-      }
-
-      let quantity: number | undefined = undefined;
-      if (quantityIdx !== -1 && cols[quantityIdx]) {
-        const q = parseFloat(cleanCell(cols[quantityIdx]));
-        if (!isNaN(q)) quantity = q;
-      }
-
-      let unitPrice: number | undefined = undefined;
-      if (unitPriceIdx !== -1 && cols[unitPriceIdx]) {
-        const p = parseValue(cols[unitPriceIdx]);
-        if (p !== null && !isNaN(p)) unitPrice = p;
-      }
-
-      let generatedBy: string | undefined = undefined;
-      if (generatedByIdx !== -1 && cols[generatedByIdx]) {
-        const g = cleanCell(cols[generatedByIdx]);
-        if (g) generatedBy = g;
-      }
-
-      let clonedFrom: string | undefined = undefined;
-      if (clonedFromIdx !== -1 && cols[clonedFromIdx]) {
-        const c = cleanCell(cols[clonedFromIdx]);
-        if (c) clonedFrom = c;
-      }
-
-      rows.push({
-        ...(rowId ? { id: rowId } : {}),
-        date: normalizedDate,
-        value: parsedVal,
-        description,
-        entryType,
-        category: category || 'Geral',
-        tags: tags || '',
-        metadataJson,
-        monthlyValue,
-        monthCount,
-        periodStart,
-        periodEnd,
-        ...(ticker ? { ticker } : {}),
-        ...(quantity !== undefined ? { quantity } : {}),
-        ...(unitPrice !== undefined ? { unitPrice } : {}),
-        ...(generatedBy ? { generatedBy } : {}),
-        ...(clonedFrom ? { clonedFrom } : {}),
-        ...(Object.keys(customValues).length > 0 ? { customValues } : {}),
-      } as TableRow | Omit<TableRow, 'id'>);
-    } catch (err: any) {
-      errors.push(`Linha ${lineNum}: ${err.message}`);
-      skippedCount++;
-    }
+    skippedCount += stepStandardTransactionLine(
+      transactionLines[i],
+      i + 1,
+      todayStr,
+      colMap,
+      options,
+      metaObj,
+      rows,
+      errors
+    );
   }
 
   // Detect sectors from parsed rows
   const rowSectors = detectSectorsFromRows(rows);
-  const detectedSectors = Array.from(new Set([
-    'personal_finance',
-    ...(metaObj.activeSectors || []),
-    ...headerSectors,
-    ...rowSectors,
-  ]));
+  const detectedSectors = Array.from(
+    new Set([
+      'personal_finance',
+      ...(metaObj.activeSectors || []),
+      ...headerSectors,
+      ...rowSectors,
+    ])
+  );
 
   console.log('[CSV Parser]: Total rows extracted from section ## ROWS ##:', rows.length);
 
@@ -1128,6 +1387,281 @@ export function parseCSVText(
     detectedSectors,
     isAmbiguous,
     metadata,
+    detectedHeaders: headers,
+  };
+}
+
+/**
+ * Cooperative async non-blocking CSV parser with UI frame yield, progress ticks, and AbortSignal.
+ * Shares exact row-mapping logic with synchronous `parseCSVText` for 100% parity.
+ */
+export async function parseCSVTextAsync(
+  csvText: string,
+  options?: {
+    fallbackEntryType?: TableRow['entryType'];
+    forceEntryType?: TableRow['entryType'];
+  },
+  controllerOptions: AsyncImportControllerOptions = {}
+): Promise<CSVParseOutput> {
+  throwIfImportAborted(controllerOptions.signal);
+  const fileName = controllerOptions.fileName || 'planilha.csv';
+
+  controllerOptions.onProgress?.({
+    stage: 'decoding',
+    stageLabel: IMPORT_STAGE_LABELS_PT.decoding,
+    detailLabel: `Analisando cabeçalhos e separadores de "${fileName}"...`,
+    cancellable: true,
+    fileName,
+    sizeBytes: controllerOptions.sizeBytes,
+    percent: 10,
+  });
+  await yieldToUiFrame();
+  throwIfImportAborted(controllerOptions.signal);
+
+  const preamble = prepareCsvPreamble(csvText);
+  if (!preamble) {
+    return {
+      rows: [],
+      errors: ['O CSV está vazio.'],
+      skippedCount: 0,
+      detectedSectors: ['personal_finance'],
+      metadata: {
+        name: 'Minha Planilha',
+        description: '',
+        goals: {},
+        tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+      },
+    };
+  }
+
+  const { cleaned, allLines, transactionLines, schemaMarkerLineIdx, metaObj } = preamble;
+  const { isSekundoOmniCsv, isSekundoCanonicalTree } = detectCsvVariantFlags(allLines);
+  const chunkSize = Math.max(50, controllerOptions.chunkSize || 250);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  if (schemaMarkerLineIdx !== -1) {
+    const dynamicResult = await parseDynamicCSVAsync(
+      cleaned,
+      metaObj.tableId || 'default',
+      options,
+      { ...controllerOptions, fileName }
+    );
+    throwIfImportAborted(controllerOptions.signal);
+    metaObj.schema = dynamicResult.schema;
+    if (dynamicResult.investorProfile) {
+      metaObj.investorProfile = dynamicResult.investorProfile;
+    }
+    const rowSectors = detectSectorsFromRows(dynamicResult.rows);
+    const detectedSectors = Array.from(
+      new Set(['personal_finance', ...(metaObj.activeSectors || []), ...rowSectors])
+    );
+
+    controllerOptions.onProgress?.({
+      stage: 'validating',
+      stageLabel: IMPORT_STAGE_LABELS_PT.validating,
+      detailLabel: `${dynamicResult.rows.length.toLocaleString('pt-BR')} linha(s) validadas.`,
+      processedCount: dynamicResult.rows.length,
+      totalCount: dynamicResult.rows.length,
+      percent: 82,
+      cancellable: true,
+      fileName,
+      sizeBytes: controllerOptions.sizeBytes,
+    });
+    await yieldToEventLoop();
+    throwIfImportAborted(controllerOptions.signal);
+
+    return {
+      rows: dynamicResult.rows,
+      errors: dynamicResult.errors,
+      skippedCount: dynamicResult.skippedLines,
+      detectedSectors,
+      metadata: metaObj,
+    };
+  }
+
+  if (isSekundoOmniCsv) {
+    const acc = createOmniRouterAccumulator(allLines);
+    const totalLines = allLines.length;
+    for (let i = 0; i < totalLines; i++) {
+      stepOmniRouterLine(allLines[i], todayStr, options, acc);
+      if (i > 0 && i % chunkSize === 0) {
+        throwIfImportAborted(controllerOptions.signal);
+        controllerOptions.onProgress?.({
+          stage: 'parsing_rows',
+          stageLabel: IMPORT_STAGE_LABELS_PT.parsing_rows,
+          detailLabel: `Processando ${i.toLocaleString('pt-BR')} de ${totalLines.toLocaleString('pt-BR')} linha(s) Omni-CSV...`,
+          processedCount: i,
+          totalCount: totalLines,
+          percent: 15 + Math.round((i / Math.max(1, totalLines)) * 55),
+          cancellable: true,
+          fileName,
+          sizeBytes: controllerOptions.sizeBytes,
+        });
+        await yieldToEventLoop();
+      }
+    }
+    throwIfImportAborted(controllerOptions.signal);
+    const parsed = finalizeOmniRouterOutput(acc, metaObj, [], 0);
+    controllerOptions.onProgress?.({
+      stage: 'validating',
+      stageLabel: IMPORT_STAGE_LABELS_PT.validating,
+      detailLabel: `${parsed.rows.length.toLocaleString('pt-BR')} linha(s) validadas.`,
+      processedCount: parsed.rows.length,
+      totalCount: parsed.rows.length,
+      percent: 82,
+      cancellable: true,
+      fileName,
+      sizeBytes: controllerOptions.sizeBytes,
+    });
+    await yieldToEventLoop();
+    throwIfImportAborted(controllerOptions.signal);
+    return parsed;
+  }
+
+  if (isSekundoCanonicalTree) {
+    const canonCtx = createCanonicalTreeContext(allLines);
+    const canonRows: (TableRow | Omit<TableRow, 'id'>)[] = [];
+    const totalDataLines = Math.max(1, allLines.length - (canonCtx.canonHeaderIdx + 1));
+    for (let i = canonCtx.canonHeaderIdx + 1; i < allLines.length; i++) {
+      stepCanonicalTreeLine(allLines[i], canonCtx, todayStr, options, metaObj, canonRows);
+      const processed = i - canonCtx.canonHeaderIdx;
+      if (processed % chunkSize === 0) {
+        throwIfImportAborted(controllerOptions.signal);
+        controllerOptions.onProgress?.({
+          stage: 'parsing_rows',
+          stageLabel: IMPORT_STAGE_LABELS_PT.parsing_rows,
+          detailLabel: `Processando ${processed.toLocaleString('pt-BR')} de ${totalDataLines.toLocaleString('pt-BR')} linha(s)...`,
+          processedCount: processed,
+          totalCount: totalDataLines,
+          percent: 15 + Math.round((processed / totalDataLines) * 55),
+          cancellable: true,
+          fileName,
+          sizeBytes: controllerOptions.sizeBytes,
+        });
+        await yieldToEventLoop();
+      }
+    }
+    throwIfImportAborted(controllerOptions.signal);
+    const rowSectors = detectSectorsFromRows(canonRows as TableRow[]);
+    const detectedSectors = Array.from(
+      new Set(['personal_finance', ...(metaObj.activeSectors || []), ...rowSectors])
+    );
+    controllerOptions.onProgress?.({
+      stage: 'validating',
+      stageLabel: IMPORT_STAGE_LABELS_PT.validating,
+      detailLabel: `${canonRows.length.toLocaleString('pt-BR')} linha(s) validadas.`,
+      processedCount: canonRows.length,
+      totalCount: canonRows.length,
+      percent: 82,
+      cancellable: true,
+      fileName,
+      sizeBytes: controllerOptions.sizeBytes,
+    });
+    await yieldToEventLoop();
+    throwIfImportAborted(controllerOptions.signal);
+    return {
+      rows: canonRows,
+      errors: [],
+      skippedCount: 0,
+      detectedSectors,
+      metadata: metaObj,
+    };
+  }
+
+  if (transactionLines.length === 0) {
+    return {
+      rows: [],
+      errors: ['Nenhuma linha de transação foi encontrada.'],
+      skippedCount: 0,
+      detectedSectors: ['personal_finance'],
+      metadata: metaObj,
+    };
+  }
+
+  const colMap = buildStandardCsvColumnIndices(transactionLines[0]);
+  const { headers, typeIdx, headerSectors } = colMap;
+
+  if (colMap.dateIdx === -1 || colMap.amountIdx === -1) {
+    return {
+      rows: [],
+      errors: [
+        'Cabeçalhos inválidos. O CSV precisa conter ao menos as colunas de data ("data", "date") e valor ("valor", "amount").',
+      ],
+      skippedCount: 0,
+      detectedSectors: ['personal_finance'],
+      metadata: metaObj,
+      detectedHeaders: headers,
+    };
+  }
+
+  const rows: (TableRow | Omit<TableRow, 'id'>)[] = [];
+  const errors: string[] = [];
+  let skippedCount = 0;
+  const totalDataLines = Math.max(1, transactionLines.length - 1);
+
+  for (let i = 1; i < transactionLines.length; i++) {
+    skippedCount += stepStandardTransactionLine(
+      transactionLines[i],
+      i + 1,
+      todayStr,
+      colMap,
+      options,
+      metaObj,
+      rows,
+      errors
+    );
+    if (i % chunkSize === 0) {
+      throwIfImportAborted(controllerOptions.signal);
+      controllerOptions.onProgress?.({
+        stage: 'parsing_rows',
+        stageLabel: IMPORT_STAGE_LABELS_PT.parsing_rows,
+        detailLabel: `Processando ${i.toLocaleString('pt-BR')} de ${totalDataLines.toLocaleString('pt-BR')} linha(s)...`,
+        processedCount: i,
+        totalCount: totalDataLines,
+        percent: 15 + Math.round((i / totalDataLines) * 55),
+        cancellable: true,
+        fileName,
+        sizeBytes: controllerOptions.sizeBytes,
+      });
+      await yieldToEventLoop();
+    }
+  }
+
+  throwIfImportAborted(controllerOptions.signal);
+  controllerOptions.onProgress?.({
+    stage: 'validating',
+    stageLabel: IMPORT_STAGE_LABELS_PT.validating,
+    detailLabel: 'Identificando setores e verificando integridade...',
+    processedCount: totalDataLines,
+    totalCount: totalDataLines,
+    percent: 78,
+    cancellable: true,
+    fileName,
+    sizeBytes: controllerOptions.sizeBytes,
+  });
+  await yieldToEventLoop();
+  throwIfImportAborted(controllerOptions.signal);
+
+  const rowSectors = detectSectorsFromRows(rows);
+  const detectedSectors = Array.from(
+    new Set([
+      'personal_finance',
+      ...(metaObj.activeSectors || []),
+      ...headerSectors,
+      ...rowSectors,
+    ])
+  );
+
+  const isAmbiguous = typeIdx === -1 && !options?.forceEntryType;
+
+  return {
+    rows,
+    errors,
+    skippedCount,
+    detectedSectors,
+    isAmbiguous,
+    metadata: metaObj,
+    detectedHeaders: headers,
   };
 }
 

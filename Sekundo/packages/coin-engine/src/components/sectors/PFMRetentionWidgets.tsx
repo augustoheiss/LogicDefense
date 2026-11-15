@@ -20,6 +20,7 @@ import {
 import { parsePfmCSV, PfmTransaction } from '../../utils/pfmRetentionParser';
 
 import { useCoinDB } from '@coin/hooks/useCoinDB';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 const SAMPLE_PFM_CSV = `data_movimento,descricao_comerciante,valor_cents,categoria,meta_associada,status_consolidacao
 2026-07-15,Supermercado Pao de Acucar,12050,Alimentação,Fundo de Emergência,Consolidado
@@ -61,6 +62,7 @@ export function PFMRetentionWidgets() {
   const [eventsList, setEventsList] = useState<{ weekIndex: number; amount: number; isIncome: boolean }[]>([
     { weekIndex: 5, amount: 1500, isIncome: false },
   ]);
+  const [selectedForecastWeek, setSelectedForecastWeek] = useState<string>('all');
 
   // ── Monte Carlo FIRE State ──
   const [portfolio, setPortfolio] = useState(String(defaultPortfolio));
@@ -278,21 +280,65 @@ export function PFMRetentionWidgets() {
           </View>
         </View>
 
-        {/* 13-Week timeline forecast */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timelineScroll}>
-          {cashFlowPrediction.map((week) => (
-            <View key={week.weekIndex} style={[styles.timelineCard, week.isNegative && styles.timelineCardAlert]}>
-              <Text style={styles.timelineWeek}>{week.dateStr}</Text>
-              <Text style={[styles.timelineBal, week.isNegative && { color: colors.danger.main }]}>
-                {formatCurrencySmart(week.projectedBalance)}
-              </Text>
-              <Text style={styles.timelineFlow}>+ {formatCurrencySmart(week.revenue)}</Text>
-              <Text style={[styles.timelineFlow, { color: colors.warning.main }]}>
-                - {formatCurrencySmart(week.expenses)}
-              </Text>
-            </View>
-          ))}
-        </ScrollView>
+        {/* 13-Week timeline forecast (Combobox Vertical Pesquisável) */}
+        <View style={styles.timelineList}>
+          <SearchableVerticalFilter
+            label="Filtrar Semana da Projeção (13 Semanas)"
+            placeholder="Filtrar ou escolher semana projetada..."
+            options={[
+              {
+                id: 'all',
+                label: '📅 Todas as 13 Semanas',
+                subtitle: 'Exibir cronograma vertical completo',
+                pinned: true,
+                keywords: ['todas', 'all', '13', 'semanas'],
+              },
+              ...cashFlowPrediction.map((week) => ({
+                id: String(week.weekIndex),
+                label: `${week.dateStr} — Saldo: ${formatCurrencySmart(week.projectedBalance)}`,
+                subtitle: `+ ${formatCurrencySmart(week.revenue)} / - ${formatCurrencySmart(week.expenses)}`,
+                badge: week.isNegative ? 'Alerta' : undefined,
+                keywords: [week.dateStr, String(week.weekIndex)],
+              })),
+            ]}
+            selectedId={selectedForecastWeek}
+            onSelect={(id) => setSelectedForecastWeek(id || 'all')}
+            allowClear
+            clearValueId="all"
+            emptyMessage="Nenhuma semana encontrada."
+            testID="pfm-13week-vertical-filter"
+          />
+          <View style={styles.timelineList}>
+            {(() => {
+              const filteredWeeks = cashFlowPrediction.filter(
+                (week) => selectedForecastWeek === 'all' || String(week.weekIndex) === selectedForecastWeek
+              );
+              if (filteredWeeks.length === 0) {
+                return (
+                  <Text style={styles.timelineEmptyText}>
+                    Nenhuma semana corresponde ao filtro selecionado.
+                  </Text>
+                );
+              }
+              return filteredWeeks.map((week) => (
+                <View key={week.weekIndex} style={[styles.timelineCard, week.isNegative && styles.timelineCardAlert]}>
+                  <View style={styles.timelineCardLeft}>
+                    <Text style={styles.timelineWeek}>{week.dateStr}</Text>
+                    <Text style={[styles.timelineBal, week.isNegative && { color: colors.danger.main }]}>
+                      {formatCurrencySmart(week.projectedBalance)}
+                    </Text>
+                  </View>
+                  <View style={styles.timelineCardRight}>
+                    <Text style={styles.timelineFlow}>+ {formatCurrencySmart(week.revenue)}</Text>
+                    <Text style={[styles.timelineFlow, { color: colors.warning.main }]}>
+                      - {formatCurrencySmart(week.expenses)}
+                    </Text>
+                  </View>
+                </View>
+              ));
+            })()}
+          </View>
+        </View>
       </View>
 
       {/* 🎲 2. Monte Carlo FIRE Simulator */}
@@ -697,23 +743,39 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: 'bold',
   },
-  timelineScroll: {
-    flexDirection: 'row',
+  timelineList: {
+    gap: spacing.xs,
     marginTop: spacing.xs,
   },
   timelineCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderWidth: 1,
     borderColor: colors.border.default,
     borderRadius: radius.sm,
     padding: spacing.sm,
-    width: 100,
-    marginRight: spacing.sm,
-    gap: 4,
+    width: '100%',
+    gap: spacing.sm,
+  },
+  timelineCardLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  timelineCardRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  timelineEmptyText: {
+    fontSize: 11,
+    color: colors.text.secondary,
+    fontStyle: 'italic',
+    paddingVertical: spacing.xs,
   },
   timelineCardAlert: {
     borderColor: colors.danger.main,
-    backgroundColor: 'rgba(239, 68, 68, 0.02)',
+    backgroundColor: 'rgba(239, 68, 68, 0.04)',
   },
   timelineWeek: {
     fontSize: 10,

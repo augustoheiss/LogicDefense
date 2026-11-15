@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,16 @@ import * as Clipboard from 'expo-clipboard';
 import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
 import { useCoinDB } from '../hooks/useCoinDB';
-import { parseCSVText } from '../utils/csvEngine';
+import { useImportPipeline } from '../hooks/useImportPipeline';
+import {
+  ImportCancelledError,
+  mapImportErrorToDiagnostics,
+} from '../services/importPipelineContract';
+import { parseCSVTextAsync } from '../utils/csvEngine';
 import type { TableRow } from '../core/types';
 import { CSVStagingReviewModal } from './ui/CSVStagingReviewModal';
+import { ImportProgressModal } from './ui/ImportProgressModal';
+import { SearchableVerticalFilter } from './ui/SearchableVerticalFilter';
 import { EXAMPLE_CSV_PROFILES, ExampleCSVProfile } from '../data/exampleCsvProfiles';
 
 interface CSVImporterProps {
@@ -23,6 +30,12 @@ interface CSVImporterProps {
   onCancel?: () => void;
   initialCsvText?: string;
   onOpenExamplesGallery?: () => void;
+  /** Permite montar overlays (staging/progress) como irmãos de modais externos, evitando Modal aninhado. */
+  renderContainer?: (params: {
+    body: React.ReactNode;
+    overlays: React.ReactNode;
+    hasActiveOverlayModal: boolean;
+  }) => React.ReactNode;
 }
 
 export function CSVImporter({
@@ -30,8 +43,11 @@ export function CSVImporter({
   onCancel,
   initialCsvText,
   onOpenExamplesGallery,
+  renderContainer,
 }: CSVImporterProps) {
   const { importSpreadsheet, activeTable, updateActiveSectors } = useCoinDB() as any;
+  const importPipeline = useImportPipeline();
+  const pendingSuccessRef = useRef<boolean>(false);
   const [csvText, setCsvText] = useState(initialCsvText || '');
   const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null);
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
@@ -96,121 +112,141 @@ export function CSVImporter({
     }>
   ) => {
     setIsProcessing(true);
+    const targetLabel = metadata?.name || activeTable?.name || 'planilha_colada.csv';
     try {
-      if (tablePartitions && tablePartitions.length > 1) {
-        let lastImportRes: any = null;
-        for (const part of tablePartitions) {
-          const partSectors = Array.from(
+      await importPipeline.run(
+        {
+          fileName: targetLabel,
+          initialStage: 'saving_storage',
+          initialDetail: 'Gravando transações importadas no cofre local...',
+        },
+        async ({ signal, reportProgress }) => {
+          if (tablePartitions && tablePartitions.length > 1) {
+            let lastImportRes: any = null;
+            const totalParts = tablePartitions.length;
+            for (let i = 0; i < totalParts; i++) {
+              const part = tablePartitions[i];
+              const partSectors = Array.from(
+                new Set([
+                  ...(part.metadata?.activeSectors || []),
+                  ...(part.detectedSectors || []),
+                ])
+              );
+              reportProgress({
+                stage: 'saving_storage',
+                stageLabel: `Gravando partição ${i + 1} de ${totalParts}...`,
+                detailLabel: part.metadata?.name || part.tableId,
+                processedCount: i,
+                totalCount: totalParts,
+                percent: Math.round(((i + 0.5) / totalParts) * 90),
+              });
+              lastImportRes = await importSpreadsheet({
+                rows: part.rows,
+                tableId: importMode === 'new' ? undefined : part.tableId,
+                apiKey: part.metadata?.apiKey,
+                lastEventSeq: part.metadata?.lastEventSeq,
+                name: part.metadata?.name,
+                description: part.metadata?.description,
+                goals: part.metadata?.goals || part.metadata?.tableGoals,
+                mode: importMode,
+                isolateByTableId: importMode !== 'new',
+                schema: part.metadata?.schema,
+                investorProfile: part.metadata?.investorProfile,
+                activeSectors: partSectors.length > 0 ? partSectors : undefined,
+                dashboardConfig: part.metadata?.dashboardConfig,
+                sectorParams: part.metadata?.sectorParams,
+                signal,
+                strictPersistence: true,
+                onProgress: (p: any) => reportProgress(p),
+              });
+            }
+
+            setCsvText('');
+            pendingSuccessRef.current = true;
+
+            reportProgress({
+              stage: 'opening_table',
+              stageLabel: 'Preparando e abrindo planilhas...',
+              percent: 100,
+            });
+
+            const tableNames = tablePartitions.map((p) => `"${p.metadata?.name || p.tableId}"`).join(', ');
+            let successMsg = `${rowsToCommit.length} transações foram distribuídas em ${tablePartitions.length} planilhas financeiras separadas (${tableNames}).`;
+            if (lastImportRes?.keyWasAutoRenewed) {
+              successMsg += ' Chaves API locais atualizadas automaticamente.';
+            }
+            setStatusMsg(successMsg);
+            return {
+              result: lastImportRes,
+              summary: successMsg,
+              importedCount: rowsToCommit.length,
+            };
+          }
+
+          const mergedSectors = Array.from(
             new Set([
-              ...(part.metadata?.activeSectors || []),
-              ...(part.detectedSectors || []),
+              ...(metadata?.activeSectors || []),
+              ...(detectedSectors || []),
             ])
           );
-          lastImportRes = await importSpreadsheet({
-            rows: part.rows,
-            tableId: importMode === 'new' ? undefined : part.tableId,
-            apiKey: part.metadata?.apiKey,
-            lastEventSeq: part.metadata?.lastEventSeq,
-            name: part.metadata?.name,
-            description: part.metadata?.description,
-            goals: part.metadata?.goals || part.metadata?.tableGoals,
+
+          const importRes = await importSpreadsheet({
+            rows: rowsToCommit,
+            tableId: importMode === 'new' ? undefined : metadata?.tableId,
+            apiKey: metadata?.apiKey,
+            lastEventSeq: metadata?.lastEventSeq,
+            name: metadata?.name,
+            description: metadata?.description,
+            goals: metadata?.goals || metadata?.tableGoals,
             mode: importMode,
-            isolateByTableId: importMode !== 'new',
-            schema: part.metadata?.schema,
-            investorProfile: part.metadata?.investorProfile,
-            activeSectors: partSectors.length > 0 ? partSectors : undefined,
-            dashboardConfig: part.metadata?.dashboardConfig,
-            sectorParams: part.metadata?.sectorParams,
+            schema: metadata?.schema,
+            investorProfile: metadata?.investorProfile,
+            activeSectors: mergedSectors.length > 0 ? mergedSectors : undefined,
+            dashboardConfig: metadata?.dashboardConfig,
+            sectorParams: metadata?.sectorParams,
+            signal,
+            strictPersistence: true,
+            onProgress: (p: any) => reportProgress(p),
           });
-        }
 
-        setCsvText('');
-        if (onSuccess) {
-          onSuccess();
-        }
-        setTimeout(() => {
-          const successTitle = 'Importação Multi-Planilha Concluída! 🎉';
-          const tableNames = tablePartitions.map((p) => `"${p.metadata?.name || p.tableId}"`).join(', ');
-          let successMsg = `Sucesso! ${rowsToCommit.length} transações foram distribuídas em ${tablePartitions.length} planilhas financeiras separadas (${tableNames}).`;
-          if (lastImportRes?.keyWasAutoRenewed) {
-            successMsg += '\n\n🔑 Chaves API locais atualizadas automaticamente.';
+          if (importMode !== 'new' && mergedSectors.length > 0) {
+            const currentActiveSectors = activeTable?.activeSectors || ['personal_finance'];
+            const nextSectors = Array.from(new Set([...currentActiveSectors, ...mergedSectors]));
+            try {
+              await updateActiveSectors(nextSectors);
+            } catch (secErr) {
+              console.warn('[Import Warning]: Skipped sectors update', secErr);
+            }
           }
-          if (Platform.OS === 'web') {
-            window.alert(`${successTitle}\n\n${successMsg}`);
-          } else {
-            Alert.alert(successTitle, successMsg);
-          }
-        }, 100);
-        return;
-      }
 
-      const mergedSectors = Array.from(
-        new Set([
-          ...(metadata?.activeSectors || []),
-          ...(detectedSectors || []),
-        ])
+          setCsvText('');
+          pendingSuccessRef.current = true;
+
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Preparando e abrindo planilha...',
+            percent: 100,
+          });
+
+          const activeTableName = metadata?.name || activeTable?.name || 'Ativa';
+          const modeLabel =
+            importMode === 'new'
+              ? 'carregadas em uma NOVA planilha'
+              : importMode === 'merge'
+              ? 'acumuladas'
+              : 'carregadas (substituição)';
+          let successMsg = `${rowsToCommit.length} transações foram ${modeLabel} ("${activeTableName}").`;
+          if (importRes?.keyWasAutoRenewed) {
+            successMsg += ' Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada.';
+          }
+          setStatusMsg(successMsg);
+          return {
+            result: importRes,
+            summary: successMsg,
+            importedCount: rowsToCommit.length,
+          };
+        }
       );
-
-      const importRes = await importSpreadsheet({
-        rows: rowsToCommit,
-        tableId: importMode === 'new' ? undefined : metadata?.tableId,
-        apiKey: metadata?.apiKey,
-        lastEventSeq: metadata?.lastEventSeq,
-        name: metadata?.name,
-        description: metadata?.description,
-        goals: metadata?.goals || metadata?.tableGoals,
-        mode: importMode,
-        schema: metadata?.schema,
-        investorProfile: metadata?.investorProfile,
-        activeSectors: mergedSectors.length > 0 ? mergedSectors : undefined,
-        dashboardConfig: metadata?.dashboardConfig,
-        sectorParams: metadata?.sectorParams,
-      });
-
-      if (importMode !== 'new' && mergedSectors.length > 0) {
-        const currentActiveSectors = activeTable?.activeSectors || ['personal_finance'];
-        const nextSectors = Array.from(new Set([...currentActiveSectors, ...mergedSectors]));
-        try {
-          await updateActiveSectors(nextSectors);
-        } catch (secErr) {
-          console.warn('[Import Warning]: Skipped sectors update', secErr);
-        }
-      }
-
-      setCsvText('');
-
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      setTimeout(() => {
-        const activeTableName = metadata?.name || activeTable?.name || 'Ativa';
-        const successTitle = 'Importação Concluída! 🎉';
-        const modeLabel =
-          importMode === 'new'
-            ? 'carregadas em uma NOVA planilha'
-            : importMode === 'merge'
-            ? 'acumuladas'
-            : 'carregadas (substituição)';
-        let successMsg = `Sucesso! ${rowsToCommit.length} transações foram ${modeLabel} ("${activeTableName}").`;
-        if (importRes?.keyWasAutoRenewed) {
-          successMsg += '\n\n🔑 Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada para este ambiente.';
-        }
-
-        if (Platform.OS === 'web') {
-          window.alert(`${successTitle}\n\n${successMsg}`);
-        } else {
-          Alert.alert(successTitle, successMsg);
-        }
-      }, 100);
-    } catch (err: any) {
-      const errMsg = err.message || 'Falha ao processar o arquivo CSV';
-      setErrorLogs([`Erro geral de importação: ${errMsg}`]);
-      if (Platform.OS === 'web') {
-        window.alert(`Erro na Importação: ${errMsg}`);
-      } else {
-        Alert.alert('Erro na Importação', errMsg);
-      }
     } finally {
       setIsProcessing(false);
     }
@@ -228,44 +264,90 @@ export function CSVImporter({
 
     try {
       const parseOptions = presetType !== 'auto' ? { forceEntryType: presetType } : undefined;
-      const parsed = parseCSVText(csvText, parseOptions);
+      let pendingStaging: {
+        rows: TableRow[];
+        metadata?: any;
+        detectedSectors?: string[];
+        isAmbiguous?: boolean;
+        mode: 'merge' | 'replace' | 'new';
+      } | null = null;
+      let parsedForCommit: any = null;
 
-      if (parsed.errors.length > 0) {
-        setErrorLogs(parsed.errors);
-        setIsProcessing(false);
-        return;
-      }
+      await importPipeline.run(
+        {
+          fileName: 'texto_csv_colado.csv',
+          sizeBytes: csvText.length,
+          initialStage: 'parsing_rows',
+          initialDetail: 'Processando texto CSV em lotes cooperativos...',
+        },
+        async ({ signal, reportProgress, requestWarningReview }) => {
+          const parsed = await parseCSVTextAsync(csvText, parseOptions, {
+            signal,
+            onProgress: (p) => reportProgress(p),
+          });
 
-      if (parsed.rows.length === 0) {
-        setErrorLogs(['Nenhuma linha de transação foi encontrada no CSV.']);
-        setIsProcessing(false);
-        return;
-      }
+          if (parsed.rows.length === 0) {
+            const msg =
+              parsed.errors.length > 0
+                ? parsed.errors.slice(0, 8).join('\n')
+                : 'Nenhuma linha de transação válida foi encontrada no CSV.';
+            setErrorLogs(parsed.errors.length > 0 ? parsed.errors : [msg]);
+            throw new Error(msg);
+          }
 
-      // If ambiguous and auto mode is selected, open staging modal for user confirmation
-      if (parsed.isAmbiguous && presetType === 'auto') {
-        setStagingData({
-          rows: parsed.rows as TableRow[],
-          metadata: parsed.metadata,
-          detectedSectors: parsed.detectedSectors,
-          isAmbiguous: true,
-          mode: importMode,
-        });
-        setShowStagingModal(true);
-        setIsProcessing(false);
-        return;
-      }
+          if (parsed.errors.length > 0) {
+            setErrorLogs(parsed.errors);
+            const issues = mapImportErrorToDiagnostics(parsed.errors.slice(0, 8), {
+              fileName: 'texto_csv_colado.csv',
+              stageFailed: 'validating',
+            });
+            const proceed = await requestWarningReview({
+              summary: `${parsed.rows.length} linhas válidas encontradas, com ${parsed.errors.length} ocorrência(s).`,
+              validCount: parsed.rows.length,
+              skippedCount: parsed.skippedCount || parsed.errors.length,
+              issues,
+            });
+            if (!proceed) {
+              throw new ImportCancelledError();
+            }
+          }
 
-      await commitRows(
-        parsed.rows,
-        parsed.metadata,
-        parsed.detectedSectors,
-        importMode,
-        parsed.tablePartitions
+          if (parsed.isAmbiguous && presetType === 'auto') {
+            pendingStaging = {
+              rows: parsed.rows as TableRow[],
+              metadata: parsed.metadata,
+              detectedSectors: parsed.detectedSectors,
+              isAmbiguous: true,
+              mode: importMode,
+            };
+          } else {
+            parsedForCommit = parsed;
+          }
+
+          return {
+            result: parsed,
+            summary: `${parsed.rows.length} linhas processadas.`,
+            suppressSuccessModal: true,
+          };
+        }
       );
-    } catch (err: any) {
-      const errMsg = err.message || 'Falha ao processar o arquivo CSV';
-      setErrorLogs([`Erro geral de importação: ${errMsg}`]);
+
+      if (pendingStaging) {
+        setStagingData(pendingStaging);
+        setShowStagingModal(true);
+        return;
+      }
+
+      if (parsedForCommit) {
+        await commitRows(
+          parsedForCommit.rows,
+          parsedForCommit.metadata,
+          parsedForCommit.detectedSectors,
+          importMode,
+          parsedForCommit.tablePartitions
+        );
+      }
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -277,7 +359,20 @@ export function CSVImporter({
     await commitRows(classifiedRows, stagingData.metadata, stagingData.detectedSectors, finalMode);
   };
 
-  return (
+  const hasActiveOverlayModal =
+    Boolean(stagingData && showStagingModal) || importPipeline.state.status !== 'idle';
+
+  const handleProgressDismiss = () => {
+    const shouldNotifySuccess =
+      pendingSuccessRef.current && importPipeline.state.status === 'success';
+    pendingSuccessRef.current = false;
+    importPipeline.dismiss();
+    if (shouldNotifySuccess && onSuccess) {
+      onSuccess();
+    }
+  };
+
+  const body = (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>📥 Importador de Planilha CSV & Exemplos</Text>
@@ -305,39 +400,25 @@ export function CSVImporter({
             <Text style={styles.copyAiPromptChipText}>🤖 Copiar Prompt p/ IA</Text>
           </Pressable>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.examplesScroll}
-        >
-          {EXAMPLE_CSV_PROFILES.map((prof) => {
-            const isSel = selectedExampleId === prof.id;
-            return (
-              <Pressable
-                key={prof.id}
-                style={[
-                  styles.exampleChip,
-                  isSel && {
-                    borderColor: prof.accentColor,
-                    backgroundColor: `${prof.accentColor}26`,
-                  },
-                ]}
-                onPress={() => handleLoadExampleIntoEditor(prof)}
-                disabled={isProcessing}
-              >
-                <Text style={styles.exampleChipEmoji}>{prof.emoji}</Text>
-                <Text
-                  style={[
-                    styles.exampleChipText,
-                    isSel && { color: '#FFFFFF', fontWeight: '800' },
-                  ]}
-                >
-                  {prof.code}. {prof.shortTitle}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <SearchableVerticalFilter
+          label="Perfil de Exemplo"
+          placeholder="Filtrar ou escolher perfil CSV de exemplo..."
+          options={EXAMPLE_CSV_PROFILES.map((prof) => ({
+            id: prof.id,
+            label: `${prof.emoji} ${prof.code}. ${prof.shortTitle}`,
+            subtitle: prof.subtitle,
+            keywords: [prof.code, prof.shortTitle, prof.title, prof.subtitle, ...prof.recommendedFor],
+          }))}
+          selectedId={selectedExampleId}
+          allowClear={false}
+          disabled={isProcessing}
+          onSelect={(id) => {
+            const prof = EXAMPLE_CSV_PROFILES.find((item) => item.id === id);
+            if (prof) handleLoadExampleIntoEditor(prof);
+          }}
+          emptyMessage="Nenhum perfil CSV encontrado."
+          testID="csv-importer-example-filter"
+        />
       </View>
 
       {/* Classification Presets */}
@@ -422,18 +503,6 @@ export function CSVImporter({
         )}
       </View>
 
-      {/* Staging Review Modal */}
-      {stagingData && (
-        <CSVStagingReviewModal
-          visible={showStagingModal}
-          onClose={() => setShowStagingModal(false)}
-          incomingRows={stagingData.rows}
-          isAmbiguous={stagingData.isAmbiguous}
-          activeTableName={stagingData.metadata?.name || activeTable?.name || 'Ativa'}
-          onConfirmCommit={handleStagingConfirm}
-        />
-      )}
-
       {statusMsg !== '' && (
         <View style={styles.statusBanner}>
           <Text style={styles.statusText}>{statusMsg}</Text>
@@ -453,6 +522,41 @@ export function CSVImporter({
         </View>
       )}
     </View>
+  );
+
+  const overlays = (
+    <>
+      {/* Staging Review Modal */}
+      {stagingData && (
+        <CSVStagingReviewModal
+          visible={showStagingModal}
+          onClose={() => setShowStagingModal(false)}
+          incomingRows={stagingData.rows}
+          isAmbiguous={stagingData.isAmbiguous}
+          activeTableName={stagingData.metadata?.name || activeTable?.name || 'Ativa'}
+          onConfirmCommit={handleStagingConfirm}
+        />
+      )}
+
+      <ImportProgressModal
+        state={importPipeline.state}
+        technicalReport={importPipeline.technicalReport}
+        onCancel={importPipeline.cancelImport}
+        onResolveWarning={importPipeline.resolveWarningReview}
+        onDismiss={handleProgressDismiss}
+      />
+    </>
+  );
+
+  if (renderContainer) {
+    return <>{renderContainer({ body, overlays, hasActiveOverlayModal })}</>;
+  }
+
+  return (
+    <>
+      {body}
+      {overlays}
+    </>
   );
 }
 

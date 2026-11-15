@@ -12,28 +12,35 @@
 import type { TableRow, DynamicTableSchema, DynamicColumnDefinition, InvestorProfileConfig, InvestorProfileType, AssetAllocationTarget } from './types';
 import { detectDelimiter, splitCSVLine, cleanCell, parseAndNormalizeDate, parseValue, normalizeEntryType, generateUUIDv4 } from '../utils/csvEngine';
 import { inferColumnType } from './typeInferenceEngine';
+import {
+  type AsyncImportControllerOptions,
+  IMPORT_STAGE_LABELS_PT,
+  throwIfImportAborted,
+  yieldToEventLoop,
+} from '../services/importPipelineContract';
 
-export interface DynamicCSVParseResult {
-  schema: DynamicTableSchema;
-  rows: TableRow[];
-  totalParsed: number;
-  skippedLines: number;
-  errors: string[];
-  hasExplicitSchema: boolean;
-  rawHeaders: string[];
-  investorProfile?: InvestorProfileConfig;
+function isPlainCsvCommentLine(line: string): boolean {
+  const t = line.trim();
+  if (!t.startsWith('#')) return false;
+  if (t.startsWith('##')) return false;
+  if (/^#(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)(?:[,:\s]|$)/i.test(t)) return false;
+  return true;
 }
 
-/**
- * Parses raw CSV text into a dynamic schema and normalized TableRow array.
- */
-export function parseDynamicCSV(
+interface DynamicCsvExecutionPlan {
+  schema: DynamicTableSchema;
+  dataLines: string[];
+  delimiter: string;
+  rawHeaders: string[];
+  hasExplicitSchema: boolean;
+  investorProfile?: InvestorProfileConfig;
+  earlyResult?: DynamicCSVParseResult;
+}
+
+function buildDynamicCsvExecutionPlan(
   csvText: string,
-  tableId: string = 'default',
-  options?: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] }
-): DynamicCSVParseResult {
-  const errors: string[] = [];
-  let skippedLines = 0;
+  tableId: string = 'default'
+): DynamicCsvExecutionPlan {
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
 
   const allLines = cleaned
@@ -41,7 +48,7 @@ export function parseDynamicCSV(
     .replace(/\r/g, '\n')
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+    .filter((l) => l.length > 0 && !isPlainCsvCommentLine(l));
 
   if (allLines.length === 0) {
     const emptySchema: DynamicTableSchema = {
@@ -54,12 +61,19 @@ export function parseDynamicCSV(
     };
     return {
       schema: emptySchema,
-      rows: [],
-      totalParsed: 0,
-      skippedLines: 0,
-      errors: ['Arquivo CSV vazio.'],
-      hasExplicitSchema: false,
+      dataLines: [],
+      delimiter: ';',
       rawHeaders: [],
+      hasExplicitSchema: false,
+      earlyResult: {
+        schema: emptySchema,
+        rows: [],
+        totalParsed: 0,
+        skippedLines: 0,
+        errors: ['Arquivo CSV vazio.'],
+        hasExplicitSchema: false,
+        rawHeaders: [],
+      },
     };
   }
 
@@ -85,7 +99,15 @@ export function parseDynamicCSV(
   const hasExplicitSchema = schemaMarkerIdx !== -1 && rowsMarkerIdx !== -1 && rowsMarkerIdx > schemaMarkerIdx;
 
   if (hasExplicitSchema) {
-    return parseStructuredV3CSV(allLines, schemaMarkerIdx, rowsMarkerIdx, tableId, investorMarkerIdx);
+    const ctx = buildStructuredV3Context(allLines, schemaMarkerIdx, rowsMarkerIdx, tableId, investorMarkerIdx);
+    return {
+      schema: ctx.schema,
+      dataLines: ctx.dataLines,
+      delimiter: ctx.dataDelim,
+      rawHeaders: ctx.rawHeaders,
+      hasExplicitSchema: true,
+      investorProfile: ctx.investorProfile,
+    };
   }
 
   // ── 2. Parse Raw Arbitrary CSV ──────────────────────────────────────────────
@@ -138,29 +160,141 @@ export function parseDynamicCSV(
     updatedAt: new Date().toISOString(),
   };
 
-  const rows = buildRowsFromDataLines(dataLines, delimiter, schema, errors, rawHeaders, options);
-
   return {
     schema,
-    rows,
-    totalParsed: rows.length,
-    skippedLines: dataLines.length - rows.length,
-    errors,
-    hasExplicitSchema: false,
+    dataLines,
+    delimiter,
     rawHeaders,
+    hasExplicitSchema: false,
   };
 }
 
-// ── Helper: Parse Structured Backup v3 (with explicit SCHEMA_COLUMNS block) ──
+export interface DynamicCSVParseResult {
+  schema: DynamicTableSchema;
+  rows: TableRow[];
+  totalParsed: number;
+  skippedLines: number;
+  errors: string[];
+  hasExplicitSchema: boolean;
+  rawHeaders: string[];
+  investorProfile?: InvestorProfileConfig;
+}
 
-function parseStructuredV3CSV(
+/**
+ * Parses raw CSV text into a dynamic schema and normalized TableRow array.
+ */
+export function parseDynamicCSV(
+  csvText: string,
+  tableId: string = 'default',
+  options?: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] }
+): DynamicCSVParseResult {
+  const plan = buildDynamicCsvExecutionPlan(csvText, tableId);
+  if (plan.earlyResult) {
+    return plan.earlyResult;
+  }
+
+  const errors: string[] = [];
+  const rows = buildRowsFromDataLines(
+    plan.dataLines,
+    plan.delimiter,
+    plan.schema,
+    errors,
+    plan.rawHeaders,
+    options
+  );
+
+  return {
+    schema: plan.schema,
+    rows,
+    totalParsed: rows.length,
+    skippedLines: plan.dataLines.length - rows.length,
+    errors,
+    hasExplicitSchema: plan.hasExplicitSchema,
+    rawHeaders: plan.rawHeaders,
+    ...(plan.investorProfile ? { investorProfile: plan.investorProfile } : {}),
+  };
+}
+
+/**
+ * Cooperative async non-blocking version of `parseDynamicCSV` for large Backup v3 CSVs.
+ */
+export async function parseDynamicCSVAsync(
+  csvText: string,
+  tableId: string = 'default',
+  options?: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] },
+  controllerOptions: AsyncImportControllerOptions = {}
+): Promise<DynamicCSVParseResult> {
+  throwIfImportAborted(controllerOptions.signal);
+  const plan = buildDynamicCsvExecutionPlan(csvText, tableId);
+  if (plan.earlyResult) {
+    return plan.earlyResult;
+  }
+
+  const errors: string[] = [];
+  const allRows: TableRow[] = [];
+  const totalDataLines = plan.dataLines.length;
+  const chunkSize = Math.max(50, controllerOptions.chunkSize || 250);
+  const fileName = controllerOptions.fileName || 'backup_v3.csv';
+
+  for (let start = 0; start < totalDataLines; start += chunkSize) {
+    throwIfImportAborted(controllerOptions.signal);
+    const slice = plan.dataLines.slice(start, start + chunkSize);
+    const chunkRows = buildRowsFromDataLines(
+      slice,
+      plan.delimiter,
+      plan.schema,
+      errors,
+      plan.rawHeaders,
+      options,
+      start
+    );
+    allRows.push(...chunkRows);
+
+    const processed = Math.min(totalDataLines, start + slice.length);
+    controllerOptions.onProgress?.({
+      stage: 'parsing_rows',
+      stageLabel: IMPORT_STAGE_LABELS_PT.parsing_rows,
+      detailLabel: `Processando Backup v3: ${processed.toLocaleString('pt-BR')} de ${totalDataLines.toLocaleString('pt-BR')} linha(s)...`,
+      processedCount: processed,
+      totalCount: totalDataLines,
+      percent: 15 + Math.round((processed / Math.max(1, totalDataLines)) * 58),
+      cancellable: true,
+      fileName,
+      sizeBytes: controllerOptions.sizeBytes,
+    });
+    if (processed < totalDataLines) {
+      await yieldToEventLoop();
+    }
+  }
+
+  throwIfImportAborted(controllerOptions.signal);
+  return {
+    schema: plan.schema,
+    rows: allRows,
+    totalParsed: allRows.length,
+    skippedLines: totalDataLines - allRows.length,
+    errors,
+    hasExplicitSchema: plan.hasExplicitSchema,
+    rawHeaders: plan.rawHeaders,
+    ...(plan.investorProfile ? { investorProfile: plan.investorProfile } : {}),
+  };
+}
+
+// ── Helper: Build Structured Backup v3 Context (with explicit SCHEMA_COLUMNS block) ──
+
+function buildStructuredV3Context(
   allLines: string[],
   schemaMarkerIdx: number,
   rowsMarkerIdx: number,
   tableId: string,
   investorMarkerIdx: number = -1
-): DynamicCSVParseResult {
-  const errors: string[] = [];
+): {
+  schema: DynamicTableSchema;
+  dataDelim: string;
+  rawHeaders: string[];
+  dataLines: string[];
+  investorProfile?: InvestorProfileConfig;
+} {
   const schemaEndIdx = (investorMarkerIdx !== -1 && investorMarkerIdx < rowsMarkerIdx)
     ? investorMarkerIdx
     : rowsMarkerIdx;
@@ -269,16 +403,11 @@ function parseStructuredV3CSV(
     updatedAt: new Date().toISOString(),
   };
 
-  const rows = buildRowsFromDataLines(transactionLines.slice(1), dataDelim, schema, errors, rawHeaders);
-
   return {
     schema,
-    rows,
-    totalParsed: rows.length,
-    skippedLines: transactionLines.length - 1 - rows.length,
-    errors,
-    hasExplicitSchema: true,
+    dataDelim,
     rawHeaders,
+    dataLines: transactionLines.slice(1),
     investorProfile,
   };
 }
@@ -291,7 +420,8 @@ export function buildRowsFromDataLines(
   schema: DynamicTableSchema,
   errors: string[] = [],
   rawHeaders?: string[],
-  options?: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] }
+  options?: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] },
+  lineOffset: number = 0
 ): TableRow[] {
   const rows: TableRow[] = [];
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -562,7 +692,7 @@ export function buildRowsFromDataLines(
 
       rows.push(row);
     } catch (err: any) {
-      errors.push(`Linha ${lineIdx + 2}: ${err.message}`);
+      errors.push(`Linha ${lineOffset + lineIdx + 2}: ${err.message}`);
     }
   });
 

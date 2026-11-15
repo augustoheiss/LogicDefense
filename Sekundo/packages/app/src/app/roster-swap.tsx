@@ -38,6 +38,7 @@ import {
   type SkillLevel,
   type ShiftType,
 } from '@sekundo/core';
+import { SearchableVerticalFilter } from '../components/ui/SearchableVerticalFilter';
 
 export default function RosterSwapConsole() {
   const router = useRouter();
@@ -247,59 +248,56 @@ export default function RosterSwapConsole() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {activeTab === 'standby' ? (
           <View style={styles.contentSection}>
-            {/* Target Slot Filter Bar */}
+              {/* Target Slot Filter Bar */}
             <View style={styles.filterCard}>
               <Text style={styles.sectionHeading}>Defina o Posto / Turno Vago para Substituição:</Text>
               <View style={styles.filterRow}>
                 <View style={styles.filterGroup}>
-                  <Text style={styles.filterLabel}>DIA DO HORIZONTE (0-27):</Text>
-                  <View style={styles.chipRow}>
-                    {[0, 1, 2, 3, 7, 14, 21].map((day) => (
-                      <Pressable
-                        key={day}
-                        onPress={() => setSelectedSlotDay(day)}
-                        style={[styles.chip, selectedSlotDay === day && styles.chipActive]}
-                      >
-                        <Text style={[styles.chipText, selectedSlotDay === day && styles.chipTextActive]}>
-                          Dia {day}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <SearchableVerticalFilter
+                    label="DIA DO HORIZONTE (0-27)"
+                    testID="roster-swap-day-filter"
+                    placeholder="🔍 Buscar dia do horizonte..."
+                    selectedId={String(selectedSlotDay)}
+                    allowClear={false}
+                    onSelect={(id) => setSelectedSlotDay(Number(id))}
+                    options={[0, 1, 2, 3, 7, 14, 21].map((day) => ({
+                      id: String(day),
+                      label: `Dia ${day}`,
+                      keywords: [`dia ${day}`, String(day)],
+                    }))}
+                  />
                 </View>
 
                 <View style={styles.filterGroup}>
-                  <Text style={styles.filterLabel}>TURNO:</Text>
-                  <View style={styles.chipRow}>
-                    {(['MORNING', 'AFTERNOON', 'NIGHT'] as ShiftType[]).map((st) => (
-                      <Pressable
-                        key={st}
-                        onPress={() => setSelectedShiftType(st)}
-                        style={[styles.chip, selectedShiftType === st && styles.chipActive]}
-                      >
-                        <Text style={[styles.chipText, selectedShiftType === st && styles.chipTextActive]}>
-                          {st === 'MORNING' ? 'Manhã' : st === 'AFTERNOON' ? 'Tarde' : 'Noite'}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <SearchableVerticalFilter
+                    label="TURNO"
+                    testID="roster-swap-shift-filter"
+                    placeholder="🔍 Buscar turno (Manhã, Tarde, Noite)..."
+                    selectedId={selectedShiftType}
+                    allowClear={false}
+                    onSelect={(id) => setSelectedShiftType(id as ShiftType)}
+                    options={(['MORNING', 'AFTERNOON', 'NIGHT'] as ShiftType[]).map((st) => ({
+                      id: st,
+                      label: st === 'MORNING' ? 'Manhã' : st === 'AFTERNOON' ? 'Tarde' : 'Noite',
+                      keywords: [st, st === 'MORNING' ? 'manha' : st === 'AFTERNOON' ? 'tarde' : 'noite'],
+                    }))}
+                  />
                 </View>
 
                 <View style={styles.filterGroup}>
-                  <Text style={styles.filterLabel}>COMPETÊNCIA MÍNIMA:</Text>
-                  <View style={styles.chipRow}>
-                    {(['BASIC', 'INTERMEDIATE', 'ADVANCED', 'LEADER'] as SkillLevel[]).map((sk) => (
-                      <Pressable
-                        key={sk}
-                        onPress={() => setRequiredSkill(sk)}
-                        style={[styles.chip, requiredSkill === sk && styles.chipActive]}
-                      >
-                        <Text style={[styles.chipText, requiredSkill === sk && styles.chipTextActive]}>
-                          {sk}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <SearchableVerticalFilter
+                    label="COMPETÊNCIA MÍNIMA"
+                    testID="roster-swap-skill-filter"
+                    placeholder="🔍 Buscar competência mínima..."
+                    selectedId={requiredSkill}
+                    allowClear={false}
+                    onSelect={(id) => setRequiredSkill(id as SkillLevel)}
+                    options={(['BASIC', 'INTERMEDIATE', 'ADVANCED', 'LEADER'] as SkillLevel[]).map((sk) => ({
+                      id: sk,
+                      label: sk,
+                      keywords: [sk],
+                    }))}
+                  />
                 </View>
               </View>
             </View>

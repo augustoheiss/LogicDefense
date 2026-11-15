@@ -20,6 +20,7 @@ import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
 import { useCoinDB } from '@coin/hooks/useCoinDB';
 import { useSectorRegistry } from '@coin/hooks/useSectorRegistry';
+import { SearchableVerticalFilter } from '@coin/components/ui/SearchableVerticalFilter';
 import {
   HealthScoreRing,
   PillarsOverview,
@@ -733,49 +734,51 @@ export default function HojeScreen() {
             </View>
           </View>
 
-          {/* ── Journey / Preset Quick Strip ── */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.presetStrip}
-          >
-            {(['survival', 'freelancer', 'investor', 'smb'] as WorkspacePresetType[]).map((pid) => {
-              const p = WORKSPACE_PRESETS[pid];
-              const isSelected = effectiveConfig.preset === p.id;
-              const isRec = recommendedPreset.id === p.id;
-              return (
-                <Pressable
-                  key={p.id}
-                  style={[styles.presetChip, isSelected && styles.presetChipActive]}
-                  onPress={() => handleQuickApplyPreset(p.id)}
-                >
-                  <Text style={styles.presetChipIcon}>{p.icon}</Text>
-                  <Text style={[styles.presetChipText, isSelected && styles.presetChipTextActive]}>
-                    {p.name}
-                  </Text>
-                  {isRec && !isSelected && (
-                    <View style={styles.presetRecDot}>
-                      <Text style={styles.presetRecDotText}>Sugerido</Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-            <Pressable
-              style={[styles.presetChip, { borderColor: 'rgba(99, 102, 241, 0.45)', backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}
-              onPress={() => setShowExamplesModal(true)}
-            >
-              <Text style={styles.presetChipIcon}>📚</Text>
-              <Text style={[styles.presetChipText, { color: '#A5B4FC', fontWeight: '700' }]}>Modelos CSV por Perfil</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.presetChip, effectiveConfig.preset === 'custom' && styles.presetChipActive]}
-              onPress={() => setShowAppBuilder(true)}
-            >
-              <Text style={styles.presetChipIcon}>⚙️</Text>
-              <Text style={styles.presetChipText}>Personalizar Blocos</Text>
-            </Pressable>
-          </ScrollView>
+          {/* ── Journey / Preset Vertical Filter (Combobox Vertical) ── */}
+          <View style={styles.presetStrip}>
+            <SearchableVerticalFilter
+              label="Modo / Atalhos do Painel"
+              placeholder="Filtrar ou escolher perfil de painel / modelos..."
+              options={[
+                ...(['survival', 'freelancer', 'investor', 'smb'] as WorkspacePresetType[]).map((pid) => {
+                  const p = WORKSPACE_PRESETS[pid];
+                  const isSelected = effectiveConfig.preset === p.id;
+                  const isRec = recommendedPreset.id === p.id;
+                  return {
+                    id: p.id,
+                    label: `${p.icon} ${p.name}`,
+                    badge: isRec && !isSelected ? 'Sugerido' : undefined,
+                    keywords: [p.name, p.id],
+                  };
+                }),
+                {
+                  id: '__examples__',
+                  label: '📚 Modelos CSV por Perfil',
+                  subtitle: 'Abrir galeria de planilhas de exemplo',
+                  keywords: ['modelos', 'csv', 'exemplos', 'perfil'],
+                },
+                {
+                  id: '__custom__',
+                  label: '⚙️ Personalizar Blocos',
+                  subtitle: 'Montar módulos visíveis do painel',
+                  keywords: ['personalizar', 'blocos', 'custom', 'builder'],
+                },
+              ]}
+              selectedId={effectiveConfig.preset}
+              allowClear={false}
+              onSelect={(id) => {
+                if (id === '__examples__') {
+                  setShowExamplesModal(true);
+                } else if (id === '__custom__') {
+                  setShowAppBuilder(true);
+                } else {
+                  handleQuickApplyPreset(id as WorkspacePresetType);
+                }
+              }}
+              emptyMessage="Nenhum modo encontrado."
+              testID="coin-home-preset-filter"
+            />
+          </View>
 
           {/* ── Undo Bar (When Available) ── */}
           {db.canUndo && (

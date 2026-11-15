@@ -22,6 +22,7 @@ import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
 import { typography } from '@coin/theme/typography';
 import { Card } from '@coin/components/ui/Card';
+import { SearchableVerticalFilter } from '@coin/components/ui/SearchableVerticalFilter';
 import {
   DEFAULT_PUBLIC_API_KEY,
   PUBLIC_API_HEADER_NAME,
@@ -324,44 +325,44 @@ ${today};1500.00;Aporte Sócio Capital;partner_in;Socios;lote_csv;csv_3`;
         </Pressable>
       </Card>
 
-      {/* Tabs Row */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsRow}>
-        <Pressable
-          style={[styles.tabButton, activeTab === 'append' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('append')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'append' && styles.tabButtonTextActive]}>
-            🚀 Envio em Massa
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.tabButton, activeTab === 'context' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('context')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'context' && styles.tabButtonTextActive]}>
-            📊 Contexto (GET)
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.tabButton, activeTab === 'export' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('export')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'export' && styles.tabButtonTextActive]}>
-            📥 Exportar CSV
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.tabButton, activeTab === 'spec' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('spec')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'spec' && styles.tabButtonTextActive]}>
-            📜 OpenAPI Spec
-          </Text>
-        </Pressable>
-      </ScrollView>
+      {/* Tabs Vertical Filter (Combobox Pesquisável) */}
+      <View style={styles.tabsRow}>
+        <SearchableVerticalFilter
+          label="Ferramenta da API Pública"
+          placeholder="Filtrar ou escolher operação da API..."
+          options={[
+            {
+              id: 'append',
+              label: '🚀 Envio em Massa',
+              subtitle: 'POST /api/v1/public/spreadsheet/append',
+              keywords: ['envio', 'massa', 'append', 'post'],
+            },
+            {
+              id: 'context',
+              label: '📊 Contexto (GET)',
+              subtitle: 'Inspecionar leitura e contexto JSON',
+              keywords: ['contexto', 'get', 'json'],
+            },
+            {
+              id: 'export',
+              label: '📥 Exportar CSV',
+              subtitle: 'Exportação consolidada em CSV',
+              keywords: ['exportar', 'csv'],
+            },
+            {
+              id: 'spec',
+              label: '📜 OpenAPI Spec',
+              subtitle: 'Contrato OpenAPI 3.1 completo',
+              keywords: ['openapi', 'spec', 'schema'],
+            },
+          ]}
+          selectedId={activeTab}
+          allowClear={false}
+          onSelect={(id) => setActiveTab(id as any)}
+          emptyMessage="Nenhuma ferramenta da API encontrada."
+          testID="api-management-tab-filter"
+        />
+      </View>
 
       {/* TAB CONTENT 1: MASS APPEND / REPLACE */}
       {activeTab === 'append' && (
@@ -785,29 +786,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   tabsRow: {
-    flexDirection: 'row',
     marginBottom: spacing.md,
-  },
-  tabButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.background.secondary,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  tabButtonActive: {
-    backgroundColor: colors.accent.purple,
-    borderColor: colors.accent.purple,
-  },
-  tabButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  tabButtonTextActive: {
-    color: '#ffffff',
   },
   sectionLabel: {
     fontSize: 13,

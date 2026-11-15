@@ -31,6 +31,7 @@ import {
   exportSingleEngineSampleCsv,
   getSheetsForEngineId,
   importOmniCsvBundle,
+  importOmniCsvBundleAsync,
   groupCoinLedgerRowsByTable,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
@@ -39,6 +40,10 @@ import {
   eventContainer,
   mergeTerritoryPartitionIntoRawRegistry,
   buildTerritoryModelCsvText,
+  IMPORT_STAGE_LABELS_PT,
+  throwIfImportAborted,
+  yieldToEventLoop,
+  type AsyncImportControllerOptions,
   type SekundoOmniStateBundle,
   type OmniEventBundleItem,
   type OmniCoinLedgerRowItem,
@@ -47,7 +52,7 @@ import {
   type EngineId,
   type ShareFormattedPayload,
 } from '@sekundo/core';
-import { loadDB, saveDB, type CoinTable, type TableRow } from '@sekundo/coin-engine';
+import { loadDB, saveDB, saveDBOrThrow, type CoinTable, type TableRow } from '@sekundo/coin-engine';
 import * as localStore from './localStorage';
 
 export const PRIVILEGE_DIRECTORY_STORAGE_KEY = 'sekundo:privilege_directory_v1';
@@ -619,7 +624,8 @@ export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]
  * exported in the same CSV are restored as independent `CoinTable` instances without mixing values.
  */
 export async function saveCoinLedgerRowsToCoinDB(
-  coinRows: OmniCoinLedgerRowItem[]
+  coinRows: OmniCoinLedgerRowItem[],
+  options?: { strictPersistence?: boolean }
 ): Promise<void> {
   if (!Array.isArray(coinRows) || coinRows.length === 0) return;
   try {
@@ -782,12 +788,18 @@ export async function saveCoinLedgerRowsToCoinDB(
     );
     const resolvedActiveIdx = firstActiveIdx >= 0 ? firstActiveIdx : 0;
 
-    await saveDB({
+    const coinDbPayload = {
       ...(db || { tables: [] }),
       activeTableId: existingTables[resolvedActiveIdx]?.id || firstImportedTableId,
       tables: existingTables,
       activeTableIndex: resolvedActiveIdx,
-    } as any);
+    } as any;
+
+    if (options?.strictPersistence) {
+      await saveDBOrThrow(coinDbPayload);
+    } else {
+      await saveDB(coinDbPayload);
+    }
 
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       try {
@@ -796,8 +808,11 @@ export async function saveCoinLedgerRowsToCoinDB(
         // ignore in non-DOM environments
       }
     }
-  } catch {
-    // ignore storage errors
+  } catch (err) {
+    if (options?.strictPersistence) {
+      throw err;
+    }
+    // ignore storage errors in lenient callers
   }
 }
 
@@ -1063,6 +1078,8 @@ export async function commitOmniCsvBundleToStorage(
     customEventName?: string;
     targetEventId?: string;
     restoreEmbeddedEvents?: boolean;
+    onProgress?: AsyncImportControllerOptions['onProgress'];
+    signal?: AbortSignal;
   }
 ): Promise<{
   bundle: SekundoOmniStateBundle;
@@ -1070,10 +1087,25 @@ export async function commitOmniCsvBundleToStorage(
   activeEngines: EngineId[];
   restoredEventIds: string[];
 }> {
+  throwIfImportAborted(options?.signal);
+
   const bundle =
     typeof csvTextOrBundle === 'string'
-      ? importOmniCsvBundle(csvTextOrBundle)
+      ? await importOmniCsvBundleAsync(csvTextOrBundle, {
+          onProgress: options?.onProgress,
+          signal: options?.signal,
+        })
       : csvTextOrBundle;
+
+  throwIfImportAborted(options?.signal);
+  options?.onProgress?.({
+    stage: 'saving_storage',
+    stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+    detailLabel: 'Preparando serialização e cofres de módulos...',
+    percent: 78,
+    cancellable: false,
+  });
+  await yieldToEventLoop();
 
   const presentSet = new Set(bundle.presentSheets || []);
   const hasAllOrSheet = (kind: NonNullable<SekundoOmniStateBundle['presentSheets']>[number]) =>
@@ -1086,12 +1118,35 @@ export async function commitOmniCsvBundleToStorage(
 
   // 1. Persist only the Planilhas that are present in the imported CSV
   if (hasAllOrSheet('participant_privilege') && bundle.participants.length > 0) {
+    options?.onProgress?.({
+      stage: 'saving_storage',
+      stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+      detailLabel: `Salvando ${bundle.participants.length} participante(s) e privilégios...`,
+      percent: 82,
+      cancellable: false,
+    });
     await savePrivilegeParticipants(bundle.participants);
+    await yieldToEventLoop();
   }
   if (hasAllOrSheet('hub_schedule_slot') && bundle.scheduleRegistry.length > 0) {
+    options?.onProgress?.({
+      stage: 'saving_storage',
+      stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+      detailLabel: `Salvando programação (${bundle.scheduleRegistry.length} registro(s))...`,
+      percent: 85,
+      cancellable: false,
+    });
     await saveScheduleRegistry(bundle.scheduleRegistry);
+    await yieldToEventLoop();
   }
   if (hasAllOrSheet('hub_territory_cycle') && bundle.territoryRegistry.length > 0) {
+    options?.onProgress?.({
+      stage: 'saving_storage',
+      stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+      detailLabel: `Salvando territórios (${bundle.territoryRegistry.length} nó(s))...`,
+      percent: 88,
+      cancellable: false,
+    });
     if (isSampleTerritorySeedRegistry(bundle.territoryRegistry)) {
       const existingSaved = await loadSavedTerritoryRegistry();
       if (existingSaved && existingSaved.length > 0 && !isSampleTerritorySeedRegistry(existingSaved)) {
@@ -1112,9 +1167,18 @@ export async function commitOmniCsvBundleToStorage(
     } else {
       await saveTerritoryRegistry(bundle.territoryRegistry);
     }
+    await yieldToEventLoop();
   }
   if (hasAllOrSheet('coin_ledger_row') && bundle.coinLedgerRows && bundle.coinLedgerRows.length > 0) {
-    await saveCoinLedgerRowsToCoinDB(bundle.coinLedgerRows);
+    options?.onProgress?.({
+      stage: 'saving_storage',
+      stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+      detailLabel: `Gravando ${bundle.coinLedgerRows.length} lançamento(s) financeiros...`,
+      percent: 91,
+      cancellable: false,
+    });
+    await saveCoinLedgerRowsToCoinDB(bundle.coinLedgerRows, { strictPersistence: true });
+    await yieldToEventLoop();
   }
 
   writeWebLocalStorage(LOADED_OMNI_BUNDLE_STORAGE_KEY, serializedCsv);

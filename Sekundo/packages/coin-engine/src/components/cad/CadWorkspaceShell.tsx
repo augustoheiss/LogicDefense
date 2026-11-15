@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
+import { SearchableVerticalFilter } from '@coin/components/ui/SearchableVerticalFilter';
 import type {
   CadToolNodeId,
   DashboardConfig,
@@ -584,43 +585,41 @@ export function CadWorkspaceShell({
               </Pressable>
             </View>
 
-            {/* Optional Split-Stage Selector Bar */}
+            {/* Optional Split-Stage Selector Bar (Combobox Vertical) */}
             {showSplitPicker && (
               <View style={styles.splitPickerBar} testID="cad-split-picker-bar">
-                <Text style={styles.splitPickerLabel}>
-                  ACOPLAR 2ª PEÇA EM PARALELO:
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                  {secondaryTool && (
-                    <Pressable
-                      style={[styles.splitChip, { borderColor: colors.danger.main }]}
-                      onPress={() => {
-                        setSecondaryTool(null);
-                        setShowSplitPicker(false);
-                      }}
-                    >
-                      <Text style={[styles.splitChipText, { color: colors.danger.main }]}>✕ Fechar 2ª Peça</Text>
-                    </Pressable>
-                  )}
-                  {CAD_TOOL_CATALOG.filter((t) => t.id !== activeTool).map((t) => (
-                    <Pressable
-                      key={t.id}
-                      style={[
-                        styles.splitChip,
-                        secondaryTool === t.id && { borderColor: t.accentColor, backgroundColor: 'rgba(168,85,247,0.18)' },
-                      ]}
-                      onPress={() => {
-                        setSecondaryTool(t.id);
-                        setShowSplitPicker(false);
-                      }}
-                      testID={`cad-split-select-${t.id}`}
-                    >
-                      <Text style={styles.splitChipText}>
-                        {t.icon} {t.shortLabel}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                <SearchableVerticalFilter
+                  label="Acoplar 2ª Peça em Paralelo"
+                  placeholder="Filtrar ou escolher ferramenta para dividir palco..."
+                  options={[
+                    ...(secondaryTool
+                      ? [
+                          {
+                            id: '__close__',
+                            label: '✕ Fechar 2ª Peça',
+                            keywords: ['fechar', 'remover', 'segunda'],
+                          },
+                        ]
+                      : []),
+                    ...CAD_TOOL_CATALOG.filter((t) => t.id !== activeTool).map((t) => ({
+                      id: t.id,
+                      label: `${t.icon} ${t.shortLabel}`,
+                      keywords: [t.shortLabel, t.id],
+                    })),
+                  ]}
+                  selectedId={secondaryTool}
+                  clearValueId="__close__"
+                  onSelect={(id) => {
+                    if (id === '__close__') {
+                      setSecondaryTool(null);
+                    } else {
+                      setSecondaryTool(id as CadToolNodeId);
+                    }
+                    setShowSplitPicker(false);
+                  }}
+                  emptyMessage="Nenhuma ferramenta encontrada."
+                  testID="cad-split-picker-filter"
+                />
               </View>
             )}
 

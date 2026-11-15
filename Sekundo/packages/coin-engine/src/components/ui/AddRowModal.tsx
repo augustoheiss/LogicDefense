@@ -26,6 +26,7 @@ import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
 import type { TableRow, DynamicTableSchema } from '@coin/core/types';
 import { parseMoneyBR, parseBatchAmounts } from '@coin/core/parseMoneyBR';
+import { SearchableVerticalFilter } from './SearchableVerticalFilter';
 
 interface AddRowModalProps {
   visible: boolean;
@@ -576,29 +577,27 @@ export function AddRowModal({
               </View>
             )}
 
-            {/* 1-Tap Quick Category Chips */}
+            {/* Quick Category Vertical Searchable Filter (Combobox Vertical) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Categoria Rápida (1 toque)</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.quickChipsRow}
-              >
-                {QUICK_CATEGORIES.map((cat) => {
-                  const isSelected = category.toLowerCase() === cat.label.toLowerCase();
-                  return (
-                    <Pressable
-                      key={cat.label}
-                      style={[styles.quickChip, isSelected && styles.quickChipActive]}
-                      onPress={() => handleQuickCategorySelect(cat)}
-                    >
-                      <Text style={styles.quickChipText}>
-                        {cat.icon} {cat.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+              <SearchableVerticalFilter
+                label="Categoria Rápida (1 toque)"
+                placeholder="Filtrar ou escolher categoria rápida..."
+                options={QUICK_CATEGORIES.map((cat) => ({
+                  id: cat.label,
+                  label: `${cat.icon} ${cat.label}`,
+                  keywords: [cat.label],
+                }))}
+                selectedId={
+                  QUICK_CATEGORIES.find((cat) => category.toLowerCase() === cat.label.toLowerCase())?.label ?? null
+                }
+                allowClear={false}
+                onSelect={(id) => {
+                  const found = QUICK_CATEGORIES.find((cat) => cat.label === id);
+                  if (found) handleQuickCategorySelect(found);
+                }}
+                emptyMessage="Nenhuma categoria rápida encontrada."
+                testID="add-row-quick-category-filter"
+              />
             </View>
 
             {/* Description Input(s) */}

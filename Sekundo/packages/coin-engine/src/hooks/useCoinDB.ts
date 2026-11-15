@@ -15,10 +15,18 @@ import { Platform } from 'react-native';
 import {
   loadDB,
   saveDB,
+  saveDBOrThrow,
   clearDB,
   getPrivacyModeSync,
   setPrivacyModeSync,
 } from '../storage/asyncStorageAdapter';
+import {
+  type AsyncImportControllerOptions,
+  IMPORT_STAGE_LABELS_PT,
+  throwIfImportAborted,
+  yieldToEventLoop,
+  yieldToUiFrame,
+} from '../services/importPipelineContract';
 import {
   loadOpLogFromIndexedDB,
   saveOpLogToIndexedDB,
@@ -103,6 +111,9 @@ export interface CoinDBState {
     sectorParams?: SectorSimulationParams;
     mode?: 'replace' | 'merge' | 'new';
     isolateByTableId?: boolean;
+    onProgress?: AsyncImportControllerOptions['onProgress'];
+    signal?: AbortSignal;
+    strictPersistence?: boolean;
   }) => Promise<{
     success: boolean;
     tableId: string;
@@ -433,19 +444,31 @@ function useCoinDBInternal(): CoinDBState {
   }, [getLatestTables, activeTableIndex]);
 
   // ── Persist to IndexedDB / AsyncStorage and Push to Cloud ──
-  const persist = useCallback(async (newTables: CoinTable[], explicitActiveIndex?: number) => {
+  const persist = useCallback(async (
+    newTables: CoinTable[],
+    explicitActiveIndex?: number,
+    options?: { strictPersistence?: boolean }
+  ) => {
     const mainTables = ensureActiveSectors(newTables);
-    tablesRef.current = mainTables;
-    setTables(mainTables);
     const effectiveActiveIdx = explicitActiveIndex !== undefined ? explicitActiveIndex : activeTableIndex;
     const currentDB = await loadDB();
-    await saveDB({
+    const dbPayload = {
       tables: mainTables,
       activeTableIndex: effectiveActiveIdx,
       aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? 0,
       aiCostLastReset: currentDB?.aiCostLastReset ?? '',
       isPrivacyMode: currentDB?.isPrivacyMode ?? isPrivacyMode,
-    });
+    };
+    if (options?.strictPersistence) {
+      // Atomic state commit: do not mutate in-memory tables before strict storage write succeeds
+      await saveDBOrThrow(dbPayload);
+      tablesRef.current = mainTables;
+      setTables(mainTables);
+    } else {
+      tablesRef.current = mainTables;
+      setTables(mainTables);
+      await saveDB(dbPayload);
+    }
     const serializedLog = opLogRef.current.serialize();
     saveOpLogToIndexedDB(serializedLog.undoStack, serializedLog.redoStack).catch(() => {});
 
@@ -1341,7 +1364,22 @@ function useCoinDBInternal(): CoinDBState {
     dashboardConfig?: DashboardConfig;
     sectorParams?: SectorSimulationParams;
     isolateByTableId?: boolean;
+    onProgress?: AsyncImportControllerOptions['onProgress'];
+    signal?: AbortSignal;
+    strictPersistence?: boolean;
   }) => {
+    throwIfImportAborted(payload.signal);
+    payload.onProgress?.({
+      stage: 'saving_storage',
+      stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+      detailLabel: `Preparando ${payload.rows.length.toLocaleString('pt-BR')} linha(s)...`,
+      processedCount: 0,
+      totalCount: payload.rows.length,
+      percent: 65,
+      cancellable: false,
+    });
+    await yieldToUiFrame();
+    throwIfImportAborted(payload.signal);
     const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
     const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
     const mode = payload.mode || 'replace';
@@ -1424,71 +1462,28 @@ function useCoinDBInternal(): CoinDBState {
 
     const effectiveTableId = targetTable.id;
 
-    // 2. Tratar Chave API com Validação & Auto-Renovação no Import (Web + Mobile Isomórfico)
-    let activeApiKey = payload.apiKey || '';
-    let keyWasAutoRenewed = false;
-    const isRedactedPlaceholder =
-      activeApiKey === 'am_sheet_example_fictitious' ||
-      activeApiKey === 'am_sheet_live_local';
-    const isRevoked = (await getApiStorageItem(`coin_api_revoked_${effectiveTableId}`)) === 'true';
-
-    if (activeApiKey && !isRedactedPlaceholder) {
-      await removeApiStorageItem(`coin_api_revoked_${effectiveTableId}`);
-      const valCheck = await validateApiKey(activeApiKey);
-      if (!valCheck.valid) {
-        console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);
-        const genRes = await generateNewApiKey(effectiveTableId);
-        if (genRes && genRes.apiKey) {
-          activeApiKey = genRes.apiKey;
-          keyWasAutoRenewed = true;
-        }
-      }
-    } else if (!isRevoked) {
-      const existingKey = await getApiStorageItem(`coin_api_key_${effectiveTableId}`);
-      if (existingKey) {
-        const valCheck = await validateApiKey(existingKey);
-        if (!valCheck.valid) {
-          const genRes = await generateNewApiKey(effectiveTableId);
-          if (genRes && genRes.apiKey) {
-            activeApiKey = genRes.apiKey;
-            keyWasAutoRenewed = true;
-          } else {
-            activeApiKey = existingKey;
-          }
-        } else {
-          activeApiKey = existingKey;
-        }
-      } else {
-        const ensured = await ensureApiKeyForTable(effectiveTableId);
-        if (ensured) {
-          activeApiKey = ensured;
-          keyWasAutoRenewed = true;
-        }
+    const formattedRows: TableRow[] = new Array(payload.rows.length);
+    const nowIso = new Date().toISOString();
+    for (let i = 0; i < payload.rows.length; i++) {
+      const r = payload.rows[i];
+      formattedRows[i] = {
+        ...r,
+        id: mode === 'new' ? generateId() : ('id' in r && r.id ? r.id : generateId()),
+        createdAt: (r as any).createdAt || nowIso,
+      };
+      if (i > 0 && i % 500 === 0) {
+        payload.onProgress?.({
+          stage: 'saving_storage',
+          stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+          detailLabel: `Estruturando ${i.toLocaleString('pt-BR')} de ${payload.rows.length.toLocaleString('pt-BR')} linha(s)...`,
+          processedCount: i,
+          totalCount: payload.rows.length,
+          percent: 70 + Math.round((i / Math.max(1, payload.rows.length)) * 15),
+          cancellable: false,
+        });
+        await yieldToEventLoop();
       }
     }
-
-    if (activeApiKey && !isRedactedPlaceholder) {
-      await setApiStorageItem(`coin_api_key_${effectiveTableId}`, activeApiKey);
-      await setApiStorageItem('coin_active_api_key', activeApiKey);
-    }
-    if (payload.lastEventSeq !== undefined) {
-      await setApiStorageItem(`coin_last_seq_${effectiveTableId}`, String(payload.lastEventSeq));
-    }
-
-    // 3. Disparar evento de Sincronia Local com a chave ativa validada (Web & Mobile)
-    if (activeApiKey && !isRedactedPlaceholder) {
-      emitCoinSyncRequested({
-        tableId: effectiveTableId,
-        apiKey: activeApiKey,
-        lastEventSeq: payload.lastEventSeq,
-      });
-    }
-
-    const formattedRows: TableRow[] = payload.rows.map((r) => ({
-      ...r,
-      id: mode === 'new' ? generateId() : ('id' in r && r.id ? r.id : generateId()),
-      createdAt: (r as any).createdAt || new Date().toISOString(),
-    }));
 
     const updatedTables = baseTables.map((t: CoinTable) => {
       if (t.id !== targetTable!.id && t.id !== effectiveTableId) return t;
@@ -1533,14 +1528,97 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
 
+    payload.onProgress?.({
+      stage: 'saving_storage',
+      stageLabel: IMPORT_STAGE_LABELS_PT.saving_storage,
+      detailLabel: 'Persistindo no cofre local (IndexedDB / Storage)...',
+      processedCount: payload.rows.length,
+      totalCount: payload.rows.length,
+      percent: 88,
+      cancellable: false,
+    });
+
     const updatedActiveList = updatedTables.filter((t: CoinTable) => !t.isDeleted);
     const targetActiveIdx = updatedActiveList.findIndex((t: CoinTable) => t.id === effectiveTableId);
+
+    await persist(updatedTables, targetActiveIdx !== -1 ? targetActiveIdx : undefined, {
+      strictPersistence: payload.strictPersistence !== false,
+    });
+
     if (targetActiveIdx !== -1) {
       setActiveTableIndex(targetActiveIdx);
     }
-
     setSelectedMonth('all');
-    await persist(updatedTables, targetActiveIdx !== -1 ? targetActiveIdx : undefined);
+
+    // 2. Tratar Chave API & sincronia SOMENTE após persistência confirmada (evita efeitos colaterais em StorageQuotaError)
+    let activeApiKey = payload.apiKey || '';
+    let keyWasAutoRenewed = false;
+    const isRedactedPlaceholder =
+      activeApiKey === 'am_sheet_example_fictitious' ||
+      activeApiKey === 'am_sheet_live_local';
+    const isRevoked = (await getApiStorageItem(`coin_api_revoked_${effectiveTableId}`)) === 'true';
+
+    if (activeApiKey && !isRedactedPlaceholder) {
+      await removeApiStorageItem(`coin_api_revoked_${effectiveTableId}`);
+      const valCheck = await validateApiKey(activeApiKey);
+      if (!valCheck.valid) {
+        console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);
+        const genRes = await generateNewApiKey(effectiveTableId);
+        if (genRes && genRes.apiKey) {
+          activeApiKey = genRes.apiKey;
+          keyWasAutoRenewed = true;
+        }
+      }
+    } else if (!isRevoked) {
+      const existingKey = await getApiStorageItem(`coin_api_key_${effectiveTableId}`);
+      if (existingKey) {
+        const valCheck = await validateApiKey(existingKey);
+        if (!valCheck.valid) {
+          const genRes = await generateNewApiKey(effectiveTableId);
+          if (genRes && genRes.apiKey) {
+            activeApiKey = genRes.apiKey;
+            keyWasAutoRenewed = true;
+          } else {
+            activeApiKey = existingKey;
+          }
+        } else {
+          activeApiKey = existingKey;
+        }
+      } else {
+        const ensured = await ensureApiKeyForTable(effectiveTableId);
+        if (ensured) {
+          activeApiKey = ensured;
+          keyWasAutoRenewed = true;
+        }
+      }
+    }
+    if (activeApiKey && !isRedactedPlaceholder) {
+      await setApiStorageItem(`coin_api_key_${effectiveTableId}`, activeApiKey);
+      await setApiStorageItem('coin_active_api_key', activeApiKey);
+    }
+    if (payload.lastEventSeq !== undefined) {
+      await setApiStorageItem(`coin_last_seq_${effectiveTableId}`, String(payload.lastEventSeq));
+    }
+
+    // 3. Disparar evento de Sincronia Local com a chave ativa validada (Web & Mobile)
+    if (activeApiKey && !isRedactedPlaceholder) {
+      emitCoinSyncRequested({
+        tableId: effectiveTableId,
+        apiKey: activeApiKey,
+        lastEventSeq: payload.lastEventSeq,
+      });
+    }
+
+    payload.onProgress?.({
+      stage: 'opening_table',
+      stageLabel: IMPORT_STAGE_LABELS_PT.opening_table,
+      detailLabel: 'Atualizando painel e filtros da planilha...',
+      processedCount: payload.rows.length,
+      totalCount: payload.rows.length,
+      percent: 98,
+      cancellable: false,
+    });
+    await yieldToEventLoop();
 
     return {
       success: true,

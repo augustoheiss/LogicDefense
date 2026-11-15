@@ -46,3 +46,6 @@ export { GranularExportModal } from './GranularExportModal';
 export { SpreadsheetDataGrid } from './SpreadsheetDataGrid';
 export { AppBuilderModal } from './AppBuilderModal';
 export { ExampleCSVGalleryModal } from './ExampleCSVGalleryModal';
+export { ImportProgressModal } from './ImportProgressModal';
+export { SearchableVerticalFilter } from './SearchableVerticalFilter';
+export type { SearchableVerticalFilterProps } from './SearchableVerticalFilter';

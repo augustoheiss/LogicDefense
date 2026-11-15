@@ -16,6 +16,7 @@ export * from './core/opLog';
 export * from './core/actions';
 export * from './utils/securitySanitizer';
 export * from './utils/csvEngine';
+export * from './utils/comboboxScrollHelper';
 export * from './storage/asyncStorageAdapter';
 export * from './storage/indexedDBAdapter';
 export * from './storage/authService';

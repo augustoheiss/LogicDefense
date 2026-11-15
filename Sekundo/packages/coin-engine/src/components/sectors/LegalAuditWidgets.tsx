@@ -22,6 +22,7 @@ import {
   GLEntry,
   AccountAuditTrail,
 } from '../../utils/generalLedgerParser';
+import { SearchableVerticalFilter } from '@coin/components/ui/SearchableVerticalFilter';
 
 // Sample General Ledger CSV
 const SAMPLE_GENERAL_LEDGER = `transaction_id,timestamp,debit_account,credit_account,amount_in_cents,description,reversal_ref_id
@@ -371,21 +372,23 @@ export function LegalAuditWidgets() {
             Selecione uma conta para reconstruir a proveniência dos saldos, auditando estornos e lançamentos de retificação de forma visual.
           </Text>
 
-          {/* Account Selector */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accSelectorRow}>
-            {Array.from(parsedGl.accountTrails.keys()).map((accCode) => (
-              <Pressable
-                key={accCode}
-                style={[
-                  styles.accSelectorBtn,
-                  selectedAccount === accCode && styles.accSelectorBtnActive,
-                ]}
-                onPress={() => setSelectedAccount(accCode)}
-              >
-                <Text style={styles.accSelectorText}>{accCode}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+          {/* Account Vertical Filter (Combobox Vertical) */}
+          <View style={styles.accSelectorRow}>
+            <SearchableVerticalFilter
+              label="Conta Contábil"
+              placeholder="Filtrar ou escolher conta..."
+              options={Array.from(parsedGl.accountTrails.keys()).map((accCode) => ({
+                id: accCode,
+                label: accCode,
+                keywords: [accCode],
+              }))}
+              selectedId={selectedAccount}
+              allowClear={false}
+              onSelect={(accCode) => setSelectedAccount(accCode)}
+              emptyMessage="Nenhuma conta encontrada."
+              testID="legal-audit-account-filter"
+            />
+          </View>
 
           {selectedTrail ? (
             <View style={styles.lineageContainer}>

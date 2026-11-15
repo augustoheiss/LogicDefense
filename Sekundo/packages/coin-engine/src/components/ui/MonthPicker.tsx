@@ -1,16 +1,15 @@
 /**
  * MonthPicker Component — Assistente Moeda
  *
- * Horizontal scrollable pill selector for filtering by:
- *   - "Todos" (all months)
- *   - 1 or more full years ("📅 2026", "📅 2025" -> 12m, 24m, 36m+ in 1 tap per year)
- *   - 1 or more individual months (1st click activates, 2nd click deactivates; auto-reverts to "Todos" if empty)
+ * Filtro vertical pesquisável (Combobox Acessível) para seleção de período:
+ *   - "Todos os períodos" (sem filtro de mês)
+ *   - Anos completos ("📅 Ano 2026", "📅 Ano 2025" -> alterna todos os meses do ano)
+ *   - Meses individuais (multi-seleção com busca live sem acentos)
  */
 
-import { useState, useMemo } from 'react';
-import { ScrollView, Pressable, Text, StyleSheet, View } from 'react-native';
-import { colors } from '@coin/theme/colors';
-import { spacing, radius } from '@coin/theme/spacing';
+import { useMemo, useCallback } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { spacing } from '@coin/theme/spacing';
 import {
   parseSelectedMonthsSpec,
   serializeSelectedMonthsSpec,
@@ -18,6 +17,8 @@ import {
   toggleYearSelection,
   formatSelectedMonthsLabel,
 } from '@coin/core/dateUtils';
+import type { VerticalFilterOption } from '@coin/utils/verticalFilterEngine';
+import { SearchableVerticalFilter } from './SearchableVerticalFilter';
 
 interface MonthPickerProps {
   months: string[]; // YYYY-MM sorted desc
@@ -28,8 +29,11 @@ interface MonthPickerProps {
   onToggleYear?: (year: string) => void;
 }
 
+const ALL_PERIODS_OPTION_ID = '__all__';
+const YEAR_OPTION_PREFIX = '__year__';
+
 function formatMonthLabel(ym?: string | null): string {
-  if (!ym || ym === 'all' || typeof ym !== 'string') return 'Todos';
+  if (!ym || ym === 'all' || typeof ym !== 'string') return 'Todos os períodos';
   const parts = ym.split('-');
   if (parts.length < 2) return ym;
   const [y, m] = parts;
@@ -51,8 +55,6 @@ export function MonthPicker({
   onToggleMonth,
   onToggleYear,
 }: MonthPickerProps) {
-  const [isCollapsed, setIsCollapsed] = useState(true);
-
   const safeMonths = useMemo(
     () =>
       Array.isArray(months)
@@ -84,273 +86,160 @@ export function MonthPicker({
     [activeMonthsList, safeMonths],
   );
 
-  const handleToggleMonth = (ym: string) => {
-    if (onToggleMonth) {
-      onToggleMonth(ym);
-    } else {
-      const next = toggleMonthSelection(activeMonthsList, ym);
-      onSelect(serializeSelectedMonthsSpec(next));
+  const handleToggleMonth = useCallback(
+    (ym: string) => {
+      if (onToggleMonth) {
+        onToggleMonth(ym);
+      } else {
+        const next = toggleMonthSelection(activeMonthsList, ym);
+        onSelect(serializeSelectedMonthsSpec(next));
+      }
+    },
+    [onToggleMonth, activeMonthsList, onSelect],
+  );
+
+  const handleToggleYear = useCallback(
+    (year: string) => {
+      if (onToggleYear) {
+        onToggleYear(year);
+      } else {
+        const next = toggleYearSelection(activeMonthsList, year, safeMonths);
+        onSelect(serializeSelectedMonthsSpec(next));
+      }
+    },
+    [onToggleYear, activeMonthsList, safeMonths, onSelect],
+  );
+
+  const options = useMemo<VerticalFilterOption[]>(() => {
+    const items: VerticalFilterOption[] = [
+      {
+        id: ALL_PERIODS_OPTION_ID,
+        label: 'Todos os períodos',
+        subtitle: 'Exibir histórico completo sem restrição mensal',
+        badge: `${safeMonths.length}m`,
+        keywords: ['todos', 'all', 'limpar', 'completo'],
+        pinned: true,
+      },
+    ];
+
+    if (availableYears.length > 0 && safeMonths.length > 1) {
+      for (const yr of availableYears) {
+        const yrMonths = safeMonths.filter((m) => m.startsWith(`${yr}-`));
+        items.push({
+          id: `${YEAR_OPTION_PREFIX}${yr}`,
+          label: `📅 Ano ${yr} (${yrMonths.length}m)`,
+          subtitle: `Selecionar ou alternar todos os ${yrMonths.length} meses de ${yr}`,
+          badge: `${yrMonths.length}m`,
+          keywords: [yr, 'ano', 'year', `ano ${yr}`],
+        });
+      }
     }
-  };
 
-  const handleToggleYear = (year: string) => {
-    if (onToggleYear) {
-      onToggleYear(year);
-    } else {
-      const next = toggleYearSelection(activeMonthsList, year, safeMonths);
-      onSelect(serializeSelectedMonthsSpec(next));
+    for (const m of safeMonths) {
+      const shortLabel = formatMonthLabel(m);
+      items.push({
+        id: m,
+        label: shortLabel,
+        subtitle: m,
+        keywords: [m, shortLabel, m.slice(0, 4)],
+      });
     }
-  };
 
-  const handleSelectAll = () => {
-    onSelect('all');
-    setIsCollapsed(true);
-  };
+    return items;
+  }, [safeMonths, availableYears]);
 
-  if (isCollapsed) {
-    return (
-      <View style={styles.collapsedWrapper}>
-        <Pressable
-          testID="month-picker-collapsed-trigger"
-          onPress={() => setIsCollapsed(false)}
-          style={({ pressed }) => [
-            styles.collapsedButton,
-            activeMonthsList.length > 0 && styles.collapsedButtonFiltered,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.collapsedButtonText}>
-            📅 Filtro: <Text style={styles.collapsedValueText}>{activeLabel}</Text> (Alterar)
-          </Text>
-        </Pressable>
-        {activeMonthsList.length > 0 && (
-          <Pressable
-            testID="month-picker-clear-btn"
-            onPress={handleSelectAll}
-            style={({ pressed }) => [styles.clearFilterBadge, pressed && styles.pressed]}
-          >
-            <Text style={styles.clearFilterText}>✕ Todos</Text>
-          </Pressable>
-        )}
-      </View>
-    );
-  }
+  const currentSelectedIds = useMemo(() => {
+    if (activeMonthsList.length === 0) {
+      return [ALL_PERIODS_OPTION_ID];
+    }
+    const ids = [...activeMonthsList];
+    if (availableYears.length > 0 && safeMonths.length > 1) {
+      for (const yr of availableYears) {
+        const yrMonths = safeMonths.filter((m) => m.startsWith(`${yr}-`));
+        if (yrMonths.length > 0 && yrMonths.every((m) => selectedSet.has(m))) {
+          ids.push(`${YEAR_OPTION_PREFIX}${yr}`);
+        }
+      }
+    }
+    return ids;
+  }, [activeMonthsList, availableYears, safeMonths, selectedSet]);
+
+  const handleChangeSelectedIds = useCallback(
+    (nextIds: string[]) => {
+      if (nextIds.length === 0) {
+        onSelect('all');
+        return;
+      }
+
+      const prevSet = new Set(currentSelectedIds);
+      const nextSet = new Set(nextIds);
+      const added = nextIds.filter((id) => !prevSet.has(id));
+      const removed = currentSelectedIds.filter((id) => !nextSet.has(id));
+
+      if (added.includes(ALL_PERIODS_OPTION_ID)) {
+        onSelect('all');
+        return;
+      }
+      if (
+        removed.includes(ALL_PERIODS_OPTION_ID) &&
+        added.length === 0 &&
+        removed.length === 1
+      ) {
+        onSelect('all');
+        return;
+      }
+
+      if (added.length + removed.length === 1) {
+        const changedId = added[0] ?? removed[0];
+        if (changedId.startsWith(YEAR_OPTION_PREFIX)) {
+          handleToggleYear(changedId.slice(YEAR_OPTION_PREFIX.length));
+          return;
+        }
+        if (/^\d{4}-\d{2}$/.test(changedId)) {
+          handleToggleMonth(changedId);
+          return;
+        }
+      }
+
+      const expandedMonths = new Set<string>();
+      for (const id of nextIds) {
+        if (/^\d{4}-\d{2}$/.test(id)) {
+          expandedMonths.add(id);
+        } else if (id.startsWith(YEAR_OPTION_PREFIX)) {
+          const yr = id.slice(YEAR_OPTION_PREFIX.length);
+          for (const ym of safeMonths) {
+            if (ym.startsWith(`${yr}-`)) {
+              expandedMonths.add(ym);
+            }
+          }
+        }
+      }
+      onSelect(serializeSelectedMonthsSpec(expandedMonths));
+    },
+    [currentSelectedIds, safeMonths, onSelect, handleToggleMonth, handleToggleYear],
+  );
 
   return (
-    <View style={styles.expandedWrapper}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.container}
-        style={styles.scrollView}
-      >
-        <Pill
-          testID="month-picker-pill-all"
-          label="Todos"
-          isActive={activeMonthsList.length === 0}
-          onPress={handleSelectAll}
-        />
-
-        {availableYears.length > 0 && safeMonths.length > 1 && (
-          <>
-            {availableYears.map((yr) => {
-              const yrMonths = safeMonths.filter((m) => m.startsWith(`${yr}-`));
-              const isFullYear = yrMonths.length > 0 && yrMonths.every((m) => selectedSet.has(m));
-              const isPartialYear = !isFullYear && yrMonths.some((m) => selectedSet.has(m));
-              return (
-                <Pill
-                  key={`year-${yr}`}
-                  testID={`month-picker-year-${yr}`}
-                  label={`📅 ${yr} (${yrMonths.length}m)`}
-                  isActive={isFullYear}
-                  isPartial={isPartialYear}
-                  onPress={() => handleToggleYear(yr)}
-                />
-              );
-            })}
-            <View style={styles.divider} />
-          </>
-        )}
-
-        {safeMonths.map((m) => (
-          <Pill
-            key={m}
-            testID={`month-picker-month-${m}`}
-            label={formatMonthLabel(m)}
-            isActive={selectedSet.has(m)}
-            onPress={() => handleToggleMonth(m)}
-          />
-        ))}
-      </ScrollView>
-      <Pressable
-        testID="month-picker-confirm-btn"
-        onPress={() => setIsCollapsed(true)}
-        style={({ pressed }) => [
-          styles.closeButton,
-          activeMonthsList.length > 0 && styles.closeButtonActive,
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={[styles.closeButtonText, activeMonthsList.length > 0 && styles.closeButtonTextActive]}>
-          {activeMonthsList.length > 0 ? `✓ (${activeMonthsList.length})` : '✕'}
-        </Text>
-      </Pressable>
+    <View style={styles.wrapper} testID="month-picker-wrapper">
+      <SearchableVerticalFilter
+        label={`Período · ${activeLabel}`}
+        testID="month-picker-vertical-filter"
+        placeholder="🔍 Filtrar ou selecionar mês/ano (ex: 2026, Jan)..."
+        emptyMessage="Nenhum mês ou ano encontrado para essa pesquisa."
+        multiSelect
+        selectedIds={currentSelectedIds}
+        allowClear={activeMonthsList.length > 0}
+        onChangeSelectedIds={handleChangeSelectedIds}
+        options={options}
+        showSelectFilteredAction
+      />
     </View>
   );
 }
 
-function Pill({
-  label,
-  isActive,
-  isPartial,
-  onPress,
-  testID,
-}: {
-  label: string;
-  isActive: boolean;
-  isPartial?: boolean;
-  onPress: () => void;
-  testID?: string;
-}) {
-  return (
-    <Pressable
-      testID={testID}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.pill,
-        isPartial && styles.pillPartial,
-        isActive && styles.pillActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text
-        style={[
-          styles.pillText,
-          isPartial && styles.pillTextPartial,
-          isActive && styles.pillTextActive,
-        ]}
-      >
-        {isActive ? `✓ ${label}` : label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  collapsedWrapper: {
-    flexDirection: 'row',
+  wrapper: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  collapsedButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-    backgroundColor: colors.background.secondary,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  collapsedButtonFiltered: {
-    borderColor: colors.accent.purpleBorder,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-  },
-  collapsedButtonText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-  },
-  collapsedValueText: {
-    color: colors.accent.purple,
-    fontWeight: '700',
-  },
-  clearFilterBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-    backgroundColor: colors.background.tertiary,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  clearFilterText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.text.tertiary,
-  },
-  expandedWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: spacing.md,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  container: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  divider: {
-    width: 1,
-    height: 20,
-    backgroundColor: colors.border.default,
-    marginHorizontal: 2,
-  },
-  pill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-    backgroundColor: colors.background.tertiary,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  pillPartial: {
-    borderColor: colors.accent.purpleBorder,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-  },
-  pillActive: {
-    backgroundColor: colors.accent.purpleLight,
-    borderColor: colors.accent.purpleBorder,
-  },
-  pillText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.text.tertiary,
-  },
-  pillTextPartial: {
-    color: colors.text.secondary,
-    fontWeight: '600',
-  },
-  pillTextActive: {
-    color: colors.accent.purple,
-    fontWeight: '700',
-  },
-  closeButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.background.tertiary,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonActive: {
-    backgroundColor: colors.accent.purpleLight,
-    borderColor: colors.accent.purpleBorder,
-  },
-  closeButtonText: {
-    color: colors.text.secondary,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  closeButtonTextActive: {
-    color: colors.accent.purple,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

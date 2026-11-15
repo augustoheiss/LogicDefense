@@ -12,6 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  extractAvailableWeekDates,
   projectScope,
   resolveTerritoryKeysForNumbers,
   assertScopedProjectionInvariants,
@@ -175,6 +176,33 @@ describe('scopeProjection — Zero-Leakage Scoped Projection Engine', () => {
     expect(leaf?.attributes?.notes).toContain('Morador pediu retorno');
     // Sensitive hashes are STILL stripped even when includeNotes=true
     expect(leaf?.attributes?.pinHash).toBeUndefined();
+  });
+
+  it('extracts and projects weekly schedules keyed by meta.sessionDate cleanly', () => {
+    const scheduleEntries: FlatSkeletonEntry[] = [
+      {
+        key: '01-01',
+        label: 'Semana S1 — Slot 1',
+        type: 'leaf',
+        value: 'Participante A',
+        meta: { sessionDate: '2026-10-09', engine_id: 'roster_assignments' },
+      },
+      {
+        key: '02-01',
+        label: 'Semana S2 — Slot 1',
+        type: 'leaf',
+        value: 'Participante B',
+        meta: { sessionDate: '2026-10-16', engine_id: 'roster_assignments' },
+      },
+    ];
+    expect(extractAvailableWeekDates(scheduleEntries)).toEqual(['2026-10-09', '2026-10-16']);
+    const proj = projectScope(scheduleEntries, {
+      kind: 'weeks',
+      engine: 'schedule',
+      keys: ['2026-10-09'],
+      mode: 'read',
+    });
+    expect(proj.nodes.map((n) => n.key)).toEqual(['01-01']);
   });
 
   it('projects 1,000 random scopes (Property Test) with zero out-of-scope or credential leakage', () => {

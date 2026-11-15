@@ -8,6 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import type { SdocDocument, SdocField, PreflightReport, FormFieldValue } from '@sekundo/core';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 export interface QuickFillFormProps {
   sdoc: SdocDocument | null;
@@ -207,28 +208,19 @@ export function QuickFillForm({
                     </Text>
                   </TouchableOpacity>
                 ) : field.options && field.options.length > 0 ? (
-                  <View style={styles.optionsWrap}>
-                    {field.options.map((opt) => {
-                      const active = strVal === opt;
-                      return (
-                        <TouchableOpacity
-                          key={opt}
-                          testID={`quickfill-opt-${key}-${opt}`}
-                          style={[styles.optionPill, active && styles.optionPillActive]}
-                          onPress={() => onChangeField(key, opt)}
-                        >
-                          <Text
-                            style={[
-                              styles.optionPillText,
-                              active && styles.optionPillTextActive,
-                            ]}
-                          >
-                            {active ? `● ${opt}` : `○ ${opt}`}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  <SearchableVerticalFilter
+                    testID={`quickfill-opt-filter-${key}`}
+                    placeholder={field.defaultValue || `Filtrar ou escolher opção de ${key}...`}
+                    selectedId={strVal || null}
+                    clearValueId=""
+                    onSelect={(id) => onChangeField(key, id)}
+                    options={field.options.map((opt) => ({
+                      id: opt,
+                      label: opt,
+                      keywords: [opt],
+                    }))}
+                    emptyMessage="Nenhuma opção encontrada."
+                  />
                 ) : (
                   <TextInput
                     testID={`quickfill-input-${key}`}
@@ -305,11 +297,6 @@ const styles = StyleSheet.create({
   checkboxBtn: { backgroundColor: '#0F172A', paddingVertical: 7, paddingHorizontal: 10, borderRadius: 5, borderWidth: 1, borderColor: '#334155' },
   checkboxBtnChecked: { backgroundColor: '#064E3B', borderColor: '#10B981' },
   checkboxText: { color: '#F8FAFC', fontSize: 11.5, fontWeight: '600' },
-  optionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  optionPill: { backgroundColor: '#0F172A', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#334155' },
-  optionPillActive: { backgroundColor: '#1D4ED8', borderColor: '#60A5FA' },
-  optionPillText: { color: '#CBD5E1', fontSize: 11 },
-  optionPillTextActive: { color: '#FFFFFF', fontWeight: '700' },
   footer: { padding: 10, borderTopWidth: 1, borderTopColor: '#1E293B', gap: 6, backgroundColor: '#090D16' },
   primaryExportBtn: { backgroundColor: '#2563EB', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, alignItems: 'center' },
   primaryExportText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' },

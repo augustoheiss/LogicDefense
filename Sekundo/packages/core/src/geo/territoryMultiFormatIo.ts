@@ -31,6 +31,15 @@ import {
   sanitizeTerritoryNodeForPrivacy,
 } from '../territory/territoryCrudEngine';
 import { sanitizeCanvassNotesForLgpd } from '../engines/canvassingEngine';
+import {
+  type AsyncImportControllerOptions,
+  IMPORT_STAGE_LABELS_PT,
+  decodeSpreadsheetBytesSmart,
+  detectSpreadsheetBinarySignature,
+  throwIfImportAborted,
+  yieldToEventLoop,
+  yieldToUiFrame,
+} from '../csv/importPipeline';
 
 function normalizeTerritoryId(raw: string): string {
   const trimmed = String(raw || '').trim();
@@ -1364,6 +1373,19 @@ export function parseKmlToCleanTerritoryNodes(
   polygonsCount: number;
   addressesCount: number;
 } {
+  const trimmedKml = String(kmlText || '').trim();
+  if (!trimmedKml) {
+    throw new Error('KML inválido: arquivo vazio.');
+  }
+  if (!/<(?:kml|Document|Folder|Placemark)\b/i.test(trimmedKml)) {
+    throw new Error(
+      'KML inválido: nenhuma tag XML <kml>, <Document>, <Folder> ou <Placemark> encontrada.'
+    );
+  }
+  if (/<Placemark\b/i.test(trimmedKml) && !/<\/Placemark>/i.test(trimmedKml)) {
+    throw new Error('KML inválido: tag <Placemark> não fechada corretamente.');
+  }
+
   const nodes: FlatSkeletonEntry[] = [];
   const terrSet = new Set<string>();
   let polygonsCount = 0;
@@ -1870,8 +1892,27 @@ export function parseGeoJsonToCleanTerritoryNodes(
   polygonsCount: number;
   addressesCount: number;
 } {
-  const parsed = JSON.parse(geoJsonText);
-  const features: any[] = Array.isArray(parsed?.features) ? parsed.features : [];
+  let parsed: any;
+  try {
+    parsed = JSON.parse(geoJsonText);
+  } catch {
+    throw new Error('GeoJSON inválido: erro de sintaxe JSON.');
+  }
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    (parsed.type !== 'FeatureCollection' &&
+      parsed.type !== 'Feature' &&
+      !Array.isArray(parsed.features))
+  ) {
+    throw new Error('GeoJSON inválido: estrutura FeatureCollection esperada.');
+  }
+  const features: any[] =
+    parsed.type === 'Feature'
+      ? [parsed]
+      : Array.isArray(parsed.features)
+      ? parsed.features
+      : [];
   const nodes: FlatSkeletonEntry[] = [];
   const terrSet = new Set<string>();
   let polygonsCount = 0;
@@ -2236,6 +2277,27 @@ export function detectTerritoryFileFormat(
   return 'csv';
 }
 
+function assertSupportedTerritoryBinaryInput(
+  input: { bytes?: Uint8Array; fileName?: string },
+  explicitFormat?: TerritoryMultiIoFormat
+): void {
+  const lowerName = String(input.fileName || '').trim().toLowerCase();
+  const binarySig = input.bytes ? detectSpreadsheetBinarySignature(input.bytes) : undefined;
+  if (binarySig === 'ole2_xls' || (!explicitFormat && lowerName.endsWith('.xls'))) {
+    throw new Error(
+      'Formato legado Excel 97-2003 (.xls) não suportado. Salve a planilha como .xlsx ou .csv (UTF-8).'
+    );
+  }
+  if (binarySig === 'pdf' || (!explicitFormat && lowerName.endsWith('.pdf'))) {
+    throw new Error(
+      'Arquivo PDF não suportado neste importador de territórios. Exporte como .csv, .xlsx, .kml ou .geojson.'
+    );
+  }
+  if (binarySig === 'unknown_binary') {
+    throw new Error('Formato binário incompatível detectado (unknown_binary).');
+  }
+}
+
 export function importTerritoryMultiFormat(
   input: {
     bytes?: Uint8Array;
@@ -2244,6 +2306,7 @@ export function importTerritoryMultiFormat(
   },
   options: TerritoryMultiImportOptions = {}
 ): TerritoryMultiImportResult {
+  assertSupportedTerritoryBinaryInput(input, options.format);
   const lowerName = String(input.fileName || '').trim().toLowerCase();
   const format =
     options.format ||
@@ -2281,7 +2344,7 @@ export function importTerritoryMultiFormat(
   }
 
   const text =
-    input.text ?? (input.bytes ? new TextDecoder('utf-8').decode(input.bytes) : '');
+    input.text ?? (input.bytes ? decodeSpreadsheetBytesSmart(input.bytes).text : '');
 
   if (format === 'kml') {
     const res = parseKmlToCleanTerritoryNodes(text, { ...options, privacySafeMode });
@@ -2308,7 +2371,12 @@ export function importTerritoryMultiFormat(
   }
 
   if (format === 'json') {
-    const parsed = JSON.parse(text);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error('JSON inválido: não foi possível interpretar o conteúdo do arquivo.');
+    }
     if (parsed?.type === 'FeatureCollection') {
       const res = parseGeoJsonToCleanTerritoryNodes(text, { ...options, privacySafeMode });
       return {
@@ -2352,6 +2420,86 @@ export function importTerritoryMultiFormat(
     addressesCount: res.addressesCount,
     privacySanitized: privacySafeMode,
   };
+}
+
+export async function importTerritoryMultiFormatAsync(
+  input: {
+    bytes?: Uint8Array;
+    text?: string;
+    fileName?: string;
+  },
+  options: TerritoryMultiImportOptions & AsyncImportControllerOptions = {}
+): Promise<TerritoryMultiImportResult> {
+  throwIfImportAborted(options.signal);
+  const fileName = input.fileName || options.fileName || 'territorios';
+  const sizeBytes = options.sizeBytes ?? input.bytes?.byteLength ?? input.text?.length;
+
+  options.onProgress?.({
+    stage: 'decoding',
+    stageLabel: IMPORT_STAGE_LABELS_PT.decoding,
+    detailLabel: `Analisando formato de "${fileName}"...`,
+    cancellable: true,
+    fileName,
+    sizeBytes,
+    percent: 12,
+  });
+  await yieldToUiFrame();
+  throwIfImportAborted(options.signal);
+
+  let resolvedText = input.text;
+  let detectedEncodingLabel = 'UTF-8';
+  assertSupportedTerritoryBinaryInput(input, options.format);
+  if (resolvedText === undefined && input.bytes) {
+    const isPkZip =
+      input.bytes.length >= 4 &&
+      input.bytes[0] === 0x50 &&
+      input.bytes[1] === 0x4b;
+    if (!isPkZip) {
+      const decoded = decodeSpreadsheetBytesSmart(input.bytes);
+      resolvedText = decoded.text;
+      if (decoded.detectedEncoding === 'windows-1252') {
+        detectedEncodingLabel = 'Windows-1252 (convertido automaticamente)';
+      }
+    }
+  }
+
+  options.onProgress?.({
+    stage: 'parsing_rows',
+    stageLabel: IMPORT_STAGE_LABELS_PT.parsing_rows,
+    detailLabel: `Interpretando geometrias e registros (${detectedEncodingLabel})...`,
+    cancellable: true,
+    fileName,
+    sizeBytes,
+    percent: 48,
+  });
+  await yieldToEventLoop();
+  throwIfImportAborted(options.signal);
+
+  const result = importTerritoryMultiFormat(
+    {
+      bytes: input.bytes,
+      text: resolvedText,
+      fileName: input.fileName,
+    },
+    options
+  );
+
+  throwIfImportAborted(options.signal);
+  options.onProgress?.({
+    stage: 'validating',
+    stageLabel: IMPORT_STAGE_LABELS_PT.validating,
+    detailLabel: `${result.territoriesCount} território(s) e ${result.addressesCount} registro(s) prontos.`,
+    processedCount: result.nodes.length,
+    totalCount: result.nodes.length,
+    cancellable: true,
+    fileName,
+    sizeBytes,
+    percent: 82,
+  });
+  await yieldToEventLoop();
+  throwIfImportAborted(options.signal);
+
+  return result;
 }
 
 export function exportTerritoryMultiFormat(

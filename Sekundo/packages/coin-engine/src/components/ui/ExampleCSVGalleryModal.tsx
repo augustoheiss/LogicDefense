@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   Modal,
   View,
@@ -14,7 +14,11 @@ import {
   EXAMPLE_CSV_PROFILES,
   ExampleCSVProfile,
 } from '../../data/exampleCsvProfiles';
-import { parseCSVText } from '../../utils/csvEngine';
+import { parseCSVText, parseCSVTextAsync } from '../../utils/csvEngine';
+import { useImportPipeline } from '../../hooks/useImportPipeline';
+import type { ImportProgressInfo } from '../../services/importPipelineContract';
+import { ImportProgressModal } from './ImportProgressModal';
+import { SearchableVerticalFilter } from './SearchableVerticalFilter';
 import { detectSectorsFromRows } from '../../utils/sectorTagDetector';
 import { shareCSVText } from '../../services/exportService';
 import {
@@ -29,6 +33,7 @@ import {
 export interface ExampleCSVGalleryModalProps {
   visible: boolean;
   onClose: () => void;
+  onImportedCloseAll?: () => void;
   initialProfileId?: string;
   onImportExample: (payload: {
     rows: (TableRow | Omit<TableRow, 'id'>)[];
@@ -44,6 +49,9 @@ export interface ExampleCSVGalleryModalProps {
     activeSectors?: string[];
     dashboardConfig?: DashboardConfig;
     sectorParams?: SectorSimulationParams;
+    onProgress?: (progress: ImportProgressInfo) => void;
+    signal?: AbortSignal;
+    strictPersistence?: boolean;
   }) => Promise<any>;
   onOpenCustomImporter?: (prefillCsv?: string) => void;
   onOpenLiveSynthesis?: () => void;
@@ -54,17 +62,29 @@ type ViewTab = 'guide' | 'backup_v3' | 'simple_csv' | 'ai_prompt';
 export function ExampleCSVGalleryModal({
   visible,
   onClose,
+  onImportedCloseAll,
   initialProfileId,
   onImportExample,
   onOpenCustomImporter,
   onOpenLiveSynthesis,
 }: ExampleCSVGalleryModalProps) {
+  const importPipeline = useImportPipeline();
   const [selectedId, setSelectedId] = useState<string>(
     initialProfileId || EXAMPLE_CSV_PROFILES[0].id
   );
   const [activeTab, setActiveTab] = useState<ViewTab>('guide');
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const selectedProfile: ExampleCSVProfile = useMemo(() => {
     return (
@@ -77,12 +97,16 @@ export function ExampleCSVGalleryModal({
     return parseCSVText(selectedProfile.fullBackupV3Csv);
   }, [selectedProfile]);
 
-  const showTemporaryFeedback = (msg: string) => {
+  const showTemporaryFeedback = useCallback((msg: string) => {
     setStatusFeedback(msg);
-    setTimeout(() => {
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+    feedbackTimerRef.current = setTimeout(() => {
+      feedbackTimerRef.current = null;
       setStatusFeedback((prev) => (prev === msg ? null : prev));
     }, 4000);
-  };
+  }, []);
 
   const handleCopyText = async (text: string, label: string) => {
     try {
@@ -117,46 +141,66 @@ export function ExampleCSVGalleryModal({
   const executeLoadIntoApp = async (mode: 'new' | 'replace' | 'merge') => {
     setIsBusy(true);
     try {
-      const parsed = parseCSVText(selectedProfile.fullBackupV3Csv);
-      const detectedSectors = detectSectorsFromRows(parsed.rows);
-      const mergedSectors = Array.from(
-        new Set([
-          ...(parsed.metadata?.activeSectors || selectedProfile.activeSectors || []),
-          ...detectedSectors,
-        ])
-      );
+      await importPipeline.run(
+        {
+          fileName: selectedProfile.fileName,
+          sizeBytes: selectedProfile.fullBackupV3Csv.length,
+          initialStage: 'parsing_rows',
+          initialDetail: `Carregando modelo fictício "${selectedProfile.shortTitle}"...`,
+        },
+        async ({ signal, reportProgress }) => {
+          const parsed = await parseCSVTextAsync(selectedProfile.fullBackupV3Csv, undefined, {
+            signal,
+            onProgress: (p) => reportProgress(p),
+          });
+          const detectedSectors = detectSectorsFromRows(parsed.rows);
+          const mergedSectors = Array.from(
+            new Set([
+              ...(parsed.metadata?.activeSectors || selectedProfile.activeSectors || []),
+              ...detectedSectors,
+            ])
+          );
 
-      await onImportExample({
-        rows: parsed.rows,
-        tableId: mode === 'new' ? undefined : parsed.metadata?.tableId,
-        apiKey: undefined, // Sempre gera chave limpa local para a planilha
-        lastEventSeq: 0,
-        name: parsed.metadata?.name || `${selectedProfile.emoji} ${selectedProfile.title} (Exemplo)`,
-        description: parsed.metadata?.description || selectedProfile.subtitle,
-        goals: parsed.metadata?.tableGoals,
-        mode,
-        schema: parsed.metadata?.schema,
-        investorProfile: parsed.metadata?.investorProfile,
-        activeSectors: mergedSectors,
-        dashboardConfig: parsed.metadata?.dashboardConfig,
-        sectorParams: parsed.metadata?.sectorParams,
-      });
+          await onImportExample({
+            rows: parsed.rows,
+            tableId: mode === 'new' ? undefined : parsed.metadata?.tableId,
+            apiKey: undefined, // Sempre gera chave limpa local para a planilha
+            lastEventSeq: 0,
+            name:
+              parsed.metadata?.name ||
+              `${selectedProfile.emoji} ${selectedProfile.title} (Exemplo)`,
+            description: parsed.metadata?.description || selectedProfile.subtitle,
+            goals: parsed.metadata?.tableGoals,
+            mode,
+            schema: parsed.metadata?.schema,
+            investorProfile: parsed.metadata?.investorProfile,
+            activeSectors: mergedSectors,
+            dashboardConfig: parsed.metadata?.dashboardConfig,
+            sectorParams: parsed.metadata?.sectorParams,
+            signal,
+            strictPersistence: true,
+            onProgress: (p) => reportProgress(p),
+          });
 
-      const actionLabel =
-        mode === 'new'
-          ? 'Nova planilha de exemplo criada e aberta!'
-          : mode === 'replace'
-          ? 'Planilha atual substituída pelo exemplo!'
-          : 'Linhas de exemplo acumuladas na planilha atual!';
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Preparando e abrindo planilha de exemplo...',
+            percent: 100,
+          });
 
-      showTemporaryFeedback(`🎉 ${actionLabel}`);
-      setTimeout(() => {
-        onClose();
-      }, 650);
-    } catch (err: any) {
-      Alert.alert(
-        'Erro ao carregar exemplo',
-        err?.message || 'Não foi possível importar a planilha de exemplo.'
+          const actionLabel =
+            mode === 'new'
+              ? 'Nova planilha de exemplo criada e aberta!'
+              : mode === 'replace'
+              ? 'Planilha atual substituída pelo exemplo!'
+              : 'Linhas de exemplo acumuladas na planilha atual!';
+
+          showTemporaryFeedback(`✅ ${actionLabel}`);
+          return {
+            result: true,
+            summary: `${parsed.rows.length} lançamentos fictícios do modelo "${selectedProfile.shortTitle}" carregados.`,
+          };
+        }
       );
     } finally {
       setIsBusy(false);
@@ -182,12 +226,15 @@ export function ExampleCSVGalleryModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={visible && importPipeline.state.status === 'idle'}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (importPipeline.state.status === 'idle') onClose();
+        }}
+      >
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
           {/* Header */}
@@ -236,54 +283,23 @@ export function ExampleCSVGalleryModal({
             )}
           </View>
 
-          {/* Profile Selector Strip */}
+          {/* Profile Selector (Combobox Vertical Pesquisável) */}
           <View style={styles.selectorWrapper}>
-            <Text style={styles.sectionLabel}>
-              ESCOLHA O PERFIL DE REFERÊNCIA ({EXAMPLE_CSV_PROFILES.length} MODELOS PRONTOS):
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.profileStrip}
-            >
-              {EXAMPLE_CSV_PROFILES.map((profile) => {
-                const isSelected = profile.id === selectedProfile.id;
-                return (
-                  <TouchableOpacity
-                    key={profile.id}
-                    style={[
-                      styles.profileChip,
-                      isSelected && {
-                        borderColor: profile.accentColor,
-                        backgroundColor: `${profile.accentColor}22`,
-                      },
-                    ]}
-                    onPress={() => setSelectedId(profile.id)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.profileChipEmoji}>{profile.emoji}</Text>
-                    <View>
-                      <Text
-                        style={[
-                          styles.profileChipCode,
-                          isSelected && { color: profile.accentColor },
-                        ]}
-                      >
-                        MODELO #{profile.code}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.profileChipTitle,
-                          isSelected && styles.profileChipTitleActive,
-                        ]}
-                      >
-                        {profile.shortTitle}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            <SearchableVerticalFilter
+              label={`Perfil de Referência (${EXAMPLE_CSV_PROFILES.length} Modelos Prontos)`}
+              testID="example-gallery-profile-filter"
+              placeholder="🔍 Buscar modelo por profissão, código ou ramo..."
+              selectedId={selectedProfile.id}
+              allowClear={false}
+              onSelect={(id) => setSelectedId(id)}
+              options={EXAMPLE_CSV_PROFILES.map((profile) => ({
+                id: profile.id,
+                label: `${profile.emoji} ${profile.shortTitle}`,
+                badge: `MODELO #${profile.code}`,
+                dotColor: profile.accentColor,
+                keywords: [profile.code, profile.shortTitle, profile.id],
+              }))}
+            />
           </View>
 
           {/* Feedback Toast inside Modal */}
@@ -720,6 +736,20 @@ export function ExampleCSVGalleryModal({
         </View>
       </View>
     </Modal>
+
+    <ImportProgressModal
+      state={importPipeline.state}
+      technicalReport={importPipeline.technicalReport}
+      onCancel={importPipeline.cancelImport}
+      onResolveWarning={importPipeline.resolveWarningReview}
+      onDismiss={importPipeline.dismiss}
+      onOpenTable={() => {
+        importPipeline.dismiss();
+        onClose();
+        onImportedCloseAll?.();
+      }}
+    />
+  </>
   );
 }
 
@@ -765,9 +795,9 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: 22,
     backgroundColor: '#1E293B',
     alignItems: 'center',
     justifyContent: 'center',

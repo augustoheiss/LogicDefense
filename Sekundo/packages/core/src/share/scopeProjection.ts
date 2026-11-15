@@ -106,6 +106,33 @@ function getMergedNodeMeta(entry: FlatSkeletonEntry & { attributes?: Record<stri
 }
 
 const NUMERIC_PATH_KEY_RE = /^\d+(-\d+)*$/;
+const ISO_WEEK_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Extracts a canonical ISO week/session date (`YYYY-MM-DD`) from a skeleton node's metadata.
+ */
+export function extractNodeWeekIsoDate(
+  entry: FlatSkeletonEntry & { attributes?: Record<string, any> }
+): string {
+  const meta = getMergedNodeMeta(entry);
+  return String(meta.sessionDate || meta.date || meta.week || '').trim();
+}
+
+/**
+ * Collects unique sorted ISO week/session dates (`YYYY-MM-DD`) present in a skeleton array.
+ */
+export function extractAvailableWeekDates(
+  entries: FlatSkeletonEntry[] | undefined | null
+): string[] {
+  const weeks = new Set<string>();
+  for (const entry of entries || []) {
+    const dateStr = extractNodeWeekIsoDate(entry);
+    if (ISO_WEEK_DATE_RE.test(dateStr)) {
+      weeks.add(dateStr);
+    }
+  }
+  return Array.from(weeks).sort();
+}
 
 function matchesKeyPrefix(nodeKey: string, prefix: string): boolean {
   const cleanPrefix = (prefix || '').trim();
@@ -140,7 +167,7 @@ function matchesScopeEntry(
   const kind = scope.kind;
 
   if (kind === 'weeks') {
-    const dateVal = String(meta.date || meta.week || '').trim();
+    const dateVal = extractNodeWeekIsoDate(entry);
     return cleanPrefixes.some(
       (w) =>
         dateVal === w ||

@@ -12,7 +12,7 @@
  * - 100% sovereign & local-first (OpenStreetMap & Leaflet with ZERO paid API keys)
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -63,6 +63,7 @@ import {
   buildTerritoryModelCsvText,
   formatShareAddressLocationText,
   formatShareTerritoryOrQuadraLocationsText,
+  yieldToUiFrame,
 } from '@sekundo/core';
 import type {
   FlatSkeletonEntry,
@@ -113,6 +114,12 @@ import {
   saveRoutingPrivacyMode,
   type PaperMapOverlayConfig,
 } from '../storage/omniStorageBridge';
+import {
+  pickBrowserSpreadsheetFile,
+  useSekundoImportPipeline,
+} from '../hooks/useSekundoImportPipeline';
+import { SekundoImportModal } from '../components/csv/SekundoImportModal';
+import { SearchableVerticalFilter } from '../components/ui/SearchableVerticalFilter';
 import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
 
 const BUFFER_OPTIONS_METERS = [-5, 0, 3, 6, 10, 20, 40];
@@ -206,6 +213,8 @@ export default function TerritoryMapScreen() {
     saveSkeleton,
     loading,
   } = useSkeleton(eventId);
+  const importPipeline = useSekundoImportPipeline();
+  const lastGeoJsonQuadraKeyRef = useRef<string | null>(null);
   const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[]>([]);
   useEffect(() => {
     let mounted = true;
@@ -1355,61 +1364,168 @@ export default function TerritoryMapScreen() {
     URL.revokeObjectURL(url);
   };
 
-  // Import Quadra boundary from a .geojson file (hardened: max 2MB, max 2000 vertices, valid coords & non-self-intersecting)
-  const handleImportQuadraGeoJSON = (quadraKey: string) => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.geojson,.json,application/geo+json,application/json';
-    input.onchange = async (e: any) => {
-      const file = e.target?.files?.[0];
-      if (!file || file.size > 2 * 1024 * 1024) return;
-      try {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        const geom =
-          parsed.type === 'FeatureCollection'
-            ? parsed.features?.[0]?.geometry
-            : parsed.type === 'Feature'
-            ? parsed.geometry
-            : parsed;
-        const rawRing = geom?.type === 'Polygon' ? geom.coordinates?.[0] : geom?.type === 'MultiPolygon' ? geom.coordinates?.[0]?.[0] : null;
-        if (!Array.isArray(rawRing) || rawRing.length < 3 || rawRing.length > 2000) return;
-        const latLngRing: [number, number][] = rawRing
-          .map((pt: any) => (Array.isArray(pt) && pt.length >= 2 ? ([Number(pt[1]), Number(pt[0])] as [number, number]) : null))
-          .filter((pt): pt is [number, number] =>
-            Boolean(
-              pt &&
-                Number.isFinite(pt[0]) &&
-                Number.isFinite(pt[1]) &&
-                pt[0] >= -90 &&
-                pt[0] <= 90 &&
-                pt[1] >= -180 &&
-                pt[1] <= 180
+  // Import Quadra boundary from a .geojson file (hardened: max 2MB, max 2000 vertices, valid coords & non-self-intersecting, explicit error diagnostics)
+  const handleImportQuadraGeoJSON = async (quadraKey: string) => {
+    lastGeoJsonQuadraKeyRef.current = quadraKey;
+    let trackedId: number | null = null;
+    try {
+      const outcome = await pickBrowserSpreadsheetFile({
+        accept: '.geojson,.json,application/geo+json,application/json',
+        allowXlsxBinary: false,
+        onFileSelected: async ({ fileName, sizeBytes }) => {
+          trackedId = importPipeline.beginTracking({
+            fileName,
+            sizeBytes,
+            initialStage: 'reading_file',
+            initialDetail: 'Lendo arquivo GeoJSON da quadra...',
+          });
+        },
+      });
+
+      if (outcome.kind === 'cancelled') {
+        importPipeline.dismiss();
+        return;
+      }
+
+      if (outcome.kind === 'error') {
+        const errId =
+          trackedId ??
+          importPipeline.beginTracking({
+            fileName: outcome.fileName,
+            sizeBytes: outcome.sizeBytes,
+            initialStage: 'reading_file',
+          });
+        importPipeline.failExternal(errId, outcome.error, {
+          fileName: outcome.fileName,
+          binarySignature: outcome.binarySignature,
+          stageFailed: 'reading_file',
+        });
+        return;
+      }
+
+      const picked = outcome.file;
+      await importPipeline.run(
+        {
+          fileName: picked.fileName,
+          sizeBytes: picked.sizeBytes,
+          initialStage: 'parsing_rows',
+          initialDetail: 'Validando coordenadas e polígono GeoJSON...',
+          diagnosticContext: {
+            fileName: picked.fileName,
+            detectedEncoding: picked.decoded.detectedEncoding,
+          },
+        },
+        async ({ reportProgress }) => {
+          if (picked.sizeBytes > 2 * 1024 * 1024) {
+            throw new Error(
+              `O arquivo "${picked.fileName}" ultrapassa o limite de 2 MB permitido para polígonos de quadra.`
+            );
+          }
+
+          let parsed: any;
+          try {
+            parsed = JSON.parse(picked.decoded.text);
+          } catch (jsonErr: any) {
+            throw new Error(
+              `GeoJSON inválido em "${picked.fileName}": ${jsonErr?.message || 'erro de sintaxe JSON'}`
+            );
+          }
+
+          const geom =
+            parsed?.type === 'FeatureCollection'
+              ? parsed.features?.[0]?.geometry
+              : parsed?.type === 'Feature'
+              ? parsed.geometry
+              : parsed;
+          const rawRing =
+            geom?.type === 'Polygon'
+              ? geom.coordinates?.[0]
+              : geom?.type === 'MultiPolygon'
+              ? geom.coordinates?.[0]?.[0]
+              : null;
+
+          if (!Array.isArray(rawRing) || rawRing.length < 3 || rawRing.length > 2000) {
+            throw new Error(
+              `Geometria GeoJSON inválida em "${picked.fileName}": esperado um Polygon ou MultiPolygon com 3 a 2000 vértices.`
+            );
+          }
+
+          reportProgress({
+            stage: 'validating',
+            stageLabel: 'Verificando coordenadas geográficas e fechamento do anel...',
+            processedCount: rawRing.length,
+            totalCount: rawRing.length,
+            percent: 65,
+          });
+
+          const latLngRing: [number, number][] = rawRing
+            .map((pt: any) =>
+              Array.isArray(pt) && pt.length >= 2
+                ? ([Number(pt[1]), Number(pt[0])] as [number, number])
+                : null
             )
-          );
-        // Strip duplicate closing vertex if present
-        if (
-          latLngRing.length > 3 &&
-          Math.abs(latLngRing[0][0] - latLngRing[latLngRing.length - 1][0]) < 1e-7 &&
-          Math.abs(latLngRing[0][1] - latLngRing[latLngRing.length - 1][1]) < 1e-7
-        ) {
-          latLngRing.pop();
-        }
-        const check = validateBoundary(latLngRing, []);
-        if (check.ok) {
+            .filter((pt): pt is [number, number] =>
+              Boolean(
+                pt &&
+                  Number.isFinite(pt[0]) &&
+                  Number.isFinite(pt[1]) &&
+                  pt[0] >= -90 &&
+                  pt[0] <= 90 &&
+                  pt[1] >= -180 &&
+                  pt[1] <= 180
+              )
+            );
+
+          if (
+            latLngRing.length > 3 &&
+            Math.abs(latLngRing[0][0] - latLngRing[latLngRing.length - 1][0]) < 1e-7 &&
+            Math.abs(latLngRing[0][1] - latLngRing[latLngRing.length - 1][1]) < 1e-7
+          ) {
+            latLngRing.pop();
+          }
+
+          const check = validateBoundary(latLngRing, []);
+          if (!check.ok) {
+            throw new Error(
+              `Polígono da quadra rejeitado na validação topológica (autointerseção ou área inválida).`
+            );
+          }
+
+          reportProgress({
+            stage: 'saving_storage',
+            stageLabel: 'Gravando contorno da quadra no mapa...',
+            percent: 88,
+          });
+
           await upsertQuadraMeta(quadraKey, (meta) => {
             meta.boundaryPolygon = roundRing(latLngRing);
             meta.boundarySource = 'imported';
             meta.bufferMeters = 0;
             return meta;
           });
+
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Atualizando contorno da quadra no mapa...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+
+          return {
+            result: latLngRing.length,
+            summary: `Contorno GeoJSON com ${latLngRing.length} vértice(s) aplicado na quadra "${quadraKey}".`,
+          };
         }
-      } catch {
-        // Ignore malformed GeoJSON
-      }
-    };
-    input.click();
+      );
+    } catch (err) {
+      const errId =
+        trackedId ??
+        importPipeline.beginTracking({
+          fileName: 'quadra.geojson',
+          initialStage: 'reading_file',
+        });
+      importPipeline.failExternal(errId, err, { stageFailed: 'reading_file' });
+    }
   };
 
   const handleAddPerimeterStreet = async (quadraKey: string, newStreet: string) => {
@@ -1710,71 +1826,50 @@ export default function TerritoryMapScreen() {
                 );
               })}
             </View>
-            <Text style={styles.customSubLabel}>Selecionar Território:</Text>
-            <ScrollView style={{ maxHeight: 110 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-              <Pressable
-                onPress={() => {
-                  setSelectedTerritory('all');
-                  requestFit();
-                }}
-                style={[
-                  styles.territoryChip,
-                  selectedTerritory === 'all' && styles.territoryChipActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.territoryChipText,
-                    selectedTerritory === 'all' && styles.territoryChipTextActive,
-                  ]}
-                >
-                  🌐 Todos ({allPins.length})
-                </Text>
-              </Pressable>
-              {territoryList.map((tNum) => {
-                const active = selectedTerritory === tNum;
-                const color = territoryColorMap[tNum] || '#3B82F6';
-                const count = allPins.filter((p) => p.territoryNumber === tNum).length;
-                const recencyInfo = recencyMap[tNum];
-                let recencyBadgeText = '';
-                if (recencyInfo && recencyInfo.totalUnits > 0) {
-                  if (recencyInfo.isCompleted) {
-                    if (
-                      recencyInfo.daysSinceCompleted !== null &&
-                      recencyInfo.daysSinceCompleted !== undefined
-                    ) {
+            <SearchableVerticalFilter
+              label="Selecionar Território"
+              testID="territory-map-territory-filter"
+              placeholder="🔍 Digite nº, bairro ou toque p/ abrir lista de territórios..."
+              selectedId={selectedTerritory}
+              clearValueId="all"
+              onSelect={(id) => {
+                setSelectedTerritory(id || 'all');
+                requestFit();
+              }}
+              options={[
+                {
+                  id: 'all',
+                  label: `Todos os Territórios (${allPins.length} end.)`,
+                  badge: `${territoryList.length}`,
+                  pinned: true,
+                  keywords: ['todos', 'all', 'geral'],
+                },
+                ...territoryList.map((tNum) => {
+                  const color = territoryColorMap[tNum] || '#3B82F6';
+                  const count = allPins.filter((p) => p.territoryNumber === tNum).length;
+                  const recencyInfo = recencyMap[tNum];
+                  let recencyBadgeText = `${count}`;
+                  if (recencyInfo && recencyInfo.totalUnits > 0) {
+                    if (recencyInfo.isCompleted) {
                       recencyBadgeText =
-                        recencyInfo.daysSinceCompleted === 0
-                          ? ' • 0d'
-                          : ` • ${recencyInfo.daysSinceCompleted}d`;
+                        recencyInfo.daysSinceCompleted !== null &&
+                        recencyInfo.daysSinceCompleted !== undefined
+                          ? `${count} • ${recencyInfo.daysSinceCompleted}d`
+                          : `${count} • 100%`;
                     } else {
-                      recencyBadgeText = ' • 100%';
+                      recencyBadgeText = `${count} • ${recencyInfo.percent}%`;
                     }
-                  } else {
-                    recencyBadgeText = ` • ${recencyInfo.percent}%`;
                   }
-                }
-                return (
-                  <Pressable
-                    key={tNum}
-                    onPress={() => {
-                      setSelectedTerritory(tNum);
-                      requestFit();
-                    }}
-                    style={[
-                      styles.territoryChip,
-                      active && { backgroundColor: `${color}25`, borderColor: color },
-                    ]}
-                  >
-                    <View style={[styles.colorDot, { backgroundColor: color }]} />
-                    <Text style={[styles.territoryChipText, active && { color }]}>
-                      {tNum} ({count}
-                      {recencyBadgeText})
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                  return {
+                    id: tNum,
+                    label: `Território ${tNum}`,
+                    badge: recencyBadgeText,
+                    dotColor: color,
+                    keywords: [tNum, recencyBadgeText],
+                  };
+                }),
+              ]}
+            />
           </View>
         ),
       },
@@ -2980,32 +3075,30 @@ export default function TerritoryMapScreen() {
                 <Text style={styles.quadraCustomTitle}>🎨 PERSONALIZAÇÃO DA QUADRA</Text>
 
                 {/* Color Selector */}
-                <Text style={styles.customSubLabel}>Cor do Polígono:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quadraColorScroll}>
-                  <Pressable
-                    onPress={() => handleUpdateQuadraColor(selectedQuadra.key, null)}
-                    style={[
-                      styles.quadraColorChip,
-                      !selectedQuadra.customColor && styles.quadraColorChipActive,
-                    ]}
-                  >
-                    <Text style={styles.quadraColorChipText}>🔄 Auto</Text>
-                  </Pressable>
-                  {COLOR_PALETTE.map((c) => {
-                    const active = selectedQuadra.customColor === c;
-                    return (
-                      <Pressable
-                        key={c}
-                        onPress={() => handleUpdateQuadraColor(selectedQuadra.key, c)}
-                        style={[
-                          styles.quadraColorDot,
-                          { backgroundColor: c },
-                          active && styles.quadraColorDotActive,
-                        ]}
-                      />
-                    );
-                  })}
-                </ScrollView>
+                <SearchableVerticalFilter
+                  label="Cor do Polígono"
+                  testID="territory-map-quadra-color-filter"
+                  placeholder="🎨 Buscar cor ou toque para listar paleta..."
+                  selectedId={selectedQuadra.customColor || 'auto'}
+                  clearValueId="auto"
+                  onSelect={(id) =>
+                    handleUpdateQuadraColor(selectedQuadra.key, id === 'auto' ? null : id)
+                  }
+                  options={[
+                    {
+                      id: 'auto',
+                      label: '🔄 Automático (Cor Padrão do Território)',
+                      pinned: true,
+                      keywords: ['auto', 'padrao', 'reset'],
+                    },
+                    ...COLOR_PALETTE.map((c, idx) => ({
+                      id: c,
+                      label: `Cor #${idx + 1} (${c})`,
+                      dotColor: c,
+                      keywords: [c, `cor ${idx + 1}`],
+                    })),
+                  ]}
+                />
 
                 {/* Buffer selector, in meters */}
                 <Text style={[styles.customSubLabel, { marginTop: 10 }]}>
@@ -3717,6 +3810,28 @@ export default function TerritoryMapScreen() {
         flatRegistry={flatRegistry}
         onClose={() => setShowDeltaSyncModal(false)}
         onSyncApplied={handleDeltaSyncApplied}
+      />
+
+      <SekundoImportModal
+        state={importPipeline.state}
+        technicalReport={importPipeline.technicalReport}
+        onCancel={importPipeline.cancelImport}
+        onResolveWarning={importPipeline.resolveWarningReview}
+        onRetry={
+          lastGeoJsonQuadraKeyRef.current
+            ? () => {
+                const targetKey = lastGeoJsonQuadraKeyRef.current;
+                importPipeline.dismiss();
+                if (targetKey) {
+                  handleImportQuadraGeoJSON(targetKey);
+                }
+              }
+            : undefined
+        }
+        onDismiss={() => {
+          lastGeoJsonQuadraKeyRef.current = null;
+          importPipeline.dismiss();
+        }}
       />
     </SafeAreaView>
   );

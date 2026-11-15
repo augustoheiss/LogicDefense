@@ -28,6 +28,7 @@ import {
   RealInvestmentsChart,
   DebtTrackingList,
 } from '@coin/components/charts';
+import { SearchableVerticalFilter } from '@coin/components/ui/SearchableVerticalFilter';
 
 type ChartView = 'builder' | 'projection' | 'audit' | 'revenue' | 'evolution';
 
@@ -78,35 +79,21 @@ export default function ChartsScreen() {
         </View>
       </View>
 
-      {/* Segmented Control Navigation */}
-      <View style={styles.navWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.segmentContainer}
-        >
-          {tabs.map((tab) => (
-            <Pressable
-              key={tab.key}
-              style={[
-                styles.segment,
-                activeView === tab.key && styles.segmentActive,
-              ]}
-              onPress={() => setActiveView(tab.key)}
-              testID={`charts-lens-${tab.key}`}
-            >
-              <Text style={styles.segmentIcon}>{tab.icon}</Text>
-              <Text
-                style={[
-                  styles.segmentLabel,
-                  activeView === tab.key && styles.segmentLabelActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+      {/* Combobox Vertical Pesquisável de Lente Analítica */}
+      <View style={[styles.navWrapper, { paddingHorizontal: spacing.md, paddingVertical: spacing.xs }]}>
+        <SearchableVerticalFilter
+          label="Lente Analítica"
+          testID="charts-lens-vertical-filter"
+          placeholder="🔍 Buscar lente gráfica (Construtor, Projeção, Auditoria...)..."
+          selectedId={activeView}
+          allowClear={false}
+          onSelect={(id) => setActiveView(id as ChartView)}
+          options={tabs.map((tab) => ({
+            id: tab.key,
+            label: `${tab.icon} ${tab.label}`,
+            keywords: [tab.label, tab.key],
+          }))}
+        />
       </View>
 
       {/* Main Content */}

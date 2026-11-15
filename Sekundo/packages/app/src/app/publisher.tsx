@@ -76,6 +76,7 @@ import {
   shareLocationPayload,
 } from '../storage/omniStorageBridge';
 import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
+import { SearchableVerticalFilter } from '../components/ui/SearchableVerticalFilter';
 
 function extractNumericHouseNumber(numStr?: string): number | null {
   if (!numStr) return null;
@@ -695,47 +696,36 @@ export default function PublisherModeScreen() {
           </View>
         </View>
 
-        {/* Territory Selector Chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.territoryRow}
-        >
-          {territoryList.map((tNum) => {
-            const active = tNum === effectiveTerritory;
-            const tName = resolveTerritoryNameFromNodes(flatRegistry, tNum);
-            return (
-              <Pressable
-                key={tNum}
-                testID={`publisher-territory-chip-${tNum}`}
-                onPress={() => {
-                  setActiveTerritory(tNum);
-                  setFitRequest((n) => n + 1);
-                }}
-                style={[
-                  styles.territoryChip,
-                  daylightMode && styles.btnDaylight,
-                  active && styles.territoryChipActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.territoryChipText,
-                    daylightMode && styles.textDaylight,
-                    active && styles.territoryChipTextActive,
-                  ]}
-                >
-                  Território {tNum}{tName ? ` • ${tName}` : ''}
-                </Text>
-              </Pressable>
-            );
-          })}
+        {/* Territory Selector (Combobox Vertical Pesquisável + New Action) */}
+        <View style={{ paddingHorizontal: 14, paddingVertical: 8, gap: 8 }}>
+          <SearchableVerticalFilter
+            label="Território Ativo"
+            testID="publisher-territory-filter"
+            placeholder="🔍 Digite o nº ou bairro do território, ou clique p/ abrir todos..."
+            selectedId={effectiveTerritory}
+            allowClear={false}
+            onSelect={(id) => {
+              setActiveTerritory(id);
+              setFitRequest((n) => n + 1);
+            }}
+            options={territoryList.map((tNum) => {
+              const tName = resolveTerritoryNameFromNodes(flatRegistry, tNum);
+              return {
+                id: tNum,
+                label: `Território ${tNum}${tName ? ` • ${tName}` : ''}`,
+                keywords: [tNum, tName || ''],
+              };
+            })}
+          />
           <Pressable
             testID="publisher-add-territory-chip"
             onPress={() => openTerritoryManager('new_territory')}
             style={[
               styles.territoryChip,
               {
+                alignSelf: 'flex-start',
+                minHeight: 44,
+                justifyContent: 'center',
                 backgroundColor: 'rgba(16, 185, 129, 0.14)',
                 borderColor: 'rgba(16, 185, 129, 0.45)',
               },
@@ -745,7 +735,7 @@ export default function PublisherModeScreen() {
               ➕ Novo Território
             </Text>
           </Pressable>
-        </ScrollView>
+        </View>
 
         {/* Big Progress & Assignment Banner */}
         <View style={styles.progressBanner}>
