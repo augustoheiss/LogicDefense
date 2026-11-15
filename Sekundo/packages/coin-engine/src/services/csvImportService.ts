@@ -25,7 +25,16 @@ const isWebPlatform = Platform.OS === 'web' || (typeof window !== 'undefined' &&
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
-import { parseCSVText } from '../utils/csvEngine';
+import { parseCSVText, parseCSVTextAsync } from '../utils/csvEngine';
+import {
+  type AsyncImportControllerOptions,
+  type BinarySpreadsheetSignature,
+  type ImportDiagnosticIssue,
+  decodeBase64ToUint8Array,
+  decodeSpreadsheetBytesSmart,
+  mapImportErrorToDiagnostics,
+  throwIfImportAborted,
+} from './importPipelineContract';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,7 +97,92 @@ const VALID_ENTRY_TYPES = new Set([
 
 // ── File Picker ──────────────────────────────────────────────────────────────
 
-export function pickCSVFile(): Promise<string | null> {
+export interface SelectedSpreadsheetFileMeta {
+  fileName: string;
+  sizeBytes?: number;
+}
+
+export type PickCSVFileOutcome =
+  | { kind: 'cancelled' }
+  | {
+      kind: 'ok';
+      fileName: string;
+      sizeBytes?: number;
+      text: string;
+      detectedEncoding: 'utf-8' | 'utf-8-bom' | 'windows-1252' | 'utf-16le' | 'utf-16be';
+      encodingHadReplacementChars: boolean;
+      binarySignature: BinarySpreadsheetSignature;
+    }
+  | {
+      kind: 'error';
+      fileName?: string;
+      sizeBytes?: number;
+      binarySignature?: BinarySpreadsheetSignature;
+      rawError: unknown;
+      diagnostic: ImportDiagnosticIssue;
+    };
+
+export interface PickCSVFileOptions {
+  onFileSelected?: (meta: SelectedSpreadsheetFileMeta) => void | Promise<void>;
+}
+
+function finalizePickedBytes(
+  bytes: Uint8Array,
+  fileName: string,
+  sizeBytes?: number
+): PickCSVFileOutcome {
+  if (!bytes || bytes.length === 0) {
+    return {
+      kind: 'error',
+      fileName,
+      sizeBytes,
+      rawError: new Error('Arquivo vazio (0 bytes).'),
+      diagnostic: mapImportErrorToDiagnostics('O arquivo selecionado está vazio (0 bytes).', {
+        fileName,
+        stageFailed: 'reading_file',
+      })[0],
+    };
+  }
+
+  const decoded = decodeSpreadsheetBytesSmart(bytes);
+  if (
+    decoded.binarySignature === 'zip_or_xlsx' ||
+    decoded.binarySignature === 'ole2_xls' ||
+    decoded.binarySignature === 'pdf' ||
+    decoded.binarySignature === 'unknown_binary'
+  ) {
+    const diag = mapImportErrorToDiagnostics(
+      `Formato binário incompatível detectado (${decoded.binarySignature}).`,
+      {
+        fileName,
+        binarySignature: decoded.binarySignature,
+        stageFailed: 'decoding',
+      }
+    )[0];
+    return {
+      kind: 'error',
+      fileName,
+      sizeBytes,
+      binarySignature: decoded.binarySignature,
+      rawError: new Error(diag.explanation),
+      diagnostic: diag,
+    };
+  }
+
+  return {
+    kind: 'ok',
+    fileName,
+    sizeBytes,
+    text: decoded.text,
+    detectedEncoding: decoded.detectedEncoding,
+    encodingHadReplacementChars: decoded.hadReplacementChars,
+    binarySignature: decoded.binarySignature,
+  };
+}
+
+export async function pickCSVFileWithResult(
+  options: PickCSVFileOptions = {}
+): Promise<PickCSVFileOutcome> {
   // Web: native HTML5 file picker ensures direct browser gesture activation
   if (typeof document !== 'undefined' && isWebPlatform) {
     return new Promise((resolve) => {
@@ -101,55 +195,122 @@ export function pickCSVFile(): Promise<string | null> {
       input.style.opacity = '0';
 
       let settled = false;
+      let focusTimer: ReturnType<typeof setTimeout> | null = null;
 
       const cleanup = () => {
+        if (focusTimer) {
+          clearTimeout(focusTimer);
+          focusTimer = null;
+        }
+        window.removeEventListener('focus', onWindowFocus);
         if (input.parentNode) {
           input.parentNode.removeChild(input);
         }
       };
 
-      const finish = (result: string | null) => {
+      const finish = (outcome: PickCSVFileOutcome) => {
         if (!settled) {
           settled = true;
           cleanup();
-          resolve(result);
+          resolve(outcome);
         }
       };
 
       input.onchange = async () => {
+        if (focusTimer) {
+          clearTimeout(focusTimer);
+          focusTimer = null;
+        }
+        let chosenFileName = 'planilha.csv';
+        let chosenFileSize: number | undefined;
         try {
           if (!input.files || input.files.length === 0) {
-            finish(null);
+            finish({ kind: 'cancelled' });
             return;
           }
           const file = input.files[0];
-          if (typeof file.text === 'function') {
+          chosenFileName = file.name || 'planilha.csv';
+          chosenFileSize = typeof file.size === 'number' ? file.size : undefined;
+
+          // Notify UI immediately BEFORE reading potentially large file bytes
+          await options.onFileSelected?.({
+            fileName: chosenFileName,
+            sizeBytes: chosenFileSize,
+          });
+
+          if (typeof file.arrayBuffer === 'function') {
+            const buf = await file.arrayBuffer();
+            finish(finalizePickedBytes(new Uint8Array(buf), chosenFileName, chosenFileSize));
+          } else if (typeof file.text === 'function') {
             const content = await file.text();
-            finish(content);
+            finish({
+              kind: 'ok',
+              fileName: chosenFileName,
+              sizeBytes: chosenFileSize,
+              text: content,
+              detectedEncoding: 'utf-8',
+              encodingHadReplacementChars: content.includes('\uFFFD'),
+              binarySignature: null,
+            });
           } else {
             const reader = new FileReader();
             reader.onload = (e) => {
-              finish((e.target?.result as string) || null);
+              const result = e.target?.result;
+              if (result instanceof ArrayBuffer) {
+                finish(finalizePickedBytes(new Uint8Array(result), chosenFileName, chosenFileSize));
+              } else {
+                const txt = String(result || '');
+                finish({
+                  kind: 'ok',
+                  fileName: chosenFileName,
+                  sizeBytes: chosenFileSize,
+                  text: txt,
+                  detectedEncoding: 'utf-8',
+                  encodingHadReplacementChars: txt.includes('\uFFFD'),
+                  binarySignature: null,
+                });
+              }
             };
-            reader.onerror = () => finish(null);
-            reader.readAsText(file, 'UTF-8');
+            reader.onerror = (readErr) => {
+              const diag = mapImportErrorToDiagnostics(
+                readErr instanceof Error ? readErr : new Error('Erro ao ler arquivo no navegador.'),
+                { fileName: chosenFileName, stageFailed: 'reading_file' }
+              )[0];
+              finish({
+                kind: 'error',
+                fileName: chosenFileName,
+                sizeBytes: chosenFileSize,
+                rawError: readErr,
+                diagnostic: diag,
+              });
+            };
+            reader.readAsArrayBuffer(file);
           }
         } catch (err) {
           console.error('Erro ao ler arquivo CSV na web:', err);
-          finish(null);
+          const diag = mapImportErrorToDiagnostics(err, {
+            fileName: chosenFileName,
+            stageFailed: 'reading_file',
+          })[0];
+          finish({
+            kind: 'error',
+            fileName: chosenFileName,
+            sizeBytes: chosenFileSize,
+            rawError: err,
+            diagnostic: diag,
+          });
         }
       };
 
       input.oncancel = () => {
-        finish(null);
+        finish({ kind: 'cancelled' });
       };
 
       // Fallback: window focus listener in case file picker was closed without event
       const onWindowFocus = () => {
-        window.removeEventListener('focus', onWindowFocus);
-        setTimeout(() => {
+        focusTimer = setTimeout(() => {
           if (!settled && (!input.files || input.files.length === 0)) {
-            finish(null);
+            finish({ kind: 'cancelled' });
           }
         }, 800);
       };
@@ -161,27 +322,66 @@ export function pickCSVFile(): Promise<string | null> {
   }
 
   // Native (iOS / Android) via DocumentPicker & FileSystem
-  return (async () => {
+  let pickedName = 'planilha.csv';
+  let pickedSize: number | undefined;
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', '*/*'],
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return { kind: 'cancelled' };
+    }
+
+    const asset = result.assets[0];
+    pickedName = asset.name || 'planilha.csv';
+    pickedSize = typeof asset.size === 'number' ? asset.size : undefined;
+
+    await options.onFileSelected?.({
+      fileName: pickedName,
+      sizeBytes: pickedSize,
+    });
+
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', '*/*'],
-        copyToCacheDirectory: true,
+      const b64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return null;
-      }
-
-      const asset = result.assets[0];
+      const bytes = decodeBase64ToUint8Array(b64);
+      return finalizePickedBytes(bytes, pickedName, pickedSize);
+    } catch {
       const content = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: FileSystem.EncodingType.UTF8,
       });
-      return content;
-    } catch (error: any) {
-      console.error('CSV pick error:', error);
-      return null;
+      return {
+        kind: 'ok',
+        fileName: pickedName,
+        sizeBytes: pickedSize,
+        text: content,
+        detectedEncoding: 'utf-8',
+        encodingHadReplacementChars: content.includes('\uFFFD'),
+        binarySignature: null,
+      };
     }
-  })();
+  } catch (error: any) {
+    console.error('CSV pick error:', error);
+    const diag = mapImportErrorToDiagnostics(error, {
+      fileName: pickedName,
+      stageFailed: 'reading_file',
+    })[0];
+    return {
+      kind: 'error',
+      fileName: pickedName,
+      sizeBytes: pickedSize,
+      rawError: error,
+      diagnostic: diag,
+    };
+  }
+}
+
+export async function pickCSVFile(): Promise<string | null> {
+  const outcome = await pickCSVFileWithResult();
+  return outcome.kind === 'ok' ? outcome.text : null;
 }
 
 // ── Parser ───────────────────────────────────────────────────────────────────
@@ -200,6 +400,28 @@ export function parseCSV(raw: string): CSVImportResult {
     backupGoals: parsed.metadata?.tableGoals,
     schema: parsed.metadata?.schema,
     investorProfile: parsed.metadata?.investorProfile,
+  };
+}
+
+export async function parseCSVAsync(
+  raw: string,
+  controllerOptions: AsyncImportControllerOptions = {}
+): Promise<CSVImportResult & { detectedHeaders?: string[] }> {
+  throwIfImportAborted(controllerOptions.signal);
+  const parsed = await parseCSVTextAsync(raw, undefined, controllerOptions);
+  return {
+    success: parsed.rows.length > 0,
+    rows: parsed.rows as TableRow[],
+    totalParsed: parsed.rows.length,
+    skippedLines: parsed.skippedCount,
+    errors: parsed.errors,
+    isBackupV2: true,
+    backupName: parsed.metadata?.name,
+    backupDescription: parsed.metadata?.description,
+    backupGoals: parsed.metadata?.tableGoals,
+    schema: parsed.metadata?.schema,
+    investorProfile: parsed.metadata?.investorProfile,
+    detectedHeaders: parsed.detectedHeaders,
   };
 }
 

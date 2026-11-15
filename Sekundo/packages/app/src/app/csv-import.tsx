@@ -37,13 +37,16 @@ import {
   generateOmniMasterSampleCsv,
   exportSingleEngineSampleCsv,
   isOmniCsvText,
-  importOmniCsvBundle,
-  importTerritoryMultiFormat,
+  importOmniCsvBundleAsync,
+  importTerritoryMultiFormatAsync,
   stripSampleTerritorySeedNodes,
   selectEnginePartitionNodes,
   getActiveEngines,
   groupCoinLedgerRowsByTable,
   getEffectiveCapabilityColumns,
+  ImportCancelledError,
+  mapImportErrorToDiagnostics,
+  yieldToUiFrame,
   type CSVDiffResult,
   type CSVRow,
   type EngineId,
@@ -61,6 +64,11 @@ import {
 } from '../storage/omniStorageBridge';
 import { deliverFile } from '../utils/deliverFile';
 import { TerritoryMultiFormatButtons } from '../components/territory/TerritoryMultiFormatButtons';
+import {
+  pickBrowserSpreadsheetFile,
+  useSekundoImportPipeline,
+} from '../hooks/useSekundoImportPipeline';
+import { SekundoImportModal } from '../components/csv/SekundoImportModal';
 
 const ENGINE_ICONS: Record<string, string> = {
   territory_logistics: '🗺️',
@@ -110,6 +118,7 @@ export default function CSVImport() {
   const [detectionReport, setDetectionReport] = useState<EngineDetectionReport | null>(null);
   const [activeTemplateEngine, setActiveTemplateEngine] =
     useState<EngineId>('roster_assignments');
+  const importPipeline = useSekundoImportPipeline<string>();
 
   const allTemplates = listEngineTemplates();
   const currentTemplate = getEngineTemplate(activeTemplateEngine);
@@ -176,36 +185,87 @@ export default function CSVImport() {
     setStatusMessage(`📥 Modelo "${filename}" baixado!`);
   };
 
-  const handlePickCsvFile = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv,.xlsx,.kml,.geojson,.json';
-      input.onchange = async (e: any) => {
-        const file = e.target?.files?.[0];
-        if (!file) return;
-        const lowerName = file.name.toLowerCase();
+  const handlePickCsvFile = async () => {
+    let trackedId: number | null = null;
+    try {
+      const outcome = await pickBrowserSpreadsheetFile({
+        accept: '.csv,.xlsx,.kml,.geojson,.json',
+        allowXlsxBinary: true,
+        onFileSelected: async ({ fileName, sizeBytes }) => {
+          trackedId = importPipeline.beginTracking({
+            fileName,
+            sizeBytes,
+            initialStage: 'reading_file',
+            initialDetail: 'Lendo arquivo e verificando assinatura e codificação...',
+          });
+        },
+      });
 
-        // Handle .xlsx, .kml, .geojson, or .json territory files directly via importTerritoryMultiFormat
-        if (
-          lowerName.endsWith('.xlsx') ||
-          lowerName.endsWith('.kml') ||
-          lowerName.endsWith('.geojson') ||
-          lowerName.endsWith('.json')
-        ) {
-          try {
-            const bytes = lowerName.endsWith('.xlsx')
-              ? new Uint8Array(await file.arrayBuffer())
-              : undefined;
-            const text = !lowerName.endsWith('.xlsx') ? await file.text() : undefined;
-            const parsedMulti = importTerritoryMultiFormat(
+      if (outcome.kind === 'cancelled') {
+        importPipeline.dismiss();
+        return;
+      }
+
+      if (outcome.kind === 'error') {
+        const errId =
+          trackedId ??
+          importPipeline.beginTracking({
+            fileName: outcome.fileName,
+            sizeBytes: outcome.sizeBytes,
+            initialStage: 'reading_file',
+          });
+        importPipeline.failExternal(errId, outcome.error, {
+          fileName: outcome.fileName,
+          binarySignature: outcome.binarySignature,
+          stageFailed: 'reading_file',
+        });
+        return;
+      }
+
+      const picked = outcome.file;
+      const lowerName = picked.fileName.toLowerCase();
+
+      await importPipeline.run(
+        {
+          fileName: picked.fileName,
+          sizeBytes: picked.sizeBytes,
+          initialStage: 'decoding',
+          initialDetail:
+            picked.decoded.detectedEncoding === 'windows-1252'
+              ? 'Codificação ANSI/Windows-1252 convertida automaticamente para UTF-8.'
+              : 'Analisando estrutura tabular da planilha...',
+          diagnosticContext: {
+            fileName: picked.fileName,
+            binarySignature: picked.binarySignature,
+            allowXlsxBinary: true,
+            detectedEncoding: picked.decoded.detectedEncoding,
+          },
+        },
+        async ({ signal, reportProgress, requestWarningReview }) => {
+          if (
+            lowerName.endsWith('.xlsx') ||
+            lowerName.endsWith('.kml') ||
+            lowerName.endsWith('.geojson') ||
+            lowerName.endsWith('.json') ||
+            picked.binarySignature === 'zip_or_xlsx'
+          ) {
+            const parsedMulti = await importTerritoryMultiFormatAsync(
               {
-                bytes,
-                text,
-                fileName: file.name,
+                bytes: picked.binarySignature === 'zip_or_xlsx' ? picked.bytes : undefined,
+                text: picked.binarySignature === 'zip_or_xlsx' ? undefined : picked.decoded.text,
+                fileName: picked.fileName,
               },
-              { privacySafeMode: false }
+              {
+                privacySafeMode: false,
+                signal,
+                onProgress: (p) => reportProgress(p),
+              }
             );
+            if (!parsedMulti.nodes || parsedMulti.nodes.length === 0) {
+              throw new Error(
+                `Nenhum território ou endereço válido foi encontrado em "${picked.fileName}".`
+              );
+            }
             setOmniBundlePreview(null);
             setRawOmniText(null);
             setActiveTemplateEngine('territory_logistics');
@@ -229,78 +289,173 @@ export default function CSVImport() {
             setQuarantinedRows([]);
             setDiff(buildDiff(activeRegistry, rowsAsCsv));
             if (!newEventName) {
-              setNewEventName(file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
+              setNewEventName(picked.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
             }
             setStatusMessage(
-              `✅ "${file.name}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços)`
+              `✅ "${picked.fileName}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços)`
             );
-          } catch (err: any) {
-            setStatusMessage(`❌ Erro ao ler "${file.name}": ${err?.message || err}`);
+            return {
+              result: picked.fileName,
+              summary: `${parsedMulti.territoriesCount} territórios carregados para pré-visualização.`,
+              suppressSuccessModal: true,
+            };
           }
-          return;
-        }
 
-        const text = await file.text();
+          const text = picked.decoded.text;
+          if (!text.trim()) {
+            throw new Error(`O arquivo "${picked.fileName}" está vazio.`);
+          }
 
-        // Check if it is a Multi-Planilha CSV (`#PLANILHA,<engine>`) or legacy Omni-CSV
-        if (isOmniCsvText(text)) {
-          const bundle = importOmniCsvBundle(text);
-          setOmniBundlePreview(bundle);
-          setRawOmniText(text);
-          setParsedRows(null);
-          if (!newEventName) setNewEventName(`${bundle.unitName} — Geral`);
-          const effectiveCols = getEffectiveCapabilityColumns(bundle.participants);
-          const sheetsCount = bundle.presentSheets?.length || 1;
-          setStatusMessage(
-            `🌐 "${file.name}" (${sheetsCount} planilhas): ${bundle.participants.length} 👤 (${effectiveCols.length} priv.) • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️ • ${(bundle.coinLedgerRows || []).length} 🪙`
-          );
-          return;
-        }
+          if (isOmniCsvText(text)) {
+            const bundle = await importOmniCsvBundleAsync(text, {
+              signal,
+              onProgress: (p) => reportProgress(p),
+            });
+            setOmniBundlePreview(bundle);
+            setRawOmniText(text);
+            setParsedRows(null);
+            if (!newEventName) setNewEventName(`${bundle.unitName} — Geral`);
+            const effectiveCols = getEffectiveCapabilityColumns(bundle.participants);
+            const sheetsCount = bundle.presentSheets?.length || 1;
+            setStatusMessage(
+              `🌐 "${picked.fileName}" (${sheetsCount} planilhas): ${bundle.participants.length} 👤 (${effectiveCols.length} priv.) • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️ • ${(bundle.coinLedgerRows || []).length} 🪙`
+            );
+            return {
+              result: picked.fileName,
+              summary: `CSV Geral com ${sheetsCount} planilhas pronto para aplicar.`,
+              suppressSuccessModal: true,
+            };
+          }
 
-        // Standard Engine CSV (17-col canonical, 18-col external, 19-col model, or other Engine CSV)
-        setOmniBundlePreview(null);
-        setRawOmniText(null);
-        const report = detectEnginesFromCSV(text);
-        setDetectionReport(report);
-        if (report.suggestedEngines.includes('territory_logistics')) {
-          setActiveTemplateEngine('territory_logistics');
+          reportProgress({
+            stage: 'parsing_rows',
+            stageLabel: 'Detectando colunas e processando linhas...',
+            percent: 42,
+          });
+          await yieldToUiFrame();
+
+          setOmniBundlePreview(null);
+          setRawOmniText(null);
+          const report = detectEnginesFromCSV(text);
+          setDetectionReport(report);
+          if (report.suggestedEngines.includes('territory_logistics')) {
+            setActiveTemplateEngine('territory_logistics');
+          }
+          const activeRegistry = currentEvent ? stripSampleTerritorySeedNodes(flatRegistry) : [];
+          const importRes = importGranularCSV(activeRegistry, text, {
+            mode: importMode,
+            forceOverwriteState: !preserveHistory,
+          });
+
+          reportProgress({
+            stage: 'validating',
+            stageLabel: 'Validando colunas, chaves e valores...',
+            processedCount: importRes.validRows.length,
+            totalCount: importRes.validRows.length + importRes.quarantinedRows.length,
+            percent: 84,
+          });
+          await yieldToUiFrame();
+
+          if (importRes.validRows.length === 0) {
+            const qReasons = importRes.quarantinedRows
+              .slice(0, 6)
+              .map((q) => `Linha ${q.rowNumber}: ${q.reason}`)
+              .join('\n');
+            throw new Error(
+              qReasons ||
+                'Nenhuma linha válida encontrada. Verifique se a planilha possui cabeçalho válido (_key/_type ou colunas de endereço/território).'
+            );
+          }
+
+          if (importRes.quarantinedRows.length > 0) {
+            const qMessages = importRes.quarantinedRows
+              .slice(0, 8)
+              .map((q) => `Linha ${q.rowNumber}: ${q.reason}`);
+            const issues = mapImportErrorToDiagnostics(qMessages, {
+              fileName: picked.fileName,
+              stageFailed: 'validating',
+            });
+            const proceed = await requestWarningReview({
+              summary: `${importRes.validRows.length} linhas válidas prontas, mas ${importRes.quarantinedRows.length} linha(s) foram separadas na quarentena.`,
+              validCount: importRes.validRows.length,
+              skippedCount: importRes.quarantinedRows.length,
+              issues,
+            });
+            if (!proceed) {
+              throw new ImportCancelledError();
+            }
+          }
+
+          setParsedRows(importRes.validRows);
+          setQuarantinedRows(importRes.quarantinedRows);
+          setDiff(buildDiff(activeRegistry, importRes.validRows));
+          if (!newEventName) {
+            setNewEventName(picked.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
+          }
+          setStatusMessage(`✅ "${picked.fileName}" (${importRes.validRows.length} linhas)`);
+
+          return {
+            result: picked.fileName,
+            summary: `${importRes.validRows.length} linhas carregadas para revisão.`,
+            suppressSuccessModal: true,
+          };
         }
-        const activeRegistry = currentEvent ? stripSampleTerritorySeedNodes(flatRegistry) : [];
-        const importRes = importGranularCSV(activeRegistry, text, {
-          mode: importMode,
-          forceOverwriteState: !preserveHistory,
+      );
+    } catch (err) {
+      const errId =
+        trackedId ??
+        importPipeline.beginTracking({
+          fileName: 'planilha.csv',
+          initialStage: 'reading_file',
         });
-        setParsedRows(importRes.validRows);
-        setQuarantinedRows(importRes.quarantinedRows);
-        setDiff(buildDiff(activeRegistry, importRes.validRows));
-        if (!newEventName) {
-          setNewEventName(file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
-        }
-        setStatusMessage(`✅ "${file.name}" (${importRes.validRows.length} linhas)`);
-      };
-      input.click();
+      importPipeline.failExternal(errId, err, { stageFailed: 'reading_file' });
     }
   };
 
   const handleCommit = async (
     targetDestination: 'schedule' | 'territory' | 'map' | 'auto' = 'auto'
   ) => {
+    const commitTargetName =
+      newEventName.trim() ||
+      (omniBundlePreview ? `${omniBundlePreview.unitName} — Geral` : 'planilha_sekundo.csv');
+
     // 1. Commit Omni-CSV Bundle across Sekundo Hubs & Engines (only updating present Planilhas)
     if (omniBundlePreview && rawOmniText) {
-      try {
-        const { primaryEventId } = await commitOmniCsvBundleToStorage(rawOmniText, {
-          customEventName: newEventName.trim() || `${omniBundlePreview.unitName} — Geral`,
-          targetEventId: currentEvent?.config.id,
-        });
-        if (targetDestination === 'territory') {
-          router.replace(`/territory-checklist?id=${primaryEventId}` as any);
-        } else if (targetDestination === 'map') {
-          router.replace(`/territory-map?id=${primaryEventId}` as any);
-        } else {
-          router.replace(`/schedule-hub?id=${primaryEventId}` as any);
+      const routeToGo = await importPipeline.run<string>(
+        {
+          fileName: commitTargetName,
+          sizeBytes: rawOmniText.length,
+          initialStage: 'saving_storage',
+          initialDetail: 'Gravando todas as planilhas no cofre local...',
+        },
+        async ({ signal, reportProgress }) => {
+          const { primaryEventId } = await commitOmniCsvBundleToStorage(rawOmniText, {
+            customEventName: commitTargetName,
+            targetEventId: currentEvent?.config.id,
+            signal,
+            onProgress: (p) => reportProgress({ ...p, cancellable: false }),
+          });
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Abrindo workspace importado...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+          const dest =
+            targetDestination === 'territory'
+              ? `/territory-checklist?id=${primaryEventId}`
+              : targetDestination === 'map'
+              ? `/territory-map?id=${primaryEventId}`
+              : `/schedule-hub?id=${primaryEventId}`;
+          return {
+            result: dest,
+            summary: 'Planilhas aplicadas com sucesso!',
+            suppressSuccessModal: true,
+          };
         }
-      } catch (err: any) {
-        setStatusMessage(`❌ Erro ao aplicar CSV Geral: ${err?.message ?? err}`);
+      );
+      if (routeToGo) {
+        router.replace(routeToGo as any);
       }
       return;
     }
@@ -308,80 +463,115 @@ export default function CSVImport() {
     // 2. Commit Single-Engine CSV / Spreadsheet
     if (!parsedRows) return;
 
-    const engines: EngineId[] =
-      detectionReport?.suggestedEngines && detectionReport.suggestedEngines.length > 0
-        ? [...detectionReport.suggestedEngines]
-        : [activeTemplateEngine];
+    const destRoute = await importPipeline.run<string>(
+      {
+        fileName: commitTargetName,
+        initialStage: 'saving_storage',
+        initialDetail: 'Gravando registros no armazenamento local...',
+      },
+      async ({ reportProgress }) => {
+        const engines: EngineId[] =
+          detectionReport?.suggestedEngines && detectionReport.suggestedEngines.length > 0
+            ? [...detectionReport.suggestedEngines]
+            : [activeTemplateEngine];
 
-    const hasTerritoryRows =
-      engines.includes('territory_logistics') ||
-      parsedRows.some(
-        (r) =>
-          r._type === 'territory' ||
-          Boolean((r as any).territory_number) ||
-          Boolean(r._meta_json && r._meta_json.includes('territory_logistics'))
-      );
-    if (hasTerritoryRows && !engines.includes('territory_logistics')) {
-      engines.unshift('territory_logistics');
-    }
+        const hasTerritoryRows =
+          engines.includes('territory_logistics') ||
+          parsedRows.some(
+            (r) =>
+              r._type === 'territory' ||
+              Boolean((r as any).territory_number) ||
+              Boolean(r._meta_json && r._meta_json.includes('territory_logistics'))
+          );
+        if (hasTerritoryRows && !engines.includes('territory_logistics')) {
+          engines.unshift('territory_logistics');
+        }
 
-    let targetId = currentEvent?.config.id || '';
-    let updatedRegistry = [];
+        let targetId = currentEvent?.config.id || '';
+        let updatedRegistry = [];
 
-    if (currentEvent) {
-      targetId = currentEvent.config.id;
-      const rawCurrent = (await storage.loadSkeleton(targetId)) || flatRegistry || [];
-      const cleanedCurrent = hasTerritoryRows
-        ? stripSampleTerritorySeedNodes(rawCurrent)
-        : rawCurrent;
-      const upsertRes = upsertRegistry(cleanedCurrent, parsedRows, {
-        forceOverwriteState: !preserveHistory,
-        preserveUnmatchedCurrent: hasTerritoryRows ? false : true,
-      });
-      updatedRegistry = upsertRes.updatedRegistry;
-      await storage.saveSkeleton(targetId, updatedRegistry);
+        reportProgress({
+          stage: 'saving_storage',
+          stageLabel: 'Gravando esqueleto no armazenamento local...',
+          percent: 35,
+        });
 
-      // Ensure event config includes the newly imported engine(s)
-      const currentEngines = getActiveEngines(currentEvent.config);
-      const mergedEngines = Array.from(new Set([...currentEngines, ...engines])) as EngineId[];
-      await storage.saveEventState(targetId, {
-        ...currentEvent,
-        config: {
-          ...currentEvent.config,
-          activeEngines: mergedEngines,
-        },
-      });
-    } else {
-      const finalName = newEventName.trim() || 'Novo Evento Importado';
-      const newState = await addEvent(finalName, 'weekly', ['01'], engines);
-      targetId = newState.config.id;
-      const upsertRes = upsertRegistry([], parsedRows, { forceOverwriteState: true });
-      updatedRegistry = upsertRes.updatedRegistry;
-      await storage.saveSkeleton(targetId, updatedRegistry);
-    }
+        if (currentEvent) {
+          targetId = currentEvent.config.id;
+          const rawCurrent = (await storage.loadSkeleton(targetId)) || flatRegistry || [];
+          const cleanedCurrent = hasTerritoryRows
+            ? stripSampleTerritorySeedNodes(rawCurrent)
+            : rawCurrent;
+          const upsertRes = upsertRegistry(cleanedCurrent, parsedRows, {
+            forceOverwriteState: !preserveHistory,
+            preserveUnmatchedCurrent: hasTerritoryRows ? false : true,
+          });
+          updatedRegistry = upsertRes.updatedRegistry;
+          await storage.saveSkeleton(targetId, updatedRegistry);
 
-    if (hasTerritoryRows) {
-      const territoryNodes = selectEnginePartitionNodes(updatedRegistry, 'territory_logistics');
-      const effectiveTerritoryNodes =
-        territoryNodes.length > 0 ? territoryNodes : updatedRegistry;
-      await saveTerritoryRegistry(effectiveTerritoryNodes);
-      await persistTerritoryRegistryMutation({
-        eventId: targetId,
-        rawRegistry: updatedRegistry,
-        cleanTerritoryNodes: effectiveTerritoryNodes,
-      });
-    }
+          const currentEngines = getActiveEngines(currentEvent.config);
+          const mergedEngines = Array.from(new Set([...currentEngines, ...engines])) as EngineId[];
+          await storage.saveEventState(targetId, {
+            ...currentEvent,
+            config: {
+              ...currentEvent.config,
+              activeEngines: mergedEngines,
+            },
+          });
+        } else {
+          const finalName = newEventName.trim() || 'Novo Evento Importado';
+          const newState = await addEvent(finalName, 'weekly', ['01'], engines);
+          targetId = newState.config.id;
+          const upsertRes = upsertRegistry([], parsedRows, { forceOverwriteState: true });
+          updatedRegistry = upsertRes.updatedRegistry;
+          await storage.saveSkeleton(targetId, updatedRegistry);
+        }
 
-    await refreshEvents();
+        if (hasTerritoryRows) {
+          reportProgress({
+            stage: 'saving_storage',
+            stageLabel: 'Sincronizando territórios e mapas...',
+            percent: 78,
+          });
+          const territoryNodes = selectEnginePartitionNodes(updatedRegistry, 'territory_logistics');
+          const effectiveTerritoryNodes =
+            territoryNodes.length > 0 ? territoryNodes : updatedRegistry;
+          await saveTerritoryRegistry(effectiveTerritoryNodes);
+          await persistTerritoryRegistryMutation({
+            eventId: targetId,
+            rawRegistry: updatedRegistry,
+            cleanTerritoryNodes: effectiveTerritoryNodes,
+          });
+        }
 
-    if (targetDestination === 'map') {
-      router.replace(`/territory-map?id=${targetId}` as any);
-    } else if (targetDestination === 'territory' || (targetDestination === 'auto' && hasTerritoryRows)) {
-      router.replace(`/territory-checklist?id=${targetId}` as any);
-    } else if (targetDestination === 'schedule') {
-      router.replace(`/schedule-hub?id=${targetId}` as any);
-    } else {
-      router.replace(`/skeleton-editor?id=${targetId}`);
+        await refreshEvents();
+
+        reportProgress({
+          stage: 'opening_table',
+          stageLabel: 'Preparando e abrindo planilha...',
+          percent: 100,
+        });
+        await yieldToUiFrame();
+
+        const dest =
+          targetDestination === 'map'
+            ? `/territory-map?id=${targetId}`
+            : targetDestination === 'territory' || (targetDestination === 'auto' && hasTerritoryRows)
+            ? `/territory-checklist?id=${targetId}`
+            : targetDestination === 'schedule'
+            ? `/schedule-hub?id=${targetId}`
+            : `/skeleton-editor?id=${targetId}`;
+
+        return {
+          result: dest,
+          summary: `${parsedRows.length} registros gravados com sucesso.`,
+          suppressSuccessModal: true,
+        };
+      }
+    );
+
+    if (destRoute) {
+      router.replace(destRoute as any);
     }
   };
 
@@ -467,7 +657,7 @@ export default function CSVImport() {
 
       {statusMessage && (
         <View style={styles.statusStrip}>
-          <Text style={styles.statusStripText} numberOfLines={1}>
+          <Text style={styles.statusStripText} numberOfLines={3}>
             {statusMessage}
           </Text>
         </View>
@@ -758,6 +948,18 @@ export default function CSVImport() {
           )}
         </View>
       </View>
+
+      <SekundoImportModal
+        state={importPipeline.state}
+        technicalReport={importPipeline.technicalReport}
+        onCancel={importPipeline.cancelImport}
+        onResolveWarning={importPipeline.resolveWarningReview}
+        onRetry={() => {
+          importPipeline.dismiss();
+          handlePickCsvFile();
+        }}
+        onDismiss={importPipeline.dismiss}
+      />
     </SafeAreaView>
   );
 }

@@ -79,7 +79,7 @@ describe('Universal Engine Auto-Detection', () => {
   it('detects roster_assignments from speaker, duration and room headers', () => {
     const sample = `_key,_type,label,value,email,_meta_json
 01,root,Reunião de Meio de Semana,,,"{}"
-01-01-01,leaf,Discurso Inicial,Participante 01,participante01@unidade.local,"{""assignedTo"":""Participante 01"",""room"":""Auditório Principal"",""durationMinutes"":10}"`;
+01-01-01,leaf,Discurso Inicial,Participante 01,participante01@example.com,"{""assignedTo"":""Participante 01"",""room"":""Auditório Principal"",""durationMinutes"":10}"`;
     const report = detectEnginesFromCSV(sample);
     expect(report.primaryEngine).toBe('roster_assignments');
     expect(report.matches[0].confidence).toBeGreaterThan(50);
@@ -87,7 +87,7 @@ describe('Universal Engine Auto-Detection', () => {
 
   it('detects study_synthesis from research status and synthesis fields', () => {
     const sample = `key,tema,pesquisador,status,sintese,principais_achados
-01-01,Topico A,Dr. Aris,submitted,"Sintese do estudo","Descoberta 1"`;
+01-01,Topico A,Pesquisador 01,submitted,"Sintese do estudo","Descoberta 1"`;
     const report = detectEnginesFromCSV(sample);
     expect(report.primaryEngine).toBe('study_synthesis');
   });
@@ -108,7 +108,7 @@ describe('Universal Engine Auto-Detection', () => {
 
   it('detects tournament_pairings from round, board, and contestant headers', () => {
     const sample = `key,partida,rodada,mesa,jogador_a,jogador_b,placar_a,placar_b
-01-01-01,Mesa 1,1,1,Kasparov,Anand,1,0`;
+01-01-01,Mesa 1,1,1,Jogador 01,Jogador 02,1,0`;
     const report = detectEnginesFromCSV(sample);
     expect(report.primaryEngine).toBe('tournament_pairings');
   });

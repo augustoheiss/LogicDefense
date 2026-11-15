@@ -346,6 +346,7 @@ export {
   exportCleanTerritoryNodesToGeoJsonText,
   detectTerritoryFileFormat,
   importTerritoryMultiFormat,
+  importTerritoryMultiFormatAsync,
   exportTerritoryMultiFormat,
   importTerritoryUniversalFile,
   exportTerritoryUniversalFile,
@@ -712,10 +713,12 @@ export {
   getSheetsForEngineId,
   isOmniCsvText,
   parseRawOmniCsvTable,
+  parseRawOmniCsvTableAsync,
   parseParticipantPrivilegesFromCsvRow,
   exportOmniCsvBundle,
   exportSingleEngineSampleCsv,
   importOmniCsvBundle,
+  importOmniCsvBundleAsync,
   groupCoinLedgerRowsByTable,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
@@ -764,6 +767,8 @@ export type {
 
 // Scoped Zero-Leakage Projection, Ed25519 Signed Packets & Capability URLs v3
 export {
+  extractNodeWeekIsoDate,
+  extractAvailableWeekDates,
   resolveTerritoryKeysForNumbers,
   projectScope,
   assertScopedProjectionInvariants,
@@ -800,5 +805,48 @@ export type {
   CapabilityLinkArtifacts,
   ParsedCapabilityUrl,
 } from './share/capabilityLink';
+
+// Unified Spreadsheet Import Pipeline Contract, Smart Decoding & Actionable Diagnostics
+export {
+  IMPORT_STAGE_ORDER,
+  IMPORT_STAGE_LABELS_PT,
+  ImportCancelledError,
+  isImportCancelledError,
+  throwIfImportAborted,
+  yieldToUiFrame,
+  yieldToEventLoop,
+  formatByteSize,
+  detectSpreadsheetBinarySignature,
+  decodeSpreadsheetBytesSmart,
+  decodeBase64ToUint8Array,
+  mapImportErrorToDiagnostics,
+  sanitizeDiagnosticSnippet,
+  buildDiagnosticReportText,
+} from './csv/importPipeline';
+export type {
+  ImportStage,
+  ImportDiagnosticCode,
+  ImportDiagnosticIssue,
+  ImportProgressInfo,
+  ImportPipelineState,
+  AsyncImportControllerOptions,
+  BinarySpreadsheetSignature,
+  SmartDecodedSpreadsheetResult,
+  DiagnosticMappingContext,
+} from './csv/importPipeline';
+
+// Headless Vertical Searchable Filter Engine (Combobox Vertical)
+export {
+  normalizeFilterSearchText,
+  tokenizeFilterQuery,
+  filterAndRankVerticalOptions,
+  computeNextHighlightedIndex,
+} from './filters/verticalFilterEngine';
+export type {
+  VerticalFilterOption,
+  VerticalFilterConfig,
+  VerticalFilterResult,
+} from './filters/verticalFilterEngine';
+
 
 

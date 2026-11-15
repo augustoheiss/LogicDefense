@@ -582,7 +582,7 @@ export default function SkeletonEditor() {
               style={styles.input}
               value={nodeEmail}
               onChangeText={setNodeEmail}
-              placeholder="Ex: operador01@exemplo.org"
+              placeholder="Ex: operador01@example.org"
               placeholderTextColor="#4F5E74"
               keyboardType="email-address"
             />

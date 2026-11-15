@@ -23,6 +23,7 @@ import type {
   MetricType,
   VisualType,
 } from '@coin/core/chartAggregationEngine';
+import { SearchableVerticalFilter } from '@coin/components/ui/SearchableVerticalFilter';
 
 interface ChartControlPanelProps {
   config: ChartBuilderConfig;
@@ -165,35 +166,23 @@ export function ChartControlPanel({
 
   return (
     <View style={styles.container} testID="chart-control-panel">
-      {/* ── Row 1: Compact Time Scope + Inline Stepper + Filter Drawer Toggle ── */}
+      {/* ── Row 1: Combobox Vertical Time Scope + Inline Stepper + Filter Drawer Toggle ── */}
       <View style={styles.topToolbarRow}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pillsRow}
-          style={{ flex: 1 }}
-        >
-          {SCOPE_OPTIONS.map((opt) => (
-            <Pressable
-              key={opt.key}
-              style={[
-                styles.pill,
-                config.scopeType === opt.key && styles.pillActive,
-              ]}
-              onPress={() => setScope(opt.key)}
-            >
-              <Text style={styles.pillIcon}>{opt.icon}</Text>
-              <Text
-                style={[
-                  styles.pillLabel,
-                  config.scopeType === opt.key && styles.pillLabelActive,
-                ]}
-              >
-                {opt.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <View style={{ flex: 1, minWidth: 260, maxWidth: '100%' }}>
+          <SearchableVerticalFilter
+            label="Recorte Temporal"
+            testID="chart-scope-vertical-filter"
+            placeholder="🔍 Escolher recorte (Dias, Meses, Anos...)"
+            selectedId={config.scopeType}
+            allowClear={false}
+            onSelect={(id) => setScope(id as TimeScopeType)}
+            options={SCOPE_OPTIONS.map((opt) => ({
+              id: opt.key,
+              label: `${opt.icon} ${opt.label}`,
+              keywords: [opt.label, opt.key],
+            }))}
+          />
+        </View>
 
         {config.scopeType === 'day' && (
           <View style={styles.stepper}>
@@ -220,9 +209,11 @@ export function ChartControlPanel({
         )}
 
         <Pressable
-          style={[styles.filterDrawerBtn, showAdvancedFilters && styles. pillActive]}
+          style={[styles.filterDrawerBtn, showAdvancedFilters && styles.pillActive]}
           onPress={() => setShowAdvancedFilters((prev) => !prev)}
           testID="chart-toggle-filters-btn"
+          accessibilityRole="button"
+          accessibilityLabel={showAdvancedFilters ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados'}
         >
           <Text style={styles.filterDrawerBtnText}>
             🎛️ {showAdvancedFilters ? 'Ocultar' : 'Filtros'}
@@ -230,55 +221,41 @@ export function ChartControlPanel({
         </Pressable>
       </View>
 
-      {/* ── Row 2: Single-Line Visual Type + Series Strip (Never Crushes Vertically) ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.compactSeriesRow}
-      >
-        {VISUAL_OPTIONS.map((v) => (
-          <Pressable
-            key={v.key}
-            style={[
-              styles.visualPill,
-              config.visualType === v.key && styles.visualPillActive,
-            ]}
-            onPress={() => setVisualType(v.key)}
-          >
-            <Text style={styles.visualPillIcon}>{v.icon}</Text>
-            <Text
-              style={[
-                styles.visualPillLabel,
-                config.visualType === v.key && styles.visualPillLabelActive,
-              ]}
-            >
-              {v.label}
-            </Text>
-          </Pressable>
-        ))}
+      {/* ── Row 2: Combobox Vertical Visual Type & Metric Series Filters ── */}
+      <View style={{ gap: 8 }}>
+        <SearchableVerticalFilter
+          label="Tipo Visual"
+          testID="chart-visual-vertical-filter"
+          placeholder="📊 Selecionar tipo de gráfico (Composto, Barras, Linhas, Donut)..."
+          selectedId={config.visualType}
+          allowClear={false}
+          onSelect={(id) => setVisualType(id as VisualType)}
+          options={VISUAL_OPTIONS.map((v) => ({
+            id: v.key,
+            label: `${v.icon} ${v.label}`,
+            keywords: [v.label, v.key],
+          }))}
+        />
 
-        <View style={styles.inlineDivider} />
-
-        {METRIC_OPTIONS.map((m) => {
-          const active = config.activeMetrics.includes(m.key);
-          return (
-            <Pressable
-              key={m.key}
-              testID={`metric-toggle-${m.key}`}
-              style={[
-                styles.metricChip,
-                active && { borderColor: m.color, backgroundColor: `${m.color}20` },
-              ]}
-              onPress={() => toggleMetric(m.key)}
-            >
-              <Text style={[styles.metricDot, { color: m.color }]}>●</Text>
-              <Text style={[styles.metricChipText, active && { color: '#fff', fontWeight: '700' }]}>
-                {m.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        <SearchableVerticalFilter
+          label="Séries / Métricas Ativas"
+          testID="chart-metrics-vertical-filter"
+          placeholder="📈 Buscar ou marcar métricas (Receitas, Custos, Saldo...)"
+          multiSelect
+          allowClear={false}
+          selectedIds={config.activeMetrics}
+          onChangeSelectedIds={(ids) => {
+            if (ids.length === 0) return;
+            onChangeConfig({ ...config, activeMetrics: ids as MetricType[] });
+          }}
+          options={METRIC_OPTIONS.map((m) => ({
+            id: m.key,
+            label: `${m.icon} ${m.label}`,
+            dotColor: m.color,
+            keywords: [m.label, m.key],
+          }))}
+        />
+      </View>
 
       {/* ── Contextual Multi-Date or Custom Range Inputs (When Selected) ── */}
       {config.scopeType === 'multi_date' && (
@@ -297,14 +274,14 @@ export function ChartControlPanel({
             </Pressable>
           </View>
           {config.multiDates.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagChipsRow}>
+            <View style={[styles.tagChipsRow, { flexWrap: 'wrap' }]}>
               {config.multiDates.map((d) => (
                 <Pressable key={d} style={styles.tagChip} onPress={() => removeMultiDate(d)}>
                   <Text style={styles.tagChipText}>{d}</Text>
                   <Text style={styles.tagChipRemove}>✕</Text>
                 </Pressable>
               ))}
-            </ScrollView>
+            </View>
           )}
         </View>
       )}
@@ -351,34 +328,24 @@ export function ChartControlPanel({
               </Pressable>
             )}
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
-            <Pressable
-              style={[
-                styles.catPill,
-                config.selectedCategories.length === 0 && styles.catPillActive,
-              ]}
-              onPress={selectAllCategories}
-            >
-              <Text style={[styles.catPillText, config.selectedCategories.length === 0 && styles.catPillTextActive]}>
-                ✨ Todas ({availableCategories.length})
-              </Text>
-            </Pressable>
-
-            {availableCategories.map((cat) => {
-              const isSelected = config.selectedCategories.map((c) => c.toUpperCase()).includes(cat.toUpperCase());
-              return (
-                <Pressable
-                  key={cat}
-                  style={[styles.catPill, isSelected && styles.catPillActive]}
-                  onPress={() => toggleCategory(cat)}
-                >
-                  <Text style={[styles.catPillText, isSelected && styles.catPillTextActive]}>
-                    {cat}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <SearchableVerticalFilter
+            label="Categorias Incluídas"
+            testID="chart-categories-vertical-filter"
+            placeholder="🔍 Digite nome da categoria ou toque p/ listar todas..."
+            multiSelect
+            selectedIds={config.selectedCategories}
+            onChangeSelectedIds={(ids) =>
+              onChangeConfig({
+                ...config,
+                selectedCategories: ids.map((c) => c.trim().toUpperCase()),
+              })
+            }
+            options={availableCategories.map((cat) => ({
+              id: cat.trim().toUpperCase(),
+              label: cat,
+              keywords: [cat],
+            }))}
+          />
         </View>
       )}
     </View>
@@ -397,6 +364,7 @@ const styles = StyleSheet.create({
   },
   topToolbarRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
   },
@@ -413,8 +381,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   filterDrawerBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: radius.sm,
     backgroundColor: colors.background.tertiary,
     borderWidth: 1,
@@ -484,8 +454,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   stepperBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   stepperBtnText: {
     color: colors.accent.purple,

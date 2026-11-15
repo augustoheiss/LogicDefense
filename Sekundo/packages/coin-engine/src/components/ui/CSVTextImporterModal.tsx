@@ -28,25 +28,31 @@ export function CSVTextImporterModal({
   const isWide = width >= 600;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={[styles.modalContainer, isWide && styles.modalContainerWide]}>
-          <CSVImporter
-            initialCsvText={initialCsvText}
-            onOpenExamplesGallery={onOpenExamplesGallery}
-            onSuccess={() => {
-              onSuccess('Importação in-place concluída com sucesso!');
-            }}
-            onCancel={onClose}
-          />
-        </View>
-      </View>
-    </Modal>
+    <CSVImporter
+      initialCsvText={initialCsvText}
+      onOpenExamplesGallery={onOpenExamplesGallery}
+      onSuccess={() => {
+        onSuccess('Importação in-place concluída com sucesso!');
+      }}
+      onCancel={onClose}
+      renderContainer={({ body, overlays, hasActiveOverlayModal }) => (
+        <>
+          <Modal
+            visible={visible && !hasActiveOverlayModal}
+            transparent
+            animationType="fade"
+            onRequestClose={onClose}
+          >
+            <View style={styles.overlay}>
+              <View style={[styles.modalContainer, isWide && styles.modalContainerWide]}>
+                {body}
+              </View>
+            </View>
+          </Modal>
+          {overlays}
+        </>
+      )}
+    />
   );
 }
 

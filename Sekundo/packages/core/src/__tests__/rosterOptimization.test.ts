@@ -150,7 +150,7 @@ describe('Bitmask Schedule & Roster Optimization Engine', () => {
     it('should validate and commit an allowed swap', () => {
       const workerA: VolunteerProfile = {
         id: 'wA',
-        name: 'André',
+        name: 'Participante 01',
         skillLevel: 'ADVANCED',
         scheduleMask: createSlotMask(6, 'MORNING'),
         availabilityMask: createSlotMask(6, 'MORNING'),
@@ -160,7 +160,7 @@ describe('Bitmask Schedule & Roster Optimization Engine', () => {
 
       const workerB: VolunteerProfile = {
         id: 'wB',
-        name: 'Bernardo',
+        name: 'Participante 02',
         skillLevel: 'INTERMEDIATE',
         scheduleMask: 0n,
         availabilityMask: createSlotMask(6, 'MORNING'),
@@ -189,7 +189,7 @@ describe('Bitmask Schedule & Roster Optimization Engine', () => {
     it('should reject a swap that violates qualification requirements', () => {
       const workerA: VolunteerProfile = {
         id: 'wA',
-        name: 'André (Leader)',
+        name: 'Participante 01',
         skillLevel: 'LEADER',
         scheduleMask: createSlotMask(6, 'MORNING'),
         availabilityMask: createSlotMask(6, 'MORNING'),
@@ -199,7 +199,7 @@ describe('Bitmask Schedule & Roster Optimization Engine', () => {
 
       const workerB: VolunteerProfile = {
         id: 'wB',
-        name: 'Cláudio (Basic)',
+        name: 'Participante 02',
         skillLevel: 'BASIC', // Below INTERMEDIATE required by slotA!
         scheduleMask: 0n,
         availabilityMask: createSlotMask(6, 'MORNING'),

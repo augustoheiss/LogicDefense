@@ -31,14 +31,20 @@ import {
   transferAddressesBetweenTerritories,
   formatShareTerritoryOrQuadraLocationsText,
   resolveTerritoryNumber,
-  importTerritoryMultiFormat,
+  importTerritoryMultiFormatAsync,
   buildCleanRoomTerritoryImportSample,
   stripSampleTerritorySeedNodes,
   isOmniCsvText,
   importOmniCsvBundle,
+  yieldToUiFrame,
   type FlatSkeletonEntry,
   type TerritoryMultiIoFormat,
 } from '@sekundo/core';
+import {
+  pickBrowserSpreadsheetFile,
+  useSekundoImportPipeline,
+} from '../../hooks/useSekundoImportPipeline';
+import { SekundoImportModal } from '../csv/SekundoImportModal';
 import {
   exportUpdatedTerritoryModelCsvFromStorage,
   commitOmniCsvBundleToStorage,
@@ -52,6 +58,7 @@ import {
   deliverTerritoryMultiFormatPreset,
   type TerritoryExportPresetId,
 } from '../../utils/territoryExportDelivery';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 export type TerritoryManageTab =
   | 'edit'
@@ -107,6 +114,7 @@ export function TerritoryManageModal({
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const importPipeline = useSekundoImportPipeline();
 
   // --- Tab 1: Edit Territory / Quadra State ---
   const [selectedEditTerritory, setSelectedEditTerritory] = useState(effectiveTargetTerritory);
@@ -515,8 +523,9 @@ export function TerritoryManageModal({
     summaryMsg: string
   ) => {
     if (importedNodes.length === 0) {
-      setFeedback('⚠️ Nenhum território ou polígono válido encontrado no arquivo importado.');
-      return;
+      const msg = 'Nenhum território ou polígono válido encontrado no arquivo importado.';
+      setFeedback(`⚠️ ${msg}`);
+      throw new Error(msg);
     }
     const baseCleanNodes = stripSampleTerritorySeedNodes(cleanNodes);
     let nextNodes: FlatSkeletonEntry[];
@@ -558,62 +567,148 @@ export function TerritoryManageModal({
     setFeedback(null);
     try {
       const sample = buildCleanRoomTerritoryImportSample('kml_folders');
-      const res = importTerritoryMultiFormat(
-        { text: sample.text, fileName: sample.fileName },
-        { privacySafeMode: importPrivacySanitize }
+      await importPipeline.run(
+        {
+          fileName: sample.fileName,
+          sizeBytes: (sample.text || '').length,
+          initialStage: 'parsing_rows',
+          initialDetail: 'Processando demonstração KML de territórios...',
+        },
+        async ({ signal, reportProgress }) => {
+          const res = await importTerritoryMultiFormatAsync(
+            { text: sample.text || '', fileName: sample.fileName },
+            { privacySafeMode: importPrivacySanitize, signal, onProgress: (p) => reportProgress(p) }
+          );
+          reportProgress({
+            stage: 'saving_storage',
+            stageLabel: 'Gravando territórios demo no armazenamento local...',
+            percent: 85,
+          });
+          const summaryMsg = `✓ KML Demo importado: ${res.polygonsCount} polígono(s) em ${res.territoriesCount} bairro(s)/território(s) sem exigir casas individuais!`;
+          await applyImportedMultiFormatNodes(res.nodes, summaryMsg);
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Atualizando painel de territórios...',
+            percent: 100,
+          });
+          return { result: true, summary: summaryMsg };
+        }
       );
-      await applyImportedMultiFormatNodes(
-        res.nodes,
-        `✓ KML Demo importado: ${res.polygonsCount} polígono(s) em ${res.territoriesCount} bairro(s)/território(s) sem exigir casas individuais!`
-      );
-    } catch (err: any) {
-      setFeedback(`⚠️ Erro ao carregar KML Demo: ${err?.message || 'Falha'}`);
     } finally {
       setBusy(false);
     }
   };
 
-  const handlePickAndImportMultiFormatFile = () => {
-    if (typeof document === 'undefined') return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.xlsx,.csv,.kml,.geojson,.json';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      setBusy(true);
-      setFeedback(null);
-      try {
-        const ab = await file.arrayBuffer();
-        const bytes = new Uint8Array(ab);
-        const isBinaryXlsx =
-          file.name.toLowerCase().endsWith('.xlsx') ||
-          (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b);
-        const text = isBinaryXlsx ? undefined : new TextDecoder('utf-8').decode(bytes);
-        if (text && isOmniCsvText(text)) {
-          const committed = await commitOmniCsvBundleToStorage(text);
-          const omniTerrNodes = committed.bundle.territoryRegistry || [];
-          await applyImportedMultiFormatNodes(
-            omniTerrNodes,
-            `✓ Planilha Omni-CSV "${file.name}" importada: ${omniTerrNodes.length} registro(s) territoriais aplicados!`
-          );
-          return;
-        }
-        const res = importTerritoryMultiFormat(
-          { bytes, text, fileName: file.name },
-          { privacySafeMode: importPrivacySanitize }
-        );
-        await applyImportedMultiFormatNodes(
-          res.nodes,
-          `✓ Arquivo "${file.name}" (${res.format.toUpperCase()}) importado: ${res.territoriesCount} território(s), ${res.polygonsCount} polígono(s) e ${res.addressesCount} endereço(s)!`
-        );
-      } catch (err: any) {
-        setFeedback(`⚠️ Erro ao importar "${file.name}": ${err?.message || 'Formato inválido'}`);
-      } finally {
-        setBusy(false);
+  const handlePickAndImportMultiFormatFile = async () => {
+    let trackedId: number | null = null;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const outcome = await pickBrowserSpreadsheetFile({
+        accept: '.xlsx,.csv,.kml,.geojson,.json',
+        allowXlsxBinary: true,
+        onFileSelected: async ({ fileName, sizeBytes }) => {
+          trackedId = importPipeline.beginTracking({
+            fileName,
+            sizeBytes,
+            initialStage: 'reading_file',
+            initialDetail: 'Lendo arquivo e verificando formato/codificação...',
+          });
+        },
+      });
+
+      if (outcome.kind === 'cancelled') {
+        importPipeline.dismiss();
+        return;
       }
-    };
-    input.click();
+
+      if (outcome.kind === 'error') {
+        const errId =
+          trackedId ??
+          importPipeline.beginTracking({
+            fileName: outcome.fileName,
+            sizeBytes: outcome.sizeBytes,
+            initialStage: 'reading_file',
+          });
+        importPipeline.failExternal(errId, outcome.error, {
+          fileName: outcome.fileName,
+          binarySignature: outcome.binarySignature,
+          stageFailed: 'reading_file',
+        });
+        return;
+      }
+
+      const picked = outcome.file;
+      await importPipeline.run(
+        {
+          fileName: picked.fileName,
+          sizeBytes: picked.sizeBytes,
+          initialStage: 'decoding',
+          initialDetail:
+            picked.decoded.detectedEncoding === 'windows-1252'
+              ? 'Codificação ANSI/Windows-1252 detectada e convertida para UTF-8.'
+              : 'Analisando estrutura territorial do arquivo...',
+          diagnosticContext: {
+            fileName: picked.fileName,
+            binarySignature: picked.binarySignature,
+            allowXlsxBinary: true,
+            detectedEncoding: picked.decoded.detectedEncoding,
+          },
+        },
+        async ({ signal, reportProgress }) => {
+          const text = picked.binarySignature === 'zip_or_xlsx' ? undefined : picked.decoded.text;
+
+          if (text && isOmniCsvText(text)) {
+            const committed = await commitOmniCsvBundleToStorage(text, {
+              signal,
+              onProgress: (p) => reportProgress({ ...p, cancellable: false }),
+            });
+            const omniTerrNodes = committed.bundle.territoryRegistry || [];
+            const summaryMsg = `Planilha Omni-CSV "${picked.fileName}" importada: ${omniTerrNodes.length} registro(s) territoriais aplicados!`;
+            await applyImportedMultiFormatNodes(omniTerrNodes, `✓ ${summaryMsg}`);
+            reportProgress({
+              stage: 'opening_table',
+              stageLabel: 'Atualizando painel de territórios...',
+              percent: 100,
+            });
+            await yieldToUiFrame();
+            return { result: true, summary: summaryMsg };
+          }
+
+          const res = await importTerritoryMultiFormatAsync(
+            { bytes: picked.bytes, text, fileName: picked.fileName },
+            { privacySafeMode: importPrivacySanitize, signal, onProgress: (p) => reportProgress(p) }
+          );
+
+          reportProgress({
+            stage: 'saving_storage',
+            stageLabel: 'Gravando territórios no armazenamento local...',
+            percent: 85,
+          });
+
+          const summaryMsg = `Arquivo "${picked.fileName}" (${res.format.toUpperCase()}) importado: ${res.territoriesCount} território(s), ${res.polygonsCount} polígono(s) e ${res.addressesCount} endereço(s)!`;
+          await applyImportedMultiFormatNodes(res.nodes, `✓ ${summaryMsg}`);
+
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Atualizando painel de territórios...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+          return { result: true, summary: summaryMsg };
+        }
+      );
+    } catch (err: any) {
+      const errId =
+        trackedId ??
+        importPipeline.beginTracking({
+          fileName: 'territorios.csv',
+          initialStage: 'reading_file',
+        });
+      importPipeline.failExternal(errId, err, { stageFailed: 'reading_file' });
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Leaf addresses belonging to `transferSourceTerritory`
@@ -826,7 +921,13 @@ export function TerritoryManageModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <>
+      <Modal
+        visible={visible && importPipeline.state.status === 'idle'}
+        transparent
+        animationType="fade"
+        onRequestClose={onClose}
+      >
       <View style={styles.overlay}>
         <View style={styles.card}>
           {/* Header */}
@@ -839,7 +940,13 @@ export function TerritoryManageModal({
                 Edite nomes e números direto no app • Salva automaticamente na memória • Exportação e compartilhamento sem burocracia
               </Text>
             </View>
-            <Pressable onPress={onClose} style={styles.closeBtn} testID="territory-manage-close-btn">
+            <Pressable
+              onPress={onClose}
+              style={styles.closeBtn}
+              testID="territory-manage-close-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Fechar gerenciador de territórios"
+            >
               <Text style={styles.closeBtnText}>✕</Text>
             </Pressable>
           </View>
@@ -949,31 +1056,22 @@ export function TerritoryManageModal({
                   Escolha o território abaixo e altere seu número, nome/bairro ou cidade. Todos os endereços e quadras vinculados serão atualizados automaticamente na memória.
                 </Text>
 
-                {/* Quick Territory Selector Chips */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
-                >
-                  {summaries.map((s) => {
-                    const isSelected = s.territoryNumber === selectedEditTerritory;
-                    return (
-                      <Pressable
-                        key={s.territoryNumber}
-                        testID={`manage-select-territory-${s.territoryNumber}`}
-                        onPress={() => handleSelectTerritoryToEdit(s.territoryNumber)}
-                        style={[styles.terrChip, isSelected && styles.terrChipActive]}
-                      >
-                        <Text
-                          style={[styles.terrChipText, isSelected && styles.terrChipTextActive]}
-                        >
-                          Nº {s.territoryNumber}
-                          {s.territoryName ? ` • ${s.territoryName}` : ''} ({s.totalAddresses})
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                {/* Quick Territory Selector (Combobox Vertical) */}
+                <SearchableVerticalFilter
+                  label="Território para Editar"
+                  testID="manage-edit-territory-filter"
+                  placeholder="🔍 Digite nº ou bairro do território, ou toque para abrir todos..."
+                  selectedId={selectedEditTerritory}
+                  allowClear={false}
+                  onSelect={(id) => handleSelectTerritoryToEdit(id)}
+                  options={summaries.map((s) => ({
+                    id: s.territoryNumber,
+                    label: `Nº ${s.territoryNumber}${s.territoryName ? ` • ${s.territoryName}` : ''}`,
+                    subtitle: s.city || undefined,
+                    badge: `${s.totalAddresses} end.`,
+                    keywords: [s.territoryNumber, s.territoryName || '', s.city || ''],
+                  }))}
+                />
 
                 {targetGroupKey ? (
                   <View style={styles.scopeRow}>
@@ -1250,35 +1348,30 @@ export function TerritoryManageModal({
                   🏠 ADICIONAR NOVO ENDEREÇO AO TERRITÓRIO
                 </Text>
 
-                {/* Quick Territory Selector */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
-                >
-                  {summaries.map((s) => {
-                    const isSelected = s.territoryNumber === addrTerritoryNumber;
-                    return (
-                      <Pressable
-                        key={s.territoryNumber}
-                        onPress={() => {
-                          setAddrTerritoryNumber(s.territoryNumber);
-                          setAddrGroupKey(s.quadraKeys[0] || '');
-                          setAddrNeighborhood(s.territoryName || '');
-                          if (s.city) setAddrCity(s.city);
-                        }}
-                        style={[styles.terrChip, isSelected && styles.terrChipActive]}
-                      >
-                        <Text
-                          style={[styles.terrChipText, isSelected && styles.terrChipTextActive]}
-                        >
-                          Território {s.territoryNumber}
-                          {s.territoryName ? ` (${s.territoryName})` : ''}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                {/* Quick Territory Selector (Combobox Vertical) */}
+                <SearchableVerticalFilter
+                  label="Território de Destino do Endereço"
+                  testID="manage-new-addr-territory-filter"
+                  placeholder="🔍 Digite nº ou bairro do território, ou toque para abrir todos..."
+                  selectedId={addrTerritoryNumber}
+                  allowClear={false}
+                  onSelect={(id) => {
+                    const found = summaries.find((item) => item.territoryNumber === id);
+                    if (found) {
+                      setAddrTerritoryNumber(found.territoryNumber);
+                      setAddrGroupKey(found.quadraKeys[0] || '');
+                      setAddrNeighborhood(found.territoryName || '');
+                      if (found.city) setAddrCity(found.city);
+                    }
+                  }}
+                  options={summaries.map((s) => ({
+                    id: s.territoryNumber,
+                    label: `Território ${s.territoryNumber}${s.territoryName ? ` (${s.territoryName})` : ''}`,
+                    subtitle: s.city || undefined,
+                    badge: `${s.totalAddresses} end.`,
+                    keywords: [s.territoryNumber, s.territoryName || '', s.city || ''],
+                  }))}
+                />
 
                 <View style={styles.row}>
                   <View style={{ flex: 2 }}>
@@ -1406,37 +1499,29 @@ export function TerritoryManageModal({
                   Transfira 1 endereço, vários endereços selecionados ou todos os endereços de um território para outro com 1 clique. O sistema salva automaticamente em LocalStorage e IndexedDB e já atualiza a planilha CSV na exportação!
                 </Text>
 
-                {/* Step 1: Source Territory */}
-                <Text style={styles.label}>1. Escolha o Território de Origem (De onde sairão os endereços):</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
-                >
-                  {summaries.map((s) => {
-                    const isSource = s.territoryNumber === transferSourceTerritory;
-                    return (
-                      <Pressable
-                        key={`transfer-src-${s.territoryNumber}`}
-                        testID={`transfer-source-territory-${s.territoryNumber}`}
-                        onPress={() => {
-                          setTransferSourceTerritory(s.territoryNumber);
-                          setSelectedTransferKeys([]);
-                          if (transferDestTerritory === s.territoryNumber) {
-                            const alt = summaries.find((x) => x.territoryNumber !== s.territoryNumber);
-                            if (alt) setTransferDestTerritory(alt.territoryNumber);
-                          }
-                        }}
-                        style={[styles.terrChip, isSource && styles.terrChipActive]}
-                      >
-                        <Text style={[styles.terrChipText, isSource && styles.terrChipTextActive]}>
-                          {isSource ? '📤 ' : ''}Território {s.territoryNumber}
-                          {s.territoryName ? ` • ${s.territoryName}` : ''} ({s.totalAddresses} end.)
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                {/* Step 1: Source Territory (Combobox Vertical) */}
+                <SearchableVerticalFilter
+                  label="1. Território de Origem (De onde sairão os endereços)"
+                  testID="transfer-source-territory-filter"
+                  placeholder="🔍 Digite nº ou bairro do território de origem, ou toque para abrir todos..."
+                  selectedId={transferSourceTerritory}
+                  allowClear={false}
+                  onSelect={(id) => {
+                    setTransferSourceTerritory(id);
+                    setSelectedTransferKeys([]);
+                    if (transferDestTerritory === id) {
+                      const alt = summaries.find((x) => x.territoryNumber !== id);
+                      if (alt) setTransferDestTerritory(alt.territoryNumber);
+                    }
+                  }}
+                  options={summaries.map((s) => ({
+                    id: s.territoryNumber,
+                    label: `📤 Território ${s.territoryNumber}${s.territoryName ? ` • ${s.territoryName}` : ''}`,
+                    subtitle: s.city || undefined,
+                    badge: `${s.totalAddresses} end.`,
+                    keywords: [s.territoryNumber, s.territoryName || '', s.city || ''],
+                  }))}
+                />
 
                 {/* Step 2: Scope (All vs Selected) */}
                 <Text style={styles.label}>2. O que deseja transferir do Território {transferSourceTerritory}?</Text>
@@ -2246,6 +2331,19 @@ export function TerritoryManageModal({
         </View>
       </View>
     </Modal>
+
+    <SekundoImportModal
+      state={importPipeline.state}
+      technicalReport={importPipeline.technicalReport}
+      onCancel={importPipeline.cancelImport}
+      onResolveWarning={importPipeline.resolveWarningReview}
+      onRetry={() => {
+        importPipeline.dismiss();
+        handlePickAndImportMultiFormatFile();
+      }}
+      onDismiss={importPipeline.dismiss}
+    />
+  </>
   );
 }
 

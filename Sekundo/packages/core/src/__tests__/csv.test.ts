@@ -8,7 +8,7 @@ import type { FlatRegistry } from '../skeleton/types';
 
 describe('CSV Parser', () => {
   it('parses standard compliant CSV', () => {
-    const csv = '_key,_type,label,value,email,_meta_json\n01,header,Programação Semanal,,,\n01-01,slot,Coordenação,Participante 01,alex@exemplo.org,"{""sala"": ""Principal""}"\n';
+    const csv = '_key,_type,label,value,email,_meta_json\n01,header,Programação Semanal,,,\n01-01,slot,Coordenação,Participante 01,participante01@example.org,"{""sala"": ""Principal""}"\n';
     const parsed = parseCSV(csv);
     expect(parsed).toHaveLength(2);
     expect(parsed[0]).toEqual({
@@ -24,17 +24,17 @@ describe('CSV Parser', () => {
       _type: 'slot',
       label: 'Coordenação',
       value: 'Participante 01',
-      email: 'alex@exemplo.org',
+      email: 'participante01@example.org',
       _meta_json: '{"sala": "Principal"}',
     });
   });
 
   it('handles quotes and commas in fields', () => {
-    const csv = `_key,_type,label,value,email,_meta_json\n01-01,slot,"Coordenador, Sessão","""Nogueira""",,\n`;
+    const csv = `_key,_type,label,value,email,_meta_json\n01-01,slot,"Coordenador, Sessão","""Participante 01""",,\n`;
     const parsed = parseCSV(csv);
     expect(parsed).toHaveLength(1);
     expect(parsed[0].label).toBe('Coordenador, Sessão');
-    expect(parsed[0].value).toBe('"Nogueira"');
+    expect(parsed[0].value).toBe('"Participante 01"');
   });
 
   it('throws error when _key is missing', () => {
@@ -59,7 +59,7 @@ describe('CSV Serializer', () => {
         _type: 'slot',
         label: 'Coordenação',
         value: 'Participante 01',
-        email: 'alex@exemplo.org',
+        email: 'participante01@example.org',
         _meta_json: '{"sala": "Principal"}',
       },
     ];
@@ -76,14 +76,14 @@ describe('CSV Serializer', () => {
         _key: '01-01',
         _type: 'slot',
         label: 'Coordenador, Sessão',
-        value: '"Nogueira"',
+        value: '"Participante 01"',
         email: '',
         _meta_json: '',
       },
     ];
     const csv = serializeCSV(rows);
     expect(csv).toContain('"Coordenador, Sessão"');
-    expect(csv).toContain('"""Nogueira"""');
+    expect(csv).toContain('"""Participante 01"""');
   });
 });
 

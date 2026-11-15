@@ -10,6 +10,7 @@ import {
 import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
 import { FINANCIAL_LESSONS, type MicroLesson } from '@coin/learning/lessons';
+import { SearchableVerticalFilter } from '@coin/components/ui/SearchableVerticalFilter';
 
 export function LessonsViewer() {
   const [selectedLesson, setSelectedLesson] = useState<MicroLesson | null>(null);
@@ -21,40 +22,25 @@ export function LessonsViewer() {
         <Text style={styles.sectionSubtitle}>Dicas práticas e sem jargões para sua família</Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.cardsScroll}
-      >
-        {FINANCIAL_LESSONS.map(lesson => (
-          <Pressable
-            key={lesson.id}
-            style={({ pressed }) => [
-              styles.lessonCard,
-              pressed && styles.lessonCardPressed,
-            ]}
-            onPress={() => setSelectedLesson(lesson)}
-          >
-            <View style={styles.cardTop}>
-              <View style={styles.timeBadge}>
-                <Text style={styles.timeBadgeText}>⏱️ {lesson.readingMinutes} min</Text>
-              </View>
-            </View>
-
-            <Text style={styles.cardTitle} numberOfLines={2}>
-              {lesson.title}
-            </Text>
-
-            <Text style={styles.cardSummary} numberOfLines={3}>
-              {lesson.summary}
-            </Text>
-
-            <View style={styles.readMoreRow}>
-              <Text style={styles.readMoreText}>Ler lição ›</Text>
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
+      <SearchableVerticalFilter
+        label="Lições Financeiras (2 min)"
+        placeholder="Filtrar ou escolher lição rápida..."
+        options={FINANCIAL_LESSONS.map((lesson) => ({
+          id: lesson.id,
+          label: lesson.title,
+          subtitle: lesson.summary,
+          badge: `${lesson.readingMinutes} min`,
+          keywords: [lesson.title, lesson.summary],
+        }))}
+        selectedId={selectedLesson?.id ?? null}
+        allowClear={false}
+        onSelect={(id) => {
+          const found = FINANCIAL_LESSONS.find((l) => l.id === id);
+          if (found) setSelectedLesson(found);
+        }}
+        emptyMessage="Nenhuma lição encontrada."
+        testID="lessons-vertical-filter"
+      />
 
       {/* Lesson Details Modal */}
       <Modal

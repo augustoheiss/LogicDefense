@@ -28,6 +28,7 @@ import {
 import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
 import type { DynamicTableSchema, DynamicColumnDefinition, ColumnSemanticRole, ColumnDataType } from '@coin/core/types';
+import { SearchableVerticalFilter } from './SearchableVerticalFilter';
 
 interface ColumnMappingWorkbenchModalProps {
   visible: boolean;
@@ -118,13 +119,13 @@ export function ColumnMappingWorkbenchModal({
         <View style={[styles.modalCard, isWide && styles.modalCardWide, { maxHeight: height * 0.9 }]}>
           {/* Header */}
           <View style={styles.header}>
-            <View>
+            <View style={{ flex: 1, flexShrink: 1, minWidth: 0 }}>
               <Text style={styles.title}>⚙️ Configurador Dinâmico de Colunas</Text>
               <Text style={styles.subtitle}>
                 Ajuste os papéis contábeis e tipos de dados. Suas preferências são salvas localmente no navegador.
               </Text>
             </View>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="Fechar configurador de colunas">
               <Text style={styles.closeBtnText}>✕</Text>
             </Pressable>
           </View>
@@ -149,7 +150,7 @@ export function ColumnMappingWorkbenchModal({
                   <View key={col.id} style={styles.columnCard}>
                     {/* Column Header & Sample */}
                     <View style={styles.columnCardHeader}>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, flexShrink: 1, minWidth: 0 }}>
                         <View style={styles.colNameRow}>
                           <Text style={styles.colIndexBadge}>#{idx + 1}</Text>
                           <TextInput
@@ -179,46 +180,43 @@ export function ColumnMappingWorkbenchModal({
                       </View>
                     </View>
 
-                    {/* Role Picker (horizontal scroll) */}
-                    <Text style={styles.fieldSectionLabel}>Papel Semântico:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-                      {AVAILABLE_ROLES.map((r) => {
-                        const isSelected = col.role === r.role;
-                        return (
-                          <Pressable
-                            key={r.role}
-                            onPress={() => handleUpdateCol(col.id, { role: r.role })}
-                            style={[styles.chip, isSelected && styles.chipSelected]}
-                          >
-                            <Text style={styles.chipIcon}>{r.icon}</Text>
-                            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                              {r.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
+                    {/* Role Picker Vertical Filter (Combobox Vertical) */}
+                    <View style={styles.chipsRow}>
+                      <SearchableVerticalFilter
+                        label="Papel Semântico"
+                        placeholder="Filtrar ou escolher papel semântico..."
+                        options={AVAILABLE_ROLES.map((r) => ({
+                          id: r.role,
+                          label: `${r.icon} ${r.label}`,
+                          keywords: [r.label, r.role],
+                        }))}
+                        selectedId={col.role}
+                        allowClear={false}
+                        onSelect={(id) => handleUpdateCol(col.id, { role: id as ColumnSemanticRole })}
+                        emptyMessage="Nenhum papel semântico encontrado."
+                        testID={`column-role-filter-${col.id}`}
+                      />
+                    </View>
 
                     {/* Type Selector & Invert Sign Options */}
                     <View style={styles.typeOptionsRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.fieldSectionLabel}>Tipo de Dado:</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-                          {AVAILABLE_TYPES.map((t) => {
-                            const isSelected = col.dataType === t.type;
-                            return (
-                              <Pressable
-                                key={t.type}
-                                onPress={() => handleUpdateCol(col.id, { dataType: t.type })}
-                                style={[styles.typeChip, isSelected && styles.typeChipSelected]}
-                              >
-                                <Text style={[styles.typeChipText, isSelected && styles.typeChipTextSelected]}>
-                                  {t.label}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
-                        </ScrollView>
+                      <View style={{ flex: 1, minWidth: 220 }}>
+                        <View style={styles.chipsRow}>
+                          <SearchableVerticalFilter
+                            label="Tipo de Dado"
+                            placeholder="Filtrar ou escolher tipo..."
+                            options={AVAILABLE_TYPES.map((t) => ({
+                              id: t.type,
+                              label: t.label,
+                              keywords: [t.label, t.type],
+                            }))}
+                            selectedId={col.dataType}
+                            allowClear={false}
+                            onSelect={(id) => handleUpdateCol(col.id, { dataType: id as ColumnDataType })}
+                            emptyMessage="Nenhum tipo encontrado."
+                            testID={`column-type-filter-${col.id}`}
+                          />
+                        </View>
                       </View>
 
                       {/* Invert Sign Toggle (for money amounts) */}
@@ -271,6 +269,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.lg,
     width: '100%',
+    maxWidth: '100%',
     overflow: 'hidden',
   },
   modalCardWide: {
@@ -280,6 +279,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: spacing.sm,
     padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
@@ -294,10 +294,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.text.secondary,
     marginTop: 2,
-    maxWidth: 620,
+    maxWidth: '100%',
   },
   closeBtn: {
-    padding: spacing.xs,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   closeBtnText: {
     color: colors.text.secondary,
@@ -329,12 +332,15 @@ const styles = StyleSheet.create({
   },
   columnCardHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.sm,
     marginBottom: 4,
   },
   colNameRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.xs,
   },
@@ -384,8 +390,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   chipsRow: {
-    flexDirection: 'row',
-    gap: 6,
+    width: '100%',
     marginVertical: 4,
   },
   chip: {
@@ -418,6 +423,7 @@ const styles = StyleSheet.create({
   },
   typeOptionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'flex-start',
     gap: spacing.md,
     marginTop: 4,
@@ -453,6 +459,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: radius.sm,
     marginTop: 4,
   },
@@ -471,6 +479,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     alignItems: 'center',
     gap: spacing.sm,
@@ -482,6 +491,8 @@ const styles = StyleSheet.create({
   cancelBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   cancelBtnText: {
     color: colors.text.secondary,
@@ -492,6 +503,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent.purple,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: radius.md,
   },
   saveBtnText: {

@@ -79,6 +79,10 @@ GoogleService-Info.plist
 .pr-lens/
 **/.pr-lens/
 
+# Local agent skill cache
+.superpowers/
+**/.superpowers/
+
 # Playwright & QA Artifacts
 artifacts/
 **/artifacts/

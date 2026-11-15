@@ -27,6 +27,7 @@ import { useLocalEvent } from '../hooks/useLocalEvent';
 import { useSkeleton } from '../hooks/useSkeleton';
 import * as storage from '../storage/localStorage';
 import type { TournamentNodeMeta } from '@sekundo/core';
+import { SearchableVerticalFilter } from '../components/ui/SearchableVerticalFilter';
 
 interface MatchItem {
   id: string;
@@ -358,19 +359,21 @@ export default function TournamentBracketConsole() {
         </View>
 
         {activeTab === 'matches' && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roundPillsRow}>
-            {rounds.map((r) => (
-              <Pressable
-                key={r}
-                onPress={() => setSelectedRound(r)}
-                style={[styles.roundPill, selectedRound === r && styles.roundPillActive]}
-              >
-                <Text style={[styles.roundPillText, selectedRound === r && styles.roundPillTextActive]}>
-                  Rodada {r}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+          <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
+            <SearchableVerticalFilter
+              label="Rodada do Torneio"
+              testID="tournament-round-filter"
+              placeholder="🔍 Buscar rodada ou toque para listar todas..."
+              selectedId={String(selectedRound)}
+              allowClear={false}
+              onSelect={(id) => setSelectedRound(Number(id))}
+              options={rounds.map((r) => ({
+                id: String(r),
+                label: `Rodada ${r}`,
+                keywords: [`rodada ${r}`, String(r)],
+              }))}
+            />
+          </View>
         )}
       </View>
 

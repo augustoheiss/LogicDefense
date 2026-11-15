@@ -57,11 +57,18 @@ import {
   GranularExportModal,
   SpreadsheetDataGrid,
   ExampleCSVGalleryModal,
+  ImportProgressModal,
 } from '@coin/components/ui';
 import { formatCurrencySmart } from '@coin/core/formatCurrency';
 import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, shareCSVText, buildCSV } from '@coin/services/exportService';
-import { importCSVFlow, pickCSVFile, parseCSV } from '@coin/services/csvImportService';
-import { parseCSVText } from '@coin/utils/csvEngine';
+import { pickCSVFileWithResult } from '@coin/services/csvImportService';
+import { parseCSVTextAsync } from '@coin/utils/csvEngine';
+import { useImportPipeline } from '@coin/hooks/useImportPipeline';
+import {
+  ImportCancelledError,
+  mapImportErrorToDiagnostics,
+  yieldToUiFrame,
+} from '@coin/services/importPipelineContract';
 import { computeBaselineGoals } from '@coin/core/metricsEngine';
 import { parseSelectedMonthsSpec, formatSelectedMonthsLabel } from '@coin/core/dateUtils';
 import { inferTableSchema } from '@coin/core/typeInferenceEngine';
@@ -116,7 +123,9 @@ export default function TransactionsScreen() {
   const [previewMode, setPreviewMode] = useState<'whatsapp' | 'csv_export' | 'csv_import'>('whatsapp');
   const [previewText, setPreviewText] = useState('');
   const [pendingImportResult, setPendingImportResult] = useState<any | null>(null);
+  const [pendingImportMeta, setPendingImportMeta] = useState<{ fileName: string; sizeBytes?: number } | null>(null);
   const [showImportChoice, setShowImportChoice] = useState(false);
+  const importPipeline = useImportPipeline();
 
   // ── Month summary (supports 'all', 1 month, or N selected months/years) ──
   const monthSummary = useMemo(() => {
@@ -430,24 +439,12 @@ export default function TransactionsScreen() {
   }, [db]);
 
   // ── Import handlers ────────────────────────────────────
-  const triggerFileImport = useCallback(async () => {
-    try {
-      const content = await pickCSVFile();
-      if (!content || !content.trim()) return;
-
-      const result = parseCSVText(content);
-
-      if (result.rows.length === 0) {
-        const errMsg = result.errors.length > 0
-          ? result.errors.slice(0, 3).join('\n')
-          : 'Nenhuma entrada válida encontrada no arquivo CSV.';
-        Alert.alert('Importação falhou', errMsg);
-        return;
-      }
-
-      const hasUnresolved = result.rows.some((r) => r.entryType === 'unresolved');
+  const routeParsedResult = useCallback(
+    (result: any, meta: { fileName: string; sizeBytes?: number }) => {
+      setPendingImportMeta(meta);
+      const hasUnresolved = result.rows.some((r: any) => r.entryType === 'unresolved');
       if (result.isAmbiguous || hasUnresolved) {
-        const preparedRows: TableRow[] = result.rows.map((r, idx) => ({
+        const preparedRows: TableRow[] = result.rows.map((r: any, idx: number) => ({
           ...r,
           id: (r as TableRow).id || `import-${Date.now()}-${idx}`,
         }));
@@ -459,10 +456,143 @@ export default function TransactionsScreen() {
         setPendingImportResult(result);
         setShowImportChoice(true);
       }
+    },
+    []
+  );
+
+  const triggerFileImport = useCallback(async () => {
+    let pickerRequestId: number | null = null;
+    try {
+      const outcome = await pickCSVFileWithResult({
+        onFileSelected: async ({ fileName, sizeBytes }) => {
+          pickerRequestId = importPipeline.beginTracking({
+            fileName,
+            sizeBytes,
+            initialStage: 'reading_file',
+            initialDetail: 'Lendo arquivo selecionado e verificando codificação...',
+          });
+          await yieldToUiFrame();
+        },
+      });
+
+      if (outcome.kind === 'cancelled') {
+        importPipeline.dismiss();
+        return;
+      }
+
+      if (outcome.kind === 'error') {
+        const errId =
+          pickerRequestId ??
+          importPipeline.beginTracking({
+            fileName: outcome.fileName || 'planilha.csv',
+            sizeBytes: outcome.sizeBytes,
+            initialStage: 'reading_file',
+          });
+        importPipeline.failExternal(
+          errId,
+          outcome.diagnostic?.explanation ||
+            outcome.rawError ||
+            'Não foi possível ler o arquivo selecionado.',
+          {
+            fileName: outcome.fileName || 'planilha.csv',
+            stageFailed: 'reading_file',
+          }
+        );
+        return;
+      }
+
+      const fileMeta = { fileName: outcome.fileName, sizeBytes: outcome.sizeBytes };
+
+      const parsed = await importPipeline.run(
+        {
+          fileName: outcome.fileName,
+          sizeBytes: outcome.sizeBytes,
+          initialStage: 'decoding',
+          initialDetail:
+            outcome.detectedEncoding === 'windows-1252'
+              ? 'Codificação ANSI/Windows-1252 detectada e convertida para UTF-8.'
+              : 'Decodificação concluída; analisando cabeçalhos e linhas...',
+          diagnosticContext: {
+            fileName: outcome.fileName,
+            binarySignature: outcome.binarySignature,
+            detectedEncoding: outcome.detectedEncoding,
+          },
+        },
+        async ({ signal, reportProgress, requestWarningReview }) => {
+          if (outcome.binarySignature) {
+            throw new Error(
+              `Arquivo "${outcome.fileName}" possui assinatura binária (${outcome.binarySignature}).`
+            );
+          }
+
+          if (!outcome.text || !outcome.text.trim()) {
+            throw new Error(`O arquivo "${outcome.fileName}" está vazio.`);
+          }
+
+          if (outcome.encodingHadReplacementChars) {
+            reportProgress({
+              stage: 'decoding',
+              stageLabel: 'Verificando codificação...',
+              detailLabel: 'Alguns caracteres acentuados podem exigir revisão após importar.',
+              percent: 18,
+            });
+          }
+
+          const result = await parseCSVTextAsync(outcome.text, undefined, {
+            signal,
+            onProgress: (p) => reportProgress(p),
+          });
+
+          if (result.rows.length === 0) {
+            const errMsg =
+              result.errors.length > 0
+                ? result.errors.slice(0, 6).join('\n')
+                : 'Nenhuma entrada válida encontrada no arquivo CSV.';
+            throw new Error(errMsg);
+          }
+
+          if (result.errors.length > 0) {
+            const issues = mapImportErrorToDiagnostics(result.errors.slice(0, 8), {
+              fileName: outcome.fileName,
+              stageFailed: 'validating',
+            });
+            const proceed = await requestWarningReview({
+              summary: `${result.rows.length} lançamentos válidos encontrados, mas ${
+                result.skippedCount || result.errors.length
+              } linha(s) apresentaram inconsistência.`,
+              validCount: result.rows.length,
+              skippedCount: result.skippedCount || result.errors.length,
+              issues,
+            });
+            if (!proceed) {
+              throw new ImportCancelledError();
+            }
+          }
+
+          return {
+            result,
+            summary: `${result.rows.length} lançamentos prontos para importação.`,
+            suppressSuccessModal: true,
+          };
+        }
+      );
+
+      if (parsed) {
+        routeParsedResult(parsed, fileMeta);
+      }
     } catch (err: any) {
-      Alert.alert('Erro ao selecionar arquivo', err.message || 'Erro desconhecido');
+      const errId =
+        pickerRequestId ??
+        importPipeline.beginTracking({
+          fileName: 'planilha.csv',
+          initialStage: 'reading_file',
+        });
+      importPipeline.failExternal(errId, err, {
+        fileName: 'planilha.csv',
+        stageFailed: 'reading_file',
+      });
     }
-  }, []);
+  }, [importPipeline, routeParsedResult]);
 
   const handleImportCSV = useCallback(() => {
     setShowFab(false);
@@ -507,129 +637,182 @@ export default function TransactionsScreen() {
       if (!db.activeTable) return;
       await shareCSVText(editedText, db.activeTable.name);
     } else if (previewMode === 'csv_import') {
-      try {
-        const result = parseCSVText(editedText);
+      const fileMeta = { fileName: 'texto_colado.csv', sizeBytes: editedText.length };
+      const parsed = await importPipeline.run(
+        {
+          fileName: fileMeta.fileName,
+          sizeBytes: fileMeta.sizeBytes,
+          initialStage: 'parsing_rows',
+          initialDetail: 'Analisando conteúdo CSV colado...',
+        },
+        async ({ signal, reportProgress, requestWarningReview }) => {
+          if (!editedText.trim()) {
+            throw new Error('Nenhum texto CSV foi fornecido para importação.');
+          }
 
-        if (result.rows.length === 0) {
-          const errMsg = result.errors.length > 0
-            ? result.errors.slice(0, 3).join('\n')
-            : 'Nenhuma entrada válida encontrada no texto.';
-          Alert.alert('Importação falhou', errMsg);
-          return;
-        }
+          const result = await parseCSVTextAsync(editedText, undefined, {
+            signal,
+            onProgress: (p) => reportProgress(p),
+          });
 
-        const hasUnresolved = result.rows.some((r) => r.entryType === 'unresolved');
-        if (result.isAmbiguous || hasUnresolved) {
-          const preparedRows: TableRow[] = result.rows.map((r, idx) => ({
-            ...r,
-            id: (r as TableRow).id || `import-${Date.now()}-${idx}`,
-          }));
-          setPendingImportResult({ ...result, rows: preparedRows });
-          setStagingRows(preparedRows);
-          setIsAmbiguousImport(Boolean(result.isAmbiguous));
-          setShowStagingModal(true);
-        } else {
-          setPendingImportResult(result);
-          setShowImportChoice(true);
+          if (result.rows.length === 0) {
+            const errMsg =
+              result.errors.length > 0
+                ? result.errors.slice(0, 6).join('\n')
+                : 'Nenhuma entrada válida encontrada no texto.';
+            throw new Error(errMsg);
+          }
+
+          if (result.errors.length > 0) {
+            const issues = mapImportErrorToDiagnostics(result.errors.slice(0, 8), {
+              fileName: fileMeta.fileName,
+              stageFailed: 'validating',
+            });
+            const proceed = await requestWarningReview({
+              summary: `${result.rows.length} lançamentos válidos encontrados com ${
+                result.skippedCount || result.errors.length
+              } aviso(s).`,
+              validCount: result.rows.length,
+              skippedCount: result.skippedCount || result.errors.length,
+              issues,
+            });
+            if (!proceed) {
+              throw new ImportCancelledError();
+            }
+          }
+
+          return {
+            result,
+            summary: `${result.rows.length} lançamentos prontos para revisão.`,
+            suppressSuccessModal: true,
+          };
         }
-      } catch (err: any) {
-        Alert.alert('Erro na importação', err.message || 'Erro desconhecido');
+      );
+
+      if (parsed) {
+        routeParsedResult(parsed, fileMeta);
       }
     }
-  }, [previewMode, db]);
+  }, [db.activeTable, importPipeline, previewMode, routeParsedResult]);
 
   const executeImportCommit = useCallback(async (mode: 'merge' | 'replace' | 'new', dataOverride?: any) => {
     const dataToUse = dataOverride || pendingImportResult;
     if (!dataToUse) return;
-    try {
-      if (Array.isArray(dataToUse.tablePartitions) && dataToUse.tablePartitions.length > 1) {
-        for (const part of dataToUse.tablePartitions) {
-          const partSectors = Array.from(
-            new Set([
-              ...(part.metadata?.activeSectors || []),
-              ...(part.detectedSectors || []),
-            ])
-          );
-          await db.importSpreadsheet({
-            rows: part.rows,
-            tableId: mode === 'new' ? undefined : part.tableId,
-            name: part.metadata?.name,
-            description: part.metadata?.description,
-            goals: part.metadata?.goals || part.metadata?.tableGoals,
-            mode,
-            isolateByTableId: mode !== 'new',
-            schema: part.metadata?.schema,
-            investorProfile: part.metadata?.investorProfile,
-            activeSectors: partSectors.length > 0 ? partSectors : undefined,
-            dashboardConfig: part.metadata?.dashboardConfig,
-            sectorParams: part.metadata?.sectorParams,
-          });
-        }
+    const commitFileName =
+      pendingImportMeta?.fileName || dataToUse.metadata?.name || db.activeTable?.name || 'planilha.csv';
 
-        setTimeout(() => {
-          const successTitle = 'Importação Multi-Planilha Concluída! 🎉';
+    await importPipeline.run(
+      {
+        fileName: commitFileName,
+        sizeBytes: pendingImportMeta?.sizeBytes,
+        initialStage: 'saving_storage',
+        initialDetail: 'Gravando planilha no armazenamento local...',
+      },
+      async ({ signal, reportProgress }) => {
+        if (Array.isArray(dataToUse.tablePartitions) && dataToUse.tablePartitions.length > 1) {
+          const totalParts = dataToUse.tablePartitions.length;
+          for (let i = 0; i < totalParts; i++) {
+            const part = dataToUse.tablePartitions[i];
+            const partSectors = Array.from(
+              new Set([
+                ...(part.metadata?.activeSectors || []),
+                ...(part.detectedSectors || []),
+              ])
+            );
+            reportProgress({
+              stage: 'saving_storage',
+              stageLabel: `Gravando partição ${i + 1} de ${totalParts}...`,
+              detailLabel: part.metadata?.name || part.tableId,
+              processedCount: i,
+              totalCount: totalParts,
+              percent: Math.round(((i + 0.5) / totalParts) * 90),
+            });
+            await db.importSpreadsheet({
+              rows: part.rows,
+              tableId: mode === 'new' ? undefined : part.tableId,
+              name: part.metadata?.name,
+              description: part.metadata?.description,
+              goals: part.metadata?.goals || part.metadata?.tableGoals,
+              mode,
+              isolateByTableId: mode !== 'new',
+              schema: part.metadata?.schema,
+              investorProfile: part.metadata?.investorProfile,
+              activeSectors: partSectors.length > 0 ? partSectors : undefined,
+              dashboardConfig: part.metadata?.dashboardConfig,
+              sectorParams: part.metadata?.sectorParams,
+              signal,
+              strictPersistence: true,
+              onProgress: (p) => reportProgress(p),
+            });
+          }
+
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Preparando e abrindo planilhas...',
+            percent: 100,
+          });
+
           const tableNames = dataToUse.tablePartitions
             .map((p: any) => `"${p.metadata?.name || p.tableId}"`)
             .join(', ');
-          const successMsg = `Sucesso! ${dataToUse.rows.length} transações foram organizadas em ${dataToUse.tablePartitions.length} planilhas separadas (${tableNames}).`;
+          return {
+            result: true,
+            summary: `${dataToUse.rows.length} transações foram organizadas em ${totalParts} planilhas separadas (${tableNames}).`,
+            importedCount: dataToUse.rows.length,
+          };
+        }
 
-          if (Platform.OS === 'web') {
-            window.alert(`${successTitle}\n\n${successMsg}`);
-          } else {
-            Alert.alert(successTitle, successMsg);
-          }
-        }, 100);
-        return;
-      }
+        const mergedSectors = Array.from(
+          new Set([
+            ...(dataToUse.metadata?.activeSectors || []),
+            ...(dataToUse.detectedSectors || []),
+          ])
+        );
 
-      const mergedSectors = Array.from(
-        new Set([
-          ...(dataToUse.metadata?.activeSectors || []),
-          ...(dataToUse.detectedSectors || []),
-        ])
-      );
+        await db.importSpreadsheet({
+          rows: dataToUse.rows,
+          tableId: mode === 'new' ? undefined : dataToUse.metadata?.tableId,
+          name: dataToUse.metadata?.name,
+          description: dataToUse.metadata?.description,
+          goals: dataToUse.metadata?.goals || dataToUse.metadata?.tableGoals,
+          mode,
+          schema: dataToUse.metadata?.schema,
+          investorProfile: dataToUse.metadata?.investorProfile,
+          activeSectors: mergedSectors.length > 0 ? mergedSectors : undefined,
+          dashboardConfig: dataToUse.metadata?.dashboardConfig,
+          sectorParams: dataToUse.metadata?.sectorParams,
+          signal,
+          strictPersistence: true,
+          onProgress: (p) => reportProgress(p),
+        });
 
-      await db.importSpreadsheet({
-        rows: dataToUse.rows,
-        tableId: mode === 'new' ? undefined : dataToUse.metadata?.tableId,
-        name: dataToUse.metadata?.name,
-        description: dataToUse.metadata?.description,
-        goals: dataToUse.metadata?.goals || dataToUse.metadata?.tableGoals,
-        mode,
-        schema: dataToUse.metadata?.schema,
-        investorProfile: dataToUse.metadata?.investorProfile,
-        activeSectors: mergedSectors.length > 0 ? mergedSectors : undefined,
-        dashboardConfig: dataToUse.metadata?.dashboardConfig,
-        sectorParams: dataToUse.metadata?.sectorParams,
-      });
+        if (mode !== 'new' && mergedSectors.length > 0) {
+          const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
+          const nextSectors = Array.from(new Set([...currentActiveSectors, ...mergedSectors]));
+          await db.updateActiveSectors(nextSectors);
+        }
 
-      if (mode !== 'new' && mergedSectors.length > 0) {
-        const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
-        const nextSectors = Array.from(new Set([...currentActiveSectors, ...mergedSectors]));
-        await db.updateActiveSectors(nextSectors);
-      }
+        reportProgress({
+          stage: 'opening_table',
+          stageLabel: 'Preparando e abrindo planilha...',
+          percent: 100,
+        });
 
-      setTimeout(() => {
         const activeTableName = dataToUse.metadata?.name || db.activeTable?.name || 'Ativa';
-        const successTitle = 'Importação Concluída! 🎉';
         const modeLabel =
           mode === 'new'
             ? 'carregadas em uma NOVA planilha'
             : mode === 'merge'
             ? 'acumuladas'
             : 'carregadas (substituição)';
-        const successMsg = `Sucesso! ${dataToUse.rows.length} transações foram ${modeLabel} ("${activeTableName}").`;
-
-        if (Platform.OS === 'web') {
-          window.alert(`${successTitle}\n\n${successMsg}`);
-        } else {
-          Alert.alert(successTitle, successMsg);
-        }
-      }, 100);
-    } catch (commitErr: any) {
-      Alert.alert('Erro na importação', commitErr.message || 'Erro desconhecido');
-    }
-  }, [db, pendingImportResult]);
+        return {
+          result: true,
+          summary: `${dataToUse.rows.length} transações foram ${modeLabel} ("${activeTableName}").`,
+          importedCount: dataToUse.rows.length,
+        };
+      }
+    );
+  }, [db, importPipeline, pendingImportMeta, pendingImportResult]);
 
   const handleBulkDeleteConfirm = useCallback((prefix: string) => {
     setShowBulkDelete(false);
@@ -882,7 +1065,8 @@ export default function TransactionsScreen() {
         <FlatList
           data={viewMode === 'grid' ? [] : safeFilteredRows}
           keyExtractor={(item, index) => item?.id || `row_${index}`}
-          ListHeaderComponent={renderHeader}
+          // Passar como ReactElement (renderHeader()) evita desmontar MonthPicker/PredictionPanel quando filtros mudam.
+          ListHeaderComponent={renderHeader()}
           renderItem={({ item }) => (
             <SwipeableRowCard
               row={item}
@@ -1195,14 +1379,9 @@ export default function TransactionsScreen() {
           setShowCSVStreamModal(false);
           setPrefillImporterCsv(undefined);
         }}
-        onSuccess={(summary) => {
+        onSuccess={() => {
           setShowCSVStreamModal(false);
           setPrefillImporterCsv(undefined);
-          if (Platform.OS === 'web') {
-            window.alert(summary);
-          } else {
-            Alert.alert('Importação Bem-Sucedida', summary);
-          }
         }}
       />
 
@@ -1316,6 +1495,18 @@ export default function TransactionsScreen() {
           });
           setPendingImportResult(null);
         }}
+      />
+
+      <ImportProgressModal
+        state={importPipeline.state}
+        technicalReport={importPipeline.technicalReport}
+        onCancel={importPipeline.cancelImport}
+        onResolveWarning={importPipeline.resolveWarningReview}
+        onRetry={() => {
+          importPipeline.dismiss();
+          triggerFileImport();
+        }}
+        onDismiss={importPipeline.dismiss}
       />
     </SafeAreaView>
     </ErrorBoundary>

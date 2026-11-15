@@ -41,7 +41,7 @@ import { shadows } from '@coin/theme/shadows';
 import { Card } from '@coin/components/ui/Card';
 import { TokenProgressBar } from '@coin/components/ui/TokenProgressBar';
 import { SectorSettingsPanel } from '@coin/components/ui/SectorSettingsPanel';
-import { SyncAuditPanel, APIManagementTester, ExampleCSVGalleryModal } from '@coin/components/ui';
+import { SyncAuditPanel, APIManagementTester, ExampleCSVGalleryModal, SearchableVerticalFilter } from '@coin/components/ui';
 import { formatCurrencySmart } from '@coin/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@coin/storage/authService';
 import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText, shareJSONBackup, shareSynthesisDocument } from '@coin/services/exportService';
@@ -552,30 +552,21 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* CAD Workbench Station Selector Bar */}
-      <View style={styles.stationBarWrapper} testID="settings-station-bar">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.stationBarScroll}
-        >
-          {SETTINGS_STATIONS.map((station) => {
-            const active = activeStation === station.id;
-            return (
-              <Pressable
-                key={station.id}
-                testID={`settings-station-${station.id}`}
-                style={[styles.stationPill, active && styles.stationPillActive]}
-                onPress={() => setActiveStation(station.id)}
-              >
-                <Text style={styles.stationPillIcon}>{station.icon}</Text>
-                <Text style={[styles.stationPillText, active && styles.stationPillTextActive]}>
-                  {station.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+      {/* CAD Workbench Station Selector (Combobox Vertical Pesquisável) */}
+      <View style={[styles.stationBarWrapper, { paddingHorizontal: spacing.md, paddingVertical: spacing.xs }]} testID="settings-station-bar">
+        <SearchableVerticalFilter
+          label="Estação de Ajustes"
+          testID="settings-station-vertical-filter"
+          placeholder="🔍 Buscar seção de ajustes ou toque para abrir todas..."
+          selectedId={activeStation}
+          allowClear={false}
+          onSelect={(id) => setActiveStation(id as SettingsStationId)}
+          options={SETTINGS_STATIONS.map((station) => ({
+            id: station.id,
+            label: `${station.icon} ${station.label}`,
+            keywords: [station.label, station.id],
+          }))}
+        />
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
@@ -774,7 +765,7 @@ export default function SettingsScreen() {
                       style={styles.licenseInput}
                       value={recoveryEmail}
                       onChangeText={setRecoveryEmail}
-                      placeholder="seu-email@exemplo.com"
+                      placeholder="seu-email@example.com"
                       placeholderTextColor={colors.text.disabled}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -2889,40 +2880,23 @@ BOAS PRÁTICAS DE AMBIENTE:
             Selecione o perfil desejado para ler na íntegra no leitor abaixo ou copiar diretamente para seu agente:
           </Text>
 
-          {/* Tabs de Seleção de Prompts */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: spacing.xs }}>
-            <View style={{ flexDirection: 'row', gap: 6, paddingVertical: 2 }}>
-              {SYSTEM_PROMPTS.map((p, idx) => {
-                const active = selectedPromptTab === idx;
-                const tabColor = p.badgeColor || colors.accent.purple;
-                return (
-                  <Pressable
-                    key={idx}
-                    onPress={() => setSelectedPromptTab(idx)}
-                    style={{
-                      paddingVertical: 7,
-                      paddingHorizontal: 10,
-                      borderRadius: radius.sm || 6,
-                      backgroundColor: active ? tabColor : colors.background.secondary,
-                      alignItems: 'center',
-                      borderWidth: 1,
-                      borderColor: active ? tabColor : colors.border.default,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: active ? '700' : '600',
-                        color: active ? '#ffffff' : colors.text.secondary,
-                      }}
-                    >
-                      {p.title}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </ScrollView>
+          {/* Tabs de Seleção de Prompts (Combobox Vertical Pesquisável) */}
+          <View style={{ marginVertical: spacing.xs }}>
+            <SearchableVerticalFilter
+              label="Perfil do Agente de IA"
+              placeholder="Filtrar ou escolher perfil de prompt..."
+              options={SYSTEM_PROMPTS.map((p, idx) => ({
+                id: String(idx),
+                label: p.title,
+                keywords: [p.title],
+              }))}
+              selectedId={String(selectedPromptTab)}
+              allowClear={false}
+              onSelect={(id) => setSelectedPromptTab(Number(id))}
+              emptyMessage="Nenhum perfil de prompt encontrado."
+              testID="settings-prompt-profile-filter"
+            />
+          </View>
 
           {/* 3. Card do Prompt Selecionado & Leitor Completo */}
           {SYSTEM_PROMPTS[selectedPromptTab] && (

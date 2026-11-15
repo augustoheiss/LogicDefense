@@ -22,7 +22,7 @@ describe('Test Suite: AI Context Privacy Guard (sanitizeRowsForAI)', () => {
       id: '1',
       date: '2026-07-01',
       value: 450,
-      description: 'Consulta Dr. Marcelo Psiquiatra PIX CPF 123.456.789-00',
+      description: 'Consulta clinica sintetica PIX CPF 000.000.000-00',
       category: 'Saúde',
       entryType: 'expense',
     },
@@ -39,8 +39,8 @@ describe('Test Suite: AI Context Privacy Guard (sanitizeRowsForAI)', () => {
     const sanitized = sanitizeRowsForAI(sensitiveRows, false);
 
     expect(sanitized[0].description).toBe('[Saúde]');
-    expect(sanitized[0].description).not.toContain('Dr. Marcelo');
-    expect(sanitized[0].description).not.toContain('123.456.789-00');
+    expect(sanitized[0].description).not.toContain('clinica sintetica');
+    expect(sanitized[0].description).not.toContain('000.000.000-00');
 
     expect(sanitized[1].description).toBe('Despesa');
     expect(sanitized[1].description).not.toContain('Tarja Preta');
@@ -52,7 +52,7 @@ describe('Test Suite: AI Context Privacy Guard (sanitizeRowsForAI)', () => {
 
   it('deve preservar as descrições originais apenas quando o usuário der opt-in explícito (allowRaw: true)', () => {
     const raw = sanitizeRowsForAI(sensitiveRows, true);
-    expect(raw[0].description).toBe('Consulta Dr. Marcelo Psiquiatra PIX CPF 123.456.789-00');
+    expect(raw[0].description).toBe('Consulta clinica sintetica PIX CPF 000.000.000-00');
     expect(raw[1].description).toBe('Farmácia Remédio Tarja Preta');
   });
 });

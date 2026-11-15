@@ -105,16 +105,63 @@ export async function loadDB(): Promise<DB | null> {
   return null;
 }
 
+export class StorageWriteError extends Error {
+  readonly quotaExceeded: boolean;
+  readonly causeError?: unknown;
+
+  constructor(message: string, quotaExceeded = false, causeError?: unknown) {
+    super(message);
+    this.name = quotaExceeded ? 'StorageQuotaError' : 'StorageWriteError';
+    this.quotaExceeded = quotaExceeded;
+    this.causeError = causeError;
+  }
+}
+
+export class StorageQuotaError extends StorageWriteError {
+  constructor(
+    message = 'QuotaExceededError: Espaço de armazenamento local insuficiente para gravar a planilha.',
+    causeError?: unknown
+  ) {
+    super(message, true, causeError);
+    this.name = 'StorageQuotaError';
+  }
+}
+
+export interface SaveDBResult {
+  ok: boolean;
+  quotaExceeded?: boolean;
+  error?: StorageWriteError;
+}
+
+function isQuotaExceededException(err: unknown): boolean {
+  if (!err || typeof err !== 'object') {
+    return typeof err === 'string' && /quota|storage full/i.test(err);
+  }
+  const anyErr = err as { name?: string; code?: number | string; message?: string };
+  return (
+    anyErr.name === 'QuotaExceededError' ||
+    anyErr.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    anyErr.name === 'StorageQuotaError' ||
+    anyErr.code === 22 ||
+    anyErr.code === 1014 ||
+    /QuotaExceeded|NS_ERROR_DOM_QUOTA|storage full|quota/i.test(String(anyErr.message || ''))
+  );
+}
+
 /**
- * Save the full DB to IndexedDB (Web) and AsyncStorage (Native / fallback).
- * Protects against QuotaExceededError on Web localStorage / AsyncStorage.
+ * Save the full DB and return a structured result without crashing existing callers.
+ * Protects previous valid snapshots via rolling `.bak` and reports quota/write failures explicitly.
  */
-export async function saveDB(db: DB): Promise<void> {
+export async function saveDBWithResult(db: DB): Promise<SaveDBResult> {
+  let idbQuotaError: unknown = null;
   if (isIndexedDBAvailable()) {
     try {
       await saveDBToIndexedDB(db);
-      return;
+      return { ok: true };
     } catch (idbErr) {
+      if (isQuotaExceededException(idbErr)) {
+        idbQuotaError = idbErr;
+      }
       console.warn('[Storage] IndexedDB save failed, falling back to AsyncStorage:', idbErr);
     }
   }
@@ -132,6 +179,7 @@ export async function saveDB(db: DB): Promise<void> {
 
   try {
     await AsyncStorage.setItem(STORAGE_KEY, serialized);
+    return { ok: true };
   } catch (writeErr) {
     console.error('Failed to write DB to AsyncStorage:', writeErr);
     // Ensure previous valid snapshot remains intact if primary key was clobbered during quota pressure
@@ -145,7 +193,35 @@ export async function saveDB(db: DB): Promise<void> {
         // ignore secondary recovery error
       }
     }
+    const quota = isQuotaExceededException(writeErr) || Boolean(idbQuotaError);
+    const errMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+    const wrapped = quota
+      ? new StorageQuotaError(
+          `Limite de armazenamento local atingido (${errMsg}). Os dados anteriores foram mantidos.`,
+          writeErr
+        )
+      : new StorageWriteError(`Falha ao gravar no armazenamento local: ${errMsg}`, false, writeErr);
+    return { ok: false, quotaExceeded: quota, error: wrapped };
   }
+}
+
+/**
+ * Strict persistence variant that throws `StorageQuotaError` / `StorageWriteError`
+ * when saving fails, preventing silent data loss on large spreadsheet imports.
+ */
+export async function saveDBOrThrow(db: DB): Promise<void> {
+  const res = await saveDBWithResult(db);
+  if (!res.ok) {
+    throw res.error || new StorageWriteError('Falha desconhecida ao gravar planilha.');
+  }
+}
+
+/**
+ * Save the full DB to IndexedDB (Web) and AsyncStorage (Native / fallback).
+ * Protects against QuotaExceededError on Web localStorage / AsyncStorage.
+ */
+export async function saveDB(db: DB): Promise<void> {
+  await saveDBWithResult(db);
 }
 
 /**

@@ -76,6 +76,7 @@ import {
 import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
 import type { MapPin } from '../components/map/mapTypes';
 import { useLiveGpsLocation, openExternalGoogleMaps } from '../hooks/useLiveGpsLocation';
+import { SearchableVerticalFilter } from '../components/ui/SearchableVerticalFilter';
 
 interface ChecklistGroup {
   groupKey: string;
@@ -172,6 +173,7 @@ export default function TerritoryChecklistScreen() {
   const focusAppliedRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedTerritoryFilter, setSelectedTerritoryFilter] = useState<string>('all');
   const [showFiltersPanel, setShowFiltersPanel] = useState<boolean>(false);
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'worked'>('all');
   const [sortOrder, setSortOrder] = useState<'hierarchical' | 'priority_oldest_first' | 'recent_first'>('hierarchical');
@@ -630,8 +632,13 @@ export default function TerritoryChecklistScreen() {
     });
   }, [focusTerritory, territorySections]);
 
-  // An active search shows every match without touching the saved accordion state.
-  const searchActive = searchQuery.trim().length > 0;
+  // An active search or specific territory filter shows matching accordions automatically.
+  const visibleTerritorySections = useMemo(() => {
+    if (selectedTerritoryFilter === 'all') return territorySections;
+    return territorySections.filter((s) => s.territory === selectedTerritoryFilter);
+  }, [territorySections, selectedTerritoryFilter]);
+
+  const searchActive = searchQuery.trim().length > 0 || selectedTerritoryFilter !== 'all';
   const isExpanded = (k: string) => searchActive || expandedKeys.has(k);
   const toggleExpanded = (k: string) =>
     setExpandedKeys((prev) => {
@@ -945,6 +952,28 @@ export default function TerritoryChecklistScreen() {
       {/* Search and Filters (Click-to-Reveal via 🔍) */}
       {showFiltersPanel ? (
         <View style={styles.filterSection}>
+          <SearchableVerticalFilter
+            label="Filtrar por Território"
+            testID="checklist-territory-vertical-filter"
+            placeholder="🔍 Digite nº do território ou toque para abrir todos..."
+            selectedId={selectedTerritoryFilter}
+            clearValueId="all"
+            onSelect={(id) => setSelectedTerritoryFilter(id || 'all')}
+            options={[
+              {
+                id: 'all',
+                label: `🌐 Todos os Territórios (${territorySections.length})`,
+                pinned: true,
+                keywords: ['todos', 'all'],
+              },
+              ...territorySections.map((sec) => ({
+                id: sec.territory,
+                label: `Território ${sec.territory}`,
+                badge: `${sec.worked}/${sec.total}`,
+                keywords: [sec.territory],
+              })),
+            ]}
+          />
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
@@ -1024,7 +1053,7 @@ export default function TerritoryChecklistScreen() {
             </Text>
           </View>
         ) : (
-          territorySections.map((section) => {
+          visibleTerritorySections.map((section) => {
             // A territory with a single group is not double-nested.
             const single = section.groups.length === 1;
             const sectionOpen = single || isExpanded(`T:${section.territory}`);

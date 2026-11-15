@@ -27,6 +27,7 @@ import {
   canPerformSpreadsheetAction,
 } from '@sekundo/core';
 import { deliverFile } from '../../utils/deliverFile';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 export interface ActivityLogModalProps {
   visible: boolean;
@@ -146,31 +147,24 @@ export function ActivityLogModal({
             </View>
           ) : null}
 
-          {/* Category Filter Chips */}
+          {/* Category Filter Vertical Combobox */}
           <View style={styles.filterRow}>
-            {(
-              [
-                { id: 'ALL', label: `🌐 Todos (${entries.length})` },
-                { id: 'access', label: '🚪 Acessos & Logout' },
-                { id: 'security', label: '🛡️ Bloqueios & Selo' },
-                { id: 'view', label: '👁️ Consultas' },
-                { id: 'edit', label: '✏️ Edições' },
-                { id: 'export', label: '📤 Exportações' },
-              ] as Array<{ id: CategoryFilter; label: string }>
-            ).map((f) => {
-              const active = categoryFilter === f.id;
-              return (
-                <Pressable
-                  key={f.id}
-                  onPress={() => setCategoryFilter(f.id)}
-                  style={[styles.filterChip, active && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                    {f.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            <SearchableVerticalFilter
+              label="Categoria de Auditoria"
+              testID="activity-log-category-filter"
+              placeholder="🔍 Buscar categoria de auditoria ou toque para listar..."
+              selectedId={categoryFilter}
+              clearValueId="ALL"
+              onSelect={(id) => setCategoryFilter(id as CategoryFilter)}
+              options={[
+                { id: 'ALL', label: `🌐 Todos (${entries.length})`, pinned: true, keywords: ['todos', 'all'] },
+                { id: 'access', label: '🚪 Acessos & Logout', keywords: ['acesso', 'login', 'logout'] },
+                { id: 'security', label: '🛡️ Bloqueios & Selo', keywords: ['seguranca', 'bloqueio', 'selo'] },
+                { id: 'view', label: '👁️ Consultas', keywords: ['consulta', 'visualizacao'] },
+                { id: 'edit', label: '✏️ Edições', keywords: ['edicao', 'alteracao'] },
+                { id: 'export', label: '📤 Exportações', keywords: ['exportacao', 'download'] },
+              ]}
+            />
           </View>
 
           {/* Activity Log Entries List */}

@@ -46,6 +46,13 @@ import {
 } from '../doc/templates/builtinTemplates';
 import { DEFAULT_SEKUNDO_APP_YAML } from '../composer/appManifest';
 import { ENGINE_TEMPLATES } from './engineTemplates';
+import {
+  type AsyncImportControllerOptions,
+  IMPORT_STAGE_LABELS_PT,
+  throwIfImportAborted,
+  yieldToEventLoop,
+  yieldToUiFrame,
+} from './importPipeline';
 
 export type OmniRecordKind =
   | 'event_node'
@@ -586,6 +593,307 @@ function escapeCsvCell(value: unknown): string {
  * normalized row objects (with `_record_kind` resolved from the Planilha name or legacy column 1),
  * and the list of `presentSheets`.
  */
+interface CsvMatrixScanState {
+  matrix: string[][];
+  currentRow: string[];
+  currentCell: string;
+  inQuotes: boolean;
+  index: number;
+}
+
+function stepCsvMatrixScan(clean: string, endExclusive: number, state: CsvMatrixScanState): void {
+  let i = state.index;
+  while (i < endExclusive) {
+    const ch = clean[i];
+    const next = clean[i + 1];
+
+    if (state.inQuotes) {
+      if (ch === '"' && next === '"') {
+        state.currentCell += '"';
+        i++;
+      } else if (ch === '"') {
+        state.inQuotes = false;
+      } else {
+        state.currentCell += ch;
+      }
+    } else {
+      if (ch === '"') {
+        state.inQuotes = true;
+      } else if (ch === ',') {
+        state.currentRow.push(state.currentCell);
+        state.currentCell = '';
+      } else if (ch === '\r' && next === '\n') {
+        state.currentRow.push(state.currentCell);
+        state.matrix.push(state.currentRow);
+        state.currentRow = [];
+        state.currentCell = '';
+        i++;
+      } else if (ch === '\n' || ch === '\r') {
+        state.currentRow.push(state.currentCell);
+        state.matrix.push(state.currentRow);
+        state.currentRow = [];
+        state.currentCell = '';
+      } else {
+        state.currentCell += ch;
+      }
+    }
+    i++;
+  }
+  state.index = i;
+}
+
+function finalizeCsvMatrixScan(state: CsvMatrixScanState): string[][] {
+  if (state.inQuotes) {
+    throw new Error('CSV inválido: aspas duplas (") não fechadas até o final do arquivo.');
+  }
+  if (state.currentCell.length > 0 || state.currentRow.length > 0) {
+    state.currentRow.push(state.currentCell);
+    state.matrix.push(state.currentRow);
+  }
+  return state.matrix;
+}
+
+interface RawOmniTableAccumulator {
+  activeHeaders: string[];
+  discoveredHeaderSet: Set<string>;
+  currentSheetKind: OmniRecordKind | null;
+  presentSheetsSet: Set<OmniRecordKind>;
+  rows: Record<string, string>[];
+  unassignedBatch: Record<string, string>[];
+  coinBackupTableId: string;
+  coinBackupTableName: string;
+  coinBackupEnvelope: Record<string, any>;
+  coinEnvelopeAttached: boolean;
+  rowsMarkerIdx: number;
+  headerCandidatePending: boolean;
+}
+
+function createRawOmniTableAccumulator(matrix: string[][]): RawOmniTableAccumulator {
+  return {
+    activeHeaders: [...OMNI_CSV_HEADERS],
+    discoveredHeaderSet: new Set<string>(),
+    currentSheetKind: null,
+    presentSheetsSet: new Set<OmniRecordKind>(),
+    rows: [],
+    unassignedBatch: [],
+    coinBackupTableId: '',
+    coinBackupTableName: '',
+    coinBackupEnvelope: {},
+    coinEnvelopeAttached: false,
+    rowsMarkerIdx: matrix.findIndex((row) => /^##\s*ROWS\s*##$/i.test((row[0] || '').trim())),
+    headerCandidatePending: true,
+  };
+}
+
+function stepRawOmniMatrixRow(line: string[], r: number, acc: RawOmniTableAccumulator): void {
+  if (line.every((cell) => cell.trim() === '')) return;
+
+  const firstCell = (line[0] || '').trim();
+  const secondCell = (line[1] || '').trim();
+
+  // 0a. If the file has a `## ROWS ##` marker (Assistente Moeda Backup v3), everything before `rowsMarkerIdx` is envelope metadata/schema
+  if (acc.rowsMarkerIdx !== -1 && r <= acc.rowsMarkerIdx) {
+    acc.currentSheetKind = 'coin_ledger_row';
+    acc.presentSheetsSet.add('coin_ledger_row');
+    if (!firstCell.startsWith('##') && secondCell) {
+      const k = firstCell.toLowerCase();
+      if (k === 'table_id' || k === 'tableid') acc.coinBackupTableId = secondCell;
+      else if (k === 'name' || k === 'nome') acc.coinBackupTableName = secondCell;
+      else if (k === 'description' || k === 'descricao') acc.coinBackupEnvelope.description = secondCell;
+      else if (k === 'active_sectors') {
+        try {
+          acc.coinBackupEnvelope.activeSectors = JSON.parse(decodeURIComponent(secondCell));
+        } catch {}
+      } else if (k === 'dashboard_config') {
+        try {
+          acc.coinBackupEnvelope.dashboardConfig = JSON.parse(decodeURIComponent(secondCell));
+        } catch {}
+      } else if (k === 'sector_params') {
+        try {
+          acc.coinBackupEnvelope.sectorParams = JSON.parse(decodeURIComponent(secondCell));
+        } catch {}
+      } else if (k === 'profile_type') {
+        acc.coinBackupEnvelope.investorProfile = {
+          ...(acc.coinBackupEnvelope.investorProfile || {
+            emergencyFundMonthsGoal: 6,
+            fireTargetAnnualExpensesMultiplier: 25,
+          }),
+          profileType: secondCell,
+        };
+      } else if (k === 'emergency_fund_goal_months' && acc.coinBackupEnvelope.investorProfile) {
+        acc.coinBackupEnvelope.investorProfile.emergencyFundMonthsGoal = parseInt(secondCell, 10) || 6;
+      } else if (k === 'fire_annual_multiplier' && acc.coinBackupEnvelope.investorProfile) {
+        acc.coinBackupEnvelope.investorProfile.fireTargetAnnualExpensesMultiplier =
+          parseInt(secondCell, 10) || 25;
+      } else if (k === 'monthly_contribution_goal' && acc.coinBackupEnvelope.investorProfile) {
+        acc.coinBackupEnvelope.investorProfile.monthlyContributionGoal =
+          parseFloat(secondCell) || undefined;
+      }
+    } else if (firstCell.startsWith('##')) {
+      const fullBannerLine = line.join(',').trim();
+      const match = fullBannerLine.match(/^##\s*([A-Z0-9_]+):\s*(.*?)\s*##$/i);
+      if (match) {
+        const key = match[1].toUpperCase();
+        const val = match[2].trim();
+        if (key === 'TABLE_ID') acc.coinBackupTableId = val;
+        else if (key === 'TABLE_NAME') acc.coinBackupTableName = val;
+        else if (key === 'TABLE_DESCRIPTION') acc.coinBackupEnvelope.description = val;
+        else if (key === 'GOALS_JSON') acc.coinBackupEnvelope.goals = safeJsonParse(val, undefined);
+        else if (key === 'INVESTOR_PROFILE_JSON')
+          acc.coinBackupEnvelope.investorProfile = safeJsonParse(val, undefined);
+        else if (key === 'SCHEMA_JSON') acc.coinBackupEnvelope.schema = safeJsonParse(val, undefined);
+        else if (key === 'ACTIVE_SECTORS_JSON')
+          acc.coinBackupEnvelope.activeSectors = safeJsonParse(val, undefined);
+        else if (key === 'DASHBOARD_CONFIG_JSON')
+          acc.coinBackupEnvelope.dashboardConfig = safeJsonParse(val, undefined);
+        else if (key === 'SECTOR_PARAMS_JSON')
+          acc.coinBackupEnvelope.sectorParams = safeJsonParse(val, undefined);
+      }
+    }
+    return;
+  }
+
+  // 0b. Check if this line is an Assistente Moeda Backup v3 (`## ... ##`) banner/metadata line
+  if (firstCell.startsWith('##')) {
+    const fullBannerLine = line.join(',').trim();
+    if (/^##\s*(COIN ASSISTANT BACKUP|ROWS)/i.test(fullBannerLine)) {
+      acc.currentSheetKind = 'coin_ledger_row';
+      acc.presentSheetsSet.add('coin_ledger_row');
+    } else {
+      const match = fullBannerLine.match(/^##\s*([A-Z0-9_]+):\s*(.*?)\s*##$/i);
+      if (match) {
+        const key = match[1].toUpperCase();
+        const val = match[2].trim();
+        acc.currentSheetKind = 'coin_ledger_row';
+        acc.presentSheetsSet.add('coin_ledger_row');
+        if (key === 'TABLE_ID') acc.coinBackupTableId = val;
+        else if (key === 'TABLE_NAME') acc.coinBackupTableName = val;
+        else if (key === 'TABLE_DESCRIPTION') acc.coinBackupEnvelope.description = val;
+        else if (key === 'GOALS_JSON') acc.coinBackupEnvelope.goals = safeJsonParse(val, undefined);
+        else if (key === 'INVESTOR_PROFILE_JSON')
+          acc.coinBackupEnvelope.investorProfile = safeJsonParse(val, undefined);
+        else if (key === 'SCHEMA_JSON') acc.coinBackupEnvelope.schema = safeJsonParse(val, undefined);
+        else if (key === 'ACTIVE_SECTORS_JSON')
+          acc.coinBackupEnvelope.activeSectors = safeJsonParse(val, undefined);
+        else if (key === 'DASHBOARD_CONFIG_JSON')
+          acc.coinBackupEnvelope.dashboardConfig = safeJsonParse(val, undefined);
+        else if (key === 'SECTOR_PARAMS_JSON')
+          acc.coinBackupEnvelope.sectorParams = safeJsonParse(val, undefined);
+      }
+    }
+    return;
+  }
+
+  // 1. Check if this line is a Top or Bottom Planilha Marker (`#PLANILHA,<engine>` or `#ABA_PLANILHA,<engine>`)
+  if (
+    /^#?(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)$/i.test(firstCell) ||
+    /^#?(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)[:\s]/i.test(firstCell)
+  ) {
+    const candidate = secondCell || firstCell;
+    const resolved =
+      resolveSheetNameToRecordKind(candidate) || resolveSheetNameToRecordKind(line[2] || '');
+    if (resolved) {
+      acc.presentSheetsSet.add(resolved);
+      if (/^#?(ABA_PLANILHA|FIM_PLANILHA)/i.test(firstCell)) {
+        for (const pending of acc.unassignedBatch) {
+          if (!pending._record_kind) {
+            pending._record_kind = resolved;
+          }
+        }
+        acc.unassignedBatch = [];
+        acc.currentSheetKind = null;
+      } else {
+        acc.currentSheetKind = resolved;
+        acc.unassignedBatch = [];
+      }
+    }
+    return;
+  }
+
+  // 1b. Ignore single-hash informational comment lines ("# comentario")
+  if (firstCell.startsWith('#')) {
+    return;
+  }
+
+  // 2. Check if this line is a Column Header row
+  if (
+    (acc.rowsMarkerIdx !== -1 && r === acc.rowsMarkerIdx + 1) ||
+    firstCell === '_container_id' ||
+    firstCell === '_record_kind' ||
+    (firstCell === '_key' && secondCell === '_type') ||
+    (firstCell === 'id' && secondCell === 'date') ||
+    (firstCell === 'date' && secondCell === 'value') ||
+    (acc.headerCandidatePending && !VALID_RECORD_KINDS.has(firstCell as OmniRecordKind))
+  ) {
+    acc.headerCandidatePending = false;
+    acc.activeHeaders = line.map((h) => h.trim());
+    for (const h of acc.activeHeaders) {
+      if (h) acc.discoveredHeaderSet.add(h);
+    }
+    return;
+  }
+  acc.headerCandidatePending = false;
+
+  // 3. Parse Data Row
+  const obj: Record<string, string> = {};
+  const firstCellIsLegacyKind = VALID_RECORD_KINDS.has(firstCell as OmniRecordKind);
+
+  if (firstCellIsLegacyKind && acc.activeHeaders[0] !== '_record_kind') {
+    obj._record_kind = firstCell;
+    acc.presentSheetsSet.add(firstCell as OmniRecordKind);
+    for (let c = 0; c < acc.activeHeaders.length; c++) {
+      obj[acc.activeHeaders[c]] = line[c + 1] ?? '';
+    }
+  } else {
+    for (let c = 0; c < acc.activeHeaders.length; c++) {
+      obj[acc.activeHeaders[c]] = line[c] ?? '';
+    }
+    if (obj._record_kind && VALID_RECORD_KINDS.has(obj._record_kind.trim() as OmniRecordKind)) {
+      acc.presentSheetsSet.add(obj._record_kind.trim() as OmniRecordKind);
+    } else if (acc.currentSheetKind) {
+      obj._record_kind = acc.currentSheetKind;
+      acc.presentSheetsSet.add(acc.currentSheetKind);
+    } else {
+      acc.unassignedBatch.push(obj);
+    }
+  }
+
+  if (obj._record_kind === 'coin_ledger_row') {
+    if (acc.coinBackupTableId && !obj._container_id) obj._container_id = acc.coinBackupTableId;
+    if (acc.coinBackupTableName && !obj._table_name) obj._table_name = acc.coinBackupTableName;
+    if (!acc.coinEnvelopeAttached && Object.keys(acc.coinBackupEnvelope).length > 0) {
+      obj._table_envelope_json = JSON.stringify(acc.coinBackupEnvelope);
+      acc.coinEnvelopeAttached = true;
+    }
+  }
+
+  acc.rows.push(obj);
+}
+
+function finalizeRawOmniTableAccumulator(acc: RawOmniTableAccumulator): {
+  headers: string[];
+  rows: Record<string, string>[];
+  presentSheets: OmniRecordKind[];
+} {
+  if (acc.discoveredHeaderSet.size === 0 && acc.rows.length === 0) {
+    return {
+      headers: [],
+      rows: [],
+      presentSheets: Array.from(acc.presentSheetsSet),
+    };
+  }
+  const finalHeaders =
+    acc.discoveredHeaderSet.size > 0
+      ? Array.from(acc.discoveredHeaderSet)
+      : [...OMNI_CSV_HEADERS];
+
+  return {
+    headers: finalHeaders,
+    rows: acc.rows,
+    presentSheets: Array.from(acc.presentSheetsSet),
+  };
+}
+
 export function parseRawOmniCsvTable(csvText: string): {
   headers: string[];
   rows: Record<string, string>[];
@@ -594,259 +902,90 @@ export function parseRawOmniCsvTable(csvText: string): {
   const clean = (csvText || '').replace(/^\uFEFF/, '').trim();
   if (!clean) return { headers: [], rows: [], presentSheets: [] };
 
-  const matrix: string[][] = [];
-  let currentRow: string[] = [];
-  let currentCell = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < clean.length; i++) {
-    const ch = clean[i];
-    const next = clean[i + 1];
-
-    if (inQuotes) {
-      if (ch === '"' && next === '"') {
-        currentCell += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        currentCell += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ',') {
-        currentRow.push(currentCell);
-        currentCell = '';
-      } else if (ch === '\r' && next === '\n') {
-        currentRow.push(currentCell);
-        matrix.push(currentRow);
-        currentRow = [];
-        currentCell = '';
-        i++;
-      } else if (ch === '\n' || ch === '\r') {
-        currentRow.push(currentCell);
-        matrix.push(currentRow);
-        currentRow = [];
-        currentCell = '';
-      } else {
-        currentCell += ch;
-      }
-    }
-  }
-
-  if (currentCell.length > 0 || currentRow.length > 0) {
-    currentRow.push(currentCell);
-    matrix.push(currentRow);
-  }
+  const scanState: CsvMatrixScanState = {
+    matrix: [],
+    currentRow: [],
+    currentCell: '',
+    inQuotes: false,
+    index: 0,
+  };
+  stepCsvMatrixScan(clean, clean.length, scanState);
+  const matrix = finalizeCsvMatrixScan(scanState);
 
   if (matrix.length === 0) return { headers: [], rows: [], presentSheets: [] };
 
-  let activeHeaders: string[] = [...OMNI_CSV_HEADERS];
-  const discoveredHeaderSet = new Set<string>();
-  let currentSheetKind: OmniRecordKind | null = null;
-  const presentSheetsSet = new Set<OmniRecordKind>();
-  const rows: Record<string, string>[] = [];
-  let unassignedBatch: Record<string, string>[] = [];
-
-  // Assistente Moeda Backup v3 header envelope state
-  let coinBackupTableId = '';
-  let coinBackupTableName = '';
-  const coinBackupEnvelope: Record<string, any> = {};
-  let coinEnvelopeAttached = false;
-  const rowsMarkerIdx = matrix.findIndex((row) =>
-    /^##\s*ROWS\s*##$/i.test((row[0] || '').trim())
-  );
-
+  const acc = createRawOmniTableAccumulator(matrix);
   for (let r = 0; r < matrix.length; r++) {
-    const line = matrix[r];
-    if (line.every((cell) => cell.trim() === '')) continue;
-
-    const firstCell = (line[0] || '').trim();
-    const secondCell = (line[1] || '').trim();
-
-    // 0a. If the file has a `## ROWS ##` marker (Assistente Moeda Backup v3), everything before `rowsMarkerIdx` is envelope metadata/schema
-    if (rowsMarkerIdx !== -1 && r <= rowsMarkerIdx) {
-      currentSheetKind = 'coin_ledger_row';
-      presentSheetsSet.add('coin_ledger_row');
-      if (!firstCell.startsWith('##') && secondCell) {
-        const k = firstCell.toLowerCase();
-        if (k === 'table_id' || k === 'tableid') coinBackupTableId = secondCell;
-        else if (k === 'name' || k === 'nome') coinBackupTableName = secondCell;
-        else if (k === 'description' || k === 'descricao') coinBackupEnvelope.description = secondCell;
-        else if (k === 'active_sectors') {
-          try {
-            coinBackupEnvelope.activeSectors = JSON.parse(decodeURIComponent(secondCell));
-          } catch {}
-        } else if (k === 'dashboard_config') {
-          try {
-            coinBackupEnvelope.dashboardConfig = JSON.parse(decodeURIComponent(secondCell));
-          } catch {}
-        } else if (k === 'sector_params') {
-          try {
-            coinBackupEnvelope.sectorParams = JSON.parse(decodeURIComponent(secondCell));
-          } catch {}
-        } else if (k === 'profile_type') {
-          coinBackupEnvelope.investorProfile = {
-            ...(coinBackupEnvelope.investorProfile || {
-              emergencyFundMonthsGoal: 6,
-              fireTargetAnnualExpensesMultiplier: 25,
-            }),
-            profileType: secondCell,
-          };
-        } else if (k === 'emergency_fund_goal_months' && coinBackupEnvelope.investorProfile) {
-          coinBackupEnvelope.investorProfile.emergencyFundMonthsGoal = parseInt(secondCell, 10) || 6;
-        } else if (k === 'fire_annual_multiplier' && coinBackupEnvelope.investorProfile) {
-          coinBackupEnvelope.investorProfile.fireTargetAnnualExpensesMultiplier =
-            parseInt(secondCell, 10) || 25;
-        } else if (k === 'monthly_contribution_goal' && coinBackupEnvelope.investorProfile) {
-          coinBackupEnvelope.investorProfile.monthlyContributionGoal =
-            parseFloat(secondCell) || undefined;
-        }
-      } else if (firstCell.startsWith('##')) {
-        const fullBannerLine = line.join(',').trim();
-        const match = fullBannerLine.match(/^##\s*([A-Z0-9_]+):\s*(.*?)\s*##$/i);
-        if (match) {
-          const key = match[1].toUpperCase();
-          const val = match[2].trim();
-          if (key === 'TABLE_ID') coinBackupTableId = val;
-          else if (key === 'TABLE_NAME') coinBackupTableName = val;
-          else if (key === 'TABLE_DESCRIPTION') coinBackupEnvelope.description = val;
-          else if (key === 'GOALS_JSON') coinBackupEnvelope.goals = safeJsonParse(val, undefined);
-          else if (key === 'INVESTOR_PROFILE_JSON')
-            coinBackupEnvelope.investorProfile = safeJsonParse(val, undefined);
-          else if (key === 'SCHEMA_JSON') coinBackupEnvelope.schema = safeJsonParse(val, undefined);
-          else if (key === 'ACTIVE_SECTORS_JSON')
-            coinBackupEnvelope.activeSectors = safeJsonParse(val, undefined);
-          else if (key === 'DASHBOARD_CONFIG_JSON')
-            coinBackupEnvelope.dashboardConfig = safeJsonParse(val, undefined);
-          else if (key === 'SECTOR_PARAMS_JSON')
-            coinBackupEnvelope.sectorParams = safeJsonParse(val, undefined);
-        }
-      }
-      continue;
-    }
-
-    // 0b. Check if this line is an Assistente Moeda Backup v3 (`## ... ##`) banner/metadata line
-    if (firstCell.startsWith('##')) {
-      const fullBannerLine = line.join(',').trim();
-      if (/^##\s*(COIN ASSISTANT BACKUP|ROWS)/i.test(fullBannerLine)) {
-        currentSheetKind = 'coin_ledger_row';
-        presentSheetsSet.add('coin_ledger_row');
-      } else {
-        const match = fullBannerLine.match(/^##\s*([A-Z0-9_]+):\s*(.*?)\s*##$/i);
-        if (match) {
-          const key = match[1].toUpperCase();
-          const val = match[2].trim();
-          currentSheetKind = 'coin_ledger_row';
-          presentSheetsSet.add('coin_ledger_row');
-          if (key === 'TABLE_ID') coinBackupTableId = val;
-          else if (key === 'TABLE_NAME') coinBackupTableName = val;
-          else if (key === 'TABLE_DESCRIPTION') coinBackupEnvelope.description = val;
-          else if (key === 'GOALS_JSON') coinBackupEnvelope.goals = safeJsonParse(val, undefined);
-          else if (key === 'INVESTOR_PROFILE_JSON')
-            coinBackupEnvelope.investorProfile = safeJsonParse(val, undefined);
-          else if (key === 'SCHEMA_JSON') coinBackupEnvelope.schema = safeJsonParse(val, undefined);
-          else if (key === 'ACTIVE_SECTORS_JSON')
-            coinBackupEnvelope.activeSectors = safeJsonParse(val, undefined);
-          else if (key === 'DASHBOARD_CONFIG_JSON')
-            coinBackupEnvelope.dashboardConfig = safeJsonParse(val, undefined);
-          else if (key === 'SECTOR_PARAMS_JSON')
-            coinBackupEnvelope.sectorParams = safeJsonParse(val, undefined);
-        }
-      }
-      continue;
-    }
-
-    // 1. Check if this line is a Top or Bottom Planilha Marker (`#PLANILHA,<engine>` or `#ABA_PLANILHA,<engine>`)
-    if (
-      /^#?(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)$/i.test(firstCell) ||
-      /^#?(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)[:\s]/i.test(firstCell)
-    ) {
-      const candidate = secondCell || firstCell;
-      const resolved = resolveSheetNameToRecordKind(candidate) || resolveSheetNameToRecordKind(line[2] || '');
-      if (resolved) {
-        presentSheetsSet.add(resolved);
-        if (/^#?(ABA_PLANILHA|FIM_PLANILHA)/i.test(firstCell)) {
-          // Bottom sheet tab marker ("nome da planilha em baixo"): assign any unassigned rows above it
-          for (const pending of unassignedBatch) {
-            if (!pending._record_kind) {
-              pending._record_kind = resolved;
-            }
-          }
-          unassignedBatch = [];
-          currentSheetKind = null;
-        } else {
-          // Top sheet marker
-          currentSheetKind = resolved;
-          unassignedBatch = [];
-        }
-      }
-      continue;
-    }
-
-    // 2. Check if this line is a Column Header row (either at top of file, start of a Planilha block, or immediately after ## ROWS ##)
-    if (
-      (rowsMarkerIdx !== -1 && r === rowsMarkerIdx + 1) ||
-      firstCell === '_container_id' ||
-      firstCell === '_record_kind' ||
-      (firstCell === '_key' && secondCell === '_type') ||
-      (firstCell === 'id' && secondCell === 'date') ||
-      (firstCell === 'date' && secondCell === 'value') ||
-      (r === 0 && !VALID_RECORD_KINDS.has(firstCell as OmniRecordKind))
-    ) {
-      activeHeaders = line.map((h) => h.trim());
-      for (const h of activeHeaders) {
-        if (h) discoveredHeaderSet.add(h);
-      }
-      continue;
-    }
-
-    // 3. Parse Data Row
-    const obj: Record<string, string> = {};
-    const firstCellIsLegacyKind = VALID_RECORD_KINDS.has(firstCell as OmniRecordKind);
-
-    if (firstCellIsLegacyKind && activeHeaders[0] !== '_record_kind') {
-      // Legacy 16-column row where column 0 is `_record_kind` and columns 1..15 map to `activeHeaders`
-      obj._record_kind = firstCell;
-      presentSheetsSet.add(firstCell as OmniRecordKind);
-      for (let c = 0; c < activeHeaders.length; c++) {
-        obj[activeHeaders[c]] = line[c + 1] ?? '';
-      }
-    } else {
-      for (let c = 0; c < activeHeaders.length; c++) {
-        obj[activeHeaders[c]] = line[c] ?? '';
-      }
-      if (obj._record_kind && VALID_RECORD_KINDS.has(obj._record_kind.trim() as OmniRecordKind)) {
-        presentSheetsSet.add(obj._record_kind.trim() as OmniRecordKind);
-      } else if (currentSheetKind) {
-        obj._record_kind = currentSheetKind;
-        presentSheetsSet.add(currentSheetKind);
-      } else {
-        unassignedBatch.push(obj);
-      }
-    }
-
-    if (obj._record_kind === 'coin_ledger_row') {
-      if (coinBackupTableId && !obj._container_id) obj._container_id = coinBackupTableId;
-      if (coinBackupTableName && !obj._table_name) obj._table_name = coinBackupTableName;
-      if (!coinEnvelopeAttached && Object.keys(coinBackupEnvelope).length > 0) {
-        obj._table_envelope_json = JSON.stringify(coinBackupEnvelope);
-        coinEnvelopeAttached = true;
-      }
-    }
-
-    rows.push(obj);
+    stepRawOmniMatrixRow(matrix[r], r, acc);
   }
+  return finalizeRawOmniTableAccumulator(acc);
+}
 
-  const finalHeaders =
-    discoveredHeaderSet.size > 0 ? Array.from(discoveredHeaderSet) : [...OMNI_CSV_HEADERS];
+export async function parseRawOmniCsvTableAsync(
+  csvText: string,
+  options: AsyncImportControllerOptions = {}
+): Promise<{
+  headers: string[];
+  rows: Record<string, string>[];
+  presentSheets: OmniRecordKind[];
+}> {
+  throwIfImportAborted(options.signal);
+  const clean = (csvText || '').replace(/^\uFEFF/, '').trim();
+  if (!clean) return { headers: [], rows: [], presentSheets: [] };
 
-  return {
-    headers: finalHeaders,
-    rows,
-    presentSheets: Array.from(presentSheetsSet),
+  const charChunkSize = 65536;
+  const scanState: CsvMatrixScanState = {
+    matrix: [],
+    currentRow: [],
+    currentCell: '',
+    inQuotes: false,
+    index: 0,
   };
+
+  while (scanState.index < clean.length) {
+    throwIfImportAborted(options.signal);
+    const nextEnd = Math.min(scanState.index + charChunkSize, clean.length);
+    stepCsvMatrixScan(clean, nextEnd, scanState);
+    if (scanState.index < clean.length) {
+      const ratio = scanState.index / clean.length;
+      options.onProgress?.({
+        stage: 'parsing_rows',
+        stageLabel: IMPORT_STAGE_LABELS_PT.parsing_rows,
+        detailLabel: 'Lendo estrutura CSV...',
+        cancellable: true,
+        fileName: options.fileName,
+        sizeBytes: options.sizeBytes,
+        percent: Math.min(45, 10 + Math.round(ratio * 35)),
+      });
+      await yieldToEventLoop();
+    }
+  }
+  const matrix = finalizeCsvMatrixScan(scanState);
+  if (matrix.length === 0) return { headers: [], rows: [], presentSheets: [] };
+
+  const rowChunkSize = Math.max(50, options.chunkSize || 250);
+  const acc = createRawOmniTableAccumulator(matrix);
+  for (let r = 0; r < matrix.length; r++) {
+    stepRawOmniMatrixRow(matrix[r], r, acc);
+    if (r > 0 && r % rowChunkSize === 0) {
+      throwIfImportAborted(options.signal);
+      const pct = 45 + Math.round((r / matrix.length) * 30);
+      options.onProgress?.({
+        stage: 'parsing_rows',
+        stageLabel: IMPORT_STAGE_LABELS_PT.parsing_rows,
+        detailLabel: `Analisando ${r.toLocaleString('pt-BR')} de ${matrix.length.toLocaleString('pt-BR')} linhas...`,
+        processedCount: r,
+        totalCount: matrix.length,
+        percent: pct,
+        cancellable: true,
+        fileName: options.fileName,
+        sizeBytes: options.sizeBytes,
+      });
+      await yieldToEventLoop();
+    }
+  }
+  throwIfImportAborted(options.signal);
+  return finalizeRawOmniTableAccumulator(acc);
 }
 
 function safeJsonParse<T>(raw: string | undefined, fallback: T): T {
@@ -1294,439 +1433,445 @@ export function parseParticipantPrivilegesFromCsvRow(
   return capMap;
 }
 
-/**
- * Demultiplexes a Multi-Planilha Omni-CSV string (or legacy 16-column Omni-CSV or single-engine CSV)
- * back into a `SekundoOmniStateBundle`.
- */
-export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
-  const { headers, rows, presentSheets } = parseRawOmniCsvTable(csvText);
+interface OmniBundleAccumulatorState {
+  unitName: string;
+  participants: ParticipantProfile[];
+  scheduleRegistry: FlatSkeletonEntry[];
+  territoryRegistry: FlatSkeletonEntry[];
+  eventsMap: Map<string, OmniEventBundleItem>;
+  studioDocuments: OmniStudioDocItem[];
+  hojeManifestYaml: string;
+  hojeRituals: OmniHojeRitualItem[];
+  coinLedgerRows: OmniCoinLedgerRowItem[];
+  seenRecordKinds: Set<OmniRecordKind>;
+}
 
-  let unitName = PROGRAMACAO_UNIT_NAME;
-  const participants: ParticipantProfile[] = [];
-  const scheduleRegistry: FlatSkeletonEntry[] = [];
-  const territoryRegistry: FlatSkeletonEntry[] = [];
-  const eventsMap = new Map<string, OmniEventBundleItem>();
-  const studioDocuments: OmniStudioDocItem[] = [];
-  let hojeManifestYaml = DEFAULT_SEKUNDO_APP_YAML;
-  const hojeRituals: OmniHojeRitualItem[] = [];
-  const coinLedgerRows: OmniCoinLedgerRowItem[] = [];
-
+function resolveNonOmniBundleIfApplicable(
+  csvText: string,
+  headers: string[],
+  presentSheets: OmniRecordKind[],
+  unitName: string
+): SekundoOmniStateBundle | null {
   const isOmniSchema =
     presentSheets.length > 0 ||
     headers.includes('_record_kind') ||
     headers.includes('_container_id');
 
-  if (!isOmniSchema) {
-    if (isTerritorySpreadsheetCsvText(csvText)) {
-      const parsedTerritory = importTerritorySpreadsheetGrid(parseCsvTextToGrid(csvText));
-      return {
-        unitName,
-        participants: DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS.map((p, idx) =>
-          ensureParticipantPrivilegeMatrix(p, idx, { preserveExplicitCapabilities: true })
-        ),
-        scheduleRegistry: [],
-        territoryRegistry: parsedTerritory.nodes,
-        events: [],
-        studioDocuments: [],
-        hojeManifestYaml,
-        hojeRituals: [],
-        coinLedgerRows: [],
-        presentSheets: ['hub_territory_cycle'],
-      };
-    }
+  if (isOmniSchema) return null;
 
-    // Fallback for standard single-engine or Schedule Hub simplified CSV
-    const hubParsed = importScheduleHubFromCsv(csvText);
+  if (isTerritorySpreadsheetCsvText(csvText)) {
+    const parsedTerritory = importTerritorySpreadsheetGrid(parseCsvTextToGrid(csvText));
     return {
-      unitName: hubParsed.unitName,
-      participants: hubParsed.participants,
-      scheduleRegistry: hubParsed.scheduleRegistry,
-      territoryRegistry: hubParsed.territoryRegistry,
+      unitName,
+      participants: DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS.map((p, idx) =>
+        ensureParticipantPrivilegeMatrix(p, idx, { preserveExplicitCapabilities: true })
+      ),
+      scheduleRegistry: [],
+      territoryRegistry: parsedTerritory.nodes,
       events: [],
       studioDocuments: [],
-      hojeManifestYaml,
+      hojeManifestYaml: DEFAULT_SEKUNDO_APP_YAML,
       hojeRituals: [],
       coinLedgerRows: [],
-      presentSheets: ['hub_schedule_slot'],
+      presentSheets: ['hub_territory_cycle'],
     };
   }
 
-  const seenRecordKinds = new Set<OmniRecordKind>(presentSheets);
+  const hubParsed = importScheduleHubFromCsv(csvText);
+  return {
+    unitName: hubParsed.unitName,
+    participants: hubParsed.participants,
+    scheduleRegistry: hubParsed.scheduleRegistry,
+    territoryRegistry: hubParsed.territoryRegistry,
+    events: [],
+    studioDocuments: [],
+    hojeManifestYaml: DEFAULT_SEKUNDO_APP_YAML,
+    hojeRituals: [],
+    coinLedgerRows: [],
+    presentSheets: ['hub_schedule_slot'],
+  };
+}
 
-  for (const row of rows) {
-    const kind = (row._record_kind || '').trim() as OmniRecordKind;
-    if (kind) seenRecordKinds.add(kind);
-    const containerId = (row._container_id || '').trim();
-    const key = (row._key || '').trim();
-    const type = ((row._type || 'slot').trim() as NodeType) || 'slot';
-    const title = row.title_or_name || '';
-    const primary = row.primary_assignee || '';
-    const secondary = row.secondary_assignee || '';
-    const meta = safeJsonParse<Record<string, any>>(row._meta_json, {});
+function stepOmniRowIntoBundle(
+  row: Record<string, string>,
+  headers: string[],
+  state: OmniBundleAccumulatorState
+): void {
+  const kind = (row._record_kind || '').trim() as OmniRecordKind;
+  if (kind) state.seenRecordKinds.add(kind);
+  const containerId = (row._container_id || '').trim();
+  const key = (row._key || '').trim();
+  const type = ((row._type || 'slot').trim() as NodeType) || 'slot';
+  const title = row.title_or_name || '';
+  const primary = row.primary_assignee || '';
+  const secondary = row.secondary_assignee || '';
+  const meta = safeJsonParse<Record<string, any>>(row._meta_json, {});
 
-    if (kind === 'participant_privilege') {
-      if (containerId) unitName = containerId;
-      const groupParts = (row.group_or_tier || 'Grupo 1|operador_base')
-        .split('|')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const groupPart = groupParts[0] || 'Grupo 1';
-      const tierPart =
-        groupParts.find((g) =>
-          ['coordenador_senior', 'assistente_tecnico', 'operador_base'].includes(g)
-        ) || 'operador_base';
-      const hasSealInGroupCol = groupParts.some((g) => /^(selo_admin|admin|👑)$/i.test(g));
-      const hasNoSealInGroupCol = groupParts.some((g) => /^(sem_selo_admin|consultor|viewer)$/i.test(g));
-      const capMap = parseParticipantPrivilegesFromCsvRow(row, headers, meta);
+  if (kind === 'participant_privilege') {
+    if (containerId) state.unitName = containerId;
+    const groupParts = (row.group_or_tier || 'Grupo 1|operador_base')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const groupPart = groupParts[0] || 'Grupo 1';
+    const tierPart =
+      groupParts.find((g) =>
+        ['coordenador_senior', 'assistente_tecnico', 'operador_base'].includes(g)
+      ) || 'operador_base';
+    const hasSealInGroupCol = groupParts.some((g) => /^(selo_admin|admin|👑)$/i.test(g));
+    const hasNoSealInGroupCol = groupParts.some((g) =>
+      /^(sem_selo_admin|consultor|viewer)$/i.test(g)
+    );
+    const capMap = parseParticipantPrivilegesFromCsvRow(row, headers, meta);
 
-      const rawContact = (row.contact_or_location || '').trim();
-      const pinMatch = rawContact.match(/(?:pin\s*[:=]\s*|^)(\d{3,8})$/i);
-      const extractedPin = pinMatch ? pinMatch[1] : meta.accessPin;
+    const rawContact = (row.contact_or_location || '').trim();
+    const pinMatch = rawContact.match(/(?:pin\s*[:=]\s*|^)(\d{3,8})$/i);
+    const extractedPin = pinMatch ? pinMatch[1] : meta.accessPin;
 
-      const explicitAdminSeal = hasSealInGroupCol
-        ? true
-        : hasNoSealInGroupCol
-        ? false
-        : capMap.cap_selo_admin === true || capMap.selo_admin === true
-        ? true
-        : typeof meta.hasAdminSeal === 'boolean'
-        ? meta.hasAdminSeal
-        : false;
-      delete capMap.cap_selo_admin;
-      delete capMap.selo_admin;
+    const explicitAdminSeal = hasSealInGroupCol
+      ? true
+      : hasNoSealInGroupCol
+      ? false
+      : capMap.cap_selo_admin === true || capMap.selo_admin === true
+      ? true
+      : typeof meta.hasAdminSeal === 'boolean'
+      ? meta.hasAdminSeal
+      : false;
+    delete capMap.cap_selo_admin;
+    delete capMap.selo_admin;
 
-      const statusFlags = (row.status_or_readiness || '')
-        .split('|')
-        .map((s) => s.trim())
-        .filter(Boolean) as any[];
+    const statusFlags = (row.status_or_readiness || '')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean) as any[];
 
-      const profile: ParticipantProfile = ensureParticipantPrivilegeMatrix(
-        {
-          ...meta,
-          id: key || meta.id || `p-${participants.length + 1}`,
-          name: title || primary || meta.name || `Participante ${participants.length + 1}`,
-          groupTag: groupPart || meta.groupTag || 'Grupo 1',
-          profileCategory: (
-            row._type === 'perfil_b'
-              ? 'perfil_b'
-              : row._type === 'perfil_a'
-              ? 'perfil_a'
-              : meta.profileCategory || 'perfil_a'
-          ) as any,
-          roleTier: (tierPart || meta.roleTier || 'operador_base') as any,
-          statusFlags: statusFlags.length > 0 ? statusFlags : meta.statusFlags,
-          capabilities: capMap,
-          capabilityTags: (row.notes_or_payload || '')
-            .split('|')
-            .map((s) => s.trim())
-            .filter(Boolean),
-          lastAssignedIsoDate: row.date_or_cycle || meta.lastAssignedIsoDate || '',
-          assignmentCount: parseInt(row.time_or_duration || '0', 10) || meta.assignmentCount || 0,
-          lastPartnerId: secondary || meta.lastPartnerId || undefined,
-          hasAdminSeal: explicitAdminSeal,
-          accessPin: extractedPin,
-          preserveExplicitCapabilities: true,
-        },
-        participants.length,
-        { preserveExplicitCapabilities: true }
-      );
-      participants.push(profile);
-    } else if (kind === 'hub_schedule_slot') {
-      if (containerId) unitName = containerId;
-      const mergedMeta: Record<string, any> = {
+    const profile: ParticipantProfile = ensureParticipantPrivilegeMatrix(
+      {
         ...meta,
-        _enginePartition: 'roster_assignments',
-      };
-      if (row.group_or_tier) mergedMeta.groupTag = row.group_or_tier;
-      if (row.date_or_cycle) mergedMeta.sessionDate = row.date_or_cycle;
-      if (row.time_or_duration) {
-        const mins = parseInt(row.time_or_duration, 10);
-        if (!Number.isNaN(mins)) mergedMeta.durationMinutes = mins;
-      }
-      if (row.status_or_readiness) {
-        mergedMeta.readinessState = row.status_or_readiness;
-        mergedMeta.confirmed = row.status_or_readiness === 'ready';
-      }
-      if (row.contact_or_location) mergedMeta.room = row.contact_or_location;
+        id: key || meta.id || `p-${state.participants.length + 1}`,
+        name: title || primary || meta.name || `Participante ${state.participants.length + 1}`,
+        groupTag: groupPart || meta.groupTag || 'Grupo 1',
+        profileCategory: (
+          row._type === 'perfil_b'
+            ? 'perfil_b'
+            : row._type === 'perfil_a'
+            ? 'perfil_a'
+            : meta.profileCategory || 'perfil_a'
+        ) as any,
+        roleTier: (tierPart || meta.roleTier || 'operador_base') as any,
+        statusFlags: statusFlags.length > 0 ? statusFlags : meta.statusFlags,
+        capabilities: capMap,
+        capabilityTags: (row.notes_or_payload || '')
+          .split('|')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        lastAssignedIsoDate: row.date_or_cycle || meta.lastAssignedIsoDate || '',
+        assignmentCount: parseInt(row.time_or_duration || '0', 10) || meta.assignmentCount || 0,
+        lastPartnerId: secondary || meta.lastPartnerId || undefined,
+        hasAdminSeal: explicitAdminSeal,
+        accessPin: extractedPin,
+        preserveExplicitCapabilities: true,
+      },
+      state.participants.length,
+      { preserveExplicitCapabilities: true }
+    );
+    state.participants.push(profile);
+  } else if (kind === 'hub_schedule_slot') {
+    if (containerId) state.unitName = containerId;
+    const mergedMeta: Record<string, any> = {
+      ...meta,
+      _enginePartition: 'roster_assignments',
+    };
+    if (row.group_or_tier) mergedMeta.groupTag = row.group_or_tier;
+    if (row.date_or_cycle) mergedMeta.sessionDate = row.date_or_cycle;
+    if (row.time_or_duration) {
+      const mins = parseInt(row.time_or_duration, 10);
+      if (!Number.isNaN(mins)) mergedMeta.durationMinutes = mins;
+    }
+    if (row.status_or_readiness) {
+      mergedMeta.readinessState = row.status_or_readiness;
+      mergedMeta.confirmed = row.status_or_readiness === 'ready';
+    }
+    if (row.contact_or_location) mergedMeta.room = row.contact_or_location;
 
-      let value = primary;
-      if (type === 'header' && key.split('-').length === 1) {
-        if (primary) mergedMeta.chairPerson = primary;
-        if (secondary) mergedMeta.openingPrayer = secondary;
-        if (row.notes_or_payload && !mergedMeta.closingPrayer) {
-          mergedMeta.closingPrayer = row.notes_or_payload;
-        }
-      } else if (type === 'slot') {
-        if (primary) mergedMeta.assignedTo = primary;
-        if (secondary) {
-          mergedMeta.assistantTo = secondary;
-          value = `${primary} / ${secondary}`;
-        } else {
-          delete mergedMeta.assistantTo;
-        }
+    let value = primary;
+    if (type === 'header' && key.split('-').length === 1) {
+      if (primary) mergedMeta.chairPerson = primary;
+      if (secondary) mergedMeta.openingPrayer = secondary;
+      if (row.notes_or_payload && !mergedMeta.closingPrayer) {
+        mergedMeta.closingPrayer = row.notes_or_payload;
       }
-
-      scheduleRegistry.push({
-        key,
-        type,
-        label: title,
-        value,
-        email: '',
-        meta: mergedMeta,
-      });
-    } else if (kind === 'hub_territory_cycle') {
-      if (containerId) unitName = containerId;
-      const mergedMeta: Record<string, any> = {
-        ...meta,
-        _enginePartition: 'territory_logistics',
-      };
-      if (primary) mergedMeta.workerName = primary;
-      if (row.group_or_tier) mergedMeta.groupTag = row.group_or_tier;
-      if (row.date_or_cycle) mergedMeta.assignedAt = row.date_or_cycle;
-      if (row.time_or_duration) mergedMeta.completedAt = row.time_or_duration;
-      if (row.status_or_readiness) {
-        mergedMeta.worked = row.status_or_readiness === 'concluido' ? 1 : 0;
-      }
-      if (row.contact_or_location && !mergedMeta.locality) {
-        mergedMeta.locality = row.contact_or_location;
-      }
-      if (row.notes_or_payload && !mergedMeta.territoryNumber && !mergedMeta.territory_number) {
-        mergedMeta.territoryNumber = row.notes_or_payload;
-        mergedMeta.territory_number = row.notes_or_payload;
-      }
-
-      const rawTerritoryType = (row._type || '').trim().toLowerCase();
-      const resolvedTerritoryType: NodeType =
-        rawTerritoryType === 'header' || rawTerritoryType === 'note' || rawTerritoryType === 'slot'
-          ? (rawTerritoryType as NodeType)
-          : 'territory';
-
-      territoryRegistry.push({
-        key,
-        type: resolvedTerritoryType,
-        label: title,
-        value: primary,
-        email: '',
-        meta: mergedMeta,
-      });
-    } else if (kind === 'studio_document') {
-      const rawYaml = row.notes_or_payload
-        ? row.notes_or_payload.replace(/\\n/g, '\n')
-        : meta.sdocYaml || '';
-      studioDocuments.push({
-        id: key || containerId || `doc-${studioDocuments.length + 1}`,
-        title: title || 'Documento SDOC',
-        format: row.group_or_tier || 'A4-Portrait-mm',
-        sdocYaml: rawYaml,
-      });
-    } else if (kind === 'cockpit_hoje') {
-      if (key === 'manifest' || containerId === 'sekundo.app.yaml') {
-        hojeManifestYaml = row.notes_or_payload
-          ? row.notes_or_payload.replace(/\\n/g, '\n')
-          : meta.yaml || DEFAULT_SEKUNDO_APP_YAML;
+    } else if (type === 'slot') {
+      if (primary) mergedMeta.assignedTo = primary;
+      if (secondary) {
+        mergedMeta.assistantTo = secondary;
+        value = `${primary} / ${secondary}`;
       } else {
-        hojeRituals.push({
-          id: key || `ritual-${hojeRituals.length + 1}`,
-          title: title || 'Ritual Governado',
-          frequency: row.group_or_tier || 'weekly',
-          status: row.status_or_readiness || 'active',
-          notes: row.notes_or_payload || '',
-        });
+        delete mergedMeta.assistantTo;
       }
-    } else if (kind === 'coin_ledger_row') {
-      const parsedAmount = parseFloat(
-        primary || row.value || row.valor || row.notes_or_payload || String(meta.amount ?? 0)
-      );
-      const rawEntryType = (
-        secondary ||
-        row.entryType ||
-        row.entry_type ||
-        row.tipo ||
-        row.type ||
-        meta.entryType ||
-        'expense'
-      )
-        .trim()
-        .toLowerCase();
-      let entryType: CoinLedgerEntryType = 'expense';
-      if (rawEntryType === 'revenue' || rawEntryType === 'receita' || rawEntryType === 'entrada') {
-        entryType = 'revenue';
-      } else if (rawEntryType === 'income') {
-        entryType = 'income';
-      } else if (rawEntryType === 'deposit' || rawEntryType === 'aporte') {
-        entryType = 'deposit';
-      } else if (rawEntryType === 'investment' || rawEntryType === 'investimento') {
-        entryType = 'investment';
-      } else if (rawEntryType === 'waiver' || rawEntryType === 'abono') {
-        entryType = 'waiver';
-      } else if (rawEntryType === 'partner_in') {
-        entryType = 'partner_in';
-      } else if (rawEntryType === 'partner_out') {
-        entryType = 'partner_out';
-      } else if (rawEntryType === 'unresolved') {
-        entryType = 'unresolved';
-      }
+    }
 
-      const rawStatus = (row.status_or_readiness || meta.status || 'paid').toLowerCase();
-      const status: 'paid' | 'pending' | 'scheduled' =
-        rawStatus === 'pending' || rawStatus === 'scheduled' ? rawStatus : 'paid';
+    state.scheduleRegistry.push({
+      key,
+      type,
+      label: title,
+      value,
+      email: '',
+      meta: mergedMeta,
+    });
+  } else if (kind === 'hub_territory_cycle') {
+    if (containerId) state.unitName = containerId;
+    const mergedMeta: Record<string, any> = {
+      ...meta,
+      _enginePartition: 'territory_logistics',
+    };
+    if (primary) mergedMeta.workerName = primary;
+    if (row.group_or_tier) mergedMeta.groupTag = row.group_or_tier;
+    if (row.date_or_cycle) mergedMeta.assignedAt = row.date_or_cycle;
+    if (row.time_or_duration) mergedMeta.completedAt = row.time_or_duration;
+    if (row.status_or_readiness) {
+      mergedMeta.worked = row.status_or_readiness === 'concluido' ? 1 : 0;
+    }
+    if (row.contact_or_location && !mergedMeta.locality) {
+      mergedMeta.locality = row.contact_or_location;
+    }
+    if (row.notes_or_payload && !mergedMeta.territoryNumber && !mergedMeta.territory_number) {
+      mergedMeta.territoryNumber = row.notes_or_payload;
+      mergedMeta.territory_number = row.notes_or_payload;
+    }
 
-      const monthlyValueStr = row.monthlyValue ?? row.monthly_value;
-      const monthlyValueRaw =
-        monthlyValueStr !== undefined && monthlyValueStr !== ''
-          ? Number(monthlyValueStr)
-          : meta.monthlyValue !== undefined
-          ? Number(meta.monthlyValue)
-          : undefined;
-      const monthCountStr = row.monthCount ?? row.month_count;
-      const monthCountRaw =
-        monthCountStr !== undefined && monthCountStr !== ''
-          ? Number(monthCountStr)
-          : meta.monthCount !== undefined
-          ? Number(meta.monthCount)
-          : undefined;
-      const periodStartVal =
-        row.periodStart || row.period_start || meta.periodStart || meta.period_start || undefined;
-      const periodEndVal =
-        row.periodEnd || row.period_end || meta.periodEnd || meta.period_end || undefined;
-      const tickerVal = row.ticker || meta.ticker || undefined;
-      const quantityRaw =
-        row.quantity !== undefined && row.quantity !== ''
-          ? Number(row.quantity)
-          : meta.quantity !== undefined
-          ? Number(meta.quantity)
-          : undefined;
-      const unitPriceStr = row.unitPrice ?? row.unit_price;
-      const unitPriceRaw =
-        unitPriceStr !== undefined && unitPriceStr !== ''
-          ? Number(unitPriceStr)
-          : meta.unitPrice !== undefined
-          ? Number(meta.unitPrice)
-          : undefined;
-      const metadataJsonVal =
-        row.metadata_json || meta.metadataJson || meta.metadata_json || undefined;
-      const customValuesVal =
-        meta.customValues && typeof meta.customValues === 'object'
-          ? meta.customValues
-          : metadataJsonVal
-          ? safeJsonParse<Record<string, any>>(metadataJsonVal, {}).customValues ||
-            safeJsonParse<Record<string, any> | undefined>(metadataJsonVal, undefined)
-          : undefined;
-      const [parsedContainerId, explicitContainerName] = containerId.includes('::')
-        ? containerId.split('::').map((s) => s.trim())
-        : [containerId, ''];
-      const metaTableId = typeof meta.tableId === 'string' ? meta.tableId.trim() : '';
-      const resolvedTableId = parsedContainerId || metaTableId || 'coin-default';
-      // Se o usuário editou manualmente a coluna `_container_id` no CSV (diferente do `meta.tableId` original),
-      // não herdamos `tableName` nem `tableEnvelope` estagnados da tabela antiga contidos em `_meta_json`.
-      const containerChangedManually = Boolean(
-        parsedContainerId && metaTableId && parsedContainerId !== metaTableId
-      );
+    const rawTerritoryType = (row._type || '').trim().toLowerCase();
+    const resolvedTerritoryType: NodeType =
+      rawTerritoryType === 'header' || rawTerritoryType === 'note' || rawTerritoryType === 'slot'
+        ? (rawTerritoryType as NodeType)
+        : 'territory';
 
-      const tableEnvelopeVal = containerChangedManually
-        ? row._table_envelope_json
-          ? safeJsonParse<Record<string, any> | undefined>(row._table_envelope_json, undefined)
-          : undefined
-        : meta.tableEnvelope && typeof meta.tableEnvelope === 'object'
-        ? meta.tableEnvelope
-        : row._table_envelope_json
-        ? safeJsonParse<Record<string, any> | undefined>(row._table_envelope_json, undefined)
-        : undefined;
-
-      const resolvedTableName =
-        row._table_name ||
-        explicitContainerName ||
-        (!containerChangedManually ? meta.tableName : undefined) ||
-        (containerChangedManually ? parsedContainerId : undefined);
-
-      const isTableHeaderOnly =
-        type === 'header' ||
-        Boolean(meta.isTableHeaderOnly) ||
-        key.startsWith('__table_header__');
-
-      coinLedgerRows.push({
-        id: key || row.id || meta.id || `coin-${coinLedgerRows.length + 1}`,
-        date: row.date_or_cycle || row.date || row.data || meta.date || '',
-        category: row.group_or_tier || row.category || row.categoria || meta.category || 'Outros',
-        description: title || row.description || row.descricao || meta.description || '',
-        amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
-        entryType,
-        paymentMethod: row.capabilities_or_tags || row.tags || meta.paymentMethod || 'PIX',
-        status,
-        recurrence:
-          row.time_or_duration ||
-          meta.recurrence ||
-          (monthCountRaw && monthCountRaw > 1 ? `rateio_${monthCountRaw}m` : 'unico'),
-        tableId: resolvedTableId,
-        ...(resolvedTableName ? { tableName: String(resolvedTableName) } : {}),
-        ...(isTableHeaderOnly ? { isTableHeaderOnly: true } : {}),
-        ...(monthlyValueRaw !== undefined && Number.isFinite(monthlyValueRaw)
-          ? { monthlyValue: monthlyValueRaw }
-          : {}),
-        ...(monthCountRaw !== undefined && Number.isFinite(monthCountRaw)
-          ? { monthCount: monthCountRaw }
-          : {}),
-        ...(periodStartVal
-          ? { periodStart: String(periodStartVal), period_start: String(periodStartVal) }
-          : {}),
-        ...(periodEndVal
-          ? { periodEnd: String(periodEndVal), period_end: String(periodEndVal) }
-          : {}),
-        ...(row.tags || meta.tags ? { tags: row.tags || meta.tags } : {}),
-        ...(tickerVal ? { ticker: String(tickerVal) } : {}),
-        ...(quantityRaw !== undefined && Number.isFinite(quantityRaw)
-          ? { quantity: quantityRaw }
-          : {}),
-        ...(unitPriceRaw !== undefined && Number.isFinite(unitPriceRaw)
-          ? { unitPrice: unitPriceRaw }
-          : {}),
-        ...(metadataJsonVal
-          ? { metadataJson: String(metadataJsonVal), metadata_json: String(metadataJsonVal) }
-          : {}),
-        ...(customValuesVal && typeof customValuesVal === 'object'
-          ? { customValues: customValuesVal }
-          : {}),
-        ...(tableEnvelopeVal && typeof tableEnvelopeVal === 'object'
-          ? { tableEnvelope: tableEnvelopeVal }
-          : {}),
-      });
-    } else if (kind === 'event_node') {
-      const [rawId, rawName] = containerId.includes('::')
-        ? containerId.split('::')
-        : [containerId || 'evt-01', containerId || 'Evento Importado'];
-      const engines = (row._engines || 'custom')
-        .split('|')
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      let ev = eventsMap.get(rawId);
-      if (!ev) {
-        ev = { id: rawId, name: rawName, engines, registry: [] };
-        eventsMap.set(rawId, ev);
-      }
-
-      const mergedMeta: Record<string, any> = { ...meta };
-      if (primary && !mergedMeta.assignedTo && !mergedMeta.workerName) {
-        mergedMeta.assignedTo = primary;
-      }
-      if (secondary) mergedMeta.assistantTo = secondary;
-
-      ev.registry.push({
-        key,
-        type,
-        label: title,
-        value: row.notes_or_payload || primary || '',
-        email: row.contact_or_location?.includes('@') ? row.contact_or_location : '',
-        meta: mergedMeta,
+    state.territoryRegistry.push({
+      key,
+      type: resolvedTerritoryType,
+      label: title,
+      value: primary,
+      email: '',
+      meta: mergedMeta,
+    });
+  } else if (kind === 'studio_document') {
+    const rawYaml = row.notes_or_payload
+      ? row.notes_or_payload.replace(/\\n/g, '\n')
+      : meta.sdocYaml || '';
+    state.studioDocuments.push({
+      id: key || containerId || `doc-${state.studioDocuments.length + 1}`,
+      title: title || 'Documento SDOC',
+      format: row.group_or_tier || 'A4-Portrait-mm',
+      sdocYaml: rawYaml,
+    });
+  } else if (kind === 'cockpit_hoje') {
+    if (key === 'manifest' || containerId === 'sekundo.app.yaml') {
+      state.hojeManifestYaml = row.notes_or_payload
+        ? row.notes_or_payload.replace(/\\n/g, '\n')
+        : meta.yaml || DEFAULT_SEKUNDO_APP_YAML;
+    } else {
+      state.hojeRituals.push({
+        id: key || `ritual-${state.hojeRituals.length + 1}`,
+        title: title || 'Ritual Governado',
+        frequency: row.group_or_tier || 'weekly',
+        status: row.status_or_readiness || 'active',
+        notes: row.notes_or_payload || '',
       });
     }
-  }
+  } else if (kind === 'coin_ledger_row') {
+    const parsedAmount = parseFloat(
+      primary || row.value || row.valor || row.notes_or_payload || String(meta.amount ?? 0)
+    );
+    const rawEntryType = (
+      secondary ||
+      row.entryType ||
+      row.entry_type ||
+      row.tipo ||
+      row.type ||
+      meta.entryType ||
+      'expense'
+    )
+      .trim()
+      .toLowerCase();
+    let entryType: CoinLedgerEntryType = 'expense';
+    if (rawEntryType === 'revenue' || rawEntryType === 'receita' || rawEntryType === 'entrada') {
+      entryType = 'revenue';
+    } else if (rawEntryType === 'income') {
+      entryType = 'income';
+    } else if (rawEntryType === 'deposit' || rawEntryType === 'aporte') {
+      entryType = 'deposit';
+    } else if (rawEntryType === 'investment' || rawEntryType === 'investimento') {
+      entryType = 'investment';
+    } else if (rawEntryType === 'waiver' || rawEntryType === 'abono') {
+      entryType = 'waiver';
+    } else if (rawEntryType === 'partner_in') {
+      entryType = 'partner_in';
+    } else if (rawEntryType === 'partner_out') {
+      entryType = 'partner_out';
+    } else if (rawEntryType === 'unresolved') {
+      entryType = 'unresolved';
+    }
 
-  // Synchronize all discovered custom capabilities across all imported participants
-  // so every participant has an explicit boolean (`true` or `false`) for every custom privilege
-  if (participants.length > 0) {
-    const allEffectiveCols = getEffectiveCapabilityColumns(participants);
-    for (const p of participants) {
+    const rawStatus = (row.status_or_readiness || meta.status || 'paid').toLowerCase();
+    const status: 'paid' | 'pending' | 'scheduled' =
+      rawStatus === 'pending' || rawStatus === 'scheduled' ? rawStatus : 'paid';
+
+    const monthlyValueStr = row.monthlyValue ?? row.monthly_value;
+    const monthlyValueRaw =
+      monthlyValueStr !== undefined && monthlyValueStr !== ''
+        ? Number(monthlyValueStr)
+        : meta.monthlyValue !== undefined
+        ? Number(meta.monthlyValue)
+        : undefined;
+    const monthCountStr = row.monthCount ?? row.month_count;
+    const monthCountRaw =
+      monthCountStr !== undefined && monthCountStr !== ''
+        ? Number(monthCountStr)
+        : meta.monthCount !== undefined
+        ? Number(meta.monthCount)
+        : undefined;
+    const periodStartVal =
+      row.periodStart || row.period_start || meta.periodStart || meta.period_start || undefined;
+    const periodEndVal =
+      row.periodEnd || row.period_end || meta.periodEnd || meta.period_end || undefined;
+    const tickerVal = row.ticker || meta.ticker || undefined;
+    const quantityRaw =
+      row.quantity !== undefined && row.quantity !== ''
+        ? Number(row.quantity)
+        : meta.quantity !== undefined
+        ? Number(meta.quantity)
+        : undefined;
+    const unitPriceStr = row.unitPrice ?? row.unit_price;
+    const unitPriceRaw =
+      unitPriceStr !== undefined && unitPriceStr !== ''
+        ? Number(unitPriceStr)
+        : meta.unitPrice !== undefined
+        ? Number(meta.unitPrice)
+        : undefined;
+    const metadataJsonVal =
+      row.metadata_json || meta.metadataJson || meta.metadata_json || undefined;
+    const customValuesVal =
+      meta.customValues && typeof meta.customValues === 'object'
+        ? meta.customValues
+        : metadataJsonVal
+        ? safeJsonParse<Record<string, any>>(metadataJsonVal, {}).customValues ||
+          safeJsonParse<Record<string, any> | undefined>(metadataJsonVal, undefined)
+        : undefined;
+    const [parsedContainerId, explicitContainerName] = containerId.includes('::')
+      ? containerId.split('::').map((s) => s.trim())
+      : [containerId, ''];
+    const metaTableId = typeof meta.tableId === 'string' ? meta.tableId.trim() : '';
+    const resolvedTableId = parsedContainerId || metaTableId || 'coin-default';
+    const containerChangedManually = Boolean(
+      parsedContainerId && metaTableId && parsedContainerId !== metaTableId
+    );
+
+    const tableEnvelopeVal = containerChangedManually
+      ? row._table_envelope_json
+        ? safeJsonParse<Record<string, any> | undefined>(row._table_envelope_json, undefined)
+        : undefined
+      : meta.tableEnvelope && typeof meta.tableEnvelope === 'object'
+      ? meta.tableEnvelope
+      : row._table_envelope_json
+      ? safeJsonParse<Record<string, any> | undefined>(row._table_envelope_json, undefined)
+      : undefined;
+
+    const resolvedTableName =
+      row._table_name ||
+      explicitContainerName ||
+      (!containerChangedManually ? meta.tableName : undefined) ||
+      (containerChangedManually ? parsedContainerId : undefined);
+
+    const isTableHeaderOnly =
+      type === 'header' ||
+      Boolean(meta.isTableHeaderOnly) ||
+      key.startsWith('__table_header__');
+
+    state.coinLedgerRows.push({
+      id: key || row.id || meta.id || `coin-${state.coinLedgerRows.length + 1}`,
+      date: row.date_or_cycle || row.date || row.data || meta.date || '',
+      category: row.group_or_tier || row.category || row.categoria || meta.category || 'Outros',
+      description: title || row.description || row.descricao || meta.description || '',
+      amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
+      entryType,
+      paymentMethod: row.capabilities_or_tags || row.tags || meta.paymentMethod || 'PIX',
+      status,
+      recurrence:
+        row.time_or_duration ||
+        meta.recurrence ||
+        (monthCountRaw && monthCountRaw > 1 ? `rateio_${monthCountRaw}m` : 'unico'),
+      tableId: resolvedTableId,
+      ...(resolvedTableName ? { tableName: String(resolvedTableName) } : {}),
+      ...(isTableHeaderOnly ? { isTableHeaderOnly: true } : {}),
+      ...(monthlyValueRaw !== undefined && Number.isFinite(monthlyValueRaw)
+        ? { monthlyValue: monthlyValueRaw }
+        : {}),
+      ...(monthCountRaw !== undefined && Number.isFinite(monthCountRaw)
+        ? { monthCount: monthCountRaw }
+        : {}),
+      ...(periodStartVal
+        ? { periodStart: String(periodStartVal), period_start: String(periodStartVal) }
+        : {}),
+      ...(periodEndVal
+        ? { periodEnd: String(periodEndVal), period_end: String(periodEndVal) }
+        : {}),
+      ...(row.tags || meta.tags ? { tags: row.tags || meta.tags } : {}),
+      ...(tickerVal ? { ticker: String(tickerVal) } : {}),
+      ...(quantityRaw !== undefined && Number.isFinite(quantityRaw)
+        ? { quantity: quantityRaw }
+        : {}),
+      ...(unitPriceRaw !== undefined && Number.isFinite(unitPriceRaw)
+        ? { unitPrice: unitPriceRaw }
+        : {}),
+      ...(metadataJsonVal
+        ? { metadataJson: String(metadataJsonVal), metadata_json: String(metadataJsonVal) }
+        : {}),
+      ...(customValuesVal && typeof customValuesVal === 'object'
+        ? { customValues: customValuesVal }
+        : {}),
+      ...(tableEnvelopeVal && typeof tableEnvelopeVal === 'object'
+        ? { tableEnvelope: tableEnvelopeVal }
+        : {}),
+    });
+  } else if (kind === 'event_node') {
+    const [rawId, rawName] = containerId.includes('::')
+      ? containerId.split('::')
+      : [containerId || 'evt-01', containerId || 'Evento Importado'];
+    const engines = (row._engines || 'custom')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    let ev = state.eventsMap.get(rawId);
+    if (!ev) {
+      ev = { id: rawId, name: rawName, engines, registry: [] };
+      state.eventsMap.set(rawId, ev);
+    }
+
+    const mergedMeta: Record<string, any> = { ...meta };
+    if (primary && !mergedMeta.assignedTo && !mergedMeta.workerName) {
+      mergedMeta.assignedTo = primary;
+    }
+    if (secondary) mergedMeta.assistantTo = secondary;
+
+    ev.registry.push({
+      key,
+      type,
+      label: title,
+      value: row.notes_or_payload || primary || '',
+      email: row.contact_or_location?.includes('@') ? row.contact_or_location : '',
+      meta: mergedMeta,
+    });
+  }
+}
+
+function finalizeOmniBundleAccumulator(
+  state: OmniBundleAccumulatorState,
+  presentSheets: OmniRecordKind[]
+): SekundoOmniStateBundle {
+  if (state.participants.length > 0) {
+    const allEffectiveCols = getEffectiveCapabilityColumns(state.participants);
+    for (const p of state.participants) {
       const nextCaps: Record<string, boolean> = { ...(p.capabilities || {}) };
       for (const col of allEffectiveCols) {
         nextCaps[col.key] = Boolean(nextCaps[col.key]);
@@ -1736,7 +1881,7 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
   }
 
   const effectivePresentSheets =
-    presentSheets.length > 0 ? presentSheets : Array.from(seenRecordKinds);
+    presentSheets.length > 0 ? presentSheets : Array.from(state.seenRecordKinds);
   const hasAllSheets = effectivePresentSheets.length === 0;
   const shouldFallbackParticipants =
     hasAllSheets ||
@@ -1748,16 +1893,15 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     hasAllSheets || effectivePresentSheets.includes('hub_territory_cycle');
 
   const resolvedParticipants =
-    participants.length > 0
-      ? participants
+    state.participants.length > 0
+      ? state.participants
       : shouldFallbackParticipants
       ? DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
       : [];
 
-  // If territoryRegistry is empty while an imported event_node contains real territory_logistics nodes, promote those nodes!
   let eventFallbackTerritory: FlatSkeletonEntry[] = [];
-  if (territoryRegistry.length === 0) {
-    for (const ev of eventsMap.values()) {
+  if (state.territoryRegistry.length === 0) {
+    for (const ev of state.eventsMap.values()) {
       const evEngines = ev.engines || [];
       const partitioned = selectEnginePartitionNodes(ev.registry || [], 'territory_logistics');
       if (
@@ -1774,18 +1918,18 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
   const resolvedTerritoryRegistry =
     eventFallbackTerritory.length > 0
       ? eventFallbackTerritory
-      : territoryRegistry.length > 0
-      ? territoryRegistry
+      : state.territoryRegistry.length > 0
+      ? state.territoryRegistry
       : shouldFallbackTerritory
       ? buildTerritoriosS13HistoricalRegistry()
       : [];
 
   return {
-    unitName,
+    unitName: state.unitName,
     participants: resolvedParticipants,
     scheduleRegistry:
-      scheduleRegistry.length > 0
-        ? scheduleRegistry
+      state.scheduleRegistry.length > 0
+        ? state.scheduleRegistry
         : shouldFallbackSchedule
         ? buildProgramacaoReuniaoRegistry(
             undefined,
@@ -1795,13 +1939,117 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           )
         : [],
     territoryRegistry: resolvedTerritoryRegistry,
-    events: Array.from(eventsMap.values()),
-    studioDocuments,
-    hojeManifestYaml,
-    hojeRituals,
-    coinLedgerRows,
+    events: Array.from(state.eventsMap.values()),
+    studioDocuments: state.studioDocuments,
+    hojeManifestYaml: state.hojeManifestYaml,
+    hojeRituals: state.hojeRituals,
+    coinLedgerRows: state.coinLedgerRows,
     presentSheets: effectivePresentSheets,
   };
+}
+
+/**
+ * Demultiplexes a Multi-Planilha Omni-CSV string (or legacy 16-column Omni-CSV or single-engine CSV)
+ * back into a `SekundoOmniStateBundle`.
+ */
+export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
+  const { headers, rows, presentSheets } = parseRawOmniCsvTable(csvText);
+
+  const nonOmni = resolveNonOmniBundleIfApplicable(
+    csvText,
+    headers,
+    presentSheets,
+    PROGRAMACAO_UNIT_NAME
+  );
+  if (nonOmni) return nonOmni;
+
+  const state: OmniBundleAccumulatorState = {
+    unitName: PROGRAMACAO_UNIT_NAME,
+    participants: [],
+    scheduleRegistry: [],
+    territoryRegistry: [],
+    eventsMap: new Map<string, OmniEventBundleItem>(),
+    studioDocuments: [],
+    hojeManifestYaml: DEFAULT_SEKUNDO_APP_YAML,
+    hojeRituals: [],
+    coinLedgerRows: [],
+    seenRecordKinds: new Set<OmniRecordKind>(presentSheets),
+  };
+
+  for (const row of rows) {
+    stepOmniRowIntoBundle(row, headers, state);
+  }
+
+  return finalizeOmniBundleAccumulator(state, presentSheets);
+}
+
+/**
+ * Cooperative async non-blocking version of `importOmniCsvBundle` with progress & AbortSignal.
+ */
+export async function importOmniCsvBundleAsync(
+  csvText: string,
+  options: AsyncImportControllerOptions = {}
+): Promise<SekundoOmniStateBundle> {
+  throwIfImportAborted(options.signal);
+
+  options.onProgress?.({
+    stage: 'decoding',
+    stageLabel: IMPORT_STAGE_LABELS_PT.decoding,
+    detailLabel: 'Identificando abas e estrutura da planilha...',
+    cancellable: true,
+    fileName: options.fileName,
+    sizeBytes: options.sizeBytes,
+    percent: 8,
+  });
+  await yieldToUiFrame();
+  throwIfImportAborted(options.signal);
+
+  const { headers, rows, presentSheets } = await parseRawOmniCsvTableAsync(csvText, options);
+  throwIfImportAborted(options.signal);
+
+  const nonOmni = resolveNonOmniBundleIfApplicable(
+    csvText,
+    headers,
+    presentSheets,
+    PROGRAMACAO_UNIT_NAME
+  );
+  if (nonOmni) return nonOmni;
+
+  const state: OmniBundleAccumulatorState = {
+    unitName: PROGRAMACAO_UNIT_NAME,
+    participants: [],
+    scheduleRegistry: [],
+    territoryRegistry: [],
+    eventsMap: new Map<string, OmniEventBundleItem>(),
+    studioDocuments: [],
+    hojeManifestYaml: DEFAULT_SEKUNDO_APP_YAML,
+    hojeRituals: [],
+    coinLedgerRows: [],
+    seenRecordKinds: new Set<OmniRecordKind>(presentSheets),
+  };
+
+  const chunkSize = Math.max(50, options.chunkSize || 250);
+  for (let i = 0; i < rows.length; i++) {
+    stepOmniRowIntoBundle(rows[i], headers, state);
+    if (i > 0 && i % chunkSize === 0) {
+      throwIfImportAborted(options.signal);
+      options.onProgress?.({
+        stage: 'validating',
+        stageLabel: IMPORT_STAGE_LABELS_PT.validating,
+        detailLabel: `Consolidando ${i.toLocaleString('pt-BR')} de ${rows.length.toLocaleString('pt-BR')} registros...`,
+        processedCount: i,
+        totalCount: rows.length,
+        percent: 75 + Math.round((i / Math.max(1, rows.length)) * 20),
+        cancellable: true,
+        fileName: options.fileName,
+        sizeBytes: options.sizeBytes,
+      });
+      await yieldToEventLoop();
+    }
+  }
+  throwIfImportAborted(options.signal);
+
+  return finalizeOmniBundleAccumulator(state, presentSheets);
 }
 
 /**

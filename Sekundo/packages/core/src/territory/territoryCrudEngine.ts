@@ -261,6 +261,8 @@ export function extractTerritorySummaries(
       totalNodes: number;
       totalAddresses: number;
       workedAddresses: number;
+      /** True while every node seen in this bucket is a header with child nodes in cleanNodes (structural Área/Setor folder). */
+      allHeadersAreTreeAncestors: boolean;
     }
   >();
 
@@ -279,6 +281,7 @@ export function extractTerritorySummaries(
         totalNodes: 0,
         totalAddresses: 0,
         workedAddresses: 0,
+        allHeadersAreTreeAncestors: true,
       };
       byTerritory.set(tNum, entry);
     }
@@ -302,6 +305,9 @@ export function extractTerritorySummaries(
     const normKey = safeNormalizeKey(node.key);
     const isHeaderOnly =
       parentKeys.has(normKey) || node.type === 'header';
+    if (!isHeaderOnly || !parentKeys.has(normKey)) {
+      entry.allHeadersAreTreeAncestors = false;
+    }
     if (isHeaderOnly) {
       const cleanLabel = String(node.label || '').trim();
       if (cleanLabel) {
@@ -324,6 +330,7 @@ export function extractTerritorySummaries(
   }
 
   return Array.from(byTerritory.entries())
+    .filter(([, data]) => data.totalAddresses > 0 || !data.allHeadersAreTreeAncestors)
     .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
     .map(([territoryNumber, data]) => {
       const resolvedName =

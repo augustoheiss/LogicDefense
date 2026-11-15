@@ -122,7 +122,7 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-12)', () => {
           id: 'tx_1',
           date: '2026-07-15',
           value: 2400,
-          description: 'PIX Confidencial Hospital Sírio CPF 123.456.789-00',
+          description: 'PIX confidencial clinica sintetica CPF 000.000.000-00',
           category: 'Saúde',
           entryType: 'expense',
         },
@@ -150,8 +150,8 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-12)', () => {
 
       expect(capturedBody).toBeDefined();
       const serializedPayload = JSON.stringify(capturedBody);
-      expect(serializedPayload).not.toContain('PIX Confidencial Hospital Sírio');
-      expect(serializedPayload).not.toContain('123.456.789-00');
+      expect(serializedPayload).not.toContain('clinica sintetica');
+      expect(serializedPayload).not.toContain('000.000.000-00');
       expect(capturedBody.rows[0].description).toBe('[Saúde]');
       expect(capturedBody.tables[0].rows[0].description).toBe('[Saúde]');
       expect(capturedBody.transactions[0].description).toBe('[Saúde]');

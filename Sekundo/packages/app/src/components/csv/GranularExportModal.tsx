@@ -34,6 +34,7 @@ import {
   buildTerritoryExportPayloadByPreset,
   type TerritoryExportPresetId,
 } from '../../utils/territoryExportDelivery';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 interface GranularExportModalProps {
   visible: boolean;
@@ -232,24 +233,20 @@ export function GranularExportModal({
           </View>
 
           <ScrollView style={styles.scrollArea}>
-            {/* 1. Branch / Subtree Selector */}
-            <Text style={styles.sectionLabel}>1. SUBÁRVORE / RAMO ESPECÍFICO:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-              {branchOptions.map((b) => {
-                const isSelected = selectedBranch === b.key;
-                return (
-                  <Pressable
-                    key={b.key}
-                    onPress={() => setSelectedBranch(b.key)}
-                    style={[styles.chip, isSelected && styles.chipActive]}
-                  >
-                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                      {b.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            {/* 1. Branch / Subtree Selector (Combobox Vertical Pesquisável) */}
+            <SearchableVerticalFilter
+              label="1. SUBÁRVORE / RAMO ESPECÍFICO"
+              testID="granular-export-branch-filter"
+              placeholder="🔍 Buscar subárvore, grupo ou ramo..."
+              selectedId={selectedBranch}
+              clearValueId={branchOptions[0]?.key}
+              onSelect={(id) => setSelectedBranch(id || branchOptions[0]?.key || 'ALL')}
+              options={branchOptions.map((b) => ({
+                id: b.key,
+                label: b.label,
+                keywords: [b.key, b.label],
+              }))}
+            />
 
             {/* 2. Scope Selector */}
             <Text style={[styles.sectionLabel, { marginTop: 16 }]}>2. ESCOPO DOS NÓS:</Text>

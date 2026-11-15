@@ -25,6 +25,7 @@ import {
 import { useRouter } from 'expo-router';
 import {
   createCapabilityLink,
+  extractAvailableWeekDates,
   resolveTerritoryKeysForNumbers,
   extractTerritorySummaries,
   type FlatSkeletonEntry,
@@ -34,6 +35,7 @@ import {
 } from '@sekundo/core';
 import { API, getHeaders } from '../../config/api';
 import { shareLocationPayload } from '../../storage/omniStorageBridge';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 const Colors = {
   textPrimary: '#F8FAFC',
@@ -114,17 +116,10 @@ export function QuickShareSheet({
     [skeleton]
   );
 
-  const availableWeeks = useMemo(() => {
-    const weeks = new Set<string>();
-    for (const entry of skeleton || []) {
-      const meta = (entry.meta || {}) as Record<string, any>;
-      const dateStr = String(meta.date || meta.week || '').trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        weeks.add(dateStr);
-      }
-    }
-    return Array.from(weeks).sort();
-  }, [skeleton]);
+  const availableWeeks = useMemo(
+    () => extractAvailableWeekDates(skeleton),
+    [skeleton]
+  );
 
   const [scopeKind, setScopeKind] = useState<ShareScopeKind>(initialScopeKind);
   const [selectedTerritoryNums, setSelectedTerritoryNums] = useState<string[]>(
@@ -342,6 +337,8 @@ export function QuickShareSheet({
               style={styles.closeBtn}
               onPress={onClose}
               testID="quick-share-close-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Fechar compartilhamento rápido"
             >
               <Text style={styles.closeBtnText}>✕</Text>
             </TouchableOpacity>
@@ -404,6 +401,9 @@ export function QuickShareSheet({
                     Digite para filtrar por nº, nome ou subtítulo e marque um ou vários territórios:
                   </Text>
                   <TouchableOpacity
+                    testID="quick-share-select-all-btn"
+                    accessibilityRole="button"
+                    style={styles.selectAllBtn}
                     onPress={() => {
                       setGeneratedLink(null);
                       const targetNums = filteredTerritorySummaries.map((t) => t.territoryNumber);
@@ -480,34 +480,25 @@ export function QuickShareSheet({
               </View>
             )}
 
-            {/* Multi-Week Chips */}
+            {/* Multi-Week Vertical Searchable List */}
             {scopeKind === 'weeks' && availableWeeks.length > 0 && (
               <View style={styles.chipsBox}>
-                <Text style={styles.helperText}>
-                  Selecione as semanas que deseja incluir no link:
-                </Text>
-                <View style={styles.chipsWrap}>
-                  {availableWeeks.map((weekIso) => {
-                    const isSelected = selectedWeekDates.includes(weekIso);
-                    return (
-                      <TouchableOpacity
-                        key={weekIso}
-                        style={[styles.chip, isSelected && styles.chipSelected]}
-                        onPress={() => toggleWeekDate(weekIso)}
-                        testID={`quick-share-week-chip-${weekIso}`}
-                      >
-                        <Text
-                          style={[
-                            styles.chipText,
-                            isSelected && styles.chipTextSelected,
-                          ]}
-                        >
-                          {isSelected ? '✓ ' : ''}{weekIso}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                <SearchableVerticalFilter
+                  label="Semanas para incluir no link"
+                  testID="quick-share-weeks-filter"
+                  placeholder="🔍 Buscar semana (YYYY-MM-DD)..."
+                  multiSelect
+                  selectedIds={selectedWeekDates}
+                  onChangeSelectedIds={(ids) => {
+                    setGeneratedLink(null);
+                    setSelectedWeekDates(ids);
+                  }}
+                  options={availableWeeks.map((weekIso) => ({
+                    id: weekIso,
+                    label: `Semana ${weekIso}`,
+                    keywords: [weekIso],
+                  }))}
+                />
               </View>
             )}
 
@@ -759,6 +750,11 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: '#94A3B8',
   },
+  selectAllBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
   selectAllLink: {
     fontSize: FontSize.xs,
     color: '#38BDF8',
@@ -770,6 +766,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterInput: {
+    minHeight: 44,
     backgroundColor: '#0F172A',
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
@@ -777,13 +774,14 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     fontSize: FontSize.xs,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 10,
     marginBottom: 8,
   },
   verticalTerritoryScroll: {
     maxHeight: 200,
   },
   territoryListRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -805,7 +803,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   chip: {
-    minHeight: 38,
+    minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,

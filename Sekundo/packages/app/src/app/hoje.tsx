@@ -32,7 +32,8 @@ import {
   isSampleTerritorySeedRegistry,
   writeUnifiedOutput,
   exportOmniCsvBundle,
-  importOmniCsvBundle,
+  importOmniCsvBundleAsync,
+  yieldToUiFrame,
   type FlatSkeletonEntry,
 } from '@sekundo/core';
 import { loadAppManifestYaml, saveAppManifestYaml } from '../storage/localStorage';
@@ -46,6 +47,11 @@ import {
   loadSavedTerritoryRegistry,
   collectFullSiteOmniBundleFromStorage,
 } from '../storage/omniStorageBridge';
+import {
+  pickBrowserSpreadsheetFile,
+  useSekundoImportPipeline,
+} from '../hooks/useSekundoImportPipeline';
+import { SekundoImportModal } from '../components/csv/SekundoImportModal';
 
 type HojeCadToolId =
   | 'compromissos'
@@ -71,6 +77,7 @@ export default function HojeCockpitScreen() {
   const [savedTerritoryReg, setSavedTerritoryReg] = useState<FlatSkeletonEntry[]>(() =>
     buildTerritoriosS13HistoricalRegistry()
   );
+  const importPipeline = useSekundoImportPipeline();
 
   useEffect(() => {
     let active = true;
@@ -220,35 +227,106 @@ export default function HojeCockpitScreen() {
     }
   };
 
-  const handleImportOmniCsv = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv';
-      input.onchange = async (e: any) => {
-        const file = e.target?.files?.[0];
-        if (!file) return;
-        const text = await file.text();
-        const bundle = importOmniCsvBundle(text);
-        const presentSet = new Set(bundle.presentSheets || []);
-        if (
-          (presentSet.size === 0 || presentSet.has('cockpit_hoje')) &&
-          bundle.hojeManifestYaml
-        ) {
-          handleYamlChange(bundle.hojeManifestYaml);
+  const handleImportOmniCsv = async () => {
+    let trackedId: number | null = null;
+    try {
+      const outcome = await pickBrowserSpreadsheetFile({
+        accept: '.csv,text/csv',
+        allowXlsxBinary: false,
+        onFileSelected: async ({ fileName, sizeBytes }) => {
+          trackedId = importPipeline.beginTracking({
+            fileName,
+            sizeBytes,
+            initialStage: 'reading_file',
+            initialDetail: 'Lendo arquivo e verificando formato/codificação...',
+          });
+        },
+      });
+
+      if (outcome.kind === 'cancelled') {
+        importPipeline.dismiss();
+        return;
+      }
+
+      if (outcome.kind === 'error') {
+        const errId =
+          trackedId ??
+          importPipeline.beginTracking({
+            fileName: outcome.fileName,
+            sizeBytes: outcome.sizeBytes,
+            initialStage: 'reading_file',
+          });
+        importPipeline.failExternal(errId, outcome.error, {
+          fileName: outcome.fileName,
+          binarySignature: outcome.binarySignature,
+          stageFailed: 'reading_file',
+        });
+        return;
+      }
+
+      const picked = outcome.file;
+      await importPipeline.run(
+        {
+          fileName: picked.fileName,
+          sizeBytes: picked.sizeBytes,
+          initialStage: 'parsing_rows',
+          initialDetail:
+            picked.decoded.detectedEncoding === 'windows-1252'
+              ? 'Codificação ANSI/Windows-1252 detectada e convertida para UTF-8.'
+              : 'Lendo e validando planilhas do CSV Geral...',
+          diagnosticContext: {
+            fileName: picked.fileName,
+            detectedEncoding: picked.decoded.detectedEncoding,
+          },
+        },
+        async ({ signal, reportProgress }) => {
+          const text = picked.decoded.text;
+          if (!text.trim()) {
+            throw new Error(`O arquivo "${picked.fileName}" está vazio.`);
+          }
+
+          const committed = await commitOmniCsvBundleToStorage(text, {
+            signal,
+            onProgress: (p) => reportProgress(p),
+          });
+          const presentSet = new Set(committed.bundle.presentSheets || []);
+          if (
+            (presentSet.size === 0 || presentSet.has('cockpit_hoje')) &&
+            committed.bundle.hojeManifestYaml
+          ) {
+            handleYamlChange(committed.bundle.hojeManifestYaml);
+          }
+
+          if (committed.bundle.scheduleRegistry.length > 0) {
+            setSavedScheduleReg(committed.bundle.scheduleRegistry);
+          }
+          if (committed.bundle.territoryRegistry.length > 0) {
+            setSavedTerritoryReg(committed.bundle.territoryRegistry);
+          }
+
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Atualizando painel Hoje...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+
+          const summary = `CSV "${picked.fileName}" (${presentSet.size || 1} planilhas) importado com sucesso!`;
+          setStatusMsg(`✅ ${summary}`);
+          return {
+            result: committed,
+            summary,
+          };
         }
-        const committed = await commitOmniCsvBundleToStorage(text);
-        if (committed.bundle.scheduleRegistry.length > 0) {
-          setSavedScheduleReg(committed.bundle.scheduleRegistry);
-        }
-        if (committed.bundle.territoryRegistry.length > 0) {
-          setSavedTerritoryReg(committed.bundle.territoryRegistry);
-        }
-        setStatusMsg(
-          `✅ CSV "${file.name}" (${presentSet.size || 1} planilhas) importado!`
-        );
-      };
-      input.click();
+      );
+    } catch (err) {
+      const errId =
+        trackedId ??
+        importPipeline.beginTracking({
+          fileName: 'sekundo_omni_geral.csv',
+          initialStage: 'reading_file',
+        });
+      importPipeline.failExternal(errId, err, { stageFailed: 'reading_file' });
     }
   };
 
@@ -550,6 +628,18 @@ export default function HojeCockpitScreen() {
           )}
         </View>
       </View>
+
+      <SekundoImportModal
+        state={importPipeline.state}
+        technicalReport={importPipeline.technicalReport}
+        onCancel={importPipeline.cancelImport}
+        onResolveWarning={importPipeline.resolveWarningReview}
+        onRetry={() => {
+          importPipeline.dismiss();
+          handleImportOmniCsv();
+        }}
+        onDismiss={importPipeline.dismiss}
+      />
     </SafeAreaView>
   );
 }

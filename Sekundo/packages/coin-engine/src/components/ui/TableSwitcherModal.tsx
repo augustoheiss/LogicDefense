@@ -23,10 +23,13 @@ import { spacing, radius } from '@coin/theme/spacing';
 import { Card } from './Card';
 import type { CoinTable } from '@coin/core/types';
 import { EXAMPLE_CSV_PROFILES, ExampleCSVProfile } from '../../data/exampleCsvProfiles';
-import { parseCSVText } from '../../utils/csvEngine';
+import { parseCSVTextAsync } from '../../utils/csvEngine';
 import { detectSectorsFromRows } from '../../utils/sectorTagDetector';
 import { useCoinDB } from '../../hooks/useCoinDB';
+import { useImportPipeline } from '../../hooks/useImportPipeline';
 import { ExampleCSVGalleryModal } from './ExampleCSVGalleryModal';
+import { ImportProgressModal } from './ImportProgressModal';
+import { SearchableVerticalFilter } from './SearchableVerticalFilter';
 
 interface TableSwitcherModalProps {
   visible: boolean;
@@ -54,6 +57,7 @@ export function TableSwitcherModal({
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
   const db = useCoinDB();
+  const importPipeline = useImportPipeline();
 
   const [newTableName, setNewTableName] = useState('');
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
@@ -62,28 +66,60 @@ export function TableSwitcherModal({
   const [showExamplesGallery, setShowExamplesGallery] = useState(false);
 
   const handleCreateFromExample = async (profile: ExampleCSVProfile) => {
-    const parsed = parseCSVText(profile.fullBackupV3Csv);
-    const detected = detectSectorsFromRows(parsed.rows);
-    const mergedSectors = Array.from(
-      new Set([
-        ...(parsed.metadata?.activeSectors || profile.activeSectors || []),
-        ...detected,
-      ])
+    await importPipeline.run(
+      {
+        fileName: profile.fileName,
+        sizeBytes: profile.fullBackupV3Csv.length,
+        initialStage: 'parsing_rows',
+        initialDetail: `Preparando planilha fictícia "${profile.shortTitle}"...`,
+      },
+      async ({ signal, reportProgress }) => {
+        const parsed = await parseCSVTextAsync(profile.fullBackupV3Csv, undefined, {
+          signal,
+          onProgress: (p) => reportProgress(p),
+        });
+        const detected = detectSectorsFromRows(parsed.rows);
+        const mergedSectors = Array.from(
+          new Set([
+            ...(parsed.metadata?.activeSectors || profile.activeSectors || []),
+            ...detected,
+          ])
+        );
+        await db.importSpreadsheet({
+          rows: parsed.rows,
+          name: parsed.metadata?.name || `${profile.emoji} ${profile.title}`,
+          description: parsed.metadata?.description || profile.subtitle,
+          goals: parsed.metadata?.tableGoals,
+          mode: 'new',
+          schema: parsed.metadata?.schema,
+          investorProfile: parsed.metadata?.investorProfile,
+          activeSectors: mergedSectors,
+          dashboardConfig: parsed.metadata?.dashboardConfig,
+          sectorParams: parsed.metadata?.sectorParams,
+          signal,
+          strictPersistence: true,
+          onProgress: (p) => reportProgress(p),
+        });
+        reportProgress({
+          stage: 'opening_table',
+          stageLabel: 'Preparando e abrindo nova planilha...',
+          percent: 100,
+        });
+        return {
+          result: true,
+          summary: `${parsed.rows.length} lançamentos fictícios do perfil "${profile.shortTitle}" adicionados em nova aba.`,
+        };
+      }
     );
-    await db.importSpreadsheet({
-      rows: parsed.rows,
-      name: parsed.metadata?.name || `${profile.emoji} ${profile.title}`,
-      description: parsed.metadata?.description || profile.subtitle,
-      goals: parsed.metadata?.tableGoals,
-      mode: 'new',
-      schema: parsed.metadata?.schema,
-      investorProfile: parsed.metadata?.investorProfile,
-      activeSectors: mergedSectors,
-      dashboardConfig: parsed.metadata?.dashboardConfig,
-      sectorParams: parsed.metadata?.sectorParams,
-    });
-    onClose();
   };
+
+  const canCloseSwitcher =
+    !showExamplesGallery && importPipeline.state.status === 'idle';
+
+  const handleSafeClose = React.useCallback(() => {
+    if (!canCloseSwitcher) return;
+    onClose();
+  }, [canCloseSwitcher, onClose]);
 
   React.useEffect(() => {
     if (visible) {
@@ -93,7 +129,7 @@ export function TableSwitcherModal({
 
   // Keyboard navigation on Web (Up/Down + Enter to select, Esc to close)
   React.useEffect(() => {
-    if (!visible || Platform.OS !== 'web') return;
+    if (!visible || !canCloseSwitcher || Platform.OS !== 'web') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (editingTableId) return; // Allow normal typing while renaming
@@ -112,13 +148,13 @@ export function TableSwitcherModal({
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        handleSafeClose();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, editingTableId, focusedIndex, tables.length, onSelect, onClose]);
+  }, [visible, canCloseSwitcher, editingTableId, focusedIndex, tables.length, onSelect, onClose, handleSafeClose]);
 
   const handleAdd = () => {
     if (!newTableName.trim()) {
@@ -171,14 +207,15 @@ export function TableSwitcherModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={visible && canCloseSwitcher}
+        transparent
+        animationType="slide"
+        onRequestClose={handleSafeClose}
+      >
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable style={styles.backdrop} onPress={handleSafeClose} />
         <View style={[styles.sheet, isWide && styles.sheetWide]}>
           {!isWide && <View style={styles.handle} />}
           <View style={styles.header}>
@@ -321,58 +358,50 @@ export function TableSwitcherModal({
                   </Text>
                 </Pressable>
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
-              >
-                {EXAMPLE_CSV_PROFILES.map((prof) => (
-                  <Pressable
-                    key={prof.id}
-                    style={({ pressed }) => [
-                      {
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.background.tertiary,
-                        borderWidth: 1,
-                        borderColor: `${prof.accentColor}66`,
-                      },
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => handleCreateFromExample(prof)}
-                  >
-                    <Text style={{ fontSize: 16 }}>{prof.emoji}</Text>
-                    <View>
-                      <Text style={{ color: colors.text.primary, fontSize: 11.5, fontWeight: '700' }}>
-                        {prof.shortTitle}
-                      </Text>
-                      <Text style={{ color: colors.text.tertiary, fontSize: 9.5 }}>
-                        + Nova aba de teste
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
+              <SearchableVerticalFilter
+                placeholder="Filtrar ou abrir modelo fictício em nova aba..."
+                options={EXAMPLE_CSV_PROFILES.map((prof) => ({
+                  id: prof.id,
+                  label: `${prof.emoji} ${prof.shortTitle}`,
+                  subtitle: '+ Nova aba de teste',
+                  badge: prof.code,
+                  keywords: [prof.shortTitle, prof.code, prof.title, prof.subtitle, ...prof.recommendedFor],
+                }))}
+                selectedId={null}
+                allowClear={false}
+                onSelect={(id) => {
+                  const prof = EXAMPLE_CSV_PROFILES.find((item) => item.id === id);
+                  if (prof) handleCreateFromExample(prof);
+                }}
+                emptyMessage="Nenhum modelo de exemplo encontrado."
+                testID="table-switcher-example-filter"
+              />
             </View>
           </ScrollView>
 
-          <ExampleCSVGalleryModal
-            visible={showExamplesGallery}
-            onClose={() => setShowExamplesGallery(false)}
-            onImportExample={async (payload) => {
-              const res = await db.importSpreadsheet(payload);
-              setShowExamplesGallery(false);
-              onClose();
-              return res;
-            }}
-          />
         </View>
       </View>
     </Modal>
+
+    <ExampleCSVGalleryModal
+      visible={showExamplesGallery}
+      onClose={() => setShowExamplesGallery(false)}
+      onImportedCloseAll={onClose}
+      onImportExample={async (payload) => db.importSpreadsheet(payload)}
+    />
+
+    <ImportProgressModal
+      state={importPipeline.state}
+      technicalReport={importPipeline.technicalReport}
+      onCancel={importPipeline.cancelImport}
+      onResolveWarning={importPipeline.resolveWarningReview}
+      onDismiss={importPipeline.dismiss}
+      onOpenTable={() => {
+        importPipeline.dismiss();
+        onClose();
+      }}
+    />
+  </>
   );
 }
 

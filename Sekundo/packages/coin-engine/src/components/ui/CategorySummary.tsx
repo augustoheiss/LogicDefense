@@ -25,6 +25,7 @@ import {
   rowContributions,
 } from '@coin/core/dateUtils';
 import type { TableRow } from '@coin/core/types';
+import { SearchableVerticalFilter } from './SearchableVerticalFilter';
 
 type FilterableType = 'revenue' | 'expense' | 'deposit' | 'waiver' | 'partner_in' | 'partner_out';
 function computeMedian(values: number[]): number {
@@ -457,31 +458,27 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
         </View>
       </View>
 
-      {/* Filter Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-        {FILTER_OPTIONS.map((opt) => {
-          const active = filterType === opt.value;
-          const count = baseRows.filter((r) => (r.entryType || 'revenue') === opt.value).length;
-          return (
-            <Pressable
-              key={opt.value}
-              style={[styles.filterChip, active && { borderColor: opt.color, backgroundColor: 'rgba(255,255,255,0.05)' }]}
-              onPress={() => setFilterType(opt.value)}
-            >
-              <Text style={[styles.filterText, active && { color: opt.color, fontWeight: '700' }]}>
-                {opt.icon} {opt.label}
-              </Text>
-              {count > 0 && (
-                <View style={[styles.badge, active ? styles.badgeActive : styles.badgeInactive]}>
-                  <Text style={[styles.badgeText, active && { color: opt.color }]}>
-                    {count}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {/* Filter Vertical List (Combobox Vertical) */}
+      <View style={styles.filterScroll}>
+        <SearchableVerticalFilter
+          label="Filtrar por Tipo de Lançamento"
+          placeholder="Filtrar ou escolher tipo (Receita, Despesa, Aporte...)"
+          options={FILTER_OPTIONS.map((opt) => {
+            const count = baseRows.filter((r) => (r.entryType || 'revenue') === opt.value).length;
+            return {
+              id: opt.value,
+              label: `${opt.icon} ${opt.label}`,
+              badge: count > 0 ? String(count) : undefined,
+              keywords: [opt.label, opt.value],
+            };
+          })}
+          selectedId={filterType}
+          allowClear={false}
+          onSelect={(id) => setFilterType(id as FilterableType)}
+          emptyMessage="Nenhum tipo encontrado."
+          testID="category-summary-type-filter"
+        />
+      </View>
 
       {/* Category list */}
       <View style={styles.listContainer}>

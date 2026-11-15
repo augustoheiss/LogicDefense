@@ -53,7 +53,11 @@ export function MultiEngineSwitcherBar({
 }: MultiEngineSwitcherBarProps) {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isCompactMobile = width < 600;
+  const [isHydrated, setIsHydrated] = React.useState(false);
+  React.useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isCompactMobile = isHydrated && width < 600;
   const query = eventId ? `?id=${encodeURIComponent(eventId)}` : '';
 
   const items: EngineIconButtonSpec[] = [

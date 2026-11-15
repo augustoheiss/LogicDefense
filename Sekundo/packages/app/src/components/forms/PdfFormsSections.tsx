@@ -12,6 +12,7 @@ import type {
   TemplateRecognitionResult,
   TerritoryRecencyItem,
 } from '@sekundo/core';
+import { SearchableVerticalFilter } from '../ui/SearchableVerticalFilter';
 
 export interface CustomPdfSectionProps {
   uploadedFileName: string | null;
@@ -170,27 +171,20 @@ export function TerritoryS13Section({
       <Text style={styles.sectionTitle}>
         RESUMO DE TERRITÓRIOS PARA REGISTRO MULTI-CICLO (4 COLUNAS) & CARTÕES DE QUADRA
       </Text>
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {(['all', '2027', '2026'] as const).map((yr) => (
-          <Pressable
-            key={yr}
-            onPress={() => onSetS13ServiceYear(yr)}
-            style={[
-              styles.yearChip,
-              s13ServiceYear === yr && styles.yearChipActive,
-            ]}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '800',
-                color: s13ServiceYear === yr ? '#FFB800' : '#94A3B8',
-              }}
-            >
-              {yr === 'all' ? '📑 Ciclos 2027 + 2026' : `📅 Ciclo Operacional ${yr}`}
-            </Text>
-          </Pressable>
-        ))}
+      <View style={{ marginBottom: 14 }}>
+        <SearchableVerticalFilter
+          label="Ciclo Operacional"
+          testID="pdf-forms-cycle-year-filter"
+          placeholder="🔍 Buscar ciclo operacional..."
+          selectedId={s13ServiceYear}
+          clearValueId="all"
+          onSelect={(id) => onSetS13ServiceYear((id || 'all') as '2027' | '2026' | 'all')}
+          options={[
+            { id: 'all', label: '📑 Ciclos 2027 + 2026', pinned: true, keywords: ['todos', '2027', '2026'] },
+            { id: '2027', label: '📅 Ciclo Operacional 2027', keywords: ['2027'] },
+            { id: '2026', label: '📅 Ciclo Operacional 2026', keywords: ['2026'] },
+          ]}
+        />
       </View>
       {territoryRecencySummary.length === 0 ? (
         <View style={styles.emptyBox}>

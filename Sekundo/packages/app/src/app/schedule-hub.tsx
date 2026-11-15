@@ -17,7 +17,7 @@
  *   (`🛡️ Privilégios (26)` + `⚡ Auto-Designar`).
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -54,6 +54,7 @@ import {
   loadSavedScheduleRegistry,
   loadSavedTerritoryRegistry,
   saveTerritoryRegistry,
+  persistTerritoryRegistryMutation,
 } from '../storage/omniStorageBridge';
 import {
   PROGRAMACAO_UNIT_NAME,
@@ -84,7 +85,8 @@ import {
   exportScheduleHubToCsv,
   importScheduleHubFromCsv,
   exportOmniCsvBundle,
-  importOmniCsvBundle,
+  importOmniCsvBundleAsync,
+  importTerritoryMultiFormatAsync,
   isOmniCsvText,
   selectEnginePartitionNodes,
   buildCombinedMultiEngineSkeleton,
@@ -92,12 +94,19 @@ import {
   inferSlotRequiredCapability,
   ensureParticipantPrivilegeMatrix,
   getEffectiveCapabilityColumns,
+  yieldToUiFrame,
   type FlatSkeletonEntry,
   type ParticipantProfile,
   type StructuredProgramSession,
   type WhatsAppExportMode,
   type ReadinessState,
 } from '@sekundo/core';
+import {
+  pickBrowserSpreadsheetFile,
+  useSekundoImportPipeline,
+} from '../hooks/useSekundoImportPipeline';
+import { SekundoImportModal } from '../components/csv/SekundoImportModal';
+import { SearchableVerticalFilter } from '../components/ui/SearchableVerticalFilter';
 
 const MY_PARTICIPANT_STORAGE_KEY = 'sekundo:my_participant_name';
 const SUNLIGHT_MODE_STORAGE_KEY = 'sekundo:sunlight_mode';
@@ -171,7 +180,11 @@ function buildFullEventSheetSdocYaml(
 export default function ScheduleHubConsole() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 900;
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isDesktop = isHydrated && width >= 900;
   const { id } = useLocalSearchParams<{ id?: string }>();
   const eventId = id || '';
 
@@ -188,6 +201,8 @@ export default function ScheduleHubConsole() {
   const [territoryRegistry, setTerritoryRegistry] = useState<FlatSkeletonEntry[]>(() =>
     buildTerritoriosS13HistoricalRegistry()
   );
+  const importPipeline = useSekundoImportPipeline();
+  const retryModeRef = useRef<'file' | 'text'>('file');
 
   const activeScheduleRegistry = useMemo(() => {
     const partitioned = selectEnginePartitionNodes(flatRegistry, 'roster_assignments');
@@ -317,6 +332,7 @@ export default function ScheduleHubConsole() {
   // UX Filters & Modals
   const [sunlightMode, setSunlightMode] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
+  const [ribbonFilterOpen, setRibbonFilterOpen] = useState<'none' | 'group' | 'week'>('none');
   const [myParticipantName, setMyParticipantName] = useState<string>('');
   const [showParticipantPicker, setShowParticipantPicker] = useState(false);
   const [participantSearch, setParticipantSearch] = useState('');
@@ -459,7 +475,11 @@ export default function ScheduleHubConsole() {
     setActiveDirectory(updated);
     savePrivilegeParticipants(updated).catch(() => undefined);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.localStorage.setItem(PRIVILEGE_DIRECTORY_STORAGE_KEY, JSON.stringify(updated));
+      try {
+        window.localStorage.setItem(PRIVILEGE_DIRECTORY_STORAGE_KEY, JSON.stringify(updated));
+      } catch {
+        // IndexedDB/localStore permanece autoritativo em cenários de cota de localStorage
+      }
     }
     recordPersistedActivityEvent({
       eventId: eventId || 'global',
@@ -510,110 +530,250 @@ export default function ScheduleHubConsole() {
   };
 
   // Pick a local .csv, .xlsx, .kml, .geojson, .json, or .txt file!
-  const handlePickLocalScheduleFile = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv,.xlsx,.kml,.geojson,.json,.txt';
-      input.onchange = async (e: any) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-          const lower = file.name.toLowerCase();
+  const handlePickLocalScheduleFile = async () => {
+    retryModeRef.current = 'file';
+    let trackedId: number | null = null;
+    try {
+      const outcome = await pickBrowserSpreadsheetFile({
+        accept: '.csv,.xlsx,.kml,.geojson,.json,.txt',
+        allowXlsxBinary: true,
+        onFileSelected: async ({ fileName, sizeBytes }) => {
+          trackedId = importPipeline.beginTracking({
+            fileName,
+            sizeBytes,
+            initialStage: 'reading_file',
+            initialDetail: 'Lendo arquivo e verificando formato/codificação...',
+          });
+        },
+      });
+
+      if (outcome.kind === 'cancelled') {
+        importPipeline.dismiss();
+        return;
+      }
+
+      if (outcome.kind === 'error') {
+        const errId =
+          trackedId ??
+          importPipeline.beginTracking({
+            fileName: outcome.fileName,
+            sizeBytes: outcome.sizeBytes,
+            initialStage: 'reading_file',
+          });
+        importPipeline.failExternal(errId, outcome.error, {
+          fileName: outcome.fileName,
+          binarySignature: outcome.binarySignature,
+          stageFailed: 'reading_file',
+        });
+        return;
+      }
+
+      const picked = outcome.file;
+      const lower = picked.fileName.toLowerCase();
+
+      await importPipeline.run(
+        {
+          fileName: picked.fileName,
+          sizeBytes: picked.sizeBytes,
+          initialStage: 'decoding',
+          initialDetail:
+            picked.decoded.detectedEncoding === 'windows-1252'
+              ? 'Codificação ANSI/Windows-1252 detectada e convertida para UTF-8.'
+              : 'Interpretando dados do arquivo selecionado...',
+          diagnosticContext: {
+            fileName: picked.fileName,
+            binarySignature: picked.binarySignature,
+            allowXlsxBinary: true,
+            detectedEncoding: picked.decoded.detectedEncoding,
+          },
+        },
+        async ({ signal, reportProgress }) => {
           if (
             lower.endsWith('.xlsx') ||
             lower.endsWith('.kml') ||
-            lower.endsWith('.geojson')
+            lower.endsWith('.geojson') ||
+            picked.binarySignature === 'zip_or_xlsx'
           ) {
-            const bytes = lower.endsWith('.xlsx')
-              ? new Uint8Array(await file.arrayBuffer())
-              : undefined;
-            const text = !lower.endsWith('.xlsx') ? await file.text() : undefined;
-            const parsedMulti = importTerritoryMultiFormat(
+            const parsedMulti = await importTerritoryMultiFormatAsync(
               {
-                bytes,
-                text,
-                fileName: file.name,
+                bytes: picked.binarySignature === 'zip_or_xlsx' ? picked.bytes : undefined,
+                text: picked.binarySignature === 'zip_or_xlsx' ? undefined : picked.decoded.text,
+                fileName: picked.fileName,
               },
-              { privacySafeMode: false }
+              {
+                privacySafeMode: false,
+                signal,
+                onProgress: (p) => reportProgress(p),
+              }
             );
+            if (!parsedMulti.nodes || parsedMulti.nodes.length === 0) {
+              throw new Error(
+                `Nenhum território ou polígono válido encontrado no arquivo "${picked.fileName}".`
+              );
+            }
+            reportProgress({
+              stage: 'saving_storage',
+              stageLabel: 'Gravando territórios no armazenamento local...',
+              percent: 82,
+            });
+            if (eventId) {
+              await persistTerritoryRegistryMutation({
+                eventId,
+                cleanTerritoryNodes: parsedMulti.nodes,
+                saveSkeletonFn: saveSkeleton,
+              });
+            } else {
+              await saveTerritoryRegistry(parsedMulti.nodes);
+            }
             setTerritoryRegistry(parsedMulti.nodes);
-            await saveTerritoryRegistry(parsedMulti.nodes);
             setActiveTab('territories');
-            setStatusBanner(
-              `✅ "${file.name}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços) importado!`
-            );
-            return;
+            reportProgress({
+              stage: 'opening_table',
+              stageLabel: 'Atualizando painel de territórios...',
+              percent: 100,
+            });
+            await yieldToUiFrame();
+            const summary = `"${picked.fileName}" (${parsedMulti.territoriesCount} territórios • ${parsedMulti.addressesCount} endereços) importado!`;
+            setStatusBanner(`✅ ${summary}`);
+            return { result: true, summary };
           }
 
-          const text = await file.text();
-          if (lower.endsWith('.csv') || isOmniCsvText(text)) {
-            const loadedOmni = importOmniCsvBundle(text);
-            const presentSet = new Set(loadedOmni.presentSheets || []);
-            const hasAllOrSheet = (k: NonNullable<typeof loadedOmni.presentSheets>[number]) =>
-              presentSet.size === 0 || presentSet.has(k);
+          const text = picked.decoded.text;
+          if (!text.trim()) {
+            throw new Error(`O arquivo "${picked.fileName}" está vazio.`);
+          }
 
-            setActiveUnitName(loadedOmni.unitName);
-            if (hasAllOrSheet('participant_privilege') && loadedOmni.participants.length > 0) {
-              handleUpdateParticipants(loadedOmni.participants);
-            }
-            if (hasAllOrSheet('hub_schedule_slot') && loadedOmni.scheduleRegistry.length > 0) {
-              setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
-            }
+          if (lower.endsWith('.csv') || isOmniCsvText(text)) {
+            const loadedOmni = await importOmniCsvBundleAsync(text, {
+              signal,
+              onProgress: (p) => reportProgress(p),
+            });
+            const presentSet = new Set(loadedOmni.presentSheets || []);
             const committed = await commitOmniCsvBundleToStorage(text, {
               targetEventId: eventId || undefined,
+              signal,
+              onProgress: (p) => reportProgress({ ...p, cancellable: false }),
             });
+            const committedSet = new Set(committed.bundle.presentSheets || presentSet);
+            const hasCommittedSheet = (
+              k: NonNullable<typeof committed.bundle.presentSheets>[number]
+            ) => committedSet.size === 0 || committedSet.has(k);
+
+            setActiveUnitName(committed.bundle.unitName);
             if (
-              hasAllOrSheet('hub_territory_cycle') &&
+              hasCommittedSheet('participant_privilege') &&
+              committed.bundle.participants.length > 0
+            ) {
+              handleUpdateParticipants(committed.bundle.participants);
+            }
+            if (
+              hasCommittedSheet('hub_schedule_slot') &&
+              committed.bundle.scheduleRegistry.length > 0
+            ) {
+              setLocalScheduleRegistry(committed.bundle.scheduleRegistry);
+            }
+            if (
+              hasCommittedSheet('hub_territory_cycle') &&
               committed.bundle.territoryRegistry.length > 0
             ) {
               setTerritoryRegistry(committed.bundle.territoryRegistry);
-              if (
-                presentSet.size === 1 &&
-                presentSet.has('hub_territory_cycle')
-              ) {
+              if (committedSet.size === 1 && committedSet.has('hub_territory_cycle')) {
                 setActiveTab('territories');
               }
             }
             setSelectedSessionIdx(0);
-            setStatusBanner(
-              `✅ CSV "${file.name}" (${presentSet.size || 1} planilhas) importado!`
-            );
-          } else if (lower.endsWith('.json')) {
+            reportProgress({
+              stage: 'opening_table',
+              stageLabel: 'Atualizando painel e planilhas do Hub...',
+              percent: 100,
+            });
+            await yieldToUiFrame();
+            const summary = `CSV "${picked.fileName}" (${committedSet.size || 1} planilhas) importado!`;
+            setStatusBanner(`✅ ${summary}`);
+            return { result: true, summary };
+          }
+
+          if (lower.endsWith('.json')) {
+            reportProgress({
+              stage: 'parsing_rows',
+              stageLabel: 'Validando pacote JSON de programação...',
+              percent: 50,
+            });
             const loaded = parseSekundoScheduleBundle(text);
-            setActiveUnitName(loaded.unitName);
-            handleUpdateParticipants(
-              loaded.participants.map((p, idx) =>
-                ensureParticipantPrivilegeMatrix(p, idx, { preserveExplicitCapabilities: true })
-              )
+            const normalizedParticipants = loaded.participants.map((p, idx) =>
+              ensureParticipantPrivilegeMatrix(p, idx, { preserveExplicitCapabilities: true })
             );
-            setLocalScheduleRegistry(loaded.scheduleRegistry);
-            setTerritoryRegistry(loaded.territoryRegistry);
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem(LOCAL_BUNDLE_STORAGE_KEY, text);
-            }
+            reportProgress({
+              stage: 'saving_storage',
+              stageLabel: 'Gravando bundle JSON no armazenamento local...',
+              percent: 82,
+            });
+            await storage.storage.setItem(LOCAL_BUNDLE_STORAGE_KEY, text);
+            await savePrivilegeParticipants(normalizedParticipants);
+            await saveTerritoryRegistry(loaded.territoryRegistry);
             if (eventId) {
               await saveSkeleton(loaded.scheduleRegistry);
             }
+            setActiveUnitName(loaded.unitName);
+            handleUpdateParticipants(normalizedParticipants);
+            setLocalScheduleRegistry(loaded.scheduleRegistry);
+            setTerritoryRegistry(loaded.territoryRegistry);
             setSelectedSessionIdx(0);
-            setStatusBanner(`✅ JSON "${file.name}" importado!`);
-          } else {
-            const parsed = parseProgramScheduleText(text, {
-              unitName: activeUnitName,
-              directory: activeDirectory,
+            reportProgress({
+              stage: 'opening_table',
+              stageLabel: 'Atualizando programação e territórios...',
+              percent: 100,
             });
-            setLocalScheduleRegistry(parsed);
-            if (eventId) {
-              await saveSkeleton(parsed);
-            }
-            setSelectedSessionIdx(0);
-            setStatusBanner(`✅ Texto "${file.name}" importado (${parsed.length} nós)!`);
+            await yieldToUiFrame();
+            const summary = `JSON "${picked.fileName}" importado com sucesso!`;
+            setStatusBanner(`✅ ${summary}`);
+            return { result: true, summary };
           }
-        } catch (err: any) {
-          setStatusBanner(`❌ Erro ao importar arquivo: ${err.message}`);
+
+          reportProgress({
+            stage: 'parsing_rows',
+            stageLabel: 'Interpretando texto da programação...',
+            percent: 52,
+          });
+          const parsed = parseProgramScheduleText(text, {
+            unitName: activeUnitName,
+            directory: activeDirectory,
+          });
+          if (parsed.length === 0) {
+            throw new Error(
+              `Nenhuma sessão ou designação válida foi reconhecida no arquivo "${picked.fileName}".`
+            );
+          }
+          reportProgress({
+            stage: 'saving_storage',
+            stageLabel: 'Gravando programação no armazenamento local...',
+            percent: 85,
+          });
+          await storage.storage.setItem(LOCAL_BUNDLE_STORAGE_KEY, text);
+          if (eventId) {
+            await saveSkeleton(parsed);
+          }
+          setLocalScheduleRegistry(parsed);
+          setSelectedSessionIdx(0);
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Atualizando programação...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+          const summary = `Texto "${picked.fileName}" importado (${parsed.length} nós)!`;
+          setStatusBanner(`✅ ${summary}`);
+          return { result: true, summary };
         }
-      };
-      input.click();
+      );
+    } catch (err: any) {
+      const errId =
+        trackedId ??
+        importPipeline.beginTracking({
+          fileName: 'programacao.csv',
+          initialStage: 'reading_file',
+        });
+      importPipeline.failExternal(errId, err, { stageFailed: 'reading_file' });
     }
   };
 
@@ -831,55 +991,105 @@ export default function ScheduleHubConsole() {
   };
 
   const handleImportCustomText = async () => {
+    retryModeRef.current = 'text';
     const trimmed = customScheduleText.trim();
     if (!trimmed) return;
-    if (
-      isOmniCsvText(trimmed) ||
-      isTerritorySpreadsheetCsvText(trimmed) ||
-      trimmed.startsWith('_record_kind,') ||
-      trimmed.startsWith('_key,')
-    ) {
-      const loadedOmni = importOmniCsvBundle(trimmed);
-      const presentSet = new Set(loadedOmni.presentSheets || []);
-      const hasAllOrSheet = (k: NonNullable<typeof loadedOmni.presentSheets>[number]) =>
-        presentSet.size === 0 || presentSet.has(k);
 
-      setActiveUnitName(loadedOmni.unitName);
-      if (hasAllOrSheet('participant_privilege') && loadedOmni.participants.length > 0) {
-        handleUpdateParticipants(loadedOmni.participants);
-      }
-      if (hasAllOrSheet('hub_schedule_slot') && loadedOmni.scheduleRegistry.length > 0) {
-        setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
-      }
-      const committed = await commitOmniCsvBundleToStorage(trimmed, {
-        targetEventId: eventId || undefined,
-      });
-      if (
-        hasAllOrSheet('hub_territory_cycle') &&
-        committed.bundle.territoryRegistry.length > 0
-      ) {
-        setTerritoryRegistry(committed.bundle.territoryRegistry);
-        if (presentSet.size === 1 && presentSet.has('hub_territory_cycle')) {
-          setActiveTab('territories');
+    await importPipeline.run(
+      {
+        fileName: 'texto_colado_hub.csv',
+        sizeBytes: trimmed.length,
+        initialStage: 'parsing_rows',
+        initialDetail: 'Validando conteúdo colado no Hub...',
+      },
+      async ({ signal, reportProgress }) => {
+        if (
+          isOmniCsvText(trimmed) ||
+          isTerritorySpreadsheetCsvText(trimmed) ||
+          trimmed.startsWith('_record_kind,') ||
+          trimmed.startsWith('_key,')
+        ) {
+          const loadedOmni = await importOmniCsvBundleAsync(trimmed, {
+            signal,
+            onProgress: (p) => reportProgress(p),
+          });
+          const presentSet = new Set(loadedOmni.presentSheets || []);
+          const committed = await commitOmniCsvBundleToStorage(trimmed, {
+            targetEventId: eventId || undefined,
+            signal,
+            onProgress: (p) => reportProgress({ ...p, cancellable: false }),
+          });
+          const committedSet = new Set(committed.bundle.presentSheets || presentSet);
+          const hasCommittedSheet = (
+            k: NonNullable<typeof committed.bundle.presentSheets>[number]
+          ) => committedSet.size === 0 || committedSet.has(k);
+
+          setActiveUnitName(committed.bundle.unitName);
+          if (
+            hasCommittedSheet('participant_privilege') &&
+            committed.bundle.participants.length > 0
+          ) {
+            handleUpdateParticipants(committed.bundle.participants);
+          }
+          if (
+            hasCommittedSheet('hub_schedule_slot') &&
+            committed.bundle.scheduleRegistry.length > 0
+          ) {
+            setLocalScheduleRegistry(committed.bundle.scheduleRegistry);
+          }
+          if (
+            hasCommittedSheet('hub_territory_cycle') &&
+            committed.bundle.territoryRegistry.length > 0
+          ) {
+            setTerritoryRegistry(committed.bundle.territoryRegistry);
+            if (committedSet.size === 1 && committedSet.has('hub_territory_cycle')) {
+              setActiveTab('territories');
+            }
+          }
+          reportProgress({
+            stage: 'opening_table',
+            stageLabel: 'Atualizando painel...',
+            percent: 100,
+          });
+          await yieldToUiFrame();
+          setShowImportModal(false);
+          setCustomScheduleText('');
+          const summary = 'CSV colado e importado com sucesso!';
+          setStatusBanner(`✅ ${summary}`);
+          return { result: true, summary };
         }
+
+        const parsed = parseProgramScheduleText(trimmed, {
+          unitName: activeUnitName,
+          directory: activeDirectory,
+        });
+        if (parsed.length === 0) {
+          throw new Error(
+            'Nenhuma sessão ou linha tabular válida foi reconhecida no texto colado.'
+          );
+        }
+        reportProgress({
+          stage: 'saving_storage',
+          stageLabel: 'Gravando programação no armazenamento local...',
+          percent: 82,
+        });
+        if (eventId) {
+          await saveSkeleton(parsed);
+        }
+        setLocalScheduleRegistry(parsed);
+        reportProgress({
+          stage: 'opening_table',
+          stageLabel: 'Atualizando programação...',
+          percent: 100,
+        });
+        await yieldToUiFrame();
+        setShowImportModal(false);
+        setCustomScheduleText('');
+        const summary = `Programação importada (${parsed.length} nós)!`;
+        setStatusBanner(`✅ ${summary}`);
+        return { result: true, summary };
       }
-      setShowImportModal(false);
-      setCustomScheduleText('');
-      setStatusBanner('✅ CSV colado e importado com sucesso!');
-      return;
-    }
-    const parsed = parseProgramScheduleText(trimmed, {
-      unitName: activeUnitName,
-      directory: activeDirectory,
-    });
-    if (parsed.length === 0) {
-      setStatusBanner('⚠️ Nenhuma sessão reconhecida no texto colado.');
-      return;
-    }
-    setLocalScheduleRegistry(parsed);
-    setShowImportModal(false);
-    setCustomScheduleText('');
-    setStatusBanner(`✅ Programação importada (${parsed.length} nós)!`);
+    );
   };
 
   const handleDownloadICS = (slot: FlatSkeletonEntry) => {
@@ -1245,26 +1455,23 @@ export default function ScheduleHubConsole() {
             </Text>
           </Pressable>
 
-          {/* Group Filter Chips */}
-          {['ALL', ...operationalGroups].map((grp) => {
-            const active = selectedGroup === grp;
-            return (
-              <Pressable
-                key={grp}
-                onPress={() => setSelectedGroup(grp)}
-                style={[
-                  styles.microChip,
-                  active && { backgroundColor: '#2563EB', borderColor: '#93C5FD' },
-                ]}
-                accessibilityLabel={grp === 'ALL' ? 'Todos os Grupos' : grp}
-                {...({ title: grp === 'ALL' ? 'Todos os Grupos' : grp } as any)}
-              >
-                <Text style={styles.microChipText}>
-                  {grp === 'ALL' ? '👥' : grp.replace('Grupo ', 'G')}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {/* Vertical Combobox Filter Toggles (Grupo + Semana) */}
+          <Pressable
+            testID="schedule-hub-toggle-group-filter"
+            onPress={() => setRibbonFilterOpen((prev) => (prev === 'group' ? 'none' : 'group'))}
+            style={[
+              styles.microChip,
+              (ribbonFilterOpen === 'group' || selectedGroup !== 'ALL') && {
+                backgroundColor: '#0369A1',
+                borderColor: '#38BDF8',
+              },
+            ]}
+            accessibilityLabel="Abrir filtro vertical de Grupo"
+          >
+            <Text style={styles.microChipText}>
+              👥 {selectedGroup === 'ALL' ? 'Grupo' : selectedGroup.replace('Grupo ', 'G')} {ribbonFilterOpen === 'group' ? '▲' : '▼'}
+            </Text>
+          </Pressable>
 
           <Pressable
             onPress={() => setShowParticipantPicker(true)}
@@ -1283,37 +1490,83 @@ export default function ScheduleHubConsole() {
             </Text>
           </Pressable>
 
-          {/* Week Selector Buttons (Compact 1-Click Pills) */}
-          {activeTab === 'schedule' &&
-            sessions.map((sess, idx) => {
-              const active = idx === selectedSessionIdx;
-              return (
-                <Pressable
-                  key={sess.key}
-                  onPress={() => {
-                    setSelectedSessionIdx(idx);
-                    setSelectedSlotKey('');
-                  }}
-                  style={[
-                    styles.weekMicroBtn,
-                    active && { backgroundColor: '#38BDF8', borderColor: '#BAE6FD' },
-                  ]}
-                  accessibilityLabel={sess.label}
-                  {...({ title: sess.label } as any)}
-                >
-                  <Text
-                    style={[
-                      styles.weekMicroBtnText,
-                      active && { color: '#090D16', fontWeight: '900' },
-                    ]}
-                  >
-                    S{idx + 1}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          {activeTab === 'schedule' && sessions.length > 0 && (
+            <Pressable
+              testID="schedule-hub-toggle-week-filter"
+              onPress={() => setRibbonFilterOpen((prev) => (prev === 'week' ? 'none' : 'week'))}
+              style={[
+                styles.weekMicroBtn,
+                ribbonFilterOpen === 'week' && { backgroundColor: '#38BDF8', borderColor: '#BAE6FD' },
+              ]}
+              accessibilityLabel={`Selecionar Semana (Atual: S${selectedSessionIdx + 1})`}
+            >
+              <Text
+                style={[
+                  styles.weekMicroBtnText,
+                  ribbonFilterOpen === 'week' && { color: '#090D16', fontWeight: '900' },
+                ]}
+              >
+                S{selectedSessionIdx + 1}/{sessions.length} {ribbonFilterOpen === 'week' ? '▲' : '▼'}
+              </Text>
+            </Pressable>
+          )}
         </View>
       </View>
+
+      {ribbonFilterOpen !== 'none' && (
+        <View style={{ paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#0B1120', borderBottomWidth: 1, borderBottomColor: theme.border }}>
+          {ribbonFilterOpen === 'group' ? (
+            <SearchableVerticalFilter
+              key="group-filter"
+              label="Filtrar Grupo Operacional"
+              testID="schedule-hub-group-vertical-filter"
+              defaultExpanded
+              placeholder="🔍 Digite o grupo ou toque para listar todos..."
+              selectedId={selectedGroup}
+              clearValueId="ALL"
+              onSelect={(id) => {
+                setSelectedGroup(id || 'ALL');
+                setRibbonFilterOpen('none');
+              }}
+              options={[
+                { id: 'ALL', label: '👥 Todos os Grupos', pinned: true, keywords: ['todos', 'all'] },
+                ...operationalGroups.map((grp) => ({
+                  id: grp,
+                  label: grp,
+                  keywords: [grp, grp.replace('Grupo ', 'G')],
+                })),
+              ]}
+            />
+          ) : (
+            <SearchableVerticalFilter
+              key="week-filter"
+              label="Selecionar Semana"
+              testID="schedule-hub-week-vertical-filter"
+              defaultExpanded
+              placeholder="🔍 Digite o número ou data da semana..."
+              selectedId={String(selectedSessionIdx)}
+              allowClear={false}
+              onSelect={(id) => {
+                const idx = Number(id);
+                if (Number.isFinite(idx)) {
+                  setSelectedSessionIdx(idx);
+                  setSelectedSlotKey('');
+                }
+                setRibbonFilterOpen('none');
+              }}
+              options={sessions.map((sess, idx) => {
+                const slotCount = sess.sections.reduce((acc, sec) => acc + sec.slots.length, 0);
+                return {
+                  id: String(idx),
+                  label: `Semana S${idx + 1} — ${sess.label}`,
+                  badge: `${slotCount} itens`,
+                  keywords: [`s${idx + 1}`, sess.label, sess.key],
+                };
+              })}
+            />
+          )}
+        </View>
+      )}
 
       {/* Optional Status Toast Strip */}
       {statusBanner && (
@@ -1548,27 +1801,33 @@ export default function ScheduleHubConsole() {
                       )}
                     </View>
 
-                    {/* Compact Privilege-Filtered Reassignment Strip */}
+                    {/* Searchable Vertical Candidate Picker (Combobox Vertical) */}
                     {showReassignList && (
                       <View style={styles.reassignPickerStrip}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          <View style={{ flexDirection: 'row', gap: 6 }}>
-                            {eligibleCandidatesForInspector.map((cand) => (
-                              <Pressable
-                                key={cand.id}
-                                onPress={() =>
-                                  handleManualReassignSlot(slot, showReassignList, cand)
-                                }
-                                style={styles.candidateChip}
-                              >
-                                <Text style={styles.candidateChipName}>{cand.name}</Text>
-                                <Text style={styles.candidateChipMeta}>
-                                  {cand.groupTag} • {cand.assignmentCount ?? 0}x
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        </ScrollView>
+                        <SearchableVerticalFilter
+                          label={
+                            showReassignList === 'assistant'
+                              ? 'Trocar Par / Ajudante'
+                              : 'Substituir Participante'
+                          }
+                          testID="schedule-hub-reassign-filter"
+                          defaultExpanded
+                          placeholder="🔍 Digite nome, grupo ou carga do candidato..."
+                          allowClear={false}
+                          onSelect={(id) => {
+                            const picked = eligibleCandidatesForInspector.find((c) => c.id === id);
+                            if (picked) {
+                              handleManualReassignSlot(slot, showReassignList, picked);
+                            }
+                          }}
+                          options={eligibleCandidatesForInspector.map((cand) => ({
+                            id: cand.id,
+                            label: cand.name,
+                            subtitle: cand.groupTag || 'Geral',
+                            badge: `${cand.assignmentCount ?? 0}x`,
+                            keywords: [cand.name, cand.groupTag || ''],
+                          }))}
+                        />
                       </View>
                     )}
 
@@ -1725,25 +1984,57 @@ export default function ScheduleHubConsole() {
               <Text style={[styles.sessionCoordTitle, { color: theme.textPrimary }]}>
                 🗺️ {consolidatedTerritorySectors.length} Setores
               </Text>
-              <View style={styles.coordPillsRow}>
-                {(['all', '2027', '2026'] as const).map((yr) => (
-                  <Pressable
-                    key={yr}
-                    onPress={() => setS13ServiceYear(yr)}
-                    style={[
-                      styles.microChip,
-                      s13ServiceYear === yr && {
-                        backgroundColor: '#10B981',
-                        borderColor: '#34D399',
-                      },
-                    ]}
-                  >
-                    <Text style={styles.microChipText}>
-                      {yr === 'all' ? '🌐' : yr}
-                    </Text>
-                  </Pressable>
-                ))}
+              <View style={{ minWidth: 190, flex: 1, maxWidth: 260 }}>
+                <SearchableVerticalFilter
+                  label="Ciclo Operacional"
+                  testID="schedule-hub-cycle-year-filter"
+                  placeholder="🔍 Filtrar ciclo..."
+                  selectedId={s13ServiceYear}
+                  clearValueId="all"
+                  onSelect={(id) => setS13ServiceYear((id || 'all') as '2027' | '2026' | 'all')}
+                  options={[
+                    { id: 'all', label: '🌐 Todos os Ciclos', pinned: true, keywords: ['todos', 'all', 'ciclo'] },
+                    { id: '2027', label: 'Ciclo 2027', keywords: ['2027', 'ciclo'] },
+                    { id: '2026', label: 'Ciclo 2026', keywords: ['2026', 'ciclo'] },
+                  ]}
+                  emptyMessage="Nenhum ciclo encontrado."
+                />
               </View>
+            </View>
+
+            <View style={{ marginBottom: 8 }}>
+              <SearchableVerticalFilter
+                label="Filtrar / Ir para Território"
+                testID="schedule-hub-territory-sector-filter"
+                placeholder="🔍 Digite nº do território, bairro ou dirigente..."
+                selectedId={String(selectedTerritoryIdx)}
+                allowClear={false}
+                onSelect={(id) => {
+                  const idx = Number(id);
+                  if (Number.isFinite(idx) && idx >= 0 && idx < consolidatedTerritorySectors.length) {
+                    setSelectedTerritoryIdx(idx);
+                  }
+                }}
+                options={consolidatedTerritorySectors.map((t, idx) => {
+                  const tMeta = (t.meta || {}) as Record<string, any>;
+                  const code = String(tMeta.territoryNumber || tMeta.territory_number || t.key);
+                  const history = (tMeta.assignmentHistory || []) as Array<{
+                    assignedTo: string;
+                    completedAt?: string;
+                  }>;
+                  const latest = history[history.length - 1];
+                  const isOpen = Boolean(latest && !latest.completedAt);
+                  const loc = String(tMeta.locality || t.label || '');
+                  return {
+                    id: String(idx),
+                    label: `[${code}] ${loc}`,
+                    subtitle: `Dirigente: ${latest?.assignedTo || 'Livre'}`,
+                    badge: isOpen ? 'Em campo' : 'Livre',
+                    dotColor: isOpen ? '#10B981' : '#3B82F6',
+                    keywords: [code, loc, latest?.assignedTo || ''],
+                  };
+                })}
+              />
             </View>
 
             <View style={styles.slotButtonsGrid}>
@@ -2043,7 +2334,12 @@ export default function ScheduleHubConsole() {
       {/* ================================================================= */}
       {/* MODAL: PASTE CSV OR SCHEDULE TEXT                                 */}
       {/* ================================================================= */}
-      <Modal visible={showImportModal} transparent animationType="fade">
+      <Modal
+        visible={showImportModal && importPipeline.state.status === 'idle'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowImportModal(false)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
@@ -2078,12 +2374,25 @@ export default function ScheduleHubConsole() {
         onClose={() => setShowQuickShareModal(false)}
         eventId={eventId || 'schedule-hub'}
         eventTitle={activeUnitName || 'Programação e Territórios'}
-        skeleton={
-          activeTab === 'territories'
-            ? territoryRegistry
-            : [...localScheduleRegistry, ...territoryRegistry]
-        }
+        skeleton={[...activeScheduleRegistry, ...territoryRegistry]}
         initialScopeKind={activeTab === 'territories' ? 'territories' : 'weeks'}
+      />
+
+      <SekundoImportModal
+        state={importPipeline.state}
+        technicalReport={importPipeline.technicalReport}
+        onCancel={importPipeline.cancelImport}
+        onResolveWarning={importPipeline.resolveWarningReview}
+        onRetry={() => {
+          importPipeline.dismiss();
+          if (retryModeRef.current === 'text') {
+            setShowImportModal(true);
+            handleImportCustomText();
+          } else {
+            handlePickLocalScheduleFile();
+          }
+        }}
+        onDismiss={importPipeline.dismiss}
       />
     </SafeAreaView>
   );
