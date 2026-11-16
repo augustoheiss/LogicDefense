@@ -13,6 +13,8 @@ import { LabPage } from './pages/LabPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
 import { SobrePage } from './pages/SobrePage'
+import { DiarioIndexPage } from './pages/DiarioIndexPage'
+import { DiarioPostPage } from './pages/DiarioPostPage'
 import { CVMaker } from './pages/CVMaker'
 import { OcorrenciasPage } from './pages/OcorrenciasPage'
 import { ApiPortPage } from './pages/ApiPortPage'
@@ -57,6 +59,8 @@ export default function App() {
           <Route path="/repositorio"               element={<MaterialsPage />} />
           {/* Dynamic lesson reading page — /repositorio/equacao-balanca etc. */}
           <Route path="/repositorio/:slug"         element={<LessonPage />} />
+          <Route path="/diario"                    element={<DiarioIndexPage />} />
+          <Route path="/diario/:slug"              element={<DiarioPostPage />} />
           <Route path="/sobre"                     element={<SobrePage />} />
           <Route path="/privacidade"               element={<PrivacyPolicy />} />
           <Route path="/termos"                    element={<TermsOfUse />} />

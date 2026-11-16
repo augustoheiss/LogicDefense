@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { InteractiveMathHack } from '../components/landing/InteractiveMathHack'
 import { GamesShowcase } from '../components/landing/GamesShowcase'
 import { BiasesInteractiveGrid } from '../components/landing/BiasesInteractiveGrid'
@@ -256,6 +257,9 @@ export function Home() {
               <cite>Augusto Heiss</cite>
             </footer>
           </blockquote>
+          <p className="diario-home-teaser">
+            <Link to="/diario">Último registro do diário de bordo →</Link>
+          </p>
         </div>
       </section>
 

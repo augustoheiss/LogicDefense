@@ -3720,3 +3720,254 @@
   margin: 0;
 }
 
+/* ── Diário de bordo ─────────────────────────────────────────── */
+.diario {
+  width: min(760px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 56px) 0 72px;
+}
+
+.diario-hero h1,
+.diario-post__header h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+  margin: 8px 0 12px;
+}
+
+.diario-hero__sub {
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.diario-layout {
+  margin-top: 36px;
+}
+
+.diario-search__label {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+
+.diario-search__row {
+  display: flex;
+  gap: 8px;
+}
+
+.diario-search__input {
+  flex: 1;
+  min-width: 0;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 16px;
+}
+
+.diario-search__input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.diario-search__submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gold);
+  color: #1c1500;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.diario-search__submit:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.diario-search__hint,
+.diario-filter__count,
+.diario-filter__empty {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.diario-search__hint {
+  margin: 8px 0 0;
+}
+
+.diario-filter {
+  margin-top: 28px;
+}
+
+.diario-filter__heading {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+.diario-filter__count {
+  margin: 0 0 12px;
+}
+
+.diario-filter__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.diario-filter__option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.diario-filter__option:hover,
+.diario-filter__option:focus {
+  border-color: var(--border-glow);
+  background: var(--card-hover);
+  outline: none;
+}
+
+.diario-filter__meta {
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.diario-filter__title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.diario-filter__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diario-kind {
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.diario-kind--citacao {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.diario-post__crumb,
+.diario-post__back {
+  font-size: 14px;
+}
+
+.diario-post__crumb a,
+.diario-post__back a,
+.diario-home-teaser a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.diario-post__crumb a:hover,
+.diario-post__back a:hover,
+.diario-home-teaser a:hover {
+  text-decoration: underline;
+}
+
+.diario-post__header {
+  margin: 18px 0 8px;
+}
+
+.diario-axes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.diario-axes li {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.diario-seal {
+  margin: 22px 0 8px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--gold);
+  background: var(--gold-dim);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.diario-seal__label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.diario-seal p:last-child {
+  margin: 0;
+  color: var(--text);
+}
+
+.diario-article {
+  margin-top: 28px;
+}
+
+.diario-home-teaser {
+  text-align: center;
+  margin: 22px 0 0;
+}
+
+@media (max-width: 640px) {
+  .diario-search__submit-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .diario-search__submit {
+    padding: 0 14px;
+  }
+}
+

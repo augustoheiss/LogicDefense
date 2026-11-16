@@ -1,0 +1,267 @@
+.portal-root:has(.lb-page-fullscreen) > .navbar,
+.portal-root:has(.lb-page-fullscreen) > .footer {
+  display: none !important;
+}
+
+.portal-root:has(.lb-page-fullscreen) > .page-content {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.lb-page-fullscreen {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.lb-wip-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #1a1302;
+  border-bottom: 2px solid #facc15;
+  color: #fef3c7;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+.lb-wip-banner__info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.lb-wip-banner__badge {
+  background: #facc15;
+  color: #291d00;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.lb-wip-banner__text {
+  color: #fde68a;
+}
+
+.lb-wip-banner__back {
+  color: #38bdf8;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.lb-wip-banner__back:hover {
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.ilha-shell {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #8ecff0;
+  touch-action: none;
+}
+
+.ilha-shell canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ilha-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: "Segoe UI", sans-serif;
+  color: #14324a;
+}
+
+.ilha-hud strong,
+.ilha-hud button,
+.ilha-plate {
+  pointer-events: auto;
+}
+
+.ilha-army,
+.ilha-compass,
+.ilha-enemies {
+  position: absolute;
+  top: 16px;
+  background: #14324a;
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 16px;
+}
+
+.ilha-army { left: 16px; }
+.ilha-compass {
+  right: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+}
+.ilha-enemies { left: 16px; top: 64px; }
+
+.ilha-fim {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  background: #fff;
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.ilha-continuar {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  background: #14324a;
+  color: #fff;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.ilha-power {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 88px;
+  background: #14324a;
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.ilha-conta,
+.ilha-atirar {
+  position: absolute;
+  bottom: 16px;
+  pointer-events: auto;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.ilha-conta {
+  right: 16px;
+  background: #facc15;
+  color: #3a2a00;
+}
+
+.ilha-atirar {
+  right: 148px;
+  background: #e11d48;
+  color: #fff;
+}
+
+.ilha-olhar {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  background: rgba(20, 50, 74, 0.88);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ilha-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 76px;
+  background: rgba(8, 16, 28, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  pointer-events: auto;
+  padding: 72px 16px 16px;
+}
+
+.ilha-slow {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ilha-card {
+  width: min(640px, 100%);
+  max-height: 90dvh;
+  overflow: auto;
+  background: #f8fafc;
+  color: #14324a;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.ilha-tiers, .ilha-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.ilha-tiers button, .ilha-choices button, .ilha-card .ilha-fechar {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px;
+  font-weight: 700;
+  background: #e2e8f0;
+}
+
+.ilha-tiers button[aria-pressed="true"] {
+  background: #facc15;
+}
+
+.ilha-plate {
+  background: #fff;
+  color: #14324a;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}

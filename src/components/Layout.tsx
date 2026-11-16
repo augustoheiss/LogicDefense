@@ -18,6 +18,7 @@ const NAV_LINKS = [
     ]
   },
   { to: '/repositorio',label: 'Repositório',  icon: '📚'  },
+  { to: '/diario',     label: 'Diário',       icon: '📓'  },
   { to: '/sobre',      label: 'Sobre',        icon: '✦'   },
 ]
 
