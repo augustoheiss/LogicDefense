@@ -386,6 +386,56 @@ export const STATIC_ROUTES_META = [
     ],
   },
   {
+    path: '/diario',
+    title: 'Diário de Bordo · Notas entre a Bancada, a Sala e o Código | Heiss-Lab',
+    description:
+      'Diário de bordo do Heiss-Lab: notas de Augusto Heiss sobre IA, limites humanos, integridade e fé. Pesquise por título, data ou citação.',
+    keywords:
+      'diário de bordo Heiss Lab, Augusto Heiss, IA e limites, etiqueta no martelo, integridade, fé e matemática',
+    badge: 'DIÁRIO DE BORDO · HEISS-LAB',
+    cardSubtitle: 'Reflexões honestas sobre IA, Matemática, limites e fé',
+    emoji: '📓',
+    accentColor: '#ffd700',
+    secondaryColor: '#7c3aed',
+    iconPath: '/icons/icon-diario.png',
+    ogImagePath: '/og/diario.png',
+    ogType: 'website',
+    schemaType: 'CollectionPage',
+    sitemapPriority: 0.8,
+    changefreq: 'weekly',
+    includeInSitemap: true,
+    highlights: [
+      'Busca por título, data de publicação e citação no texto',
+      'Notas entre a bancada, a sala de aula e o código',
+      'Tese humana, com o papel da IA declarado em cada entrada',
+    ],
+  },
+  {
+    path: '/diario/a-etiqueta-no-martelo',
+    title: 'A Etiqueta no Martelo: Será que ter controle é a solução? | Heiss-Lab',
+    description:
+      'Diário #001, 15 de novembro de 2026. IA, CEOs, limites humanos e a integridade: a única coisa que realmente está nas nossas mãos.',
+    keywords:
+      'etiqueta no martelo, diário de bordo Heiss Lab, controle e IA, Salmo 119, integridade, Augusto Heiss',
+    badge: 'DIÁRIO #001 · 15 NOV 2026',
+    cardSubtitle: 'Notas sobre IA, limites humanos e a única coisa que está nas nossas mãos',
+    emoji: '🔨',
+    accentColor: '#ffd700',
+    secondaryColor: '#00d4ff',
+    iconPath: '/icons/icon-diario-001.png',
+    ogImagePath: '/og/diario-001.png',
+    ogType: 'article',
+    schemaType: 'WebPage',
+    sitemapPriority: 0.75,
+    changefreq: 'yearly',
+    includeInSitemap: true,
+    highlights: [
+      'Se você escrever sábio num martelo, ele não fica sábio',
+      'O que está nas nossas mãos é a integridade',
+      'Tese humana, revisão assistida declarada no selo do martelo',
+    ],
+  },
+  {
     path: '/repositorio',
     title: 'Repositório Didático Aberto · Aulas de Matemática em LaTeX, PDFs e Vídeos | Heiss-Lab',
     description:
@@ -610,6 +660,7 @@ export function buildRouteJsonLd(meta) {
         jogos: { name: 'Jogos Cognitivos', url: `${SITE_ORIGIN}/jogos` },
         laboratorio: { name: 'Laboratório de IA', url: `${SITE_ORIGIN}/laboratorio` },
         repositorio: { name: 'Repositório Didático', url: `${SITE_ORIGIN}/repositorio` },
+        diario: { name: 'Diário de bordo', url: `${SITE_ORIGIN}/diario` },
       }
       const parent = parentMap[segments[0]]
       if (parent) {

@@ -132,25 +132,24 @@ export function GamesMenu() {
           </div>
         </div>
 
-        {/* ── Logic Battle (Genesis Edition) card ── */}
+        {/* ── Logic Battle (Em Construção) card ── */}
         <div className="game-card" style={{ marginTop: 24 }}>
           <div className="game-card__thumb" style={{ background: 'linear-gradient(135deg, #071226 0%, #162d4c 50%, #451a03 100%)' }}>
             <span style={{ position: 'relative', zIndex: 1 }}>⚔️</span>
           </div>
           <div className="game-card__body">
-            <span className="game-card__tag" style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15', border: '1px solid rgba(250,204,21,0.35)' }}>Crowd Runner · Conquista Territorial</span>
-            <h2 className="game-card__title">Logic Battle · Genesis Edition</h2>
+            <span className="game-card__tag" style={{ background: 'rgba(250,204,21,0.16)', color: '#facc15', border: '1px solid rgba(250,204,21,0.45)' }}>🚧 Em Construção · Protótipo 3D</span>
+            <h2 className="game-card__title">Logic Battle · Em Construção</h2>
             <p className="game-card__desc">
-              A Ponte dos Portões Honestos & O Reino da Matemática Soberana. Guie sua legião por portões
-              aritméticos (+, −, ×, ÷, %, potências), veja 10 soldados se fundirem em Pelotões Posicionais
-              (Vai-Um) e dome as 20 Pegadinhas da Intuição com Fichas de Resgate Socráticas.
+              Nova versão 3D em construção ativa. Você já pode testar o protótipo jogável
+              (movimentação na ilha, combate e desafios matemáticos em 4 níveis de dificuldade)
+              enquanto finalizamos o jogo completo.
             </p>
             <div className="game-card__footer">
-              <span className="game-card__badge">🌉 Mundo 1 (A Ponte) + Mundo 2 (O Reino)</span>
-              <span className="game-card__badge">⚡ 20 Pegadinhas & Fichas de Resgate</span>
-              <span className="game-card__badge">🔟 Fusão Posicional Vai-Um</span>
+              <span className="game-card__badge">🚧 Protótipo em desenvolvimento</span>
+              <span className="game-card__badge">🧮 Desafios em 4 níveis</span>
               <Link to="/jogos/logic-battle" className="btn-primary">
-                ▶ Jogar agora
+                🚧 Testar protótipo
               </Link>
             </div>
           </div>
