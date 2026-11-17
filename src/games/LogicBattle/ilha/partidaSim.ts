@@ -486,7 +486,7 @@ export function atirar(state: PartidaState): PartidaState {
   const fx = -Math.sin(state.heroi.yaw)
   const fz = Math.cos(state.heroi.yaw)
   let alvo: Unidade | null = null
-  let melhor = PARTIDA.shootRange
+  let melhor: number = PARTIDA.shootRange
   for (const unidade of state.unidades) {
     if (unidade.lado !== 'inimigo' || unidade.hp <= 0) continue
     const dx = unidade.x - state.heroi.x

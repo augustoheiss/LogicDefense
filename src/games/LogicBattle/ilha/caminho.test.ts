@@ -32,7 +32,7 @@ export function run(): void {
 
   const muro = { x: 4, z: 0, hx: 0.6, hz: 3 }
   const desvio = encontrarCaminho(0, 0, 8, 0, [muro])
-  assert(desvio !== null && desvio.length > 0, 'desvio existe')
+  if (!desvio) throw new Error('desvio existe')
   assert(!cruzaCaixa({ x: 0, z: 0 }, desvio, muro), 'caminho não cruza a caixa')
   assert(cruzaCaixa({ x: 0, z: 0 }, [{ x: 8, z: 0 }], muro), 'a reta do teste cruza a caixa')
 
@@ -40,26 +40,22 @@ export function run(): void {
     { x: 1, z: 0, hx: 0.45, hz: 0.45 },
     { x: 0, z: 1, hx: 0.45, hz: 0.45 },
   ])
-  assert(quina !== null && quina.length > 1, `quina tem volta ${JSON.stringify(quina)}`)
+  if (!quina || quina.length < 2) throw new Error(`quina tem volta ${JSON.stringify(quina)}`)
   assert(!cruzaCaixa({ x: 0, z: 0 }, quina, { x: 1, z: 1, hx: 0.2, hz: 0.2 }), 'segmento não corta (1,1)')
 
   const dentro = encaixarLivre(4, 0, [muro])
-  assert(dentro !== null, 'clique na caixa acha célula')
+  if (!dentro) throw new Error('clique na caixa acha célula')
   const ponto = { x: dentro[0] * PARTIDA.celula, z: dentro[1] * PARTIDA.celula }
   assert(Math.hypot(ponto.x - 4, ponto.z) <= PARTIDA.espiral + 0.01, 'espiral de 5 m')
   assert(Math.abs(ponto.x - muro.x) > muro.hx || Math.abs(ponto.z - muro.z) > muro.hz, 'célula fora da caixa')
 
   const caixaPortao = { x: 4, z: 0, hx: 1.2, hz: 0.4 }
   const semBloqueio = encontrarCaminho(0, 0, 8, 0, [])
-  assert(
-    semBloqueio !== null && cruzaCaixa({ x: 0, z: 0 }, semBloqueio, caixaPortao),
-    'lista vazia cruza o lugar do portão',
-  )
+  if (!semBloqueio) throw new Error('lista vazia cruza o lugar do portão')
+  assert(cruzaCaixa({ x: 0, z: 0 }, semBloqueio, caixaPortao), 'lista vazia cruza o lugar do portão')
   const portaoComoMuro = encontrarCaminho(0, 0, 8, 0, [caixaPortao])
-  assert(
-    portaoComoMuro !== null && !cruzaCaixa({ x: 0, z: 0 }, portaoComoMuro, caixaPortao),
-    'o mesmo retângulo, se bloqueia, é contornado',
-  )
+  if (!portaoComoMuro) throw new Error('o mesmo retângulo, se bloqueia, é contornado')
+  assert(!cruzaCaixa({ x: 0, z: 0 }, portaoComoMuro, caixaPortao), 'o mesmo retângulo, se bloqueia, é contornado')
 
   const parede: { x: number; z: number; hx: number; hz: number }[] = []
   for (let z = -56; z <= 56; z++) parede.push({ x: 2, z, hx: 0.6, hz: 0.6 })
@@ -67,7 +63,7 @@ export function run(): void {
   assert(visitasUltima === PARTIDA.maxVisitas, 'a busca para em 5000 visitas')
 
   const fora = encontrarCaminho(0, 0, 80, 0, [])
-  assert(fora !== null, 'alvo fora do disco ainda devolve marco')
+  if (!fora) throw new Error('alvo fora do disco ainda devolve marco')
   assert(
     Math.hypot(fora[fora.length - 1].x, fora[fora.length - 1].z) <= PARTIDA.radius - PARTIDA.body + 0.01,
     'o marco fica dentro do disco',

@@ -2,6 +2,7 @@ import { Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useRef, useState } from 'react'
 import type { Group, Mesh } from 'three'
+import { Vector2 } from 'three'
 import {
   generateInfiniteChallenge,
   InfiniteMathChallenge,
@@ -95,10 +96,10 @@ function Cena(props: {
   const soloNoChao = (clientX: number, clientY: number) => {
     const retangulo = gl.domElement.getBoundingClientRect()
     raycaster.setFromCamera(
-      {
-        x: ((clientX - retangulo.left) / retangulo.width) * 2 - 1,
-        y: -((clientY - retangulo.top) / retangulo.height) * 2 + 1,
-      },
+      new Vector2(
+        ((clientX - retangulo.left) / retangulo.width) * 2 - 1,
+        -((clientY - retangulo.top) / retangulo.height) * 2 + 1,
+      ),
       camera,
     )
     const dirY = raycaster.ray.direction.y

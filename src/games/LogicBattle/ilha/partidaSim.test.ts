@@ -18,19 +18,20 @@ import {
   mira,
   ordenar,
   ordenarHeroi,
+  PartidaInput,
   PartidaState,
   postura,
   stepPartida,
 } from './partidaSim'
 
-function assert(condition: boolean, name: string): void {
+function assert(condition: boolean, name: string): asserts condition {
   if (!condition) throw new Error(name)
 }
 
 function anda(
   state: PartidaState,
   segundos: number,
-  input = { forward: true, back: false, strafe: 0 as const },
+  input: PartidaInput = { forward: true, back: false, strafe: 0 },
 ) {
   let atual = state
   let resta = segundos
@@ -384,7 +385,7 @@ export function run(): void {
   assert(soldado !== undefined, 'soldado do desvio')
   const mandado = ordenar(pelotao, [soldado.id], { tipo: 'mover', x: 8, z: 0 })
   const rota = mandado.unidades.find((unidade) => unidade.id === soldado.id)?.rota
-  assert(rota !== undefined && rota.semCaminho === false && rota.marcos.length > 0, 'ordem ganha marcos')
+  assert(rota != null && rota.semCaminho === false && rota.marcos.length > 0, 'ordem ganha marcos')
   const andouMuro = stepPartida(mandado, INPUT_PARADO, 2)
   const depoisMuro = andouMuro.unidades.find((unidade) => unidade.id === soldado.id)
   assert(depoisMuro !== undefined, 'soldado segue')

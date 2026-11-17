@@ -65,11 +65,11 @@ export const PARTIDA = {
   espiral: 5,
   recalcularSeg: 0.4,
   maxVisitas: 5000,
-  caminho: 'grade',
+  caminho: 'grade' as 'grade' | 'reto',
   levaDistancia: 16,
   levaPrimeira: 4,
   levaSeguinte: 1,
-  levaAlvo: 'nucleo',
+  levaAlvo: 'nucleo' as 'nucleo' | 'perto',
 } as const
 
 export const GRAU_PARTIDA: Record<1 | 2 | 3 | 4, { wipe: number; bonus: number; credito: number }> = {
