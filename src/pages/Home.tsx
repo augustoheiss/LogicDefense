@@ -258,7 +258,7 @@ export function Home() {
             </footer>
           </blockquote>
           <p className="diario-home-teaser">
-            <Link to="/diario">Último registro do diário de bordo →</Link>
+            <Link to="/diario/placa-de-igreja-nao-salva-ninguem">Último registro do diário de bordo →</Link>
           </p>
         </div>
       </section>

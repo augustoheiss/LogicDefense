@@ -34,6 +34,13 @@ try {
   if (!scene.includes('Continuar na rua') || scene.includes('useNavigate')) {
     throw new Error('falta a escolha de continuar na rua')
   }
+  const proibido = ['LogicFriction', 'LogicDefense', 'LogicAscension', 'LogicInvaders', 'LogicTetris', '@react-three/rapier', 'SerpentCanvas', 'ArcadeEnginesCanvas']
+  const vazou = proibido.find((nome) => scene.includes(nome))
+  if (vazou) throw new Error(`a cena puxa ${vazou}`)
+  const partida = await server.ssrLoadModule('/src/games/LogicBattle/ilha/partidaSim.test.ts')
+  partida.run()
+  const caminho = await server.ssrLoadModule('/src/games/LogicBattle/ilha/caminho.test.ts')
+  caminho.run()
   console.log('ilha-rua: ok')
 } finally {
   await server.close()
