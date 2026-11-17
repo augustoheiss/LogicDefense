@@ -112,6 +112,101 @@
   font-size: 16px;
 }
 
+.ilha-barra,
+.ilha-ferramentas {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: min(640px, calc(100% - 32px));
+}
+
+.ilha-barra {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+}
+
+.ilha-barra button,
+.ilha-ferramentas button {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-weight: 700;
+  background: #14324a;
+  color: #fff;
+}
+
+.ilha-barra span {
+  background: #fff;
+  color: #14324a;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 800;
+}
+
+.ilha-ferramentas {
+  left: 16px;
+  top: 156px;
+  width: min(280px, 46vw);
+  background: rgba(255, 255, 255, 0.92);
+  color: #14324a;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.ilha-ferramentas p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ilha-retangulo {
+  position: fixed;
+  z-index: 5;
+  pointer-events: none;
+  border: 2px solid #facc15;
+  background: rgba(250, 204, 21, 0.2);
+}
+
+.ilha-mira {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  margin-top: -9px;
+  pointer-events: none;
+  z-index: 3;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #14324a;
+}
+
+.ilha-mira::before,
+.ilha-mira::after {
+  content: "";
+  position: absolute;
+  background: #fff;
+}
+
+.ilha-mira::before {
+  left: 7px;
+  top: -4px;
+  width: 2px;
+  height: 24px;
+}
+
+.ilha-mira::after {
+  top: 7px;
+  left: -4px;
+  width: 24px;
+  height: 2px;
+}
+
 .ilha-army { left: 16px; }
 .ilha-compass {
   right: 16px;
@@ -123,6 +218,17 @@
   justify-content: center;
   border: 2px solid #fff;
 }
+.ilha-base {
+  position: absolute;
+  left: 16px;
+  top: 108px;
+  background: #14324a;
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
 .ilha-enemies { left: 16px; top: 64px; }
 
 .ilha-fim {
@@ -209,16 +315,14 @@
 
 .ilha-modal {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 76px;
-  background: rgba(8, 16, 28, 0.28);
+  inset: 0;
+  z-index: 8;
+  background: rgba(8, 16, 28, 0.55);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   pointer-events: auto;
-  padding: 72px 16px 16px;
+  padding: 24px 16px 16px;
 }
 
 .ilha-slow {
