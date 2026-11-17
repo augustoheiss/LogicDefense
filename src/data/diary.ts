@@ -12,6 +12,63 @@ export interface DiaryEntry {
 
 export const DIARY_ENTRIES: DiaryEntry[] = [
   {
+    slug: 'placa-de-igreja-nao-salva-ninguem',
+    edition: '#002',
+    date: '2026-11-16',
+    title: 'Placa de igreja não salva ninguém',
+    subtitle: 'Um contrato por tempo determinado.',
+    axes: ['Fé & Ética', 'Nomes & Placas', 'IA & Limites'],
+    disclosure:
+      'Tese e vivência humanas (Augusto Heiss). Revisão gramatical e checagem dos versículos assistidas por IA.',
+    readingMinutes: 6,
+    body: `## I. O contrato
+
+O que você acharia de um homem de uma empresa prestando serviço por um tempo dentro de uma fábrica que não é a dele, se ele começasse a criticar os funcionários dessa fábrica e a subestimar a capacidade deles?
+
+Ele sempre divide as coisas. O que ele e os funcionários da empresa dele fizeram, de um lado. O que os funcionários da fábrica fizeram, do outro. E faz essa divisão usando o nome oficial de cada companhia.
+
+O que eu penso desse homem? O contrato apenas o coloca lá dentro por um tempo — não o coloca acima de ninguém. O nome da empresa não é a capacidade de ninguém. O serviço de um e de outro pode até ser diferente. Medir as pessoas pelo nome oficial, como se o nome fosse o valor delas, é preconceito. Mesmo quando, em alguma coisa, parece que há razão.
+
+Hoje gostam de chamar ferramenta e documento de "inteligentes". Alguém pode olhar para esse papel e dizer: "Olha que contrato inteligente." O contrato não é inteligente. Inteligência, consciência, sabedoria e conhecimento não se definem por um contrato. Quem pode receber essas qualidades é um ser humano. O papel só acompanha a inteligência de quem o usa.
+
+## II. A placa
+
+O que está no meu coração neste diário é a mesma coisa, com outro nome.
+
+Placa de igreja não salva ninguém.
+
+Quem faz distinção de grupo pelo nome, por mais que pareça ter razão, está agindo com preconceito. Eu acredito que nós, humanos, precisamos nos organizar de várias maneiras. Organizar não é o problema. O problema é achar que, por participar de uma religião, estamos automaticamente protegidos, e que alguém, por pertencer a outra religião, não está. Esse pensamento é de quem forma seita, põe regra de homem no lugar da Palavra de Deus e divide as pessoas.
+
+Está escrito que é em vão adorar a Deus quando se ensinam regras de homens como doutrinas (Mateus 15:9). Nem todo o que diz "Senhor, Senhor" entra no Reino dos céus, mas apenas aquele que faz a vontade do Pai (Mateus 7:21).
+
+## III. A família
+
+Quem usou a religião pela primeira vez? Satanás, o Diabo, ao enganar Eva e mentir. Ele disse que eles não morreriam e que seriam como Deus (Gênesis 3:4, 5). Uma mentira no lugar do que Deus tinha dito. Eu chamo isso de religião. Não foi Deus quem fez isso.
+
+Será que precisamos continuar dividindo as coisas pelo nome? Não estou falando de unir as religiões. Deus não quer salvar nenhuma religião. Ele deu o seu Filho unigênito, para que todo aquele que nele exercer fé não seja destruído, mas tenha vida eterna (João 3:16).
+
+O que Deus formou foi uma família. Quem encontrava a verdade encontrava essa família. E foi primeiro em Antioquia que os discípulos, por direção divina, foram chamados de cristãos (Atos 11:26). O nome não nasceu como seita. O nome dizia de quem eles eram seguidores. O que pode dividir é o homem pegar esse nome e usar como placa.
+
+Viver de acordo com os ensinamentos de Jesus é o que ajuda cada membro no seu próprio lugar dentro da família, e é o que protege. Não é o nome.
+
+Jesus prometeu essa família a quem deixasse as coisas por causa dele e das boas novas. Não é um prêmio de quem tem a placa.
+
+> "Eu lhes garanto: Ninguém deixou casa, irmãos, irmãs, mãe, pai, filhos ou campos, por minha causa e por causa das boas novas, que não receba cem vezes mais agora, neste tempo, casas, irmãos, irmãs, mães, filhos e campos, com perseguições, e, no futuro sistema de coisas, a vida eterna." (Marcos 10:29, 30)
+
+## IV. Quem procura
+
+Persistam em pedir, e lhes será dado. Persistam em buscar, e acharão. Persistam em bater, e lhes será aberto (Mateus 7:7).
+
+Não devemos ser enganados procurando o que não tem valor. Mais nomenclaturas, mais CNPJs, mais religiões. Isso só causa mais divisão.
+
+É como aquele homem de quem Isaías fala: ele corta a madeira para se aquecer e preparar a comida, e com a mesma madeira faz um deus e o adora, dizendo: "Salva-me, pois tu és o meu deus" (Isaías 44:14-17). É isso que nós fazemos com todos esses nomes, com a IA e com esses CNPJs. Nós trabalhamos com essas coisas, mas acabamos confiando nelas para nos salvar — causando divisões, preconceitos e pensamentos de homens.
+
+O resultado de uma máquina também não é inteligente sozinho. Não tem consciência, sabedoria nem conhecimento próprios. É só um resultado, produzido com muito trabalho — neste caso, força bruta automatizada. Essas qualidades ganham significado na jornada. Depois que esse resultado já foi produzido, ele serve de testemunho para os outros e de benefício para quem o recebe com inteligência. O resultado pode ser bom. Na mão de quem não age com inteligência, ele não torna essa pessoa inteligente. Aí ele não beneficia. Fica o testemunho.
+
+Quem continua medindo as pessoas pela placa e pelo nome, achando que o nome salva ou que deixa alguém sem proteção, esse é quem faz parte de uma seita. Seita é regra de homem. Pelos frutos se reconhece, não pela placa (Mateus 7:20).
+`,
+  },
+  {
     slug: 'a-etiqueta-no-martelo',
     edition: '#001',
     date: '2026-11-15',

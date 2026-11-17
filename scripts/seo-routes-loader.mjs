@@ -436,6 +436,31 @@ export const STATIC_ROUTES_META = [
     ],
   },
   {
+    path: '/diario/placa-de-igreja-nao-salva-ninguem',
+    title: 'Placa de igreja não salva ninguém | Heiss-Lab',
+    description:
+      'Diário #002, 16 de novembro de 2026. Placa de igreja não salva ninguém. O nome não mede a pessoa, e o contrato não é inteligente.',
+    keywords:
+      'placa de igreja, contrato por tempo determinado, diário de bordo Heiss Lab, Isaías 44, CNPJ, Augusto Heiss',
+    badge: 'DIÁRIO #002 · 16 NOV 2026',
+    cardSubtitle: 'Um contrato por tempo determinado.',
+    emoji: '🪧',
+    accentColor: '#ffd700',
+    secondaryColor: '#7c3aed',
+    iconPath: '/icons/icon-diario-002.png',
+    ogImagePath: '/og/diario-002.png',
+    ogType: 'article',
+    schemaType: 'WebPage',
+    sitemapPriority: 0.75,
+    changefreq: 'yearly',
+    includeInSitemap: true,
+    highlights: [
+      'Placa de igreja não salva ninguém',
+      'O contrato não é inteligente; quem age é a pessoa',
+      'O fruto fica de testemunho. O nome não salva',
+    ],
+  },
+  {
     path: '/repositorio',
     title: 'Repositório Didático Aberto · Aulas de Matemática em LaTeX, PDFs e Vídeos | Heiss-Lab',
     description:
