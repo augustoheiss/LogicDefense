@@ -41,6 +41,10 @@ try {
   partida.run()
   const caminho = await server.ssrLoadModule('/src/games/LogicBattle/ilha/caminho.test.ts')
   caminho.run()
+  const atlas = await server.ssrLoadModule('/src/games/LogicBattle/ilha/atlas.test.ts')
+  atlas.run()
+  const sandboxViva = await server.ssrLoadModule('/src/games/LogicBattle/ilha/sandboxViva.test.ts')
+  sandboxViva.run()
   console.log('ilha-rua: ok')
 } finally {
   await server.close()

@@ -68,6 +68,11 @@ export function run(): void {
     Math.hypot(fora[fora.length - 1].x, fora[fora.length - 1].z) <= PARTIDA.radius - PARTIDA.body + 0.01,
     'o marco fica dentro do disco',
   )
+  const canto = encontrarCaminho(0, 0, 80, 80, [])
+  if (!canto) throw new Error('alvo diagonal ainda devolve marco')
+  const limite = PARTIDA.radius - PARTIDA.body
+  const ultimo = canto[canto.length - 1]
+  assert(Math.abs(ultimo.x - limite) < 0.02 && Math.abs(ultimo.z - limite) < 0.02, 'o canto do quadrado segura o alvo')
 
   const muralha: { x: number; z: number; hx: number; hz: number }[] = []
   for (let i = -3; i <= 3; i++) {
@@ -77,4 +82,16 @@ export function run(): void {
     muralha.push({ x: -3, z: i, hx: 0.55, hz: 0.55 })
   }
   assert(encontrarCaminho(0, 0, 10, 0, muralha) === null, 'muro fechado')
+
+  const rotaCanto = encontrarCaminho(0, 0, 45, 45, [{ x: 0, z: 20, hx: 0.2, hz: 0.2 }])
+  assert(rotaCanto !== null && rotaCanto[rotaCanto.length - 1].x > 40 && rotaCanto[rotaCanto.length - 1].z > 40, 'o canto 45,45 tem caminho')
+  const encaixeCanto = encaixarLivre(45, 45, [])
+  assert(encaixeCanto !== null && encaixeCanto[0] === 45 && encaixeCanto[1] === 45, 'a leva encaixa no canto')
+  assert(encontrarCaminho(0, 0, -45, -45, [{ x: 4, z: -4, hx: 0.3, hz: 0.3 }]) !== null, 'o canto sudoeste tem caminho')
+
+  const lagoaRasa = { x: 4, z: 0, hx: 1.5, hz: 2 }
+  const desvioAgua = encontrarCaminho(0, 0, 8, 0, [], (px, pz) =>
+    Math.abs(px - lagoaRasa.x) <= lagoaRasa.hx && Math.abs(pz - lagoaRasa.z) <= lagoaRasa.hz ? PARTIDA.custoAguaCaminho : 1,
+  )
+  assert(desvioAgua !== null && !cruzaCaixa({ x: 0, z: 0 }, desvioAgua, lagoaRasa), 'custo de água rasa induz rota seca quando possível')
 }
