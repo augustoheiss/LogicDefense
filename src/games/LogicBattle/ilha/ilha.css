@@ -270,7 +270,8 @@
 }
 
 .ilha-conta,
-.ilha-atirar {
+.ilha-atirar,
+.ilha-pular {
   position: absolute;
   bottom: 16px;
   pointer-events: auto;
@@ -279,6 +280,84 @@
   padding: 12px 16px;
   font-weight: 700;
   font-size: 16px;
+}
+
+.ilha-pular,
+.ilha-atirar {
+  display: none;
+}
+
+.ilha-celular .ilha-pular,
+.ilha-celular .ilha-atirar {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.ilha-celular .ilha-atirar {
+  right: 20px;
+  bottom: 22px;
+  z-index: 6;
+  width: 88px;
+  height: 88px;
+  font-size: 15px;
+}
+
+.ilha-celular .ilha-pular {
+  right: 30px;
+  bottom: 122px;
+  z-index: 6;
+  width: 68px;
+  height: 68px;
+  font-size: 14px;
+}
+
+.ilha-celular .ilha-conta {
+  left: 16px;
+  right: auto;
+  top: 156px;
+  bottom: auto;
+}
+
+.ilha-celular .ilha-minimapa {
+  top: 70px;
+  right: 8px;
+  bottom: auto;
+  transform: scale(0.72);
+  transform-origin: top right;
+}
+
+.ilha-celular .ilha-olhar {
+  display: none;
+}
+
+.ilha-joystick {
+  position: absolute;
+  z-index: 5;
+  display: none;
+  width: 128px;
+  height: 128px;
+  margin: -64px 0 0 -64px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.28);
+  pointer-events: none;
+}
+
+.ilha-joystick.ativo {
+  display: block;
+}
+
+.ilha-joystick span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .ilha-conta {
@@ -290,6 +369,12 @@
 .ilha-atirar {
   right: 148px;
   background: #e11d48;
+  color: #fff;
+}
+
+.ilha-pular {
+  right: 236px;
+  background: #0f766e;
   color: #fff;
 }
 
@@ -360,6 +445,16 @@
   background: #facc15;
 }
 
+.ilha-numero {
+  pointer-events: none;
+  background: #4c1d95;
+  color: #fff;
+  border-radius: 8px;
+  padding: 2px 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .ilha-plate {
   background: #fff;
   color: #14324a;
@@ -368,4 +463,313 @@
   font-size: 13px;
   font-weight: 700;
   text-align: center;
+}
+
+.ilha-minimapa {
+  position: absolute;
+  right: 16px;
+  bottom: 72px;
+  z-index: 8;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.ilha-mini-janela {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #020617;
+}
+
+.ilha-mini-camada {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+
+.ilha-minimapa .ilha-mini-quadrado {
+  position: absolute;
+  padding: 0;
+  border: 2px solid rgba(148, 163, 184, 0.45);
+  border-radius: 4px;
+  background: #334155;
+  color: transparent;
+}
+
+.ilha-minimapa .ilha-mapa-vazio {
+  background: #0f172a;
+  border-color: rgba(71, 85, 105, 0.7);
+}
+
+.ilha-minimapa .ilha-mapa-corpo {
+  box-shadow: inset 0 0 0 2px #38bdf8;
+}
+
+.ilha-minimapa .ilha-mapa-vendo {
+  border-color: #facc15;
+}
+
+.ilha-minimapa .ilha-alerta-verde {
+  background: #166534;
+}
+
+.ilha-minimapa .ilha-alerta-vermelho {
+  background: #991b1b;
+}
+
+.ilha-pipa {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 0 2px #0f172a;
+  pointer-events: none;
+}
+
+.ilha-minimapa .ilha-voltar {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-weight: 700;
+  background: #14324a;
+  color: #fff;
+}
+
+.ilha-minimapa .ilha-mapa-cheio {
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.7);
+}
+
+.ilha-icone-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0 !important;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #14324a;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.ilha-icone-btn:hover {
+  background: #1e496b;
+  transform: translateY(-1px);
+}
+
+.ilha-icone-btn.ativo {
+  background: #facc15 !important;
+  color: #1e293b !important;
+  box-shadow: 0 0 0 2px #14324a;
+}
+
+.ilha-mini-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ilha-mini-modos {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ilha-mini-status {
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.ilha-confirmar-card {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  z-index: 12;
+  pointer-events: auto;
+  width: min(380px, calc(100% - 28px));
+  background: rgba(15, 23, 42, 0.96);
+  color: #f8fafc;
+  border: 2px solid #facc15;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.55);
+}
+
+.ilha-confirmar-topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.ilha-confirmar-selo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+  flex-shrink: 0;
+}
+
+.ilha-confirmar-topo strong {
+  font-size: 15px;
+  color: #fde68a;
+}
+
+.ilha-confirmar-resumo {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #e2e8f0;
+}
+
+.ilha-confirmar-detalhe {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.ilha-confirmar-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ilha-confirmar-sim,
+.ilha-confirmar-nao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-confirmar-sim {
+  background: #22c55e;
+  color: #052e16;
+}
+
+.ilha-confirmar-nao {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.ilha-ferramentas-grade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.ilha-recursos-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+}
+
+@media (max-width: 600px) {
+  .ilha-celular .ilha-barra {
+    top: 8px;
+    left: 8px;
+    right: 72px;
+    max-width: none;
+    transform: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .ilha-celular .ilha-barra span {
+    grid-column: 1 / -1;
+    justify-self: start;
+    white-space: nowrap;
+  }
+
+  .ilha-celular .ilha-army,
+  .ilha-celular .ilha-enemies {
+    top: 96px;
+    padding: 5px 8px;
+    font-size: 13px;
+  }
+
+  .ilha-celular .ilha-army { left: 8px; }
+  .ilha-celular .ilha-enemies {
+    left: 108px;
+    max-width: calc(100% - 256px);
+    font-size: 11.5px;
+    line-height: 1.2;
+  }
+  .ilha-celular .ilha-compass { top: 8px; right: 8px; }
+
+  .ilha-celular .ilha-base {
+    top: 148px;
+    left: 8px;
+    max-width: calc(100% - 176px);
+    max-height: 86px;
+    overflow: auto;
+    touch-action: pan-y;
+    pointer-events: auto;
+    font-size: 12px;
+  }
+
+  .ilha-celular .ilha-minimapa { top: 102px; }
+
+  .ilha-celular .ilha-ferramentas {
+    top: 240px;
+    left: 8px;
+    width: calc(100% - 184px);
+    max-height: calc(100% - 260px);
+    overflow: auto;
+    touch-action: pan-y;
+    pointer-events: auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ilha-celular .ilha-ferramentas p { grid-column: 1 / -1; }
+  .ilha-celular .ilha-ferramentas-grade { grid-column: 1 / -1; }
+  .ilha-celular .ilha-conta { top: 304px; left: auto; right: 8px; }
+}
+
+.ilha-acoes-campo {
+  position: absolute;
+  left: 16px;
+  bottom: 112px;
+  z-index: 6;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.82);
 }

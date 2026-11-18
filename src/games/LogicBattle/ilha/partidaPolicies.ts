@@ -2,8 +2,30 @@ import { Gate } from '../types'
 
 export type Olhar = 'primeira' | 'terceira' | 'imperio'
 export type Postura = 'ordens' | 'automatico'
-export type PecaId = 'nucleo' | 'torre' | 'portao' | 'quartel' | 'britador'
+export type PecaId = 'nucleo' | 'torre' | 'portao' | 'quartel' | 'britador' | 'serraria' | 'mina'
 export type Papel = 'horda' | 'tropa' | 'sitiante' | 'isca' | 'dragao'
+export type PoliticaMinimapas = 'atual' | 'alguns' | 'todos'
+
+export const OBRA_CENTRO_Y = 0.8
+export const DIMENSOES_OBRA: Record<PecaId, [number, number, number]> = {
+  nucleo: [2, 1.6, 2],
+  quartel: [2, 1.6, 2],
+  britador: [2, 1.6, 2],
+  serraria: [1.9, 1.5, 1.9],
+  mina: [2.1, 1.5, 2.1],
+  torre: [1.1, 2.4, 1.1],
+  portao: [2.4, 2.2, 0.4],
+}
+
+export const TEMPO_CONSTRUCAO: Record<PecaId, number> = {
+  nucleo: 6,
+  torre: 5,
+  portao: 4,
+  quartel: 6,
+  britador: 5,
+  serraria: 5,
+  mina: 6,
+}
 
 export interface OrdemMover {
   tipo: 'mover'
@@ -16,7 +38,12 @@ export interface OrdemAtacar {
   alvoId: number
 }
 
-export type Ordem = OrdemMover | OrdemAtacar
+export interface OrdemAtacarObra {
+  tipo: 'atacarObra'
+  obraId: number
+}
+
+export type Ordem = OrdemMover | OrdemAtacar | OrdemAtacarObra
 
 export const PARTIDA = {
   radius: 56,
@@ -28,11 +55,18 @@ export const PARTIDA = {
   dtMax: 0.05,
   dtBudgetMax: 3,
   heroSpeed: 8,
+  pulo: 9.6,
+  gravidade: 28,
   allyCap: 12,
   enemyCap: 12,
   creditoInicial: 4,
   shootRange: 14,
   shootDot: 0.5,
+  tiroFolgaMin: 0.55,
+  tiroFolgaExtra: 2.1,
+  tiroFolgaEscala: 6,
+  tiroCorpoBaixo: 0.2,
+  tiroCorpoAlto: 1.35,
   shootCooldown: 0.45,
   hitRadius: 0.9,
   hitDamage: 3,
@@ -56,7 +90,17 @@ export const PARTIDA = {
   pedraX: -8,
   pedraZ: 10,
   pedraKg: 35,
+  pedraMeio: 0.4,
+  pedraAltura: 0.7,
   britadorDivisor: 10,
+  reparoLingotes: 3,
+  reparoCredito: 2,
+  nivelMaximoObra: 5,
+  rebroteArvoreSeg: 45,
+  aguaFatorVelocidade: 0.55,
+  custoAguaCaminho: 2.2,
+  orcamentoFrameTodosMs: 28,
+  orcamentoStepTodosMs: 9,
   altarPasso: 4,
   altarRaio: 1.15,
   arch: { minX: -1.2, maxX: 1.2, minZ: 18, maxZ: 22 },
@@ -70,6 +114,17 @@ export const PARTIDA = {
   levaPrimeira: 4,
   levaSeguinte: 1,
   levaAlvo: 'nucleo' as 'nucleo' | 'perto',
+  corpoPasso: 3.2,
+  nuvem: true as boolean,
+  ladoMapa: 112,
+  mapasResidentes: 3,
+  atlas: 'grade' as 'grade' | 'um',
+  visao: {
+    heroi: 18,
+    tropa: 12,
+    obra: 10,
+    torre: 22,
+  },
 } as const
 
 export const GRAU_PARTIDA: Record<1 | 2 | 3 | 4, { wipe: number; bonus: number; credito: number }> = {
@@ -87,8 +142,8 @@ export const PLUS_TEN: Gate = {
   readingTimeMs: 0,
 }
 
-export const OBSTACULOS: readonly { x: number; z: number; hx: number; hz: number }[] = [
-  { x: -1.65, z: 12, hx: 1.15, hz: 0.7 },
-  { x: 1.65, z: 26, hx: 1.15, hz: 0.7 },
-  { x: -1.55, z: 33, hx: 1.05, hz: 0.65 },
+export const OBSTACULOS: readonly { x: number; z: number; hx: number; hz: number; altura: number }[] = [
+  { x: -1.65, z: 12, hx: 1.15, hz: 0.7, altura: 1.4 },
+  { x: 1.65, z: 26, hx: 1.15, hz: 0.7, altura: 1.4 },
+  { x: -1.55, z: 33, hx: 1.05, hz: 0.65, altura: 1.4 },
 ]

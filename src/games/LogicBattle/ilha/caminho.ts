@@ -46,7 +46,10 @@ function centro(gx: number, gz: number): Marco {
 function bloqueia(gx: number, gz: number, bloqueios: readonly Bloqueio[]): boolean {
   if (gx < -limite() || gz < -limite() || gx > limite() || gz > limite()) return true
   const ponto = centro(gx, gz)
-  if (Math.hypot(ponto.x, ponto.z) > PARTIDA.radius - PARTIDA.body) return true
+  const borda = PARTIDA.radius - PARTIDA.body
+  if (PARTIDA.atlas === 'grade') {
+    if (Math.abs(ponto.x) > borda || Math.abs(ponto.z) > borda) return true
+  } else if (Math.hypot(ponto.x, ponto.z) > borda) return true
   return bloqueios.some(
     (caixa) =>
       Math.abs(ponto.x - caixa.x) <= caixa.hx + PARTIDA.body &&
@@ -128,14 +131,25 @@ function segmentoLivre(
   a: Marco,
   b: Marco,
   bloqueios: readonly Bloqueio[],
+  custoExtra?: (x: number, z: number) => number,
 ): boolean {
   for (let t = 0; t <= 8; t++) {
     const p = t / 8
     const x = a.x + (b.x - a.x) * p
     const z = a.z + (b.z - a.z) * p
     if (!livre(Math.round(x / PARTIDA.celula), Math.round(z / PARTIDA.celula), bloqueios)) return false
+    if (custoExtra && custoExtra(x, z) > 1.01) return false
   }
   return true
+}
+
+function limitaAlvo(ponto: Marco): Marco {
+  if (PARTIDA.atlas !== 'grade') return dentroDoDisco(ponto)
+  const limite = PARTIDA.radius - PARTIDA.body
+  return {
+    x: Math.min(limite, Math.max(-limite, ponto.x)),
+    z: Math.min(limite, Math.max(-limite, ponto.z)),
+  }
 }
 
 function dentroDoDisco(ponto: Marco): Marco {
@@ -151,6 +165,7 @@ function reconstruir(
   inicioGx: number,
   inicioGz: number,
   bloqueios: readonly Bloqueio[],
+  custoExtra?: (x: number, z: number) => number,
 ): Marco[] {
   const bruto: [number, number][] = []
   let atual: string | undefined = fim
@@ -180,7 +195,7 @@ function reconstruir(
   const origem = centro(inicioGx, inicioGz)
   const pontos = [origem, ...liso]
   for (let i = 1; i < pontos.length; i++) {
-    if (!segmentoLivre(pontos[i - 1], pontos[i], bloqueios)) return cheio
+    if (!segmentoLivre(pontos[i - 1], pontos[i], bloqueios, custoExtra)) return cheio
   }
   return liso
 }
@@ -191,11 +206,12 @@ export function encontrarCaminho(
   alvoX: number,
   alvoZ: number,
   bloqueios: readonly Bloqueio[],
+  custoExtra?: (x: number, z: number) => number,
 ): Marco[] | null {
   if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(alvoX) || !Number.isFinite(alvoZ)) {
     return null
   }
-  if (bloqueios.length === 0 || PARTIDA.caminho === 'reto') return [dentroDoDisco({ x: alvoX, z: alvoZ })]
+  if ((bloqueios.length === 0 && !custoExtra) || PARTIDA.caminho === 'reto') return [limitaAlvo({ x: alvoX, z: alvoZ })]
 
   contagemBuscas += 1
   const celula = PARTIDA.celula
@@ -228,7 +244,7 @@ export function encontrarCaminho(
     const ck = chave(atual.gx, atual.gz)
     if (ck === fim) {
       visitasUltima = visitas
-      return reconstruir(veio, ck, sgx, sgz, bloqueios)
+      return reconstruir(veio, ck, sgx, sgz, bloqueios, custoExtra)
     }
     if (fechado.has(ck)) continue
     fechado.add(ck)
@@ -241,7 +257,9 @@ export function encontrarCaminho(
       if (dx !== 0 && dz !== 0) {
         if (!livre(atual.gx + dx, atual.gz, bloqueios) || !livre(atual.gx, atual.gz + dz, bloqueios)) continue
       }
-      const passo = dx !== 0 && dz !== 0 ? Math.SQRT2 : 1
+      const pViz = centro(nx, nz)
+      const pesoTerreno = custoExtra ? Math.max(1, custoExtra(pViz.x, pViz.z)) : 1
+      const passo = (dx !== 0 && dz !== 0 ? Math.SQRT2 : 1) * pesoTerreno
       const novo = custo + passo
       const anterior = gScore.get(nk)
       if (anterior !== undefined && novo >= anterior) continue
