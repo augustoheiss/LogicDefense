@@ -1,5 +1,5 @@
 import { PARTIDA } from './partidaPolicies'
-import { atirar, createPartida, criarTropa, fundar, INPUT_PARADO, ordenar, ordenarHeroi } from './partidaSim'
+import { atirar, createPartida, criarTropa, editarBlocoMundo, fundar, INPUT_PARADO, ordenar, ordenarHeroi } from './partidaSim'
 import {
   atualizarAlerta,
   colocarHeroi,
@@ -303,5 +303,29 @@ export function run(): void {
   assert(
     algunsMapas.fichas.filter((f) => f.ritmo === 'cheio').length <= PARTIDA.mapasResidentes,
     'modo alguns limita aos residentes configurados',
+  )
+
+  // Persistência de mapa com blocos manuais (blocosMapa) sob pressão de residentes
+  const comBlocoLivre = editarBlocoMundo(
+    { ...createPartida(), semCorpo: true, madeira: 5, obras: [], unidades: [] },
+    6,
+    0,
+    6,
+    'adicionar',
+    'madeira',
+  )
+  let persistBlocos = escreverFicha(criarAtlas(), 4, 4, comBlocoLivre, 'cheio')
+  persistBlocos = escreverFicha(persistBlocos, 3, 3, { ...createPartida(), semCorpo: true, obras: [], unidades: [] }, 'cheio')
+  persistBlocos = escreverFicha(persistBlocos, 1, 0, { ...createPartida(), semCorpo: true, obras: [], unidades: [] }, 'cheio')
+  persistBlocos = escreverFicha(persistBlocos, 0, 1, { ...createPartida(), semCorpo: true, obras: [], unidades: [] }, 'cheio')
+  persistBlocos = escreverFicha(persistBlocos, -1, 0, { ...createPartida(), semCorpo: true, obras: [], unidades: [] }, 'cheio')
+  persistBlocos = escreverFicha(persistBlocos, 0, -1, { ...createPartida(), semCorpo: true, obras: [], unidades: [] }, 'cheio')
+  const fichaComBloco = fichaEm(persistBlocos, 4, 4)
+  assert(
+    fichaComBloco !== undefined &&
+      fichaComBloco.ritmo === 'lento' &&
+      Object.keys(fichaComBloco.state.blocosMapa).length === 1 &&
+      fichaEm(persistBlocos, 3, 3) === undefined,
+    'atlas preserva mapa com blocosMapa sob pressão de residentes',
   )
 }

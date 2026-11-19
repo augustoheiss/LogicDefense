@@ -2,15 +2,32 @@ import { Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Group, InstancedMesh, Mesh } from 'three'
-import { BufferAttribute, BufferGeometry, Object3D, Vector2 } from 'three'
+import { Object3D, Vector2 } from 'three'
 import {
   generateInfiniteChallenge,
   InfiniteMathChallenge,
   MATH_CHALLENGE_TIER_POLICIES,
   MathDifficultyTier,
 } from '../domain/infiniteMathEngine'
-import { corDoChaoBioma } from './biomaRecursos'
-import { DIMENSOES_OBRA, GRAU_PARTIDA, OBRA_CENTRO_Y, OBSTACULOS, PARTIDA, PecaId } from './partidaPolicies'
+import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
+import {
+  AlvoEdicaoUnificado,
+  mensagemMotivoBloco,
+  resolverAlvoBlocoMundoPorFace,
+  resolverAlvoBlocoNoChao,
+  temRecursoParaMaterial,
+} from './alvoBlocoUnificado'
+import {
+  BlocoMaterial,
+  blocoMundoParaCentro,
+  PASSO_BLOCO_MUNDO,
+  PlanoLinhaBlocos,
+  SPEC_BLOCO_MATERIAL,
+} from './blocosMundo'
+import { meiaLarguraNv5 } from './blocosNv5Blueprints'
+import { validarAdicionarBlocoObraLivre } from './obraBlocosLivres'
+import { IndiceBlocoMundo, IndiceVoxelNv5, ObraArquiteturaMesh } from './ObrasArquiteturaCena'
+import { GRAU_PARTIDA, OBSTACULOS, Olhar, PARTIDA, PecaId } from './partidaPolicies'
 import {
   abrirAltar,
   alcanceDoTiro,
@@ -20,15 +37,19 @@ import {
   aplicarConta,
   atirar,
   CELULAS_DO_DISCO,
+  celulaColideObraExistente,
   chaoRevelado,
   cobertoAgora,
+  consagrarEstruturaManual,
+  construirLinhaBlocos,
   continuarNaRua,
   criarTropa,
   definirOlhar,
+  editarBlocoMundo,
   editarBlocoObra,
+  editarBlocoObraLivre,
   evoluir,
   fecharAltar,
-  idsNoRetangulo,
   iniciarObra,
   inimigoVisivel,
   marcadoPelaTorre,
@@ -36,14 +57,28 @@ import {
   obraEmConstrucao,
   ordenar,
   ordenarHeroi,
+  planejarLinhaNoEstado,
+  podeConsagrarEm,
+  podeFundarEm,
   pular,
   repararObra,
   pontosDoCorpo,
+  selecionarAoClicarChaoVazio,
+  selecionarAoClicarHeroi,
+  selecionarAoClicarUnidade,
+  selecionarPorRetanguloEstado,
   folgaDoTiro,
   vetorDoOlhar,
   PartidaState,
   postura,
 } from './partidaSim'
+import {
+  decidirAcaoPonteiro,
+  filtrarHitEdicao,
+  normalDominanteMundo,
+  resolverAlvoEdicaoVoxel,
+  VoxelAlvoHit,
+} from './verticalidadeVoxel'
 import {
   abrirMapa,
   criarAtlas,
@@ -58,6 +93,7 @@ import {
 } from './atlas'
 import { IconeId, IconeSvg, META_INTENCOES } from './ilhaIcones'
 import { MundoSandboxCena } from './MundoSandboxCena'
+import { TropasCena } from './TropasCena'
 import './ilha.css'
 
 function compassLetter(yaw: number): string {
@@ -136,6 +172,7 @@ type Controle = {
 }
 
 const RAIO_MANCHE = 56
+const semRaycast = () => null
 
 function Cena(props: {
   sim: React.MutableRefObject<PartidaState>
@@ -146,23 +183,45 @@ function Cena(props: {
   dragou: React.MutableRefObject<boolean>
   onHud: (state: PartidaState) => void
   onGround: (x: number, z: number) => void
-  onUnit: (id: number, lado: 'aliado' | 'inimigo') => void
+  onGroundOrder: (x: number, z: number) => void
+  onUnit: (id: number, lado: 'aliado' | 'inimigo', shiftKey?: boolean) => void
   onObra: (id: number) => void
-  onRect: (x0: number, z0: number, x1: number, z1: number) => void
+  onRect: (x0: number, z0: number, x1: number, z1: number, shiftKey?: boolean) => void
   onCaixa: (caixa: { x: number; y: number; x2: number; y2: number } | null) => void
-  onHeroi: () => void
+  onHeroi: (shiftKey?: boolean) => void
   heroiEscolhido: boolean
+  selectedIds: readonly number[]
   atlas: React.MutableRefObject<ReturnType<typeof criarAtlas>>
   mapa: string
   onQuadro: (texto: string) => void
   modoBloco: 'adicionar' | 'remover' | null
-  onEditarBloco: (obraId: number, bx: number, by: number, bz: number, acao: 'adicionar' | 'remover') => void
+  modoBlocoRef: React.MutableRefObject<'adicionar' | 'remover' | null>
+  materialBlocoRef: React.MutableRefObject<BlocoMaterial>
+  modoLinhaRef: React.MutableRefObject<boolean>
+  alturaLinhaRef: React.MutableRefObject<1 | 2 | 3>
+  modoConsagrarRef: React.MutableRefObject<PecaId | null>
+  cursorNdcRef: React.MutableRefObject<{ x: number; y: number } | null>
+  voxelAlvoRef: React.MutableRefObject<AlvoEdicaoUnificado | null>
+  resolverAlvoSyncRef: React.MutableRefObject<() => AlvoEdicaoUnificado | null>
+  resolverBlocoConsagrarSyncRef: React.MutableRefObject<() => { gx: number; gy: number; gz: number } | null>
+  ghostBloco: AlvoEdicaoUnificado | null
+  onGhostBloco: (alvo: AlvoEdicaoUnificado | null) => void
+  ghostObra: { tipo: PecaId; x: number; z: number; valido: boolean } | null
+  onGhostObra: (ghost: { tipo: PecaId; x: number; z: number; valido: boolean } | null) => void
+  previewLinha: { plano: PlanoLinhaBlocos; temRecurso: boolean } | null
+  onPreviewLinha: (preview: { plano: PlanoLinhaBlocos; temRecurso: boolean } | null) => void
+  onConcluirLinha: (x0: number, z0: number, x1: number, z1: number) => void
+  onMiraAlvo: (ativo: boolean) => void
   onPedirSubsolo: () => void
 }) {
   const avatar = useRef<Group>(null)
   const flash = useRef<Mesh>(null)
-  const campo = useRef<Mesh>(null)
-  const campoGrupo = useRef<Group>(null)
+  const voxeisGroupRef = useRef<Group>(null)
+  const blocosMapaGroupRef = useRef<Group>(null)
+  const obrasLivresGroupRef = useRef<Group>(null)
+  const ultimaAssinaturaGhost = useRef('')
+  const ultimaAssinaturaGhostObra = useRef('')
+  const ultimoMiraAlvo = useRef(false)
   const nuvem = useRef<InstancedMesh>(null)
   const penumbra = useRef<InstancedMesh>(null)
   const pedra = useRef<Mesh>(null)
@@ -170,29 +229,277 @@ function Cena(props: {
   const marcaPenumbra = useRef({ versao: -1, olhar: '', mapa: '', assinatura: '' })
   const moldeNuvem = useMemo(() => new Object3D(), [])
   useLayoutEffect(() => {
-    const mesh = campo.current
-    if (!mesh) return
-    const fatias = 8
-    const posicoes = new Float32Array((fatias + 1) * 2 * 3)
-    const indices: number[] = []
-    for (let i = 0; i < fatias; i++) {
-      const a = i * 2
-      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
-    }
-    const geom = new BufferGeometry()
-    geom.setAttribute('position', new BufferAttribute(posicoes, 3))
-    geom.setIndex(indices)
-    mesh.geometry = geom
     if (penumbra.current) penumbra.current.count = 0
     if (nuvem.current) nuvem.current.count = 0
-    return () => geom.dispose()
   }, [])
-  const unidades = useRef(new Map<number, Mesh>())
+  const unidades = useRef(new Map<number, Group>())
   const aneis = useRef(new Map<number, Mesh>())
   const corpos = useRef(new Map<string, Mesh>())
-  const obras = useRef(new Map<number, Mesh>())
-  const arrasto = useRef<{ x: number; y: number } | null>(null)
+  const arrasto = useRef<{ x: number; y: number; pointerId: number } | null>(null)
+  const linhaDrag = useRef<{ x0: number; z0: number; pointerId: number } | null>(null)
+  const rmbDrag = useRef<{ x: number; y: number; worldX: number; worldZ: number; pointerId: number } | null>(null)
+  const ultimoBoxSelectMs = useRef(0)
   const { camera, gl, raycaster } = useThree()
+
+  const soloNoNdc = (ndcX: number, ndcY: number, planoY = 0) => {
+    camera.updateMatrixWorld()
+    raycaster.setFromCamera(new Vector2(ndcX, ndcY), camera)
+    const dirY = raycaster.ray.direction.y
+    if (Math.abs(dirY) < 1e-5) return null
+    const t = (planoY - raycaster.ray.origin.y) / dirY
+    if (t < 0) return null
+    return {
+      x: raycaster.ray.origin.x + raycaster.ray.direction.x * t,
+      z: raycaster.ray.origin.z + raycaster.ray.direction.z * t,
+      t,
+    }
+  }
+
+  const contextoBlocoMundo = (state: PartidaState) => ({
+    blocosMapa: state.blocosMapa,
+    recursos: { madeira: state.madeira, lingotes: state.lingotes, ouro: state.ouro },
+    heroi: state.semCorpo ? null : state.heroi,
+    unidades: state.unidades,
+    chaoRevelado: (x: number, z: number) => !PARTIDA.nuvem || chaoRevelado(state, x, z),
+    colideObraEm: (gx: number, gy: number, gz: number) => celulaColideObraExistente(state, gx, gy, gz),
+  })
+
+  const resolverAlvoNoGrupo = (state: PartidaState): AlvoEdicaoUnificado | null => {
+    const modoAtual = props.modoBlocoRef.current
+    if (!modoAtual || (!state.semCorpo && state.heroi.y < -0.9)) {
+      return null
+    }
+    const olharDesenho = state.semCorpo ? 'imperio' : state.olhar
+    const ndc = olharDesenho === 'imperio' ? props.cursorNdcRef.current : { x: 0, y: 0 }
+    if (!ndc) return null
+    camera.updateMatrixWorld()
+    raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), camera)
+
+    type CandidatoHit =
+      | { kind: 'nv5'; meta: IndiceVoxelNv5; hit: VoxelAlvoHit }
+      | { kind: 'mundo'; meta: IndiceBlocoMundo; hit: VoxelAlvoHit }
+      | { kind: 'obraLivre'; meta: IndiceBlocoMundo; hit: VoxelAlvoHit }
+
+    const candidatos: CandidatoHit[] = []
+    const hitsMapeados: VoxelAlvoHit[] = []
+
+    if (voxeisGroupRef.current) {
+      voxeisGroupRef.current.updateMatrixWorld(true)
+      const hitsNv5 = raycaster.intersectObject(voxeisGroupRef.current, true)
+      for (const h of hitsNv5) {
+        const idx = h.instanceId
+        const lista = h.object.userData?.voxelNv5Indices as IndiceVoxelNv5[] | undefined
+        const meta = idx !== undefined && lista ? lista[idx] : undefined
+        if (!meta || meta.lado !== 'nosso') continue
+        const mapped: VoxelAlvoHit = {
+          hitPoint: { x: h.point.x, y: h.point.y, z: h.point.z },
+          distance: h.distance,
+          obraId: candidatos.length,
+          bx: meta.bx,
+          by: meta.by,
+          bz: meta.bz,
+          centro: meta.centro,
+        }
+        candidatos.push({ kind: 'nv5', meta, hit: mapped })
+        hitsMapeados.push(mapped)
+      }
+    }
+
+    if (blocosMapaGroupRef.current) {
+      blocosMapaGroupRef.current.updateMatrixWorld(true)
+      const hitsMundo = raycaster.intersectObject(blocosMapaGroupRef.current, true)
+      for (const h of hitsMundo) {
+        const idx = h.instanceId
+        const lista = h.object.userData?.blocoMundoIndices as IndiceBlocoMundo[] | undefined
+        const meta = idx !== undefined && lista ? lista[idx] : undefined
+        if (!meta) continue
+        if (modoAtual === 'remover' && meta.lado !== 'nosso') continue
+        const mapped: VoxelAlvoHit = {
+          hitPoint: { x: h.point.x, y: h.point.y, z: h.point.z },
+          distance: h.distance,
+          obraId: candidatos.length,
+          bx: meta.gx,
+          by: meta.gy,
+          bz: meta.gz,
+          centro: meta.centro,
+        }
+        candidatos.push({ kind: 'mundo', meta, hit: mapped })
+        hitsMapeados.push(mapped)
+      }
+    }
+
+    if (obrasLivresGroupRef.current) {
+      obrasLivresGroupRef.current.updateMatrixWorld(true)
+      const hitsLivres = raycaster.intersectObject(obrasLivresGroupRef.current, true)
+      for (const h of hitsLivres) {
+        const idx = h.instanceId
+        const lista = h.object.userData?.blocoObraLivreIndices as IndiceBlocoMundo[] | undefined
+        const meta = idx !== undefined && lista ? lista[idx] : undefined
+        if (!meta || meta.lado !== 'nosso' || meta.obraId === undefined) continue
+        const mapped: VoxelAlvoHit = {
+          hitPoint: { x: h.point.x, y: h.point.y, z: h.point.z },
+          distance: h.distance,
+          obraId: candidatos.length,
+          bx: meta.gx,
+          by: meta.gy,
+          bz: meta.gz,
+          centro: meta.centro,
+        }
+        candidatos.push({ kind: 'obraLivre', meta, hit: mapped })
+        hitsMapeados.push(mapped)
+      }
+    }
+
+    const heroiEye = { x: state.heroi.x, y: PARTIDA.eyeY + state.heroi.y, z: state.heroi.z }
+    const material = props.materialBlocoRef.current
+    const escolhido = filtrarHitEdicao(
+      hitsMapeados,
+      { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+      { x: raycaster.ray.direction.x, y: raycaster.ray.direction.y, z: raycaster.ray.direction.z },
+      heroiEye,
+      PARTIDA.alcanceEdicaoBlocos,
+      olharDesenho === 'imperio',
+    )
+
+    if (escolhido) {
+      const cand = candidatos[escolhido.obraId]
+      if (cand.kind === 'nv5') {
+        const obra = state.obras.find((o) => o.id === cand.meta.obraId)
+        if (!obra) return null
+        const res = resolverAlvoEdicaoVoxel(
+          obra,
+          cand.meta.bx,
+          cand.meta.by,
+          cand.meta.bz,
+          escolhido.hitPoint,
+          cand.meta.centro,
+          modoAtual,
+          state.madeira,
+          state.semCorpo ? null : state.heroi,
+        )
+        return res ? { ...res, tipo: 'nv5', passo: VOXEL_NV5.passo } : null
+      }
+      if (cand.kind === 'mundo') {
+        return resolverAlvoBlocoMundoPorFace(
+          cand.meta.gx,
+          cand.meta.gy,
+          cand.meta.gz,
+          escolhido.hitPoint,
+          modoAtual,
+          material,
+          contextoBlocoMundo(state),
+        )
+      }
+      // cand.kind === 'obraLivre'
+      const obraId = cand.meta.obraId!
+      const obra = state.obras.find((o) => o.id === obraId)
+      if (!obra || !obra.blocosLivres) return null
+      if (modoAtual === 'remover') {
+        const unico = obra.blocosLivres.filter((b) => b.hp > 0).length <= 1
+        return {
+          tipo: 'obraLivre',
+          obraId,
+          gx: cand.meta.gx,
+          gy: cand.meta.gy,
+          gz: cand.meta.gz,
+          material: cand.meta.material,
+          wx: cand.meta.centro.x,
+          wy: cand.meta.centro.y,
+          wz: cand.meta.centro.z,
+          passo: PASSO_BLOCO_MUNDO,
+          acao: 'remover',
+          valido: !unico,
+          motivo: unico ? 'ultimo_bloco' : 'ok',
+        }
+      }
+      const [dx, dy, dz] = normalDominanteMundo(escolhido.hitPoint, cand.meta.centro)
+      const nx = cand.meta.gx + dx
+      const ny = cand.meta.gy + dy
+      const nz = cand.meta.gz + dz
+      const c = blocoMundoParaCentro(nx, ny, nz)
+      const check = validarAdicionarBlocoObraLivre(
+        obra.blocosLivres,
+        nx,
+        ny,
+        nz,
+        material,
+        { madeira: state.madeira, lingotes: state.lingotes, ouro: state.ouro },
+        state.semCorpo ? null : state.heroi,
+        state.unidades,
+        state.blocosMapa,
+      )
+      return {
+        tipo: 'obraLivre',
+        obraId,
+        gx: nx,
+        gy: ny,
+        gz: nz,
+        material,
+        wx: c.x,
+        wy: c.y,
+        wz: c.z,
+        passo: PASSO_BLOCO_MUNDO,
+        acao: 'adicionar',
+        valido: check.valido,
+        motivo: check.motivo,
+      }
+    }
+
+    // Sem hit em bloco existente: em modo adicionar, permite colocar bloco livre direto no chão!
+    if (modoAtual === 'adicionar') {
+      const chao = soloNoNdc(ndc.x, ndc.y, 0)
+      if (!chao) return null
+      if (olharDesenho !== 'imperio') {
+        const tPlanoHeroi = Math.max(
+          0,
+          (heroiEye.x - camera.position.x) * raycaster.ray.direction.x +
+            (heroiEye.y - camera.position.y) * raycaster.ray.direction.y +
+            (heroiEye.z - camera.position.z) * raycaster.ray.direction.z,
+        )
+        if (chao.t < tPlanoHeroi - 0.15) return null
+        if (Math.hypot(chao.x - heroiEye.x, 0 - heroiEye.y, chao.z - heroiEye.z) > PARTIDA.alcanceEdicaoBlocos) {
+          return null
+        }
+      }
+      return resolverAlvoBlocoNoChao(chao.x, chao.z, material, contextoBlocoMundo(state))
+    }
+
+    return null
+  }
+
+  const resolverBlocoConsagrar = (state: PartidaState): { gx: number; gy: number; gz: number } | null => {
+    const olharDesenho = state.semCorpo ? 'imperio' : state.olhar
+    const ndc = olharDesenho === 'imperio' ? props.cursorNdcRef.current : { x: 0, y: 0 }
+    if (!ndc) return null
+    camera.updateMatrixWorld()
+    raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), camera)
+    if (blocosMapaGroupRef.current) {
+      blocosMapaGroupRef.current.updateMatrixWorld(true)
+      const hits = raycaster.intersectObject(blocosMapaGroupRef.current, true)
+      for (const h of hits) {
+        const lista = h.object.userData?.blocoMundoIndices as IndiceBlocoMundo[] | undefined
+        const meta = h.instanceId !== undefined && lista ? lista[h.instanceId] : undefined
+        if (meta && meta.lado === 'nosso') return { gx: meta.gx, gy: meta.gy, gz: meta.gz }
+      }
+    }
+    const chao = soloNoNdc(ndc.x, ndc.y, 0)
+    if (chao) {
+      const gx = Math.round(chao.x / PASSO_BLOCO_MUNDO)
+      const gz = Math.round(chao.z / PASSO_BLOCO_MUNDO)
+      for (let gy = 0; gy < 6; gy += 1) {
+        const b = state.blocosMapa[`${gx},${gy},${gz}`]
+        if (b && b.hp > 0 && b.lado === 'nosso') return { gx, gy, gz }
+      }
+    }
+    return null
+  }
+
+  props.resolverAlvoSyncRef.current = () => {
+    const alvo = resolverAlvoNoGrupo(props.sim.current)
+    props.voxelAlvoRef.current = alvo
+    return alvo
+  }
+  props.resolverBlocoConsagrarSyncRef.current = () => resolverBlocoConsagrar(props.sim.current)
   const soloNoChao = (clientX: number, clientY: number) => {
     const retangulo = gl.domElement.getBoundingClientRect()
     raycaster.setFromCamera(
@@ -204,13 +511,112 @@ function Cena(props: {
     )
     const dirY = raycaster.ray.direction.y
     if (Math.abs(dirY) < 1e-5) return null
-    const t = -raycaster.ray.origin.y / dirY
+    const t = (-0.45 - raycaster.ray.origin.y) / dirY
     if (t < 0) return null
     return {
       x: raycaster.ray.origin.x + raycaster.ray.direction.x * t,
       z: raycaster.ray.origin.z + raycaster.ray.direction.z * t,
     }
   }
+  const callbacksCenaRef = useRef({
+    onCaixa: props.onCaixa,
+    onRect: props.onRect,
+    onGroundOrder: props.onGroundOrder,
+    onPreviewLinha: props.onPreviewLinha,
+    onConcluirLinha: props.onConcluirLinha,
+    soloNoChao,
+  })
+  callbacksCenaRef.current = {
+    onCaixa: props.onCaixa,
+    onRect: props.onRect,
+    onGroundOrder: props.onGroundOrder,
+    onPreviewLinha: props.onPreviewLinha,
+    onConcluirLinha: props.onConcluirLinha,
+    soloNoChao,
+  }
+  useEffect(() => {
+    const moveJanela = (event: PointerEvent) => {
+      const dragLinha = linhaDrag.current
+      if (dragLinha && event.pointerId === dragLinha.pointerId) {
+        const p = callbacksCenaRef.current.soloNoChao(event.clientX, event.clientY)
+        if (p) {
+          const st = props.sim.current
+          const mat = props.materialBlocoRef.current
+          const plano = planejarLinhaNoEstado(st, dragLinha.x0, dragLinha.z0, p.x, p.z, props.alturaLinhaRef.current, mat)
+          const temRec = temRecursoParaMaterial(
+            { madeira: st.madeira, lingotes: st.lingotes, ouro: st.ouro },
+            mat,
+            plano.celulas.length,
+          )
+          callbacksCenaRef.current.onPreviewLinha({ plano, temRecurso: temRec })
+        }
+        return
+      }
+      const inicio = arrasto.current
+      if (!inicio || event.pointerId !== inicio.pointerId) return
+      if (Math.hypot(event.clientX - inicio.x, event.clientY - inicio.y) < PARTIDA.limiarArrastoPx + 2) return
+      props.dragou.current = true
+      callbacksCenaRef.current.onCaixa({ x: inicio.x, y: inicio.y, x2: event.clientX, y2: event.clientY })
+    }
+    const soltaJanela = (event: PointerEvent) => {
+      if (linhaDrag.current && event.pointerId === linhaDrag.current.pointerId) {
+        const dragLinha = linhaDrag.current
+        linhaDrag.current = null
+        callbacksCenaRef.current.onPreviewLinha(null)
+        if (event.type === 'pointerup') {
+          ultimoBoxSelectMs.current = performance.now()
+          const p = callbacksCenaRef.current.soloNoChao(event.clientX, event.clientY) ?? {
+            x: dragLinha.x0,
+            z: dragLinha.z0,
+          }
+          callbacksCenaRef.current.onConcluirLinha(dragLinha.x0, dragLinha.z0, p.x, p.z)
+        }
+        return
+      }
+      if (rmbDrag.current && event.pointerId === rmbDrag.current.pointerId) {
+        const infoRmb = rmbDrag.current
+        rmbDrag.current = null
+        if (
+          event.type === 'pointerup' &&
+          !props.modoBlocoRef.current &&
+          !props.modoLinhaRef.current &&
+          !props.modoConsagrarRef.current &&
+          !props.tool.current
+        ) {
+          const dist = Math.hypot(event.clientX - infoRmb.x, event.clientY - infoRmb.y)
+          if (dist <= PARTIDA.limiarArrastoRmbPx) {
+            const p =
+              callbacksCenaRef.current.soloNoChao(event.clientX, event.clientY) ?? {
+                x: infoRmb.worldX,
+                z: infoRmb.worldZ,
+              }
+            callbacksCenaRef.current.onGroundOrder(p.x, p.z)
+          }
+        }
+      }
+      if (arrasto.current && event.pointerId === arrasto.current.pointerId) {
+        const inicio = arrasto.current
+        arrasto.current = null
+        callbacksCenaRef.current.onCaixa(null)
+        const foiArrasto = props.dragou.current
+        props.dragou.current = false
+        if (event.type === 'pointerup' && foiArrasto) {
+          ultimoBoxSelectMs.current = performance.now()
+          const a = callbacksCenaRef.current.soloNoChao(inicio.x, inicio.y)
+          const b = callbacksCenaRef.current.soloNoChao(event.clientX, event.clientY)
+          if (a && b) callbacksCenaRef.current.onRect(a.x, a.z, b.x, b.z, event.shiftKey)
+        }
+      }
+    }
+    window.addEventListener('pointermove', moveJanela)
+    window.addEventListener('pointerup', soltaJanela)
+    window.addEventListener('pointercancel', soltaJanela)
+    return () => {
+      window.removeEventListener('pointermove', moveJanela)
+      window.removeEventListener('pointerup', soltaJanela)
+      window.removeEventListener('pointercancel', soltaJanela)
+    }
+  }, [])
   useFrame((_, dt) => {
     const keys = props.keys.current
     const bruto = Math.min(dt, 0.05)
@@ -243,12 +649,17 @@ function Cena(props: {
       flash.current.visible = state.heroi.shootCooldown > PARTIDA.shootCooldown * 0.55
     }
     state.unidades.forEach((unidade) => {
-      const mesh = unidades.current.get(unidade.id)
-      if (!mesh) return
+      const group = unidades.current.get(unidade.id)
+      if (!group) return
       const mostra = unidade.lado === 'inimigo' ? inimigoVisivel(state, unidade) : unidade.hp > 0
-      mesh.visible = mostra
-      mesh.position.set(unidade.x, unidade.papel === 'dragao' ? 0.8 : 0.45, unidade.z)
-      mesh.scale.set(1, 1, 1)
+      group.visible = mostra
+      group.position.set(unidade.x, 0, unidade.z)
+      group.scale.set(1, 1, 1)
+      if (unidade.ordem?.tipo === 'mover') {
+        const dx = unidade.ordem.x - unidade.x
+        const dz = unidade.ordem.z - unidade.z
+        if (Math.hypot(dx, dz) > 0.1) group.rotation.y = Math.atan2(dx, dz)
+      }
       const anel = aneis.current.get(unidade.id)
       if (anel) {
         anel.visible = marcadoPelaTorre(state, unidade)
@@ -266,36 +677,16 @@ function Cena(props: {
         })
       }
     })
-    state.obras.forEach((obra) => {
-      const mesh = obras.current.get(obra.id)
-      if (!mesh) return
-      const ruina = obra.hp <= 0
-      const construindo = obraEmConstrucao(obra)
-      const usaVoxelNv5 = Boolean(obra.blocosNv5) && !ruina && !construindo
-      if (usaVoxelNv5) {
-        mesh.visible = false
-        return
-      }
-      const total = Math.max(0.01, obra.construindoTotal ?? 1)
-      const progresso = construindo ? Math.max(0, 1 - (obra.construindoRestante ?? 0) / total) : 1
-      const lembrada = chaoRevelado(state, obra.x, obra.z)
-      mesh.visible = obra.lado === 'inimigo'
-        ? ruina ? lembrada : cobertoAgora(state, obra.x, obra.z)
-        : ruina ? lembrada : true
-      const escalaY = ruina ? 0.16 : construindo ? 0.25 + 0.75 * progresso : 1
-      mesh.scale.y = escalaY
-      const alturaPeca = DIMENSOES_OBRA[obra.tipo][1]
-      mesh.position.set(
-        obra.x,
-        ruina ? alturaPeca * 0.08 + 0.02 : construindo ? (alturaPeca * escalaY) / 2 : OBRA_CENTRO_Y,
-        obra.z,
-      )
-    })
     const yaw = state.heroi.yaw
     const pitch = state.heroi.pitch
     const olhar = vetorDoOlhar(yaw, pitch)
+    const raioNv5 = meiaLarguraNv5() + 0.15
     const dentroDeFortaleza = state.obras.some(
-      (o) => Boolean(o.blocosNv5) && o.hp > 0 && Math.abs(state.heroi.x - o.x) < 3.1 && Math.abs(state.heroi.z - o.z) < 3.1 && state.heroi.y < 2.5,
+      (o) =>
+        o.hp > 0 &&
+        state.heroi.y < 2.5 &&
+        ((Boolean(o.blocosNv5) && Math.abs(state.heroi.x - o.x) < raioNv5 && Math.abs(state.heroi.z - o.z) < raioNv5) ||
+          (Boolean(o.blocosLivres?.length) && Math.hypot(state.heroi.x - o.x, state.heroi.z - o.z) < 4.5)),
     )
     const confinado = state.heroi.y < -0.9 || dentroDeFortaleza
     if (olharDesenho === 'imperio') {
@@ -319,28 +710,56 @@ function Cena(props: {
       camera.position.set(camX, camY, camZ)
       camera.lookAt(camX + olhar.x, camY + olhar.y, camZ + olhar.z)
     }
-    if (campoGrupo.current) {
-      const grupo = campoGrupo.current
-      grupo.visible = olharDesenho !== 'imperio'
-      if (grupo.visible) {
-        const alcance = alcanceDoTiro(state.heroi.x, state.heroi.z, yaw)
-        const fx = -Math.sin(yaw)
-        const fz = Math.cos(yaw)
-        grupo.position.set(state.heroi.x, 0.08 + state.heroi.y, state.heroi.z)
-        grupo.rotation.y = Math.atan2(fx, fz)
-        const posicoes = campo.current?.geometry.getAttribute('position')
-        if (posicoes) {
-          const fatias = posicoes.count / 2 - 1
-          for (let i = 0; i <= fatias; i++) {
-            const along = (alcance * i) / Math.max(1, fatias)
-            const folga = folgaDoTiro(along)
-            posicoes.setXYZ(i * 2, folga, 0, along)
-            posicoes.setXYZ(i * 2 + 1, -folga, 0, along)
-          }
-          posicoes.needsUpdate = true
-          campo.current?.geometry.computeBoundingSphere()
+    if (olharDesenho !== 'imperio' && !state.semCorpo) {
+      const alcance = alcanceDoTiro(state.heroi.x, state.heroi.z, yaw)
+      const fx = -Math.sin(yaw)
+      const fz = Math.cos(yaw)
+      const temAlvo = state.unidades.some((u) => {
+        if (u.lado !== 'inimigo' || !inimigoVisivel(state, u)) return false
+        return pontosDoCorpo(u).some((p) => {
+          const along = (p.x - state.heroi.x) * fx + (p.z - state.heroi.z) * fz
+          if (along < 0.35 || along > alcance + 0.05) return false
+          const perp = Math.abs((p.x - state.heroi.x) * fz - (p.z - state.heroi.z) * fx)
+          return perp <= folgaDoTiro(along)
+        })
+      })
+      if (temAlvo !== ultimoMiraAlvo.current) {
+        ultimoMiraAlvo.current = temAlvo
+        props.onMiraAlvo(temAlvo)
+      }
+    } else if (ultimoMiraAlvo.current) {
+      ultimoMiraAlvo.current = false
+      props.onMiraAlvo(false)
+    }
+
+    const proximoAlvo = resolverAlvoNoGrupo(state)
+    props.voxelAlvoRef.current = proximoAlvo
+    const assGhost = proximoAlvo
+      ? proximoAlvo.tipo === 'nv5'
+        ? `nv5:${proximoAlvo.obraId}:${proximoAlvo.bx}:${proximoAlvo.by}:${proximoAlvo.bz}:${proximoAlvo.acao}:${proximoAlvo.valido ? 1 : 0}:${proximoAlvo.motivo}`
+        : `${proximoAlvo.tipo}:${proximoAlvo.gx}:${proximoAlvo.gy}:${proximoAlvo.gz}:${proximoAlvo.material}:${proximoAlvo.acao}:${proximoAlvo.valido ? 1 : 0}:${proximoAlvo.motivo}`
+      : ''
+    if (assGhost !== ultimaAssinaturaGhost.current) {
+      ultimaAssinaturaGhost.current = assGhost
+      props.onGhostBloco(proximoAlvo)
+    }
+
+    const pecaAtiva = props.tool.current
+    if (pecaAtiva && olharDesenho === 'imperio' && props.cursorNdcRef.current) {
+      const p = soloNoNdc(props.cursorNdcRef.current.x, props.cursorNdcRef.current.y, 0)
+      if (p) {
+        const px = Math.round(p.x * 2) / 2
+        const pz = Math.round(p.z * 2) / 2
+        const check = podeFundarEm(state, pecaAtiva, px, pz, { cobrarRecursos: true, exigirRevelado: true })
+        const ass = `${pecaAtiva}:${px}:${pz}:${check.ok ? 1 : 0}`
+        if (ass !== ultimaAssinaturaGhostObra.current) {
+          ultimaAssinaturaGhostObra.current = ass
+          props.onGhostObra({ tipo: pecaAtiva, x: px, z: pz, valido: check.ok })
         }
       }
+    } else if (ultimaAssinaturaGhostObra.current !== '') {
+      ultimaAssinaturaGhostObra.current = ''
+      props.onGhostObra(null)
     }
     if (nuvem.current) {
       const malhaNuvem = nuvem.current
@@ -424,31 +843,68 @@ function Cena(props: {
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.45, 0]}
         onPointerDown={(event) => {
-          if ((!props.sim.current.semCorpo && props.sim.current.olhar !== 'imperio') || props.tool.current) return
-          arrasto.current = { x: event.clientX, y: event.clientY }
-        }}
-        onPointerMove={(event) => {
-          const inicio = arrasto.current
-          if (!inicio) return
-          if (Math.hypot(event.clientX - inicio.x, event.clientY - inicio.y) < 8) return
-          props.dragou.current = true
-          props.onCaixa({ x: inicio.x, y: inicio.y, x2: event.clientX, y2: event.clientY })
-        }}
-        onPointerUp={(event) => {
-          const inicio = arrasto.current
-          arrasto.current = null
-          if (!inicio || !props.dragou.current) return
-          const a = soloNoChao(inicio.x, inicio.y)
-          const b = soloNoChao(event.clientX, event.clientY)
-          props.onCaixa(null)
-          if (a && b) props.onRect(a.x, a.z, b.x, b.z)
+          if (props.modoBlocoRef.current || props.modoConsagrarRef.current) return
+          if (!props.sim.current.semCorpo && props.sim.current.olhar !== 'imperio') return
+          if (props.modoLinhaRef.current && (event.nativeEvent.button === 0 || event.pointerType === 'touch')) {
+            event.stopPropagation()
+            linhaDrag.current = { x0: event.point.x, z0: event.point.z, pointerId: event.pointerId }
+            const st = props.sim.current
+            const mat = props.materialBlocoRef.current
+            const plano = planejarLinhaNoEstado(
+              st,
+              event.point.x,
+              event.point.z,
+              event.point.x,
+              event.point.z,
+              props.alturaLinhaRef.current,
+              mat,
+            )
+            const temRec = temRecursoParaMaterial(
+              { madeira: st.madeira, lingotes: st.lingotes, ouro: st.ouro },
+              mat,
+              plano.celulas.length,
+            )
+            props.onPreviewLinha({ plano, temRecurso: temRec })
+            return
+          }
+          if (props.tool.current) return
+          if (event.nativeEvent.button === 2) {
+            rmbDrag.current = {
+              x: event.clientX,
+              y: event.clientY,
+              worldX: event.point.x,
+              worldZ: event.point.z,
+              pointerId: event.pointerId,
+            }
+            return
+          }
+          if (event.nativeEvent.button === 0 || event.pointerType === 'touch') {
+            arrasto.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+          }
         }}
         onClick={(event) => {
-          if (props.dragou.current) {
+          if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current) return
+          if (props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160) {
             props.dragou.current = false
             return
           }
+          if (event.nativeEvent.button === 2) return
           event.stopPropagation()
+          if (props.tool.current) {
+            const rect = gl.domElement.getBoundingClientRect()
+            const p =
+              rect.width > 0 && rect.height > 0
+                ? soloNoNdc(
+                    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+                    -((event.clientY - rect.top) / rect.height) * 2 + 1,
+                    0,
+                  )
+                : null
+            if (p) {
+              props.onGround(Math.round(p.x * 2) / 2, Math.round(p.z * 2) / 2)
+              return
+            }
+          }
           props.onGround(event.point.x, event.point.z)
         }}
       >
@@ -461,31 +917,46 @@ function Cena(props: {
         recursos={props.sim.current.recursos}
         subsoloCentro={props.sim.current.subsoloCentro}
         modoBloco={props.modoBloco}
-        onEditarBloco={props.onEditarBloco}
+        voxeisGroupRef={voxeisGroupRef}
+        blocosMapaGroupRef={blocosMapaGroupRef}
+        obrasLivresGroupRef={obrasLivresGroupRef}
+        ghostBloco={props.ghostBloco}
+        ghostObra={props.ghostObra}
+        previewLinha={props.previewLinha}
+        bloqueiaCliqueObra={Boolean(props.modoBloco || props.modoLinhaRef.current || props.modoConsagrarRef.current)}
+        onSelectObraInstanced={(obraId) => {
+          if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current) return
+          if (props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160) return
+          const atual = props.sim.current
+          if (atual.semCorpo || atual.olhar === 'imperio') props.onObra(obraId)
+        }}
         onPedirSubsolo={props.onPedirSubsolo}
       />
       {(props.sim.current.semCorpo || props.sim.current.heroi.y >= -0.9) && (
-        <mesh position={[0, -0.35, 20]}>
+        <mesh position={[0, -0.35, 20]} raycast={() => null}>
           <boxGeometry args={[8, 0.2, 42]} />
           <meshStandardMaterial color="#7d8ea3" />
         </mesh>
       )}
-      <mesh ref={pedra} position={[PARTIDA.pedraX, PARTIDA.pedraAltura / 2, PARTIDA.pedraZ]}>
+      <mesh ref={pedra} position={[PARTIDA.pedraX, PARTIDA.pedraAltura / 2, PARTIDA.pedraZ]} raycast={() => null}>
         <boxGeometry args={[PARTIDA.pedraMeio * 2, PARTIDA.pedraAltura, PARTIDA.pedraMeio * 2]} />
         <meshStandardMaterial color="#78716c" />
       </mesh>
       <group
         ref={avatar}
         onClick={(event) => {
+          if (props.modoBlocoRef.current) return
+          if (props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160) return
+          if (props.sim.current.olhar !== 'imperio' || props.sim.current.semCorpo) return
           event.stopPropagation()
-          if (props.sim.current.olhar === 'imperio') props.onHeroi()
+          props.onHeroi(event.nativeEvent.shiftKey)
         }}
       >
-        <mesh position={[0, 0.2, 0]}>
+        <mesh position={[0, 0.2, 0]} raycast={props.modoBloco ? semRaycast : undefined}>
           <boxGeometry args={[0.7, 1.1, 0.5]} />
           <meshStandardMaterial color="#3b82f6" />
         </mesh>
-        <mesh position={[0, 0.95, 0]}>
+        <mesh position={[0, 0.95, 0]} raycast={props.modoBloco ? semRaycast : undefined}>
           <sphereGeometry args={[0.28, 12, 12]} />
           <meshStandardMaterial color="#f2b544" />
         </mesh>
@@ -493,165 +964,101 @@ function Cena(props: {
           <boxGeometry args={[0.12, 0.12, 0.45]} />
           <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={1.4} />
         </mesh>
-        {props.heroiEscolhido && props.sim.current.olhar === 'imperio' && (
-          <mesh position={[0, -0.7, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        {props.heroiEscolhido && props.sim.current.olhar === 'imperio' && !props.sim.current.semCorpo && (
+          <mesh position={[0, -0.7, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
             <ringGeometry args={[0.55, 0.75, 20]} />
             <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={0.6} />
           </mesh>
         )}
       </group>
       {OBSTACULOS.map((caixa) => (
-        <mesh key={`${caixa.x}-${caixa.z}`} position={[caixa.x, caixa.altura / 2, caixa.z]}>
+        <mesh key={`${caixa.x}-${caixa.z}`} position={[caixa.x, caixa.altura / 2, caixa.z]} raycast={() => null}>
           <boxGeometry args={[caixa.hx * 2, caixa.altura, caixa.hz * 2]} />
           <meshStandardMaterial color="#c47a3a" />
         </mesh>
       ))}
       <group position={[0, 0, 20]}>
-        <mesh position={[-1.4, 1.2, 0]}>
+        <mesh position={[-1.4, 1.2, 0]} raycast={() => null}>
           <boxGeometry args={[0.4, 2.4, 0.4]} />
           <meshStandardMaterial color="#1a8f5c" />
         </mesh>
-        <mesh position={[1.4, 1.2, 0]}>
+        <mesh position={[1.4, 1.2, 0]} raycast={() => null}>
           <boxGeometry args={[0.4, 2.4, 0.4]} />
           <meshStandardMaterial color="#1a8f5c" />
         </mesh>
-        <mesh position={[0, 2.3, 0]}>
+        <mesh position={[0, 2.3, 0]} raycast={() => null}>
           <boxGeometry args={[3.2, 0.4, 0.4]} />
           <meshStandardMaterial color="#3ecf8e" />
         </mesh>
         {(props.sim.current.semCorpo || props.sim.current.heroi.y >= -0.9) && cobertoAgora(props.sim.current, 0, 20) && (
-          <Html position={[0, 2.8, 0]} center>
+          <Html position={[0, 2.8, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none' }}>
             <div className="ilha-plate">+10</div>
           </Html>
         )}
       </group>
-      {props.sim.current.obras.map((obra) => (
-        <mesh
-          key={obra.id}
-          ref={(node) => {
-            if (node) obras.current.set(obra.id, node)
-            else obras.current.delete(obra.id)
-          }}
-          position={[obra.x, OBRA_CENTRO_Y, obra.z]}
-          onClick={(event) => {
-            const atual = props.sim.current
-            const peca = atual.obras.find((item) => item.id === obra.id)
-            if (!peca || peca.hp <= 0 || (peca.lado === 'inimigo' && !cobertoAgora(atual, peca.x, peca.z))) return
-            event.stopPropagation()
-            if (atual.semCorpo || atual.olhar === 'imperio') props.onObra(obra.id)
-          }}
-        >
-          <boxGeometry args={DIMENSOES_OBRA[obra.tipo]} />
-          <meshStandardMaterial
-            color={
-              obra.hp <= 0
-                ? obra.lado === 'inimigo'
-                  ? '#292524'
-                  : '#57534e'
-                : obraEmConstrucao(obra)
-                  ? obra.lado === 'inimigo'
-                    ? '#b45309'
-                    : '#f59e0b'
-                  : obra.lado === 'inimigo'
-                ? obra.tipo === 'nucleo'
-                  ? '#7f1d1d'
-                  : '#9f1239'
-                : obra.tipo === 'nucleo'
-                  ? '#facc15'
-                  : obra.tipo === 'torre'
-                    ? '#0284c7'
-                    : obra.tipo === 'portao'
-                      ? '#16a34a'
-                      : obra.tipo === 'quartel'
-                        ? '#d97706'
-                        : obra.tipo === 'serraria'
-                          ? '#15803d'
-                          : obra.tipo === 'mina'
-                            ? '#eab308'
-                            : '#57534e'
-            }
+      {props.sim.current.obras.map((obra) => {
+        const atualCena = props.sim.current
+        const ruina = obra.hp <= 0
+        const lembrada = chaoRevelado(atualCena, obra.x, obra.z)
+        const visivel =
+          obra.lado === 'inimigo'
+            ? ruina
+              ? lembrada
+              : cobertoAgora(atualCena, obra.x, obra.z)
+            : ruina
+              ? lembrada
+              : true
+        return (
+          <ObraArquiteturaMesh
+            key={obra.id}
+            obra={obra}
+            visivel={visivel}
+            modoBloco={Boolean(props.modoBloco || props.modoLinhaRef.current || props.modoConsagrarRef.current)}
+            onPointerDown={(event) => {
+              if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current || event.nativeEvent.button !== 2) return
+              const atual = props.sim.current
+              const peca = atual.obras.find((item) => item.id === obra.id)
+              if (!peca || peca.hp <= 0 || peca.lado !== 'inimigo' || !cobertoAgora(atual, peca.x, peca.z)) return
+              event.stopPropagation()
+            }}
+            onPointerUp={(event) => {
+              if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current || event.nativeEvent.button !== 2) return
+              const atual = props.sim.current
+              const peca = atual.obras.find((item) => item.id === obra.id)
+              if (!peca || peca.hp <= 0 || peca.lado !== 'inimigo' || !cobertoAgora(atual, peca.x, peca.z)) return
+              event.stopPropagation()
+              if (atual.semCorpo || atual.olhar === 'imperio') props.onObra(obra.id)
+            }}
+            onClick={(event) => {
+              if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current) return
+              if (props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160) return
+              const atual = props.sim.current
+              const peca = atual.obras.find((item) => item.id === obra.id)
+              if (!peca || peca.hp <= 0 || (peca.lado === 'inimigo' && !cobertoAgora(atual, peca.x, peca.z))) return
+              event.stopPropagation()
+              if (atual.semCorpo || atual.olhar === 'imperio') props.onObra(obra.id)
+            }}
           />
-        </mesh>
-      ))}
-      {props.sim.current.unidades.map((unidade) => (
-        <mesh
-          key={unidade.id}
-          ref={(node) => {
-            if (node) unidades.current.set(unidade.id, node)
-            else unidades.current.delete(unidade.id)
-          }}
-          onClick={(event) => {
-            event.stopPropagation()
-            props.onUnit(unidade.id, unidade.lado)
-          }}
-        >
-          <boxGeometry args={unidade.papel === 'dragao' ? [1.2, 1.1, 1.4] : [0.55, 0.9, 0.55]} />
-          <meshStandardMaterial
-            color={
-              unidade.lado === 'aliado'
-                ? '#16a34a'
-                : unidade.papel === 'dragao'
-                  ? '#7c3aed'
-                  : unidade.papel === 'sitiante'
-                    ? '#9f1239'
-                    : '#e11d48'
-            }
-          />
-        </mesh>
-      ))}
-      {props.sim.current.unidades.filter((unidade) => unidade.lado === 'inimigo').map((unidade) => (
-        <mesh
-          key={`anel-${unidade.id}`}
-          ref={(node) => {
-            if (node) aneis.current.set(unidade.id, node)
-            else aneis.current.delete(unidade.id)
-          }}
-          visible={false}
-          rotation={[-Math.PI / 2, 0, 0]}
-          raycast={() => null}
-        >
-          <ringGeometry args={[0.65, 0.83, 24]} />
-          <meshBasicMaterial color="#facc15" depthWrite={false} />
-        </mesh>
-      ))}
-      {props.sim.current.unidades
-        .filter((unidade) => unidade.papel === 'dragao' && inimigoVisivel(props.sim.current, unidade))
-        .flatMap((unidade) =>
-          unidade.segmentos.map((numero, indice) => (
-            <mesh
-              key={`${unidade.id}-${numero}`}
-              position={[unidade.x, 1.35 + indice * 0.38, unidade.z]}
-              ref={(node) => {
-                const chave = `${unidade.id}:${numero}`
-                if (node) corpos.current.set(chave, node)
-                else corpos.current.delete(chave)
-              }}
-              onClick={(event) => {
-                event.stopPropagation()
-                props.onUnit(unidade.id, unidade.lado)
-              }}
-            >
-              <boxGeometry args={[0.85, 0.7, 1.05]} />
-              <meshStandardMaterial color="#6d28d9" />
-              <Html center sprite style={{ pointerEvents: 'none' }} zIndexRange={[1, 0]}>
-                <div className="ilha-numero" data-testid={`ilha-dragao-${numero}`}>
-                  {numero}
-                </div>
-              </Html>
-            </mesh>
-          )),
-        )}
+        )
+      })}
+      <TropasCena
+        sim={props.sim}
+        unidades={props.sim.current.unidades}
+        selectedIds={props.selectedIds}
+        unidadesRef={unidades}
+        aneisRef={aneis}
+        corposRef={corpos}
+        modoBloco={props.modoBloco}
+        modoBlocoRef={props.modoBlocoRef}
+        deveIgnorarClique={() => props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160}
+        onUnit={props.onUnit}
+      />
       {pisos.map((piso) => (
-        <mesh key={piso.nome} position={[piso.x, 0.05, piso.z]}>
+        <mesh key={piso.nome} position={[piso.x, 0.05, piso.z]} raycast={() => null}>
           <cylinderGeometry args={[0.7, 0.7, 0.12, 12]} />
           <meshStandardMaterial color="#f8fafc" />
         </mesh>
       ))}
-      <group ref={campoGrupo}>
-        <mesh ref={campo} renderOrder={3} raycast={() => null} frustumCulled={false}>
-          <meshBasicMaterial color="#facc15" transparent opacity={0.45} depthWrite={false} side={2} />
-        </mesh>
-      </group>
       <instancedMesh
         ref={penumbra}
         args={[undefined, undefined, CELULAS_DO_DISCO.length]}
@@ -700,6 +1107,10 @@ export const IlhaRua: React.FC = () => {
   const [heroiEscolhido, setHeroiEscolhido] = useState(false)
   const [caixa, setCaixa] = useState<{ x: number; y: number; x2: number; y2: number } | null>(null)
   const selected = useRef<number[]>([])
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [modoMoverTouch, setModoMoverTouch] = useState(false)
+  const modoMoverTouchRef = useRef(false)
+  modoMoverTouchRef.current = modoMoverTouch
   const [hud, setHud] = useState(sim.current)
   const [open, setOpen] = useState(false)
   const [tier, setTier] = useState<MathDifficultyTier>(1)
@@ -713,7 +1124,43 @@ export const IlhaRua: React.FC = () => {
   const [modoBloco, setModoBloco] = useState<'adicionar' | 'remover' | null>(null)
   const modoBlocoRef = useRef<'adicionar' | 'remover' | null>(null)
   modoBlocoRef.current = modoBloco
+  const [materialBloco, setMaterialBloco] = useState<BlocoMaterial>(PARTIDA.materialBlocoPadrao)
+  const materialBlocoRef = useRef<BlocoMaterial>(PARTIDA.materialBlocoPadrao)
+  materialBlocoRef.current = materialBloco
+  const [modoLinhaBlocos, setModoLinhaBlocos] = useState(false)
+  const modoLinhaRef = useRef(false)
+  modoLinhaRef.current = modoLinhaBlocos
+  const [alturaLinha, setAlturaLinha] = useState<1 | 2 | 3>(PARTIDA.alturaLinhaPadrao)
+  const alturaLinhaRef = useRef<1 | 2 | 3>(PARTIDA.alturaLinhaPadrao)
+  alturaLinhaRef.current = alturaLinha
+  const [modoConsagrar, setModoConsagrar] = useState<PecaId | null>(null)
+  const modoConsagrarRef = useRef<PecaId | null>(null)
+  modoConsagrarRef.current = modoConsagrar
+  const shellRef = useRef<HTMLDivElement>(null)
+  const cursorNdcRef = useRef<{ x: number; y: number } | null>(null)
+  const voxelAlvoRef = useRef<AlvoEdicaoUnificado | null>(null)
+  const resolverAlvoSyncRef = useRef<() => AlvoEdicaoUnificado | null>(() => null)
+  const resolverBlocoConsagrarSyncRef = useRef<() => { gx: number; gy: number; gz: number } | null>(() => null)
+  const blocoPonteiro = useRef<{ pointerId: number; x0: number; y0: number; arrastou: boolean; button: number } | null>(null)
+  const [ghostBloco, setGhostBloco] = useState<AlvoEdicaoUnificado | null>(null)
+  const [ghostObra, setGhostObra] = useState<{ tipo: PecaId; x: number; z: number; valido: boolean } | null>(null)
+  const [previewLinha, setPreviewLinha] = useState<{ plano: PlanoLinhaBlocos; temRecurso: boolean } | null>(null)
+  const [miraAlvo, setMiraAlvo] = useState(false)
   const mapaInteracao = useRef('0,0')
+
+  const definirSelecao = (ids: number[]) => {
+    const unicos = Array.from(new Set(ids))
+    selected.current = unicos
+    setSelectedIds(unicos)
+  }
+
+  const limparSelecao = () => {
+    definirSelecao([])
+    setHeroiEscolhido(false)
+    setModoMoverTouch(false)
+    evoluirId.current = null
+    setFerramenta('')
+  }
 
   const limparInteracao = (preservarMovimento = false) => {
     if (!preservarMovimento) {
@@ -724,22 +1171,40 @@ export const IlhaRua: React.FC = () => {
       stickOrigem.current = null
       segurandoTiro.current = false
       tiroPonteiro.current = null
+      blocoPonteiro.current = null
       stickEl.current?.classList.remove('ativo')
       document.exitPointerLock?.()
     }
-    selected.current = []
+    definirSelecao([])
+    setModoMoverTouch(false)
     evoluirId.current = null
     tool.current = null
     dragou.current = false
+    voxelAlvoRef.current = null
     setHeroiEscolhido(false)
     setCaixa(null)
     setFerramenta('')
     setIntencao(null)
+    modoBlocoRef.current = null
     setModoBloco(null)
+    modoLinhaRef.current = false
+    setModoLinhaBlocos(false)
+    modoConsagrarRef.current = null
+    setModoConsagrar(null)
+    setGhostBloco(null)
+    setGhostObra(null)
+    setPreviewLinha(null)
     setOpen(false)
   }
 
   const podeComandar = () => !estadoCorpo(atlasRef.current).derrota && (sim.current.semCorpo || sim.current.olhar === 'imperio')
+
+  const executarOrdemChao = (x: number, z: number) => {
+    let atual = sim.current
+    if (heroiEscolhido && !atual.semCorpo) atual = ordenarHeroi(atual, { tipo: 'mover', x, z })
+    if (selected.current.length > 0) atual = ordenar(atual, selected.current, { tipo: 'mover', x, z })
+    publicar(atual)
+  }
 
   const publicar = (next: PartidaState) => {
     sim.current = next
@@ -752,9 +1217,20 @@ export const IlhaRua: React.FC = () => {
         previous.credito !== next.credito ||
         previous.derrota !== next.derrota ||
         previous.ruaPercorrida !== next.ruaPercorrida ||
+        previous.versaoSolidos !== next.versaoSolidos ||
         previous.obras.length !== next.obras.length ||
-        previous.obras.map((obra) => `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}`).join() !==
-          next.obras.map((obra) => `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}`).join() ||
+        previous.obras
+          .map(
+            (obra) =>
+              `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}:${obra.lado === 'inimigo' ? (cobertoAgora(previous, obra.x, obra.z) ? 1 : 0) : 1}`,
+          )
+          .join() !==
+          next.obras
+            .map(
+              (obra) =>
+                `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}:${obra.lado === 'inimigo' ? (cobertoAgora(next, obra.x, obra.z) ? 1 : 0) : 1}`,
+            )
+            .join() ||
         previous.unidades.length !== next.unidades.length ||
         previous.unidades
             .map((unidade) => `${unidade.id}:${unidade.postura}:${unidade.ordem?.tipo ?? ''}:${unidade.hp}:${unidade.segmentos.join('.')}:${inimigoVisivel(previous, unidade) ? 1 : 0}:${unidade.rota?.semCaminho ? 1 : 0}`)
@@ -780,15 +1256,106 @@ export const IlhaRua: React.FC = () => {
     })
   }
 
+  const aplicarEdicaoVoxel = () => {
+    if (!sim.current.semCorpo && sim.current.heroi.y < -0.9) {
+      setPower('Volte à superfície para editar blocos')
+      return
+    }
+    if (modoConsagrarRef.current) {
+      const tipo = modoConsagrarRef.current
+      const bloco = resolverBlocoConsagrarSyncRef.current()
+      if (!bloco) {
+        setPower('Clique em um bloco aliado livre para consagrar')
+        return
+      }
+      const check = podeConsagrarEm(sim.current, bloco.gx, bloco.gy, bloco.gz, tipo)
+      if (!check.ok) {
+        setPower(check.motivo ?? 'Estrutura ainda não atende os requisitos')
+        return
+      }
+      publicar(consagrarEstruturaManual(sim.current, bloco.gx, bloco.gy, bloco.gz, tipo))
+      modoConsagrarRef.current = null
+      setModoConsagrar(null)
+      setFerramenta('')
+      setPower(`Estrutura consagrada como ${META_INTENCOES[tipo].titulo}!`)
+      return
+    }
+    const alvo =
+      sim.current.semCorpo || sim.current.olhar === 'imperio'
+        ? resolverAlvoSyncRef.current()
+        : (voxelAlvoRef.current ?? resolverAlvoSyncRef.current())
+    setGhostBloco(alvo)
+    if (!alvo) {
+      setPower(modoBlocoRef.current === 'remover' ? 'Mire em um bloco seu para remover' : 'Mire no chão ou em um bloco até 7 m')
+      return
+    }
+    if (!alvo.valido) {
+      setPower(mensagemMotivoBloco(alvo.motivo, alvo.tipo === 'nv5' ? 'madeira' : alvo.material))
+      return
+    }
+    if (alvo.tipo === 'nv5') {
+      publicar(editarBlocoObra(sim.current, alvo.obraId, alvo.bx, alvo.by, alvo.bz, alvo.acao))
+      return
+    }
+    if (alvo.tipo === 'mundo') {
+      publicar(editarBlocoMundo(sim.current, alvo.gx, alvo.gy, alvo.gz, alvo.acao, alvo.material))
+      return
+    }
+    publicar(editarBlocoObraLivre(sim.current, alvo.obraId, alvo.gx, alvo.gy, alvo.gz, alvo.acao, alvo.material))
+  }
+
+  const irParaOlhar = (olhar: Olhar) => {
+    if (olhar === 'imperio') {
+      document.exitPointerLock?.()
+    } else {
+      tool.current = null
+      setGhostObra(null)
+      modoLinhaRef.current = false
+      setModoLinhaBlocos(false)
+      setPreviewLinha(null)
+      modoConsagrarRef.current = null
+      setModoConsagrar(null)
+      setModoMoverTouch(false)
+      if (!modoBlocoRef.current) setFerramenta('')
+    }
+    publicar(definirOlhar(sim.current, olhar))
+  }
+  const irParaOlharRef = useRef(irParaOlhar)
+  irParaOlharRef.current = irParaOlhar
+
+  const aplicarEdicaoVoxelRef = useRef(aplicarEdicaoVoxel)
+  aplicarEdicaoVoxelRef.current = aplicarEdicaoVoxel
+
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (modalOpen.current) return
-      if (event.code === 'Digit1') publicar(definirOlhar(sim.current, 'primeira'))
-      if (event.code === 'Digit2') publicar(definirOlhar(sim.current, 'terceira'))
-      if (event.code === 'Digit3') {
-        document.exitPointerLock?.()
-        publicar(definirOlhar(sim.current, 'imperio'))
+      if (event.code === 'Escape') {
+        if (modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) {
+          modoBlocoRef.current = null
+          modoLinhaRef.current = false
+          modoConsagrarRef.current = null
+          voxelAlvoRef.current = null
+          setModoBloco(null)
+          setModoLinhaBlocos(false)
+          setModoConsagrar(null)
+          setGhostBloco(null)
+          setPreviewLinha(null)
+          setFerramenta('')
+          return
+        }
+        if (modoMoverTouchRef.current || tool.current) {
+          tool.current = null
+          setGhostObra(null)
+          setIntencao(null)
+          setModoMoverTouch(false)
+          setFerramenta('')
+          return
+        }
+        setIntencao(null)
       }
+      if (event.code === 'Digit1') irParaOlharRef.current('primeira')
+      if (event.code === 'Digit2') irParaOlharRef.current('terceira')
+      if (event.code === 'Digit3') irParaOlharRef.current('imperio')
       if (event.code === 'Space') {
         event.preventDefault()
         if (event.repeat || sim.current.olhar === 'imperio' || sim.current.derrota || sim.current.semCorpo) return
@@ -836,7 +1403,24 @@ export const IlhaRua: React.FC = () => {
       delete keys.current.eixoY
       stickEl.current?.classList.remove('ativo')
     }
+    const atualizarCursorNdc = (clientX: number, clientY: number) => {
+      const canvasEl = shellRef.current?.querySelector('canvas')
+      if (!canvasEl) return
+      const rect = canvasEl.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return
+      cursorNdcRef.current = {
+        x: ((clientX - rect.left) / rect.width) * 2 - 1,
+        y: -((clientY - rect.top) / rect.height) * 2 + 1,
+      }
+    }
     const moveLook = (event: PointerEvent) => {
+      atualizarCursorNdc(event.clientX, event.clientY)
+      if (blocoPonteiro.current && blocoPonteiro.current.pointerId === event.pointerId) {
+        const dist = Math.hypot(event.clientX - blocoPonteiro.current.x0, event.clientY - blocoPonteiro.current.y0)
+        if (decidirAcaoPonteiro(dist) === 'arrasto') {
+          blocoPonteiro.current.arrastou = true
+        }
+      }
       if (stickPonteiro.current === event.pointerId) {
         moverManche(event.clientX, event.clientY)
         return
@@ -864,6 +1448,19 @@ export const IlhaRua: React.FC = () => {
         segurandoTiro.current = false
         tiroPonteiro.current = null
       }
+      if (blocoPonteiro.current && blocoPonteiro.current.pointerId === event.pointerId) {
+        const info = blocoPonteiro.current
+        blocoPonteiro.current = null
+        if (
+          event.type === 'pointerup' &&
+          !info.arrastou &&
+          (modoBlocoRef.current || modoConsagrarRef.current) &&
+          (info.button === 0 || event.pointerType === 'touch')
+        ) {
+          atualizarCursorNdc(event.clientX, event.clientY)
+          aplicarEdicaoVoxelRef.current()
+        }
+      }
     }
     window.addEventListener('keydown', down, true)
     window.addEventListener('keyup', up)
@@ -881,6 +1478,14 @@ export const IlhaRua: React.FC = () => {
 
   const escolherFerramenta = (peca: PecaId, nome: string) => {
     if (!podeComandar()) return
+    modoBlocoRef.current = null
+    modoLinhaRef.current = false
+    modoConsagrarRef.current = null
+    setModoBloco(null)
+    setModoLinhaBlocos(false)
+    setModoConsagrar(null)
+    setGhostBloco(null)
+    setPreviewLinha(null)
     tool.current = peca
     setFerramenta(nome)
     publicar(definirOlhar(sim.current, 'imperio'))
@@ -928,12 +1533,22 @@ export const IlhaRua: React.FC = () => {
     hud.obras.find((obra) => obra.lado !== 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0) ??
     hud.obras.find((obra) => obra.lado !== 'inimigo' && obra.hp <= 0)
   const tropasVivas = hud.unidades.filter((unidade) => unidade.lado === 'aliado' && unidade.hp > 0)
+  const vivosAliadosSet = new Set(tropasVivas.map((unidade) => unidade.id))
+  const selectedVivas = selectedIds.filter((id) => vivosAliadosSet.has(id))
   const emOrdens = tropasVivas.filter((unidade) => unidade.postura === 'ordens').length
   const emAuto = tropasVivas.filter((unidade) => unidade.postura === 'automatico').length
   const dragaoVivo = hud.unidades.find((unidade) => unidade.papel === 'dragao' && inimigoVisivel(hud, unidade))
   const corpoAtual = estadoCorpo(atlasRef.current)
   const derrotado = corpoAtual.derrota
   const tatico = hud.semCorpo || hud.olhar === 'imperio'
+  const heroiSelecionavel = heroiEscolhido && !hud.semCorpo
+  const temSelecaoAtiva = tatico && !derrotado && (heroiSelecionavel || selectedVivas.length > 0)
+  const textoSelecao =
+    heroiSelecionavel && selectedVivas.length > 0
+      ? `Herói + ${selectedVivas.length} ${selectedVivas.length === 1 ? 'tropa' : 'tropas'}`
+      : heroiSelecionavel
+        ? 'Herói selecionado'
+        : `${selectedVivas.length} ${selectedVivas.length === 1 ? 'tropa' : 'tropas'}`
 
   const confirmarIntencao = (acao: IconeId) => {
     setIntencao(null)
@@ -952,32 +1567,72 @@ export const IlhaRua: React.FC = () => {
     if (acao === 'evoluir') {
       const id = evoluirId.current ?? nucleo?.id
       if (!id) return
-      publicar(evoluir(sim.current, id))
+      const antes = sim.current.obras.find((o) => o.id === id)
+      const prox = evoluir(sim.current, id)
+      publicar(prox)
+      const depois = prox.obras.find((o) => o.id === id)
+      if (antes && depois && depois.nivel > antes.nivel) {
+        setFerramenta(`${META_INTENCOES[depois.tipo].titulo} (Nv. ${depois.nivel})`)
+        setPower(`${META_INTENCOES[depois.tipo].titulo} evoluiu para Nv. ${depois.nivel}!`)
+      } else if (antes) {
+        setPower(
+          antes.nivel >= PARTIDA.nivelMaximoObra
+            ? 'Construção já está no Nível 5 (máximo)'
+            : obraEmConstrucao(antes)
+              ? 'Aguarde concluir a construção antes de evoluir'
+              : 'Precisa 1 licença ou 2 madeiras + 2 ouros para evoluir',
+        )
+      }
       return
     }
     if (acao === 'tropa') {
+      const selecionada = evoluirId.current
+        ? sim.current.obras.find(
+            (obra) =>
+              obra.id === evoluirId.current &&
+              obra.lado !== 'inimigo' &&
+              (obra.tipo === 'quartel' || obra.tipo === 'nucleo') &&
+              obra.hp > 0 &&
+              !obraEmConstrucao(obra),
+          )
+        : undefined
       const casa =
+        selecionada ??
         sim.current.obras.find(
           (obra) => obra.lado !== 'inimigo' && obra.tipo === 'quartel' && obra.hp > 0 && !obraEmConstrucao(obra),
-        ) ?? nucleo
+        ) ??
+        nucleo
       if (!casa) return
-      publicar(criarTropa(sim.current, casa.id))
+      const prox = criarTropa(sim.current, casa.id)
+      if (prox === sim.current) {
+        const vivasCount = sim.current.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).length
+        setPower(
+          vivasCount >= PARTIDA.allyCap
+            ? `Limite máximo de ${PARTIDA.allyCap} tropas atingido`
+            : 'Precisa 1 licença ou 2 ouros para recrutar tropa',
+        )
+        return
+      }
+      publicar(prox)
       return
     }
     if (acao === 'todas') {
-      selected.current = sim.current.unidades
+      const todas = sim.current.unidades
         .filter((unidade) => unidade.lado === 'aliado' && unidade.hp > 0)
         .map((unidade) => unidade.id)
-      setFerramenta(`${selected.current.length} selecionados`)
+      definirSelecao(todas)
+      setFerramenta(`${todas.length} selecionados`)
       return
     }
     if (acao === 'atacar') {
       const ids =
         selected.current.length > 0
           ? selected.current
-          : sim.current.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).map((u) => u.id)
+          : heroiEscolhido
+            ? []
+            : sim.current.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).map((u) => u.id)
       if (ids.length === 0 && !heroiEscolhido) return
-      selected.current = ids
+      if (ids.length > 0) definirSelecao(ids)
       const alvoId = alvoDoBotao(sim.current)
       if (alvoId !== null) {
         let atual = sim.current
@@ -999,7 +1654,7 @@ export const IlhaRua: React.FC = () => {
         selected.current.length > 0
           ? selected.current
           : sim.current.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).map((u) => u.id)
-      selected.current = ids
+      definirSelecao(ids)
       publicar(postura(sim.current, ids, 'automatico'))
       return
     }
@@ -1017,24 +1672,96 @@ export const IlhaRua: React.FC = () => {
       return
     }
     if (acao === 'editarBlocos') {
+      modoLinhaRef.current = false
+      setModoLinhaBlocos(false)
+      setPreviewLinha(null)
+      modoConsagrarRef.current = null
+      setModoConsagrar(null)
       setPainelBlocosAberto((aberto) => {
-        if (aberto) setModoBloco(null)
+        if (aberto) {
+          modoBlocoRef.current = null
+          voxelAlvoRef.current = null
+          setModoBloco(null)
+          setGhostBloco(null)
+          setFerramenta('')
+        }
         return !aberto
       })
       return
     }
     if (acao === 'blocoAdicionar') {
       document.exitPointerLock?.()
+      tool.current = null
+      setGhostObra(null)
+      modoLinhaRef.current = false
+      setModoLinhaBlocos(false)
+      setPreviewLinha(null)
+      modoConsagrarRef.current = null
+      setModoConsagrar(null)
       setPainelBlocosAberto(true)
-      setModoBloco((atual) => (atual === 'adicionar' ? null : 'adicionar'))
-      setFerramenta('Modo Bloco: Adicionar')
+      const proximo = modoBlocoRef.current === 'adicionar' ? null : 'adicionar'
+      modoBlocoRef.current = proximo
+      setModoBloco(proximo)
+      setFerramenta(proximo ? `Modo Bloco: Adicionar (${SPEC_BLOCO_MATERIAL[materialBlocoRef.current].nome})` : '')
+      if (!proximo) {
+        voxelAlvoRef.current = null
+        setGhostBloco(null)
+      }
       return
     }
     if (acao === 'blocoRemover') {
       document.exitPointerLock?.()
+      tool.current = null
+      setGhostObra(null)
+      modoLinhaRef.current = false
+      setModoLinhaBlocos(false)
+      setPreviewLinha(null)
+      modoConsagrarRef.current = null
+      setModoConsagrar(null)
       setPainelBlocosAberto(true)
-      setModoBloco((atual) => (atual === 'remover' ? null : 'remover'))
-      setFerramenta('Modo Bloco: Remover')
+      const proximo = modoBlocoRef.current === 'remover' ? null : 'remover'
+      modoBlocoRef.current = proximo
+      setModoBloco(proximo)
+      setFerramenta(proximo ? 'Modo Bloco: Remover' : '')
+      if (!proximo) {
+        voxelAlvoRef.current = null
+        setGhostBloco(null)
+      }
+      return
+    }
+    if (acao === 'muralhaLinha') {
+      document.exitPointerLock?.()
+      tool.current = null
+      setGhostObra(null)
+      setPainelBlocosAberto(false)
+      modoBlocoRef.current = null
+      setModoBloco(null)
+      setGhostBloco(null)
+      modoConsagrarRef.current = null
+      setModoConsagrar(null)
+      const proximo = !modoLinhaRef.current
+      modoLinhaRef.current = proximo
+      setModoLinhaBlocos(proximo)
+      setPreviewLinha(null)
+      setFerramenta(proximo ? `Linha 360° (${alturaLinhaRef.current}b · ${SPEC_BLOCO_MATERIAL[materialBlocoRef.current].nome})` : '')
+      if (proximo) publicar(definirOlhar(sim.current, 'imperio'))
+      return
+    }
+    if (acao === 'consagrar') {
+      document.exitPointerLock?.()
+      tool.current = null
+      setGhostObra(null)
+      setPainelBlocosAberto(false)
+      modoBlocoRef.current = null
+      setModoBloco(null)
+      setGhostBloco(null)
+      modoLinhaRef.current = false
+      setModoLinhaBlocos(false)
+      setPreviewLinha(null)
+      const proximo: PecaId | null = modoConsagrarRef.current ? null : 'torre'
+      modoConsagrarRef.current = proximo
+      setModoConsagrar(proximo)
+      setFerramenta(proximo ? 'Consagrar: escolha o tipo e clique na estrutura' : '')
       return
     }
     if (acao === 'menuMinimapas') {
@@ -1054,12 +1781,10 @@ export const IlhaRua: React.FC = () => {
     (obra) => obra.lado !== 'inimigo' && obra.tipo === 'mina' && obra.hp > 0 && !obraEmConstrucao(obra),
   )
   const noSubsoloHud = !hud.semCorpo && hud.heroi.y < -0.9
-  const temFortalezaNv5 = hud.obras.some(
-    (obra) => obra.lado !== 'inimigo' && obra.hp > 0 && !obraEmConstrucao(obra) && Boolean(obra.blocosNv5),
-  )
 
   return (
     <div
+      ref={shellRef}
       className={celular ? 'ilha-shell ilha-celular' : 'ilha-shell'}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => {
@@ -1070,12 +1795,22 @@ export const IlhaRua: React.FC = () => {
           )
         )
           return
+        const canvasEl = shellRef.current?.querySelector('canvas')
+        if (canvasEl) {
+          const rectCanvas = canvasEl.getBoundingClientRect()
+          if (rectCanvas.width > 0 && rectCanvas.height > 0) {
+            cursorNdcRef.current = {
+              x: ((event.clientX - rectCanvas.left) / rectCanvas.width) * 2 - 1,
+              y: -((event.clientY - rectCanvas.top) / rectCanvas.height) * 2 + 1,
+            }
+          }
+        }
         const toque = event.pointerType === 'touch'
         if (toque) setCelular(true)
         if (toque) {
           const retangulo = event.currentTarget.getBoundingClientRect()
           const localX = event.clientX - retangulo.left
-          if (localX < retangulo.width * 0.45) {
+          if (localX < retangulo.width * 0.45 && sim.current.olhar !== 'imperio' && !sim.current.semCorpo) {
             event.preventDefault()
             stickPonteiro.current = event.pointerId
             stickOrigem.current = { x: event.clientX, y: event.clientY }
@@ -1089,14 +1824,56 @@ export const IlhaRua: React.FC = () => {
             if (knobEl.current) knobEl.current.style.transform = 'translate(0px, 0px)'
             return
           }
-          if (sim.current.olhar === 'imperio' || sim.current.semCorpo || modoBlocoRef.current) return
+          if (sim.current.olhar === 'imperio' || sim.current.semCorpo) {
+            if (modoBlocoRef.current || modoConsagrarRef.current) {
+              blocoPonteiro.current = {
+                pointerId: event.pointerId,
+                x0: event.clientX,
+                y0: event.clientY,
+                arrastou: false,
+                button: event.button,
+              }
+            }
+            return
+          }
           event.preventDefault()
           lookDrag.current = { x: event.clientX, y: event.clientY }
           lookPonteiro.current = event.pointerId
+          if (modoBlocoRef.current || modoConsagrarRef.current) {
+            blocoPonteiro.current = {
+              pointerId: event.pointerId,
+              x0: event.clientX,
+              y0: event.clientY,
+              arrastou: false,
+              button: event.button,
+            }
+          }
           return
         }
-        if (sim.current.olhar === 'imperio' || sim.current.semCorpo) return
-        if (modoBlocoRef.current) return
+        if (sim.current.olhar === 'imperio' || sim.current.semCorpo) {
+          if ((modoBlocoRef.current || modoConsagrarRef.current) && event.button === 0) {
+            blocoPonteiro.current = {
+              pointerId: event.pointerId,
+              x0: event.clientX,
+              y0: event.clientY,
+              arrastou: false,
+              button: event.button,
+            }
+          }
+          return
+        }
+        if (modoBlocoRef.current || modoConsagrarRef.current) {
+          lookDrag.current = { x: event.clientX, y: event.clientY }
+          lookPonteiro.current = event.pointerId
+          blocoPonteiro.current = {
+            pointerId: event.pointerId,
+            x0: event.clientX,
+            y0: event.clientY,
+            arrastou: false,
+            button: event.button,
+          }
+          return
+        }
         if (event.button === 0 && !sim.current.derrota) {
           segurandoTiro.current = true
           tiroPonteiro.current = event.pointerId
@@ -1115,11 +1892,40 @@ export const IlhaRua: React.FC = () => {
           cam={cam}
           tool={tool}
           dragou={dragou}
+          selectedIds={selectedIds}
           modoBloco={modoBloco}
-          onEditarBloco={(obraId, bx, by, bz, acao) => {
-            publicar(editarBlocoObra(sim.current, obraId, bx, by, bz, acao))
+          modoBlocoRef={modoBlocoRef}
+          materialBlocoRef={materialBlocoRef}
+          modoLinhaRef={modoLinhaRef}
+          alturaLinhaRef={alturaLinhaRef}
+          modoConsagrarRef={modoConsagrarRef}
+          cursorNdcRef={cursorNdcRef}
+          voxelAlvoRef={voxelAlvoRef}
+          resolverAlvoSyncRef={resolverAlvoSyncRef}
+          resolverBlocoConsagrarSyncRef={resolverBlocoConsagrarSyncRef}
+          ghostBloco={ghostBloco}
+          onGhostBloco={setGhostBloco}
+          ghostObra={ghostObra}
+          onGhostObra={setGhostObra}
+          previewLinha={previewLinha}
+          onPreviewLinha={setPreviewLinha}
+          onConcluirLinha={(x0, z0, x1, z1) => {
+            const st = sim.current
+            const mat = materialBlocoRef.current
+            const alt = alturaLinhaRef.current
+            const plano = planejarLinhaNoEstado(st, x0, z0, x1, z1, alt, mat)
+            if (plano.celulas.length === 0) return
+            if (!temRecursoParaMaterial({ madeira: st.madeira, lingotes: st.lingotes, ouro: st.ouro }, mat, plano.celulas.length)) {
+              setPower(`Precisa ${plano.custoTotal} ${SPEC_BLOCO_MATERIAL[mat].nome} para erguer esta linha`)
+              return
+            }
+            publicar(construirLinhaBlocos(st, x0, z0, x1, z1, alt, mat))
+            setPower(`Linha erguida: ${plano.celulas.length} blocos de ${SPEC_BLOCO_MATERIAL[mat].nome}`)
           }}
-          onPedirSubsolo={() => setIntencao('subsolo')}
+          onMiraAlvo={setMiraAlvo}
+          onPedirSubsolo={() => {
+            if (!modoBlocoRef.current && !modoLinhaRef.current && !modoConsagrarRef.current) setIntencao('subsolo')
+          }}
           onHud={(state) => {
             const corpo = fichaEm(atlasRef.current, atlasRef.current.heroiI, atlasRef.current.heroiJ)
             const camada = camadaMini.current
@@ -1143,37 +1949,55 @@ export const IlhaRua: React.FC = () => {
           onGround={(x, z) => {
             if (!podeComandar()) return
             if (tool.current) {
-              if (!chaoRevelado(sim.current, x, z)) return
+              const check = podeFundarEm(sim.current, tool.current, x, z, { cobrarRecursos: true, exigirRevelado: true })
+              if (!check.ok) {
+                if (check.motivo) setPower(check.motivo)
+                return
+              }
               publicar(iniciarObra(sim.current, tool.current, x, z))
               tool.current = null
+              setGhostObra(null)
               setFerramenta('')
               return
             }
-            let atual = sim.current
-            if (heroiEscolhido && !atual.semCorpo) atual = ordenarHeroi(atual, { tipo: 'mover', x, z })
-            if (selected.current.length > 0) atual = ordenar(atual, selected.current, { tipo: 'mover', x, z })
-            publicar(atual)
+            if (modoMoverTouchRef.current) {
+              executarOrdemChao(x, z)
+              setModoMoverTouch(false)
+              return
+            }
+            const proxima = selecionarAoClicarChaoVazio({ heroi: heroiEscolhido, tropas: selected.current }, false)
+            definirSelecao(proxima.tropas)
+            setHeroiEscolhido(proxima.heroi)
+            evoluirId.current = null
+            setFerramenta('')
+            setIntencao(null)
           }}
-          onUnit={(id, lado) => {
-            if (!podeComandar()) return
+          onGroundOrder={(x, z) => {
+            if (!podeComandar() || modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current || tool.current) return
+            executarOrdemChao(x, z)
+          }}
+          onUnit={(id, lado, shiftKey) => {
+            if (!podeComandar() || modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) return
             const unidade = sim.current.unidades.find((item) => item.id === id)
             if (!unidade || unidade.hp <= 0 || (lado === 'inimigo' && !inimigoVisivel(sim.current, unidade))) return
             if (lado === 'aliado') {
-              selected.current = selected.current.includes(id)
-                ? selected.current.filter((item) => item !== id)
-                : [...selected.current, id]
-              setFerramenta(`${selected.current.length} selecionados`)
+              const proxima = selecionarAoClicarUnidade({ heroi: heroiEscolhido, tropas: selected.current }, id, Boolean(shiftKey))
+              setHeroiEscolhido(proxima.heroi)
+              setModoMoverTouch(false)
+              evoluirId.current = null
+              definirSelecao(proxima.tropas)
+              setFerramenta(`${proxima.tropas.length} ${proxima.tropas.length === 1 ? 'selecionado' : 'selecionados'}`)
               return
             }
             if (selected.current.length > 0) {
               publicar(ordenar(sim.current, selected.current, { tipo: 'atacar', alvoId: id }))
             }
-            if (heroiEscolhido) {
+            if (heroiEscolhido && !sim.current.semCorpo) {
               publicar(ordenarHeroi(sim.current, { tipo: 'atacar', alvoId: id }))
             }
           }}
           onObra={(id) => {
-            if (!podeComandar()) return
+            if (!podeComandar() || modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) return
             const obra = sim.current.obras.find((item) => item.id === id)
             if (!obra || obra.hp <= 0) return
             if (obra.lado === 'inimigo') {
@@ -1185,18 +2009,34 @@ export const IlhaRua: React.FC = () => {
               return
             }
             evoluirId.current = id
-            setFerramenta(obra.tipo)
+            setFerramenta(`${META_INTENCOES[obra.tipo].titulo} (Nv. ${obra.nivel})`)
           }}
-          onRect={(x0, z0, x1, z1) => {
-            if (!podeComandar()) return
-            selected.current = idsNoRetangulo(sim.current, x0, z0, x1, z1)
-            setFerramenta(`${selected.current.length} no retângulo`)
+          onRect={(x0, z0, x1, z1, shiftKey) => {
+            if (!podeComandar() || modoBlocoRef.current) return
+            const proxima = selecionarPorRetanguloEstado(
+              sim.current,
+              { heroi: heroiEscolhido, tropas: selected.current },
+              x0,
+              z0,
+              x1,
+              z1,
+              Boolean(shiftKey),
+            )
+            setModoMoverTouch(false)
+            evoluirId.current = null
+            definirSelecao(proxima.tropas)
+            setHeroiEscolhido(proxima.heroi)
+            setFerramenta(`${proxima.tropas.length} no retângulo`)
           }}
           onCaixa={setCaixa}
-          onHeroi={() => {
-            if (!podeComandar() || sim.current.semCorpo) return
-            setHeroiEscolhido((valor) => !valor)
-            setFerramenta('Herói')
+          onHeroi={(shiftKey) => {
+            if (!podeComandar() || sim.current.semCorpo || modoBlocoRef.current) return
+            const proxima = selecionarAoClicarHeroi({ heroi: heroiEscolhido, tropas: selected.current }, Boolean(shiftKey))
+            setModoMoverTouch(false)
+            evoluirId.current = null
+            definirSelecao(proxima.tropas)
+            setHeroiEscolhido(proxima.heroi)
+            setFerramenta(proxima.heroi ? 'Herói' : '')
           }}
           heroiEscolhido={heroiEscolhido}
           atlas={atlasRef}
@@ -1216,23 +2056,36 @@ export const IlhaRua: React.FC = () => {
       </Canvas>
       <div className="ilha-hud">
         <div className="ilha-barra">
-          <button type="button" data-testid="ilha-olhar-primeira" onClick={() => publicar(definirOlhar(sim.current, 'primeira'))}>
+          <button
+            type="button"
+            className={!hud.semCorpo && hud.olhar === 'primeira' ? 'ativo' : undefined}
+            aria-pressed={!hud.semCorpo && hud.olhar === 'primeira'}
+            data-testid="ilha-olhar-primeira"
+            onClick={() => irParaOlhar('primeira')}
+          >
             Primeira
           </button>
-          <button type="button" data-testid="ilha-olhar-terceira" onClick={() => publicar(definirOlhar(sim.current, 'terceira'))}>
+          <button
+            type="button"
+            className={!hud.semCorpo && hud.olhar === 'terceira' ? 'ativo' : undefined}
+            aria-pressed={!hud.semCorpo && hud.olhar === 'terceira'}
+            data-testid="ilha-olhar-terceira"
+            onClick={() => irParaOlhar('terceira')}
+          >
             Terceira
           </button>
           <button
             type="button"
+            className={hud.semCorpo || hud.olhar === 'imperio' ? 'ativo' : undefined}
+            aria-pressed={hud.semCorpo || hud.olhar === 'imperio'}
             data-testid="ilha-olhar-imperio"
-            onClick={() => {
-              document.exitPointerLock?.()
-              publicar(definirOlhar(sim.current, 'imperio'))
-            }}
+            onClick={() => irParaOlhar('imperio')}
           >
             Império
           </button>
-          <span data-testid="ilha-olhar">{hud.semCorpo ? 'Observando · Império' : olharNome(hud.olhar)}</span>
+          <span className={hud.semCorpo ? 'ilha-obs-sem-corpo' : undefined} data-testid="ilha-olhar">
+            {hud.semCorpo ? 'Observando · Império' : olharNome(hud.olhar)}
+          </span>
         </div>
         <div className="ilha-army" data-testid="ilha-exercito">
           Exército {corpoAtual.heroi.army}
@@ -1259,13 +2112,15 @@ export const IlhaRua: React.FC = () => {
           {hud.lingotes > 0 ? ` · Lingotes ${hud.lingotes} resto ${hud.resto}` : ''}
           {hud.heroi.carregandoKg > 0 ? ` · Pedra ${hud.heroi.carregandoKg} kg` : ''}
           {noSubsoloHud ? ' · Subsolo' : ''}
-          {modoBloco ? ` · Blocos (${modoBloco})` : ''}
+          {modoBloco ? ` · Blocos (${modoBloco} · ${SPEC_BLOCO_MATERIAL[materialBloco].nome})` : ''}
+          {modoLinhaBlocos ? ` · Linha 360° (${alturaLinha}b · ${SPEC_BLOCO_MATERIAL[materialBloco].nome})` : ''}
+          {modoConsagrar ? ` · Consagrar (${modoConsagrar})` : ''}
         </div>
         <div className="ilha-compass" data-testid="ilha-bussola">
           {compassLetter(hud.heroi.yaw)}
         </div>
-        {!tatico && <div className="ilha-mira" data-testid="ilha-mira" />}
-        {!tatico && !derrotado && (temMinaPronta || noSubsoloHud || temFortalezaNv5) && (
+        {!tatico && <div className={miraAlvo ? 'ilha-mira alvo' : 'ilha-mira'} data-testid="ilha-mira" />}
+        {!tatico && !derrotado && (
           <div className="ilha-acoes-campo" data-testid="ilha-acoes-campo">
             {(temMinaPronta || noSubsoloHud) && (
               <button
@@ -1278,39 +2133,52 @@ export const IlhaRua: React.FC = () => {
                 <IconeSvg id="subsolo" size={18} />
               </button>
             )}
-            {temFortalezaNv5 && (
+            <button
+              type="button"
+              className={painelBlocosAberto || intencao === 'editarBlocos' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+              data-testid="ilha-editar-blocos"
+              aria-label={META_INTENCOES.editarBlocos.titulo}
+              onClick={() => setIntencao('editarBlocos')}
+            >
+              <IconeSvg id="editarBlocos" size={18} />
+            </button>
+            {painelBlocosAberto && (
               <>
                 <button
                   type="button"
-                  className={painelBlocosAberto || intencao === 'editarBlocos' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                  data-testid="ilha-editar-blocos"
-                  aria-label={META_INTENCOES.editarBlocos.titulo}
-                  onClick={() => setIntencao('editarBlocos')}
+                  className={modoBloco === 'adicionar' || intencao === 'blocoAdicionar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                  data-testid="ilha-bloco-adicionar"
+                  aria-label={META_INTENCOES.blocoAdicionar.titulo}
+                  onClick={() => setIntencao('blocoAdicionar')}
                 >
-                  <IconeSvg id="editarBlocos" size={18} />
+                  <IconeSvg id="blocoAdicionar" size={18} />
                 </button>
-                {painelBlocosAberto && (
-                  <>
+                <button
+                  type="button"
+                  className={modoBloco === 'remover' || intencao === 'blocoRemover' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                  data-testid="ilha-bloco-remover"
+                  aria-label={META_INTENCOES.blocoRemover.titulo}
+                  onClick={() => setIntencao('blocoRemover')}
+                >
+                  <IconeSvg id="blocoRemover" size={18} />
+                </button>
+                <div className="ilha-subbarra-inline" data-testid="ilha-mat-campo">
+                  {(['madeira', 'pedra', 'ouro'] as const).map((mat) => (
                     <button
+                      key={mat}
                       type="button"
-                      className={modoBloco === 'adicionar' || intencao === 'blocoAdicionar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                      data-testid="ilha-bloco-adicionar"
-                      aria-label={META_INTENCOES.blocoAdicionar.titulo}
-                      onClick={() => setIntencao('blocoAdicionar')}
+                      className={materialBloco === mat ? 'ilha-chip ativo' : 'ilha-chip'}
+                      data-testid={`ilha-mat-${mat}`}
+                      aria-label={`Material ${SPEC_BLOCO_MATERIAL[mat].nome}`}
+                      onClick={() => {
+                        materialBlocoRef.current = mat
+                        setMaterialBloco(mat)
+                      }}
                     >
-                      <IconeSvg id="blocoAdicionar" size={18} />
+                      {mat === 'madeira' ? 'Mad' : mat === 'pedra' ? 'Ped' : 'Our'}
                     </button>
-                    <button
-                      type="button"
-                      className={modoBloco === 'remover' || intencao === 'blocoRemover' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                      data-testid="ilha-bloco-remover"
-                      aria-label={META_INTENCOES.blocoRemover.titulo}
-                      onClick={() => setIntencao('blocoRemover')}
-                    >
-                      <IconeSvg id="blocoRemover" size={18} />
-                    </button>
-                  </>
-                )}
+                  ))}
+                </div>
               </>
             )}
           </div>
@@ -1386,39 +2254,53 @@ export const IlhaRua: React.FC = () => {
                   <IconeSvg id="subsolo" size={18} />
                 </button>
               )}
-              {temFortalezaNv5 && (
+              <button
+                type="button"
+                className={painelBlocosAberto || intencao === 'editarBlocos' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                data-testid="ilha-editar-blocos"
+                aria-label={META_INTENCOES.editarBlocos.titulo}
+                onClick={() => setIntencao('editarBlocos')}
+              >
+                <IconeSvg id="editarBlocos" size={18} />
+              </button>
+              <button
+                type="button"
+                className={modoLinhaBlocos || intencao === 'muralhaLinha' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                data-testid="ilha-muralha-linha"
+                aria-label={META_INTENCOES.muralhaLinha.titulo}
+                onClick={() => setIntencao('muralhaLinha')}
+              >
+                <IconeSvg id="muralhaLinha" size={18} />
+              </button>
+              <button
+                type="button"
+                className={Boolean(modoConsagrar) || intencao === 'consagrar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                data-testid="ilha-consagrar"
+                aria-label={META_INTENCOES.consagrar.titulo}
+                onClick={() => setIntencao('consagrar')}
+              >
+                <IconeSvg id="consagrar" size={18} />
+              </button>
+              {painelBlocosAberto && (
                 <>
                   <button
                     type="button"
-                    className={painelBlocosAberto || intencao === 'editarBlocos' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                    data-testid="ilha-editar-blocos"
-                    aria-label={META_INTENCOES.editarBlocos.titulo}
-                    onClick={() => setIntencao('editarBlocos')}
+                    className={modoBloco === 'adicionar' || intencao === 'blocoAdicionar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                    data-testid="ilha-bloco-adicionar"
+                    aria-label={META_INTENCOES.blocoAdicionar.titulo}
+                    onClick={() => setIntencao('blocoAdicionar')}
                   >
-                    <IconeSvg id="editarBlocos" size={18} />
+                    <IconeSvg id="blocoAdicionar" size={18} />
                   </button>
-                  {painelBlocosAberto && (
-                    <>
-                      <button
-                        type="button"
-                        className={modoBloco === 'adicionar' || intencao === 'blocoAdicionar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                        data-testid="ilha-bloco-adicionar"
-                        aria-label={META_INTENCOES.blocoAdicionar.titulo}
-                        onClick={() => setIntencao('blocoAdicionar')}
-                      >
-                        <IconeSvg id="blocoAdicionar" size={18} />
-                      </button>
-                      <button
-                        type="button"
-                        className={modoBloco === 'remover' || intencao === 'blocoRemover' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                        data-testid="ilha-bloco-remover"
-                        aria-label={META_INTENCOES.blocoRemover.titulo}
-                        onClick={() => setIntencao('blocoRemover')}
-                      >
-                        <IconeSvg id="blocoRemover" size={18} />
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="button"
+                    className={modoBloco === 'remover' || intencao === 'blocoRemover' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                    data-testid="ilha-bloco-remover"
+                    aria-label={META_INTENCOES.blocoRemover.titulo}
+                    onClick={() => setIntencao('blocoRemover')}
+                  >
+                    <IconeSvg id="blocoRemover" size={18} />
+                  </button>
                 </>
               )}
               {ruinaNossa && (
@@ -1433,7 +2315,80 @@ export const IlhaRua: React.FC = () => {
                 </button>
               )}
             </div>
-            <p>{ferramenta || 'Toque num ícone para ver a descrição e confirmar.'}</p>
+            {(painelBlocosAberto || modoLinhaBlocos) && (
+              <div className="ilha-subbarra" data-testid="ilha-subbarra-blocos">
+                {(['madeira', 'pedra', 'ouro'] as const).map((mat) => (
+                  <button
+                    key={mat}
+                    type="button"
+                    className={materialBloco === mat ? 'ilha-chip ativo' : 'ilha-chip'}
+                    data-testid={`ilha-mat-${mat}`}
+                    aria-label={`Material ${SPEC_BLOCO_MATERIAL[mat].nome}`}
+                    onClick={() => {
+                      materialBlocoRef.current = mat
+                      setMaterialBloco(mat)
+                      if (modoLinhaRef.current) {
+                        setFerramenta(`Linha 360° (${alturaLinhaRef.current}b · ${SPEC_BLOCO_MATERIAL[mat].nome})`)
+                      } else if (modoBlocoRef.current === 'adicionar') {
+                        setFerramenta(`Modo Bloco: Adicionar (${SPEC_BLOCO_MATERIAL[mat].nome})`)
+                      }
+                    }}
+                  >
+                    {SPEC_BLOCO_MATERIAL[mat].nome}
+                  </button>
+                ))}
+                {modoLinhaBlocos &&
+                  ([1, 2, 3] as const).map((alt) => (
+                    <button
+                      key={alt}
+                      type="button"
+                      className={alturaLinha === alt ? 'ilha-chip ativo' : 'ilha-chip'}
+                      data-testid={`ilha-linha-alt-${alt}`}
+                      aria-label={`Altura ${alt} ${alt === 1 ? 'bloco' : 'blocos'}`}
+                      onClick={() => {
+                        alturaLinhaRef.current = alt
+                        setAlturaLinha(alt)
+                        setFerramenta(`Linha 360° (${alt}b · ${SPEC_BLOCO_MATERIAL[materialBlocoRef.current].nome})`)
+                      }}
+                    >
+                      {alt === 1 ? '1b Trinch' : alt === 2 ? '2b Muralha' : '3b Alta'}
+                    </button>
+                  ))}
+              </div>
+            )}
+            {modoConsagrar && (
+              <div className="ilha-subbarra" data-testid="ilha-subbarra-consagrar">
+                {(
+                  [
+                    ['nucleo', 'Núcleo'],
+                    ['torre', 'Torre'],
+                    ['quartel', 'Quartel'],
+                    ['portao', 'Portão'],
+                    ['britador', 'Britador'],
+                    ['serraria', 'Serraria'],
+                    ['mina', 'Mina'],
+                  ] as const
+                ).map(([peca, rotulo]) => (
+                  <button
+                    key={peca}
+                    type="button"
+                    className={modoConsagrar === peca ? 'ilha-chip ativo' : 'ilha-chip'}
+                    data-testid={`ilha-consagrar-tipo-${peca}`}
+                    onClick={() => {
+                      modoConsagrarRef.current = peca
+                      setModoConsagrar(peca)
+                    }}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p>
+              {previewLinha
+                ? `Linha: ${previewLinha.plano.celulas.length} blocos · Custo ${previewLinha.plano.custoTotal} ${SPEC_BLOCO_MATERIAL[previewLinha.plano.material].nome}${previewLinha.temRecurso ? '' : ' (insuficiente)'}`
+                : ferramenta || 'Toque num ícone para ver a descrição e confirmar.'}
+            </p>
           </div>
         )}
         {derrotado ? (
@@ -1472,6 +2427,30 @@ export const IlhaRua: React.FC = () => {
             </>
           )
         )}
+        {temSelecaoAtiva && !modoBloco && !modoLinhaBlocos && !modoConsagrar && (
+          <div className="ilha-selecao-barra" data-testid="ilha-selecao-barra">
+            <span data-testid="ilha-selecao-texto">{textoSelecao}</span>
+            <button
+              type="button"
+              className={modoMoverTouch ? 'ativo' : undefined}
+              aria-pressed={modoMoverTouch}
+              data-testid="ilha-mover-aqui"
+              onClick={() => setModoMoverTouch((valor) => !valor)}
+            >
+              <IconeSvg id="moverAqui" size={15} />
+              {modoMoverTouch ? 'Toque no chão' : 'Mover'}
+            </button>
+            <button
+              type="button"
+              className="ilha-selecao-limpar"
+              data-testid="ilha-desmarcar"
+              onClick={() => limparSelecao()}
+            >
+              <IconeSvg id="desmarcar" size={15} />
+              Limpar
+            </button>
+          </div>
+        )}
         {power && <div className="ilha-power">{power}</div>}
         {!tatico && (
           <>
@@ -1490,11 +2469,15 @@ export const IlhaRua: React.FC = () => {
             <button
               type="button"
               className="ilha-atirar"
-              data-testid="ilha-atirar"
+              data-testid={modoBloco ? 'ilha-bloco-acao' : 'ilha-atirar'}
               onPointerDown={(event) => {
                 event.stopPropagation()
                 event.preventDefault()
                 if (sim.current.derrota || sim.current.olhar === 'imperio' || sim.current.semCorpo) return
+                if (modoBlocoRef.current) {
+                  aplicarEdicaoVoxelRef.current()
+                  return
+                }
                 segurandoTiro.current = true
                 tiroPonteiro.current = event.pointerId
                 publicar(atirar(sim.current))
@@ -1512,7 +2495,7 @@ export const IlhaRua: React.FC = () => {
                 }
               }}
             >
-              Atirar
+              {modoBloco === 'adicionar' ? 'Pôr' : modoBloco === 'remover' ? 'Tirar' : 'Atirar'}
             </button>
           </>
         )}
@@ -1570,8 +2553,7 @@ export const IlhaRua: React.FC = () => {
           <div className="ilha-mini-cabecalho">
             <button
               type="button"
-              className={menuMiniAberto || intencao === 'menuMinimapas' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-              style={{ width: 30, height: 30 }}
+              className={menuMiniAberto || intencao === 'menuMinimapas' ? 'ilha-icone-btn ilha-mini-btn ativo' : 'ilha-icone-btn ilha-mini-btn'}
               data-testid="ilha-menu-minimapas"
               aria-label={META_INTENCOES.menuMinimapas.titulo}
               onClick={(event) => {
@@ -1592,9 +2574,10 @@ export const IlhaRua: React.FC = () => {
                     key={icone}
                     type="button"
                     className={
-                      atlasRef.current.politica === modo || intencao === icone ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'
+                      atlasRef.current.politica === modo || intencao === icone
+                        ? 'ilha-icone-btn ilha-mini-btn ativo'
+                        : 'ilha-icone-btn ilha-mini-btn'
                     }
-                    style={{ width: 30, height: 30 }}
                     data-testid={`ilha-minimapa-${modo}`}
                     aria-label={META_INTENCOES[icone].titulo}
                     onClick={(event) => {

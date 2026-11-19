@@ -1,5 +1,7 @@
 import { contagemBuscas, zerarBuscas } from './caminho'
-import { DIMENSOES_OBRA, GRAU_PARTIDA, OBSTACULOS, PARTIDA } from './partidaPolicies'
+import { chaveBlocoMundo } from './blocosMundo'
+import { COTA_ESTORNO_BLUEPRINT_NV5 } from './obraBlocosLivres'
+import { DIMENSOES_OBRA, GRAU_PARTIDA, OBSTACULOS, PARTIDA, PecaId } from './partidaPolicies'
 import {
   aplicarConta,
   abrirAltar,
@@ -12,6 +14,8 @@ import {
   CELULAS_DO_DISCO,
   chaoRevelado,
   cobertoAgora,
+  consagrarEstruturaManual,
+  construirLinhaBlocos,
   folgaDoTiro,
   inimigoVisivel,
   marcarChao,
@@ -22,7 +26,9 @@ import {
   createPartida,
   criarTropa,
   definirOlhar,
+  editarBlocoMundo,
   editarBlocoObra,
+  editarBlocoObraLivre,
   evoluir,
   fundar,
   iniciarObra,
@@ -33,13 +39,20 @@ import {
   lugarDaBaseInimiga,
   mira,
   pontosDoCorpo,
+  pontosFormacaoTropa,
   ordenar,
   ordenarHeroi,
+  podeConsagrarEm,
+  podeFundarEm,
   repararObra,
   pular,
   PartidaInput,
   PartidaState,
   postura,
+  selecionarAoClicarChaoVazio,
+  selecionarAoClicarHeroi,
+  selecionarAoClicarUnidade,
+  selecionarPorRetanguloEstado,
   stepPartida,
 } from './partidaSim'
 
@@ -1279,10 +1292,474 @@ export function run(): void {
   }
   assert(Math.hypot(entrando.heroi.x - 0, entrando.heroi.z - -14) < 1.5, 'herói entra caminhando dentro da construção Nível 5')
 
-  // Editar blocos da construção Nível 5 (remover e adicionar bloco)
+  // Editar blocos da construção Nível 5 (remover e adicionar bloco + bloquear com madeira === 0 e no subsolo)
   const madeiraAntes = entrando.madeira
   const esculpido = editarBlocoObra(entrando, idCastelo, 0, 1, 2, 'remover')
   assert(esculpido.madeira === madeiraAntes + 1 && esculpido.versaoSolidos > entrando.versaoSolidos, 'remover bloco da construção Nv.5 devolve madeira e atualiza sólidos')
   const ampliado = editarBlocoObra(esculpido, idCastelo, 4, 0, 4, 'adicionar')
-  assert(ampliado.versaoSolidos > esculpido.versaoSolidos, 'adicionar bloco na construção Nv.5 cria degrau sólido')
+  assert(ampliado.versaoSolidos > esculpido.versaoSolidos && ampliado.madeira === esculpido.madeira - 1, 'adicionar bloco na construção Nv.5 debita 1 madeira e cria degrau sólido')
+
+  const semMadeira = { ...ampliado, madeira: 0 }
+  const bloqueadoSemMadeira = editarBlocoObra(semMadeira, idCastelo, 5, 0, 4, 'adicionar')
+  assert(
+    bloqueadoSemMadeira === semMadeira && bloqueadoSemMadeira.versaoSolidos === semMadeira.versaoSolidos,
+    'não permite adicionar bloco com madeira === 0',
+  )
+
+  const noSubsoloEdit = { ...ampliado, madeira: 5, heroi: { ...ampliado.heroi, y: -3.2 } }
+  assert(editarBlocoObra(noSubsoloEdit, idCastelo, 5, 0, 4, 'adicionar') === noSubsoloEdit, 'bloqueia edição de bloco da superfície enquanto herói está no subsolo')
+
+  assert(PARTIDA.mostrarFaixaTiroVisual === false, 'faixa amarela visual no chão desligada por padrão')
+  assert(alcanceDoTiro(0, 0, 0) === PARTIDA.visao.heroi, 'matemática de alcanceDoTiro permanece íntegra sem faixa visual')
+
+  // Fase 2: Seleção RTS (clicar fora deseleciona, 1/algumas/todas, Shift alterna) + Formação & Separação real de tropas
+  assert(PARTIDA.allyCap >= 24, 'teto de aliados ampliado para pelotões')
+  let basePelotao = definirOlhar(fundar({ ...createPartida(), credito: 30 }, 'nucleo', 0, -10), 'imperio')
+  const nucPelotaoId = basePelotao.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!.id
+  for (let i = 0; i < 5; i++) basePelotao = criarTropa(basePelotao, nucPelotaoId)
+  const cincoTropas = basePelotao.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0)
+  assert(cincoTropas.length === 5, 'recruta 5 tropas visíveis distintas')
+
+  // Testa alcance real do teto allyCap = 24 e bloqueio da 25ª tropa
+  let ateCap = basePelotao
+  for (let i = 5; i < PARTIDA.allyCap + 2; i += 1) ateCap = criarTropa(ateCap, nucPelotaoId)
+  assert(
+    ateCap.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).length === PARTIDA.allyCap,
+    'criarTropa permite recrutar até allyCap = 24 e bloqueia além do limite',
+  )
+  let menorDistSpawn = Number.POSITIVE_INFINITY
+  for (let i = 0; i < cincoTropas.length; i++) {
+    for (let j = i + 1; j < cincoTropas.length; j++) {
+      menorDistSpawn = Math.min(menorDistSpawn, Math.hypot(cincoTropas[i].x - cincoTropas[j].x, cincoTropas[i].z - cincoTropas[j].z))
+    }
+  }
+  assert(menorDistSpawn >= PARTIDA.tropaRaioSeparacao - 1e-3, 'tropas nascem já separadas sem empilhar num único boneco')
+
+  const slotsUnico = pontosFormacaoTropa(10, 20, 1)
+  assert(slotsUnico.length === 1 && slotsUnico[0].x === 10 && slotsUnico[0].z === 20, 'tropa única obedece ponto exato')
+
+  const idsCinco = cincoTropas.map((u) => u.id)
+  let marcha = ordenar(basePelotao, idsCinco, { tipo: 'mover', x: 10, z: 20 })
+  for (let s = 0; s < 40; s++) marcha = stepPartida(marcha, INPUT_PARADO, 0.1)
+  const cincoAposMarcha = marcha.unidades.filter((u) => idsCinco.includes(u.id) && u.hp > 0)
+  let menorDistMarcha = Number.POSITIVE_INFINITY
+  for (let i = 0; i < cincoAposMarcha.length; i++) {
+    for (let j = i + 1; j < cincoAposMarcha.length; j++) {
+      menorDistMarcha = Math.min(
+        menorDistMarcha,
+        Math.hypot(cincoAposMarcha[i].x - cincoAposMarcha[j].x, cincoAposMarcha[i].z - cincoAposMarcha[j].z),
+      )
+    }
+  }
+  assert(
+    menorDistMarcha >= 0.75,
+    `5 tropas ordenadas ao mesmo ponto mantêm formação separada (minDist=${menorDistMarcha.toFixed(2)})`,
+  )
+
+  let sobrepostas: PartidaState = {
+    ...basePelotao,
+    unidades: cincoTropas.slice(0, 3).map((u) => ({ ...u, x: 6, z: 6, ordem: null, rota: null })),
+  }
+  for (let s = 0; s < 10; s++) sobrepostas = stepPartida(sobrepostas, INPUT_PARADO, 0.05)
+  const separadas = sobrepostas.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0)
+  let minSep = Number.POSITIVE_INFINITY
+  for (let i = 0; i < separadas.length; i++) {
+    for (let j = i + 1; j < separadas.length; j++) {
+      minSep = Math.min(minSep, Math.hypot(separadas[i].x - separadas[j].x, separadas[i].z - separadas[j].z))
+    }
+  }
+  assert(minSep >= 0.65, 'steering de separação afasta tropas sobrepostas')
+
+  let sel = selecionarAoClicarHeroi({ heroi: false, tropas: [] }, false)
+  assert(sel.heroi === true && sel.tropas.length === 0, 'clicar no herói seleciona herói exclusivamente')
+  sel = selecionarAoClicarUnidade(sel, idsCinco[0], true)
+  assert(sel.heroi === true && sel.tropas.length === 1 && sel.tropas[0] === idsCinco[0], 'Shift+clique adiciona 1 tropa mantendo herói')
+  sel = selecionarAoClicarChaoVazio(sel, false)
+  assert(sel.heroi === false && sel.tropas.length === 0, 'clique no chão vazio deseleciona herói e tropas')
+  const emModoMover = selecionarAoClicarChaoVazio({ heroi: true, tropas: [idsCinco[0]] }, true)
+  assert(emModoMover.heroi && emModoMover.tropas.length === 1, 'modo Mover preserva seleção ao clicar no destino')
+  sel = selecionarAoClicarUnidade(emModoMover, idsCinco[2], false)
+  assert(!sel.heroi && sel.tropas.length === 1 && sel.tropas[0] === idsCinco[2], 'clique simples numa tropa seleciona apenas 1 soldado')
+  const estadoGrupo: PartidaState = {
+    ...basePelotao,
+    heroi: { ...basePelotao.heroi, x: 20, z: 20 },
+    unidades: [
+      { ...cincoTropas[0], x: 1, z: 1 },
+      { ...cincoTropas[1], x: 2, z: 2 },
+      { ...cincoTropas[2], x: -12, z: -12 },
+    ],
+  }
+  const porCaixa = selecionarPorRetanguloEstado(estadoGrupo, { heroi: false, tropas: [] }, 0, 0, 3, 3, false)
+  assert(porCaixa.tropas.length === 2 && !porCaixa.heroi, 'retângulo seleciona subgrupo de tropas')
+  const comHeroiCaixa = selecionarPorRetanguloEstado(estadoGrupo, porCaixa, 18, 18, 22, 22, true)
+  assert(comHeroiCaixa.heroi && comHeroiCaixa.tropas.length === 2, 'Shift+retângulo inclui herói mantendo tropas')
+  const shiftDesmarcaTropa = selecionarAoClicarUnidade(comHeroiCaixa, cincoTropas[0].id, true)
+  assert(shiftDesmarcaTropa.tropas.length === 1 && !shiftDesmarcaTropa.tropas.includes(cincoTropas[0].id), 'Shift+clique desmarca tropa já selecionada')
+  const caixaVazia = selecionarPorRetanguloEstado(estadoGrupo, comHeroiCaixa, -40, -40, -30, -30, false)
+  assert(!caixaVazia.heroi && caixaVazia.tropas.length === 0, 'retângulo sobre área vazia limpa seleção')
+
+  // Fase 3: Ghost Blueprint DbC (podeFundarEm), Blocos Livres no Mapa (Madeira/Pedra/Ouro) e Linha 360°
+  let f3: PartidaState = { ...createPartida(), madeira: 40, lingotes: 20, ouro: 20, credito: 10, unidades: [] }
+  assert(podeFundarEm(f3, 'nucleo', 8, 8).ok, 'podeFundarEm aceita local limpo para Núcleo')
+  assert(!podeFundarEm(f3, 'nucleo', 0, 0).ok, 'podeFundarEm bloqueia em cima do herói')
+  f3 = fundar(f3, 'nucleo', 8, 8)
+  assert(!podeFundarEm(f3, 'nucleo', -8, -8).ok, 'podeFundarEm bloqueia segundo núcleo')
+  const comBlocoMad = editarBlocoMundo(f3, 4, 0, 4, 'adicionar', 'madeira')
+  assert(
+    comBlocoMad.madeira === f3.madeira - 1 &&
+      comBlocoMad.blocosMapa[chaveBlocoMundo(4, 0, 4)]?.material === 'madeira' &&
+      comBlocoMad.versaoSolidos > f3.versaoSolidos,
+    'editarBlocoMundo coloca bloco de madeira debitando 1 madeira',
+  )
+  assert(!podeFundarEm(comBlocoMad, 'torre', 4, 4).ok, 'podeFundarEm respeita blocos livres no terreno')
+  const comBlocoPedra = editarBlocoMundo(comBlocoMad, 4, 1, 4, 'adicionar', 'pedra')
+  assert(comBlocoPedra.lingotes === f3.lingotes - 1, 'bloco de pedra consome 1 lingote')
+  const comBlocoOuro = editarBlocoMundo(comBlocoPedra, 4, 2, 4, 'adicionar', 'ouro')
+  assert(comBlocoOuro.ouro === f3.ouro - 1, 'bloco de ouro consome 1 ouro')
+  const removidoOuro = editarBlocoMundo(comBlocoOuro, 4, 2, 4, 'remover', 'madeira')
+  assert(
+    removidoOuro.ouro === f3.ouro && !removidoOuro.blocosMapa[chaveBlocoMundo(4, 2, 4)],
+    'remover bloco de ouro estorna 1 ouro exato',
+  )
+  const semMadMundo = { ...f3, madeira: 0, lingotes: 0, ouro: 0 }
+  assert(editarBlocoMundo(semMadMundo, 6, 0, 6, 'adicionar', 'madeira') === semMadMundo, 'editarBlocoMundo recusa adicionar com madeira 0')
+  assert(editarBlocoMundo(semMadMundo, 6, 0, 6, 'adicionar', 'pedra') === semMadMundo, 'editarBlocoMundo recusa adicionar pedra com lingotes 0')
+  assert(editarBlocoMundo(f3, 0, 0, 0, 'adicionar', 'madeira') === f3, 'editarBlocoMundo recusa colocar bloco sobre o corpo do herói')
+  const f3Sub = { ...f3, heroi: { ...f3.heroi, y: -3.2 } }
+  assert(editarBlocoMundo(f3Sub, 6, 0, 6, 'adicionar', 'madeira') === f3Sub, 'editarBlocoMundo recusa edição de superfície estando no subsolo')
+  const linhaDiag = construirLinhaBlocos(f3, 2, 10, 6, 14, 2, 'madeira')
+  assert(Object.keys(linhaDiag.blocosMapa).length === 18, 'linha diagonal 360° 4-conexa altura 2 coloca 18 blocos (9 colunas x 2)')
+  assert(linhaDiag.madeira === f3.madeira - 18, 'construirLinhaBlocos debita exatamente o custo total da linha')
+  const semRecLinha = construirLinhaBlocos({ ...f3, madeira: 3 }, 2, 10, 6, 14, 2, 'madeira')
+  assert(Object.keys(semRecLinha.blocosMapa).length === 0, 'construirLinhaBlocos é atômico e não constrói parcialmente sem recurso')
+
+  // Fase 4: LoS 2.5D por altura (Trincheira 1b vs Muralha 2b vs Torre Nv5 3b vs 4b + Herói + Cerco a blocos)
+  let f4: PartidaState = {
+    ...createPartida(),
+    madeira: 60,
+    lingotes: 30,
+    ouro: 30,
+    credito: 12,
+    heroi: { ...createPartida().heroi, x: -35, z: -35, y: 0 },
+    unidades: [],
+  }
+  f4 = fundar(f4, 'nucleo', -30, -30)
+  f4 = fundar(f4, 'torre', 0, 0)
+  const torreF4Id = f4.obras.find((o) => o.lado === 'nosso' && o.tipo === 'torre')!.id
+  const alvoOculto = {
+    id: 901,
+    lado: 'inimigo' as const,
+    papel: 'isca' as const,
+    x: 0,
+    z: 8,
+    hp: 30,
+    postura: 'automatico' as const,
+    ordem: null,
+    cooldown: 0,
+    segmentos: [],
+    alerta: false,
+  }
+  f4 = marcarChao({ ...f4, unidades: [alvoOculto] })
+
+  // 1 bloco (trincheira) em z = 4: Torre Nv1 e Herói no chão enxergam/atiram por cima!
+  let comTrincheira = construirLinhaBlocos(f4, -3, 4, 3, 4, 1, 'madeira')
+  assert(inimigoVisivel(comTrincheira, alvoOculto), 'Torre Nv1 enxerga inimigo atrás de trincheira de 1 bloco')
+  const heroiSobreTrincheira = atirar({
+    ...comTrincheira,
+    heroi: { ...comTrincheira.heroi, x: 0, z: 0, y: 0, yaw: 0, pitch: 0, shootCooldown: 0 },
+    unidades: [{ ...alvoOculto, hp: 30 }],
+  })
+  assert(heroiSobreTrincheira.unidades.find((u) => u.id === 901)!.hp < 30, 'Herói no chão atira por cima de trincheira de 1 bloco')
+  comTrincheira = stepPartida(comTrincheira, INPUT_PARADO, 0.1)
+  assert(
+    comTrincheira.unidades.find((u) => u.id === 901)!.hp < 30,
+    'Torre Nv1 atira por cima de trincheira de 1 bloco',
+  )
+
+  // 2 blocos (muralha) em z = 4: Torre Nv1 NÃO enxerga e NÃO atira!
+  let comMuralha2 = construirLinhaBlocos(f4, -3, 4, 3, 4, 2, 'pedra')
+  assert(!inimigoVisivel(comMuralha2, alvoOculto), 'Muralha de 2 blocos oculta inimigo da visão da Torre Nv1')
+  comMuralha2 = stepPartida(comMuralha2, INPUT_PARADO, 0.1)
+  assert(
+    comMuralha2.unidades.find((u) => u.id === 901)!.hp === 30,
+    'Torre Nv1 não consegue atirar através de muralha de 2 blocos',
+  )
+
+  // Evoluir a mesma torre para Nv5: enxerga e atira acima de 2 e 3 blocos, mas bloqueia em 4 blocos!
+  let comMuralha3 = construirLinhaBlocos(f4, -3, 4, 3, 4, 3, 'pedra')
+  for (let n = 0; n < 4; n += 1) comMuralha3 = evoluir(comMuralha3, torreF4Id)
+  const torreNv5F4 = comMuralha3.obras.find((o) => o.id === torreF4Id)!
+  assert(torreNv5F4.nivel === 5 && torreNv5F4.blocosNv5 !== undefined, 'Torre evolui para Nv5 entrável')
+  assert(inimigoVisivel(comMuralha3, alvoOculto), 'Torre Nv5 enxerga inimigo atrás de muralha de 3 blocos')
+  comMuralha3 = stepPartida(comMuralha3, INPUT_PARADO, 0.1)
+  assert(
+    comMuralha3.unidades.find((u) => u.id === 901)!.hp < 30,
+    'Torre Nv5 atira por cima de muralha de 3 blocos',
+  )
+
+  let comMuralha4: PartidaState = { ...comMuralha3, unidades: [{ ...alvoOculto, hp: 30 }] }
+  for (let gx = -3; gx <= 3; gx += 1) comMuralha4 = editarBlocoMundo(comMuralha4, gx, 3, 4, 'adicionar', 'pedra')
+  assert(!inimigoVisivel(comMuralha4, alvoOculto), 'Muralha de 4 blocos oclui até a Torre Nv5')
+
+  // Herói no chão (y=0) não atravessa muralha de 2 blocos no tiro, mas elevado (y=2) mirando para baixo acerta por cima!
+  const heroiLoS: PartidaState = {
+    ...comMuralha2,
+    heroi: { ...comMuralha2.heroi, x: 0, z: 0, y: 0, yaw: 0, pitch: 0, shootCooldown: 0 },
+    unidades: [{ ...alvoOculto, hp: 30 }],
+  }
+  const tiroChaoBloq = atirar(heroiLoS)
+  assert(tiroChaoBloq.unidades.find((u) => u.id === 901)!.hp === 30, 'herói no chão não atira através de muralha de 2 blocos')
+  const pitchDoAlto = Math.atan2(0.8 - (PARTIDA.eyeY + 2), 8)
+  const tiroAlto = atirar({ ...heroiLoS, heroi: { ...heroiLoS.heroi, y: 2, pitch: pitchDoAlto, shootCooldown: 0 } })
+  assert(tiroAlto.unidades.find((u) => u.id === 901)!.hp < 30, 'herói elevado (y=2) atira por cima de muralha de 2 blocos')
+
+  // Simetria: torre inimiga Nv1 também fica bloqueada por muralha de 2 blocos protegendo o herói
+  let f4Simetria: PartidaState = {
+    ...createPartida(),
+    madeira: 30,
+    lingotes: 30,
+    heroi: { ...createPartida().heroi, x: 0, z: 0, y: 0, army: 20 },
+    obras: [
+      {
+        id: 700,
+        lado: 'inimigo',
+        tipo: 'torre',
+        x: 0,
+        z: 8,
+        nivel: 1,
+        hp: 50,
+        maxHp: 50,
+        gateApplied: false,
+        cooldown: 0,
+      },
+    ],
+    unidades: [],
+  }
+  f4Simetria = construirLinhaBlocos(f4Simetria, -3, 4, 3, 4, 2, 'pedra')
+  const aposTorreInimiga = stepPartida(f4Simetria, INPUT_PARADO, 0.2)
+  assert(aposTorreInimiga.heroi.army === 20, 'torre inimiga Nv1 também respeita oclusão de muralha de 2 blocos')
+
+  // Fase 5: Todos os 7 tipos evoluem Nv1->5 com blueprints entráveis distintos + Portão Nv5 +10 + Anti-exploit de madeira
+  let f5: PartidaState = { ...createPartida(), credito: 50, madeira: 40, ouro: 40, unidades: [] }
+  const posicoes7: readonly [PecaId, number, number][] = [
+    ['nucleo', -20, -20],
+    ['torre', -10, -20],
+    ['portao', 0, -20],
+    ['quartel', 10, -20],
+    ['britador', 20, -20],
+    ['serraria', -20, -10],
+    ['mina', -10, -10],
+  ]
+  for (const [tipo, px, pz] of posicoes7) {
+    f5 = fundar(f5, tipo, px, pz)
+    const id = f5.obras.find((o) => o.lado === 'nosso' && o.tipo === tipo)!.id
+    for (let k = 0; k < 4; k += 1) f5 = evoluir(f5, id)
+    const evo = f5.obras.find((o) => o.id === id)!
+    assert(evo.nivel === 5 && evo.blocosNv5 !== undefined, `${tipo} evolui até Nv5 com estrutura voxel entrável`)
+  }
+  // Portão Nv5 dispara +10 ao atravessar seu corredor central aberto
+  const armyAntesPortao5 = f5.heroi.army
+  const atravessouPortao5 = stepPartida(
+    { ...f5, heroi: { ...f5.heroi, x: 0, z: -20, y: 0, vy: 0 } },
+    INPUT_PARADO,
+    0.05,
+  )
+  assert(atravessouPortao5.heroi.army === armyAntesPortao5 + 10, 'Portão Nv5 permanece transitável e concede +10')
+
+  // Anti-exploit: desmontar 15 blocos de uma obra Nv5 rende no máximo COTA_ESTORNO_BLUEPRINT_NV5 madeiras
+  const nuc5 = f5.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!
+  let desmontando = { ...f5, madeira: 0 }
+  let removidos = 0
+  for (let bx = 0; bx < 7 && removidos < 15; bx += 1) {
+    for (let bz = 0; bz < 7 && removidos < 15; bz += 1) {
+      const prox = editarBlocoObra(desmontando, nuc5.id, bx, 0, bz, 'remover')
+      if (prox !== desmontando) {
+        desmontando = prox
+        removidos += 1
+      }
+    }
+  }
+  assert(
+    removidos >= 10 && desmontando.madeira <= COTA_ESTORNO_BLUEPRINT_NV5,
+    `desmontar ${removidos} blocos Nv5 respeita teto anti-exploit de ${COTA_ESTORNO_BLUEPRINT_NV5} madeiras (obteve ${desmontando.madeira})`,
+  )
+
+  // Fase 6: Consagração de estruturas manuais (BFS 3D) em Núcleo/Torre + edição pós-consagração + regra de Núcleo único
+  let f6: PartidaState = { ...createPartida(), madeira: 60, lingotes: 40, ouro: 40, credito: 10, unidades: [] }
+  // Monta estrutura manual de 12 blocos (2x3 base x 2 altura) em x=10..11, z=10..12, y=0..1
+  for (let gx = 10; gx <= 11; gx += 1) {
+    for (let gz = 10; gz <= 12; gz += 1) {
+      for (let gy = 0; gy <= 1; gy += 1) {
+        f6 = editarBlocoMundo(f6, gx, gy, gz, 'adicionar', 'pedra')
+      }
+    }
+  }
+  assert(Object.keys(f6.blocosMapa).length === 12, '12 blocos manuais colocados para consagração')
+  assert(podeConsagrarEm(f6, 10, 0, 10, 'nucleo').ok, 'estrutura manual 12b altura 2 é elegível como Núcleo')
+  f6 = consagrarEstruturaManual(f6, 10, 0, 10, 'nucleo')
+  assert(Object.keys(f6.blocosMapa).length === 0, 'blocos consagrados são transferidos de blocosMapa para a obra')
+  const nucleoCustom = f6.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!
+  assert(
+    nucleoCustom !== undefined &&
+      nucleoCustom.blocosLivres?.length === 12 &&
+      nucleoCustom.maxHp === 12 * 42,
+    'Núcleo consagrado preserva todos os 12 blocos de pedra e herda soma de HP (504)',
+  )
+  // Núcleo consagrado recruta tropa sem prender
+  const comTropaCustom = criarTropa(f6, nucleoCustom.id)
+  assert(comTropaCustom.unidades.some((u) => u.lado === 'aliado' && u.hp > 0), 'Núcleo consagrado recruta tropa')
+
+  // Segunda estrutura manual com 12 blocos (>= minBlocos do Núcleo) NÃO pode virar segundo Núcleo, mas estrutura >=6b vira Torre!
+  for (let gx = 20; gx <= 21; gx += 1) {
+    for (let gz = 10; gz <= 12; gz += 1) {
+      for (let gy = 0; gy <= 1; gy += 1) {
+        f6 = editarBlocoMundo(f6, gx, gy, gz, 'adicionar', 'madeira')
+      }
+    }
+  }
+  const checkDupNucleo = podeConsagrarEm(f6, 20, 0, 10, 'nucleo')
+  assert(
+    !checkDupNucleo.ok && Boolean(checkDupNucleo.motivo?.includes('Já existe um Núcleo')),
+    'regra de Núcleo único bloqueia consagrar segundo Núcleo mesmo com >= 12 blocos',
+  )
+
+  for (let gy = 0; gy <= 2; gy += 1) {
+    f6 = editarBlocoMundo(f6, 16, gy, 10, 'adicionar', 'ouro')
+    f6 = editarBlocoMundo(f6, 17, gy, 10, 'adicionar', 'ouro')
+  }
+  assert(podeConsagrarEm(f6, 16, 0, 10, 'torre').ok, 'estrutura manual 6b altura 3 é elegível como Torre')
+  f6 = consagrarEstruturaManual(f6, 16, 0, 10, 'torre')
+  const torreCustom = f6.obras.find((o) => o.lado === 'nosso' && o.tipo === 'torre')!
+  assert(torreCustom !== undefined && torreCustom.blocosLivres?.length === 6, 'Torre manual consagrada com 6 blocos de ouro')
+
+  // Evoluir obra consagrada Nv1 -> Nv5 preserva blocosLivres sem sobrescrever com blueprint Nv5 e aumenta maxHp
+  let evoCustom = f6
+  for (let k = 0; k < 4; k += 1) evoCustom = evoluir(evoCustom, torreCustom.id)
+  const torreCustomNv5 = evoCustom.obras.find((o) => o.id === torreCustom.id)!
+  assert(
+    torreCustomNv5.nivel === 5 &&
+      torreCustomNv5.blocosNv5 === undefined &&
+      torreCustomNv5.blocosLivres?.length === 6 &&
+      torreCustomNv5.maxHp > torreCustom.maxHp,
+    'evoluir obra consagrada até Nv5 preserva blocosLivres e escala HP sem sobrescrever com template Nv5',
+  )
+
+  // Edição pós-consagração de obra livre (adicionar e remover bloco + proteger último bloco)
+  const ouroAntesEdit = f6.ouro
+  const editAdd = editarBlocoObraLivre(f6, torreCustom.id, 16, 3, 10, 'adicionar', 'ouro')
+  assert(
+    editAdd.ouro === ouroAntesEdit - 1 &&
+      editAdd.obras.find((o) => o.id === torreCustom.id)!.blocosLivres?.length === 7,
+    'editarBlocoObraLivre adiciona bloco à obra consagrada debitando recurso',
+  )
+  const editRem = editarBlocoObraLivre(editAdd, torreCustom.id, 16, 3, 10, 'remover', 'ouro')
+  assert(
+    editRem.ouro === ouroAntesEdit &&
+      editRem.obras.find((o) => o.id === torreCustom.id)!.blocosLivres?.length === 6,
+    'editarBlocoObraLivre remove bloco e estorna recurso exato',
+  )
+  let quaseVazia = editRem
+  for (const b of torreCustom.blocosLivres!.slice(1)) {
+    quaseVazia = editarBlocoObraLivre(quaseVazia, torreCustom.id, b.x, b.y, b.z, 'remover')
+  }
+  assert(quaseVazia.obras.find((o) => o.id === torreCustom.id)!.blocosLivres?.length === 1, 'reduz até 1 bloco restante')
+  assert(
+    editarBlocoObraLivre(quaseVazia, torreCustom.id, torreCustom.blocosLivres![0].x, torreCustom.blocosLivres![0].y, torreCustom.blocosLivres![0].z, 'remover') === quaseVazia,
+    'editarBlocoObraLivre protege último bloco restante',
+  )
+
+  // Estrutura longa 10x2 (> 7x7) preserva blocosLivres, aproximacaoDaObra usa meiaLivre e pátio 9x9 não aprisiona tropa no spawn
+  let f6Grande: PartidaState = { ...createPartida(), madeira: 60, credito: 10, ouro: 20, unidades: [], heroi: { ...createPartida().heroi, x: -30, z: -30 } }
+  for (let gx = -5; gx <= 4; gx += 1) {
+    f6Grande = editarBlocoMundo(f6Grande, gx, 0, 8, 'adicionar', 'madeira')
+    f6Grande = editarBlocoMundo(f6Grande, gx, 1, 8, 'adicionar', 'madeira')
+  }
+  f6Grande = consagrarEstruturaManual(f6Grande, 0, 0, 8, 'nucleo')
+  const nucGrande = f6Grande.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!
+  assert(nucGrande.blocosLivres?.length === 20, 'estrutura 10x2 conserva todos os 20 blocos sem truncar em 7x7')
+  assert(
+    aproximacaoDaObra(nucGrande, 12, 8).x >= 5.0,
+    'aproximacaoDaObra respeita largura estendida da estrutura consagrada 10x2',
+  )
+  let f6Pateo: PartidaState = {
+    ...createPartida(),
+    madeira: 80,
+    credito: 10,
+    ouro: 20,
+    recursos: [],
+    obras: [],
+    unidades: [],
+    heroi: { ...createPartida().heroi, x: -30, z: -30 },
+  }
+  for (let gx = -4; gx <= 4; gx += 1) {
+    f6Pateo = editarBlocoMundo(f6Pateo, gx, 0, 4, 'adicionar', 'madeira')
+    f6Pateo = editarBlocoMundo(f6Pateo, gx, 0, 12, 'adicionar', 'madeira')
+  }
+  for (let gz = 5; gz <= 11; gz += 1) {
+    f6Pateo = editarBlocoMundo(f6Pateo, -4, 0, gz, 'adicionar', 'madeira')
+    f6Pateo = editarBlocoMundo(f6Pateo, 4, 0, gz, 'adicionar', 'madeira')
+  }
+  f6Pateo = editarBlocoMundo(f6Pateo, -4, 1, 4, 'adicionar', 'madeira')
+  f6Pateo = consagrarEstruturaManual(f6Pateo, -4, 0, 4, 'nucleo')
+  const nucPateo = f6Pateo.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!
+  const tropaFora = criarTropa(f6Pateo, nucPateo.id)
+  const soldadoFora = tropaFora.unidades.find((u) => u.lado === 'aliado' && u.hp > 0)!
+  assert(
+    soldadoFora !== undefined &&
+      Math.max(Math.abs(soldadoFora.x - nucPateo.x), Math.abs(soldadoFora.z - nucPateo.z)) >= 4.9,
+    'tropa recrutada em pátio consagrado 9x9 nasce fora do perímetro sem aprisionamento',
+  )
+
+  // Cerco inimigo contra muralhas fechadas: Madeira (18 HP) cede antes de Pedra (42 HP) sem travar a leva
+  const criarCenarioCercoMuro = (mat: 'madeira' | 'pedra'): PartidaState => {
+    let st: PartidaState = {
+      ...createPartida(),
+      madeira: 80,
+      lingotes: 80,
+      ouro: 20,
+      heroi: { ...createPartida().heroi, x: -35, z: -35 },
+      obras: [],
+      unidades: [],
+    }
+    st = fundar(st, 'nucleo', 0, 0)
+    // Cerca o núcleo completamente com anel fechado em raio 3 (x = -3..3, z = -3..3)
+    st = construirLinhaBlocos(st, -3, -3, 3, -3, 1, mat)
+    st = construirLinhaBlocos(st, -3, 3, 3, 3, 1, mat)
+    st = construirLinhaBlocos(st, -3, -2, -3, 2, 1, mat)
+    st = construirLinhaBlocos(st, 3, -2, 3, 2, 1, mat)
+    return {
+      ...st,
+      unidades: [
+        {
+          id: 950,
+          lado: 'inimigo',
+          papel: 'sitiante',
+          x: 0,
+          z: 4.1,
+          hp: 40,
+          postura: 'automatico',
+          ordem: null,
+          cooldown: 0,
+          segmentos: [],
+          alerta: true,
+        },
+      ],
+    }
+  }
+  let cercoMad = criarCenarioCercoMuro('madeira')
+  let cercoPed = criarCenarioCercoMuro('pedra')
+  const blocosMadAntes = Object.keys(cercoMad.blocosMapa).length
+  const blocosPedAntes = Object.keys(cercoPed.blocosMapa).length
+  for (let s = 0; s < 12; s += 1) {
+    cercoMad = stepPartida(cercoMad, INPUT_PARADO, 0.3)
+    cercoPed = stepPartida(cercoPed, INPUT_PARADO, 0.3)
+  }
+  assert(
+    Object.keys(cercoMad.blocosMapa).length < blocosMadAntes,
+    'sitiante bloqueado abre brecha na muralha de madeira (18 HP)',
+  )
+  assert(
+    Object.keys(cercoPed.blocosMapa).length === blocosPedAntes,
+    'muralha de pedra (42 HP) resiste por mais tempo ao mesmo cerco que a madeira',
+  )
 }
