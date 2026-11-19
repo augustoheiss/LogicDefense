@@ -109,6 +109,7 @@ function devePreservar(ficha: Ficha): boolean {
   if (ficha.corpo) return true
   if (ficha.state.obras.some((obra) => obra.lado !== 'inimigo')) return true
   if (ficha.state.obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0)) return true
+  if (Object.keys(ficha.state.blocosMapa).length > 0) return true
   return ficha.state.unidades.some((unidade) => unidade.lado === 'aliado' && unidade.hp > 0)
 }
 

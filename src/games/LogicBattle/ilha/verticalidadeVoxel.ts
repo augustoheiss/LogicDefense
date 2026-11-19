@@ -1,12 +1,25 @@
 import {
   centroBlocoMundo,
-  criarBlocosFortalezaNv5,
   dentroVoxelLocal,
   indiceVoxelLocal,
   RecursoNatural,
   SUBSOLO_CFG,
   VOXEL_NV5,
 } from './biomaRecursos'
+import {
+  bateBlocoMundo,
+  BlocoMundo,
+  MapaBlocos,
+  pisoBlocoMundoEm,
+  tetoBlocoMundoEm,
+} from './blocosMundo'
+import { criarBlocosObraNv5 } from './blocosNv5Blueprints'
+import {
+  bateObraLivre,
+  bloqueiosDeObraLivre,
+  pisoObraLivreEm,
+  tetoObraLivreEm,
+} from './obraBlocosLivres'
 import type { Bloqueio } from './caminho'
 import { DIMENSOES_OBRA, OBRA_CENTRO_Y, OBSTACULOS, PARTIDA, PecaId } from './partidaPolicies'
 
@@ -20,6 +33,7 @@ export interface ObraVertical {
   hp: number
   construindoRestante?: number
   blocosNv5?: Uint8Array
+  blocosLivres?: readonly BlocoMundo[]
 }
 
 const CORPO_VOXEL = 0.26
@@ -75,6 +89,7 @@ export function pisoUniversalEm(
   obras: readonly ObraVertical[],
   recursos: readonly RecursoNatural[],
   subsoloCentro: { x: number; z: number } | null,
+  blocosMapa?: MapaBlocos,
 ): number {
   if (subsoloCentro && pesY < -0.9) {
     let pisoSub: number = SUBSOLO_CFG.pisoY
@@ -130,9 +145,13 @@ export function pisoUniversalEm(
     }
   }
 
-  // 5. Construções (Nível 1..4 caixa + peitoril de escalada; Nível 5+ bloquinhos editáveis estilo Sandbox)
+  // 5. Construções (Nível 1..4 caixa + peitoril de escalada; Nível 5+ bloquinhos editáveis; obras manuais consagradas)
   for (const obra of obras) {
     if (obra.hp <= 0) continue
+    if (obra.blocosLivres && obra.blocosLivres.length > 0) {
+      piso = Math.max(piso, pisoObraLivreEm(x, pesY, z, obra.blocosLivres))
+      continue
+    }
     if (obra.blocosNv5) {
       const { nx, ny, nz, passo } = VOXEL_NV5
       const h = passo / 2
@@ -172,6 +191,11 @@ export function pisoUniversalEm(
     }
   }
 
+  // 6. Blocos livres do mundo (trincheiras, muralhas, escadas manuais 1.0 m)
+  if (blocosMapa) {
+    piso = Math.max(piso, pisoBlocoMundoEm(x, pesY, z, blocosMapa))
+  }
+
   return piso
 }
 
@@ -181,13 +205,19 @@ export function tetoUniversalEm(
   z: number,
   obras: readonly ObraVertical[],
   subsoloCentro: { x: number; z: number } | null,
+  blocosMapa?: MapaBlocos,
 ): number {
   if (subsoloCentro && pesY < -0.9) {
     return SUBSOLO_CFG.tetoY - ALTURA_CORPO
   }
   let teto = Number.POSITIVE_INFINITY
   for (const obra of obras) {
-    if (obra.hp <= 0 || !obra.blocosNv5) continue
+    if (obra.hp <= 0) continue
+    if (obra.blocosLivres && obra.blocosLivres.length > 0) {
+      teto = Math.min(teto, tetoObraLivreEm(x, pesY, z, obra.blocosLivres))
+      continue
+    }
+    if (!obra.blocosNv5) continue
     const { nx, ny, nz, passo } = VOXEL_NV5
     const h = passo / 2
     const meioTotal = (nx * passo) / 2 + CORPO_VOXEL + 0.1
@@ -206,6 +236,9 @@ export function tetoUniversalEm(
       }
     }
   }
+  if (blocosMapa) {
+    teto = Math.min(teto, tetoBlocoMundoEm(x, pesY, z, blocosMapa))
+  }
   return teto
 }
 
@@ -215,10 +248,13 @@ export function bateObraUniversal(
   obras: readonly ObraVertical[],
   ignorarId = -1,
   pesY = 0,
+  blocosMapa?: MapaBlocos,
 ): boolean {
   if (pesY < -0.9) return false
+  if (blocosMapa && bateBlocoMundo(x, pesY, z, blocosMapa)) return true
   return obras.some((obra) => {
     if (obra.id === ignorarId || obra.hp <= 0) return false
+    if (obra.blocosLivres && obra.blocosLivres.length > 0) return bateObraLivre(x, pesY, z, obra.blocosLivres)
     if (obra.blocosNv5) return bateBlocoNv5(x, pesY, z, obra)
     if (obra.tipo === 'portao') return false
     const dim = DIMENSOES_OBRA[obra.tipo]
@@ -265,7 +301,12 @@ export function bloqueiosTerrenoEAldeaNv5(
     lista.push({ x: rec.x, z: rec.z, hx: r, hz: r })
   }
   for (const obra of obras) {
-    if (obra.hp <= 0 || !obra.blocosNv5) continue
+    if (obra.hp <= 0) continue
+    if (obra.blocosLivres && obra.blocosLivres.length > 0) {
+      lista.push(...bloqueiosDeObraLivre(obra.blocosLivres))
+      continue
+    }
+    if (!obra.blocosNv5) continue
     const { nx, nz, passo } = VOXEL_NV5
     const h = passo / 2
     for (let bz = 0; bz < nz; bz++) {
@@ -283,7 +324,7 @@ export function bloqueiosTerrenoEAldeaNv5(
 }
 
 export function garantirBlocosNv5(obra: ObraVertical): Uint8Array {
-  return obra.blocosNv5 ? new Uint8Array(obra.blocosNv5) : criarBlocosFortalezaNv5()
+  return obra.blocosNv5 ? new Uint8Array(obra.blocosNv5) : criarBlocosObraNv5(obra.tipo)
 }
 
 export function afastarDeFortalezaNv5(
@@ -348,5 +389,176 @@ export function restringirGaleriaSubsolo(
   return {
     x: Math.min(centro.x + mx, Math.max(centro.x - mx, x)),
     z: Math.min(centro.z + mz, Math.max(centro.z - mz, z)),
+  }
+}
+
+export interface Ponto3D {
+  x: number
+  y: number
+  z: number
+}
+
+export interface VoxelAlvoHit {
+  hitPoint: Ponto3D
+  distance: number
+  obraId: number
+  bx: number
+  by: number
+  bz: number
+  centro: Ponto3D
+}
+
+export interface AlvoEdicaoVoxel {
+  obraId: number
+  bx: number
+  by: number
+  bz: number
+  wx: number
+  wy: number
+  wz: number
+  acao: 'adicionar' | 'remover'
+  valido: boolean
+  motivo: 'ok' | 'sem_madeira' | 'colide_corpo' | 'fora_limite' | 'vazio'
+}
+
+export function decidirAcaoPonteiro(
+  dragPx: number,
+  limiar: number = PARTIDA.limiarArrastoPx,
+): 'arrasto' | 'clique' {
+  return dragPx > limiar ? 'arrasto' : 'clique'
+}
+
+/**
+ * Calcula a normal da face atingida em coordenadas de mundo pelo eixo dominante
+ * de (hitPoint - centroBloco), evitando depender da normal local da malha.
+ */
+export function normalDominanteMundo(
+  hitPoint: Ponto3D,
+  centroBloco: Ponto3D,
+): [number, number, number] {
+  const dx = hitPoint.x - centroBloco.x
+  const dy = hitPoint.y - centroBloco.y
+  const dz = hitPoint.z - centroBloco.z
+  const ax = Math.abs(dx)
+  const ay = Math.abs(dy)
+  const az = Math.abs(dz)
+  if (ay >= ax && ay >= az) return [0, dy >= 0 ? 1 : -1, 0]
+  if (ax >= ay && ax >= az) return [dx >= 0 ? 1 : -1, 0, 0]
+  return [0, 0, dz >= 0 ? 1 : -1]
+}
+
+/**
+ * Filtra os hits do raycaster da câmera em 1ª/3ª pessoa para:
+ * 1) nunca selecionar blocos atrás das costas do herói em 3ª pessoa;
+ * 2) medir o alcance máximo (7 m) a partir dos olhos do herói, e não da lente.
+ */
+export function filtrarHitEdicao(
+  hits: readonly VoxelAlvoHit[],
+  camPos: Ponto3D,
+  rayDir: Ponto3D,
+  heroiEye: Ponto3D,
+  alcanceMax: number = PARTIDA.alcanceEdicaoBlocos,
+  ignorarPlanoHeroi = false,
+): VoxelAlvoHit | null {
+  const tPlanoHeroi = ignorarPlanoHeroi
+    ? 0
+    : Math.max(
+        0,
+        (heroiEye.x - camPos.x) * rayDir.x +
+          (heroiEye.y - camPos.y) * rayDir.y +
+          (heroiEye.z - camPos.z) * rayDir.z,
+      )
+  const ordenados = [...hits].sort((a, b) => a.distance - b.distance)
+  for (const hit of ordenados) {
+    if (!ignorarPlanoHeroi && hit.distance < tPlanoHeroi - 0.15) continue
+    if (!ignorarPlanoHeroi) {
+      const distHeroi = Math.hypot(
+        hit.hitPoint.x - heroiEye.x,
+        hit.hitPoint.y - heroiEye.y,
+        hit.hitPoint.z - heroiEye.z,
+      )
+      if (distHeroi > alcanceMax) continue
+    }
+    return hit
+  }
+  return null
+}
+
+export function resolverAlvoEdicaoVoxel(
+  obra: ObraVertical,
+  bx: number,
+  by: number,
+  bz: number,
+  hitPoint: Ponto3D,
+  centroBloco: Ponto3D,
+  acao: 'adicionar' | 'remover',
+  madeira: number,
+  heroi: Ponto3D | null,
+): AlvoEdicaoVoxel | null {
+  if (!obra.blocosNv5) return null
+  if (acao === 'remover') {
+    if (!dentroVoxelLocal(bx, by, bz) || obra.blocosNv5[indiceVoxelLocal(bx, by, bz)] === 0) {
+      return null
+    }
+    const c = centroBlocoMundo(obra.x, obra.z, bx, by, bz)
+    return {
+      obraId: obra.id,
+      bx,
+      by,
+      bz,
+      wx: c.x,
+      wy: c.y,
+      wz: c.z,
+      acao,
+      valido: true,
+      motivo: 'ok',
+    }
+  }
+  const [dbx, dby, dbz] = normalDominanteMundo(hitPoint, centroBloco)
+  const nx = bx + dbx
+  const ny = by + dby
+  const nz = bz + dbz
+  if (!dentroVoxelLocal(nx, ny, nz)) {
+    const c = centroBlocoMundo(obra.x, obra.z, bx, by, bz)
+    return {
+      obraId: obra.id,
+      bx: nx,
+      by: ny,
+      bz: nz,
+      wx: c.x + dbx * VOXEL_NV5.passo,
+      wy: c.y + dby * VOXEL_NV5.passo,
+      wz: c.z + dbz * VOXEL_NV5.passo,
+      acao,
+      valido: false,
+      motivo: 'fora_limite',
+    }
+  }
+  const c = centroBlocoMundo(obra.x, obra.z, nx, ny, nz)
+  if (madeira < 1) {
+    return {
+      obraId: obra.id,
+      bx: nx,
+      by: ny,
+      bz: nz,
+      wx: c.x,
+      wy: c.y,
+      wz: c.z,
+      acao,
+      valido: false,
+      motivo: 'sem_madeira',
+    }
+  }
+  const editado = editarBlocoEmArray(obra.blocosNv5, obra.x, obra.z, nx, ny, nz, 'adicionar', heroi)
+  return {
+    obraId: obra.id,
+    bx: nx,
+    by: ny,
+    bz: nz,
+    wx: c.x,
+    wy: c.y,
+    wz: c.z,
+    acao,
+    valido: editado !== null,
+    motivo: editado !== null ? 'ok' : 'colide_corpo',
   }
 }

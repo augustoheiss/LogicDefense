@@ -43,7 +43,58 @@ function centro(gx: number, gz: number): Marco {
   return { x: gx * PARTIDA.celula, z: gz * PARTIDA.celula }
 }
 
-function bloqueia(gx: number, gz: number, bloqueios: readonly Bloqueio[]): boolean {
+interface GradeBloqueios {
+  lim: number
+  lado: number
+  celulas: Uint8Array
+}
+
+function construirGradeBloqueios(bloqueios: readonly Bloqueio[]): GradeBloqueios {
+  const lim = limite()
+  const lado = lim * 2 + 1
+  const celulas = new Uint8Array(lado * lado)
+  const borda = PARTIDA.radius - PARTIDA.body
+  const celula = PARTIDA.celula
+  for (let gz = -lim; gz <= lim; gz += 1) {
+    const pz = gz * celula
+    const row = (gz + lim) * lado
+    for (let gx = -lim; gx <= lim; gx += 1) {
+      const px = gx * celula
+      if (PARTIDA.atlas === 'grade') {
+        if (Math.abs(px) > borda || Math.abs(pz) > borda) celulas[row + gx + lim] = 1
+      } else if (Math.hypot(px, pz) > borda) {
+        celulas[row + gx + lim] = 1
+      }
+    }
+  }
+  const body = PARTIDA.body
+  for (const caixa of bloqueios) {
+    const rx = caixa.hx + body
+    const rz = caixa.hz + body
+    const minGx = Math.max(-lim, Math.ceil((caixa.x - rx) / celula))
+    const maxGx = Math.min(lim, Math.floor((caixa.x + rx) / celula))
+    const minGz = Math.max(-lim, Math.ceil((caixa.z - rz) / celula))
+    const maxGz = Math.min(lim, Math.floor((caixa.z + rz) / celula))
+    for (let gz = minGz; gz <= maxGz; gz += 1) {
+      if (Math.abs(gz * celula - caixa.z) > rz) continue
+      const row = (gz + lim) * lado
+      for (let gx = minGx; gx <= maxGx; gx += 1) {
+        if (Math.abs(gx * celula - caixa.x) <= rx) {
+          celulas[row + gx + lim] = 1
+        }
+      }
+    }
+  }
+  return { lim, lado, celulas }
+}
+
+function bloqueiaGrade(gx: number, gz: number, grade: GradeBloqueios): boolean {
+  if (gx < -grade.lim || gz < -grade.lim || gx > grade.lim || gz > grade.lim) return true
+  return grade.celulas[(gz + grade.lim) * grade.lado + (gx + grade.lim)] === 1
+}
+
+function bloqueia(gx: number, gz: number, bloqueios: readonly Bloqueio[], grade?: GradeBloqueios): boolean {
+  if (grade) return bloqueiaGrade(gx, gz, grade)
   if (gx < -limite() || gz < -limite() || gx > limite() || gz > limite()) return true
   const ponto = centro(gx, gz)
   const borda = PARTIDA.radius - PARTIDA.body
@@ -57,16 +108,17 @@ function bloqueia(gx: number, gz: number, bloqueios: readonly Bloqueio[]): boole
   )
 }
 
-function livre(gx: number, gz: number, bloqueios: readonly Bloqueio[]): boolean {
-  return !bloqueia(gx, gz, bloqueios)
+function livre(gx: number, gz: number, bloqueios: readonly Bloqueio[], grade?: GradeBloqueios): boolean {
+  return !bloqueia(gx, gz, bloqueios, grade)
 }
 
 export function encaixarLivre(
   gx: number,
   gz: number,
   bloqueios: readonly Bloqueio[],
+  grade?: GradeBloqueios,
 ): [number, number] | null {
-  if (livre(gx, gz, bloqueios)) return [gx, gz]
+  if (livre(gx, gz, bloqueios, grade)) return [gx, gz]
   let melhor: [number, number] | null = null
   let melhorDist = Number.POSITIVE_INFINITY
   for (let raio = 1; raio <= PARTIDA.espiral; raio++) {
@@ -75,7 +127,7 @@ export function encaixarLivre(
         if (Math.abs(dx) !== raio && Math.abs(dz) !== raio) continue
         const cx = gx + dx
         const cz = gz + dz
-        if (!livre(cx, cz, bloqueios)) continue
+        if (!livre(cx, cz, bloqueios, grade)) continue
         const dist = dx * dx + dz * dz
         if (dist < melhorDist) {
           melhorDist = dist
@@ -132,12 +184,13 @@ function segmentoLivre(
   b: Marco,
   bloqueios: readonly Bloqueio[],
   custoExtra?: (x: number, z: number) => number,
+  grade?: GradeBloqueios,
 ): boolean {
   for (let t = 0; t <= 8; t++) {
     const p = t / 8
     const x = a.x + (b.x - a.x) * p
     const z = a.z + (b.z - a.z) * p
-    if (!livre(Math.round(x / PARTIDA.celula), Math.round(z / PARTIDA.celula), bloqueios)) return false
+    if (!livre(Math.round(x / PARTIDA.celula), Math.round(z / PARTIDA.celula), bloqueios, grade)) return false
     if (custoExtra && custoExtra(x, z) > 1.01) return false
   }
   return true
@@ -166,6 +219,7 @@ function reconstruir(
   inicioGz: number,
   bloqueios: readonly Bloqueio[],
   custoExtra?: (x: number, z: number) => number,
+  grade?: GradeBloqueios,
 ): Marco[] {
   const bruto: [number, number][] = []
   let atual: string | undefined = fim
@@ -195,7 +249,7 @@ function reconstruir(
   const origem = centro(inicioGx, inicioGz)
   const pontos = [origem, ...liso]
   for (let i = 1; i < pontos.length; i++) {
-    if (!segmentoLivre(pontos[i - 1], pontos[i], bloqueios, custoExtra)) return cheio
+    if (!segmentoLivre(pontos[i - 1], pontos[i], bloqueios, custoExtra, grade)) return cheio
   }
   return liso
 }
@@ -214,13 +268,14 @@ export function encontrarCaminho(
   if ((bloqueios.length === 0 && !custoExtra) || PARTIDA.caminho === 'reto') return [limitaAlvo({ x: alvoX, z: alvoZ })]
 
   contagemBuscas += 1
+  const grade = construirGradeBloqueios(bloqueios)
   const celula = PARTIDA.celula
   let sgx = Math.round(x / celula)
   let sgz = Math.round(z / celula)
   let egx = Math.round(alvoX / celula)
   let egz = Math.round(alvoZ / celula)
-  const saida = encaixarLivre(sgx, sgz, bloqueios)
-  const chegada = encaixarLivre(egx, egz, bloqueios)
+  const saida = encaixarLivre(sgx, sgz, bloqueios, grade)
+  const chegada = encaixarLivre(egx, egz, bloqueios, grade)
   if (!saida || !chegada) return null
   sgx = saida[0]
   sgz = saida[1]
@@ -244,7 +299,7 @@ export function encontrarCaminho(
     const ck = chave(atual.gx, atual.gz)
     if (ck === fim) {
       visitasUltima = visitas
-      return reconstruir(veio, ck, sgx, sgz, bloqueios, custoExtra)
+      return reconstruir(veio, ck, sgx, sgz, bloqueios, custoExtra, grade)
     }
     if (fechado.has(ck)) continue
     fechado.add(ck)
@@ -253,9 +308,9 @@ export function encontrarCaminho(
       const nx = atual.gx + dx
       const nz = atual.gz + dz
       const nk = chave(nx, nz)
-      if (fechado.has(nk) || !livre(nx, nz, bloqueios)) continue
+      if (fechado.has(nk) || !livre(nx, nz, bloqueios, grade)) continue
       if (dx !== 0 && dz !== 0) {
-        if (!livre(atual.gx + dx, atual.gz, bloqueios) || !livre(atual.gx, atual.gz + dz, bloqueios)) continue
+        if (!livre(atual.gx + dx, atual.gz, bloqueios, grade) || !livre(atual.gx, atual.gz + dz, bloqueios, grade)) continue
       }
       const pViz = centro(nx, nz)
       const pesoTerreno = custoExtra ? Math.max(1, custoExtra(pViz.x, pViz.z)) : 1

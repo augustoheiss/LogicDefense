@@ -1,14 +1,23 @@
 import React from 'react'
+import type { Group } from 'three'
+import type { AlvoEdicaoUnificado } from './alvoBlocoUnificado'
 import {
-  centroBlocoMundo,
-  indiceVoxelLocal,
   LagoaRasa,
   RecursoNatural,
   SUBSOLO_CFG,
   VOXEL_NV5,
 } from './biomaRecursos'
-import { DIMENSOES_OBRA, PARTIDA } from './partidaPolicies'
-import { chaoRevelado, cobertoAgora, obraEmConstrucao, Obra, PartidaState } from './partidaSim'
+import type { PlanoLinhaBlocos } from './blocosMundo'
+import {
+  BlocosMundoInstanced,
+  GhostBlueprintObra,
+  ObrasLivresInstanced,
+  ObrasNv5Instanced,
+  PreviewLinhaBlocos,
+} from './ObrasArquiteturaCena'
+import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
+import { chaoRevelado, cobertoAgora, obraEmConstrucao, PartidaState } from './partidaSim'
+import type { AlvoEdicaoVoxel } from './verticalidadeVoxel'
 
 export interface MundoSandboxCenaProps {
   state: PartidaState
@@ -16,7 +25,15 @@ export interface MundoSandboxCenaProps {
   recursos: readonly RecursoNatural[]
   subsoloCentro: { x: number; z: number } | null
   modoBloco: 'adicionar' | 'remover' | null
-  onEditarBloco: (obraId: number, bx: number, by: number, bz: number, acao: 'adicionar' | 'remover') => void
+  voxeisGroupRef?: React.RefObject<Group | null>
+  blocosMapaGroupRef?: React.RefObject<Group | null>
+  obrasLivresGroupRef?: React.RefObject<Group | null>
+  ghostVoxel?: AlvoEdicaoVoxel | null
+  ghostBloco?: AlvoEdicaoUnificado | null
+  ghostObra?: { tipo: PecaId; x: number; z: number; valido: boolean } | null
+  previewLinha?: { plano: PlanoLinhaBlocos; temRecurso: boolean } | null
+  bloqueiaCliqueObra?: boolean
+  onSelectObraInstanced?: (obraId: number, lado: 'nosso' | 'inimigo', button: number) => void
   onPedirSubsolo: () => void
 }
 
@@ -26,11 +43,20 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
   recursos,
   subsoloCentro,
   modoBloco,
-  onEditarBloco,
+  voxeisGroupRef,
+  blocosMapaGroupRef,
+  obrasLivresGroupRef,
+  ghostVoxel,
+  ghostBloco,
+  ghostObra,
+  previewLinha,
+  bloqueiaCliqueObra,
+  onSelectObraInstanced,
   onPedirSubsolo,
 }) => {
   const olharEfetivo = state.semCorpo ? 'imperio' : state.olhar
   const noSubsolo = !state.semCorpo && state.heroi.y < -0.9
+  const ghostAtivo = ghostBloco ?? (ghostVoxel ? { ...ghostVoxel, passo: VOXEL_NV5.passo } : null)
 
   return (
     <group>
@@ -116,7 +142,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
       {state.obras.map((obra) => {
         if (obra.hp <= 0 || obraEmConstrucao(obra)) return null
         if (obra.lado === 'inimigo' && PARTIDA.nuvem && !cobertoAgora(state, obra.x, obra.z)) return null
-        const temVoxel = Boolean((obra as Obra & { blocosNv5?: Uint8Array }).blocosNv5)
+        const temVoxel = Boolean(obra.blocosNv5) || Boolean(obra.blocosLivres?.length)
         const dim = DIMENSOES_OBRA[obra.tipo]
 
         return (
@@ -200,55 +226,70 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         </group>
       )}
 
-      {/* 5. Construções Nível 5+ Entráveis e Editáveis Bloco-a-Bloco (7x5x7) */}
-      {state.obras.map((obra) => {
-        const blocos = (obra as Obra & { blocosNv5?: Uint8Array }).blocosNv5
-        if (!blocos || obra.hp <= 0 || obraEmConstrucao(obra)) return null
-        if (obra.lado === 'inimigo' && PARTIDA.nuvem && !cobertoAgora(state, obra.x, obra.z)) return null
+      {/* 5. Construções Nível 5+ Entráveis (InstancedMesh), Blocos Livres do Mapa e Obras Consagradas */}
+      <ObrasNv5Instanced
+        state={state}
+        versaoSolidos={state.versaoSolidos}
+        versaoChao={state.versaoChao}
+        groupRef={voxeisGroupRef}
+        bloqueiaCliqueObra={bloqueiaCliqueObra}
+        onSelectObra={onSelectObraInstanced}
+      />
+      <BlocosMundoInstanced
+        blocosMapa={state.blocosMapa}
+        versaoSolidos={state.versaoSolidos}
+        versaoChao={state.versaoChao}
+        state={state}
+        groupRef={blocosMapaGroupRef}
+      />
+      <ObrasLivresInstanced
+        state={state}
+        versaoSolidos={state.versaoSolidos}
+        versaoChao={state.versaoChao}
+        groupRef={obrasLivresGroupRef}
+        bloqueiaCliqueObra={bloqueiaCliqueObra}
+        onSelectObra={onSelectObraInstanced}
+      />
 
-        const { nx, ny, nz, passo } = VOXEL_NV5
-        const itens: { bx: number; by: number; bz: number; val: number; x: number; y: number; z: number }[] = []
-        for (let by = 0; by < ny; by++) {
-          for (let bz = 0; bz < nz; bz++) {
-            for (let bx = 0; bx < nx; bx++) {
-              const val = blocos[indiceVoxelLocal(bx, by, bz)]
-              if (val === 0) continue
-              const c = centroBlocoMundo(obra.x, obra.z, bx, by, bz)
-              itens.push({ bx, by, bz, val, x: c.x, y: c.y, z: c.z })
-            }
-          }
-        }
+      {/* 6. Ghost Blueprint de Fundação (Torre/Obra seguindo cursor ou toque) */}
+      {ghostObra && (
+        <GhostBlueprintObra
+          tipo={ghostObra.tipo}
+          x={ghostObra.x}
+          z={ghostObra.z}
+          valido={ghostObra.valido}
+        />
+      )}
 
-        return (
-          <group key={`fortaleza-nv5-${obra.id}`}>
-            {itens.map((b) => (
-              <mesh
-                key={`${b.bx}-${b.by}-${b.bz}`}
-                position={[b.x, b.y, b.z]}
-                onClick={(event) => {
-                  if (!modoBloco) return
-                  event.stopPropagation()
-                  if (modoBloco === 'remover') {
-                    onEditarBloco(obra.id, b.bx, b.by, b.bz, 'remover')
-                    return
-                  }
-                  const n = event.face?.normal
-                  const dbx = n ? Math.round(n.x) : 0
-                  const dby = n ? Math.round(n.y) : 1
-                  const dbz = n ? Math.round(n.z) : 0
-                  onEditarBloco(obra.id, b.bx + dbx, b.by + dby, b.bz + dbz, 'adicionar')
-                }}
-              >
-                <boxGeometry args={[passo * 0.98, passo * 0.98, passo * 0.98]} />
-                <meshStandardMaterial
-                  color={b.val === 2 ? '#d97706' : b.by === 4 ? '#facc15' : '#cbd5e1'}
-                  roughness={0.75}
-                />
-              </mesh>
-            ))}
-          </group>
-        )
-      })}
+      {/* 7. Preview 360° da Linha de Blocos (Trincheira / Muralha) */}
+      {previewLinha && (
+        <PreviewLinhaBlocos plano={previewLinha.plano} temRecurso={previewLinha.temRecurso} />
+      )}
+
+      {/* 8. Ghost Highlight do Bloco/Voxel Alvo na Edição */}
+      {modoBloco && ghostAtivo && (
+        <group position={[ghostAtivo.wx, ghostAtivo.wy, ghostAtivo.wz]}>
+          <mesh raycast={() => null}>
+            <boxGeometry args={[ghostAtivo.passo * 1.03, ghostAtivo.passo * 1.03, ghostAtivo.passo * 1.03]} />
+            <meshBasicMaterial
+              color={ghostAtivo.valido ? '#22d3ee' : '#ef4444'}
+              transparent
+              opacity={0.38}
+              depthWrite={false}
+            />
+          </mesh>
+          <mesh raycast={() => null}>
+            <boxGeometry args={[ghostAtivo.passo * 1.04, ghostAtivo.passo * 1.04, ghostAtivo.passo * 1.04]} />
+            <meshBasicMaterial
+              color={ghostAtivo.valido ? '#f8fafc' : '#fecaca'}
+              wireframe
+              transparent
+              opacity={0.95}
+              depthWrite={false}
+            />
+          </mesh>
+        </group>
+      )}
     </group>
   )
 }

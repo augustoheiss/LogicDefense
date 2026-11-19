@@ -17,6 +17,8 @@ export type IconeId =
   | 'editarBlocos'
   | 'blocoAdicionar'
   | 'blocoRemover'
+  | 'muralhaLinha'
+  | 'consagrar'
   | 'subsolo'
   | 'menuMinimapas'
   | 'minimapaAtual'
@@ -24,6 +26,8 @@ export type IconeId =
   | 'minimapaTodos'
   | 'confirmar'
   | 'cancelar'
+  | 'moverAqui'
+  | 'desmarcar'
 
 export interface MetaIntencao {
   id: IconeId
@@ -42,14 +46,14 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
   torre: {
     id: 'torre',
     titulo: 'Torre de Vigia e Cerco',
-    resumo: 'Enxerga 22m e dispara em inimigos e construções rivais (5s de construção frágil).',
-    detalhe: 'Custo: grátis se tiver até 1 torre ou 2 madeiras nas seguintes. Confirmar seleção para posicionar no chão?',
+    resumo: 'Enxerga 22m e dispara por cima de trincheiras (1 bloco). No Nv. 5 vira mirante entrável e vê acima de 3 blocos!',
+    detalhe: 'A planta transparente segue o ponteiro (verde válido / vermelho bloqueado). Confirmar seleção?',
   },
   portao: {
     id: 'portao',
     titulo: 'Portão Matemático (+10)',
-    resumo: 'Arco tático que soma +10 soldados ao atravessar (4s de construção frágil).',
-    detalhe: 'Custo: 2 madeiras (ou 1 licença). Deseja confirmar esta construção?',
+    resumo: 'Arco tático que soma +10 soldados ao atravessar. No Nv. 5 vira arco triunfal fortificado com corredor aberto!',
+    detalhe: 'Custo: 2 madeiras (ou 1 licença). Deseja posicionar com a planta transparente?',
   },
   quartel: {
     id: 'quartel',
@@ -113,21 +117,33 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
   },
   editarBlocos: {
     id: 'editarBlocos',
-    titulo: 'Editar Blocos da Fortaleza (Nv. 5+)',
-    resumo: 'Ativa/desativa a edição estilo Sandbox dos bloquinhos da sua construção Nível 5.',
-    detalhe: 'Permite abrir janelas, passagens ou criar degraus para o andar superior. Confirmar?',
+    titulo: 'Construir & Esculpir Blocos',
+    resumo: 'Abre ferramentas de blocos livres no mapa (Madeira, Pedra/Lingote ou Ouro) e edição de fortalezas Nv. 5.',
+    detalhe: 'Crie trincheiras (1 bloco), muralhas (2–3 blocos), escadas ou estruturas próprias. Confirmar?',
   },
   blocoAdicionar: {
     id: 'blocoAdicionar',
-    titulo: 'Adicionar Bloquinho na Construção',
-    resumo: 'Coloca um bloco sólido (consome 1 madeira se fora do estoque inicial) para criar escada ou muro.',
-    detalhe: 'Confirmar modo Adicionar Bloco e clicar na fortaleza Nível 5?',
+    titulo: 'Adicionar Bloco (Mapa ou Obra)',
+    resumo: 'Coloca um bloco sólido no chão, empilhado sobre outro bloco ou na sua obra Nível 5 / consagrada.',
+    detalhe: 'Escolha Madeira, Pedra ou Ouro. Arraste para girar a câmera livremente; clique ou toque para pôr.',
   },
   blocoRemover: {
     id: 'blocoRemover',
-    titulo: 'Remover Bloquinho da Construção',
-    resumo: 'Abre passagem, porta extra ou janela de tiro na parede/teto da sua obra Nível 5.',
-    detalhe: 'Confirmar modo Esculpir/Remover Bloco e clicar num bloco da fortaleza?',
+    titulo: 'Remover / Esculpir Bloco',
+    resumo: 'Remove blocos livres do mapa ou esculpe portas, janelas e passagens em obras Nível 5 e consagradas.',
+    detalhe: 'Confirmar modo Remover Bloco?',
+  },
+  muralhaLinha: {
+    id: 'muralhaLinha',
+    titulo: 'Linha de Blocos 360° (Trincheira / Muralha)',
+    resumo: 'Arraste no chão em qualquer direção 360° para erguer trincheiras (1 bloco) ou muralhas (2–3 blocos).',
+    detalhe: '1 bloco: torres ainda atiram por cima. 2+ blocos: bloqueiam visão de torres Nv. 1–4. Confirmar?',
+  },
+  consagrar: {
+    id: 'consagrar',
+    titulo: 'Consagrar Estrutura Manual',
+    resumo: 'Transforma uma estrutura construída com blocos manuais em Núcleo, Torre, Quartel, Portão, Britador, Serraria ou Mina!',
+    detalhe: 'Escolha o tipo desejado e clique em qualquer bloco conectado da sua construção manual. Confirmar?',
   },
   subsolo: {
     id: 'subsolo',
@@ -169,6 +185,18 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
     id: 'cancelar',
     titulo: 'Cancelar',
     resumo: 'Fecha sem executar.',
+    detalhe: '',
+  },
+  moverAqui: {
+    id: 'moverAqui',
+    titulo: 'Mover Seleção para o Chão',
+    resumo: 'Ativa o modo de destino por clique ou toque único no mapa.',
+    detalhe: 'Toque no terreno após ativar para deslocar tropas/herói selecionados.',
+  },
+  desmarcar: {
+    id: 'desmarcar',
+    titulo: 'Limpar Seleção',
+    resumo: 'Deseleciona o herói e todas as tropas selecionadas.',
     detalhe: '',
   },
 }
@@ -301,6 +329,20 @@ export const IconeSvg: React.FC<{ id: IconeId; size?: number }> = ({ id, size = 
           <path d="M8 12h8" />
         </svg>
       )
+    case 'muralhaLinha':
+      return (
+        <svg {...common}>
+          <path d="M3 18h18v-8H3v8z" />
+          <path d="M3 10V6h4v4h3V6h4v4h3V6h4v4" />
+          <path d="M9 10v8M15 10v8M3 14h18" />
+        </svg>
+      )
+    case 'consagrar':
+      return (
+        <svg {...common}>
+          <path d="M12 3l2.6 5.3L20 9.1l-4 3.9.9 5.5L12 15.8l-4.9 2.7.9-5.5-4-3.9 5.4-.8L12 3z" />
+        </svg>
+      )
     case 'subsolo':
       return (
         <svg {...common}>
@@ -357,6 +399,20 @@ export const IconeSvg: React.FC<{ id: IconeId; size?: number }> = ({ id, size = 
       return (
         <svg {...common}>
           <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      )
+    case 'moverAqui':
+      return (
+        <svg {...common}>
+          <path d="M12 2v14M12 16l-5-5M12 16l5-5" />
+          <path d="M5 20h14" />
+        </svg>
+      )
+    case 'desmarcar':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9 9l6 6M15 9l-6 6" />
         </svg>
       )
   }

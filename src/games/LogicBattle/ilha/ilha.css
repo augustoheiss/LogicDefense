@@ -89,6 +89,7 @@
 .ilha-hud {
   position: absolute;
   inset: 0;
+  z-index: 4;
   pointer-events: none;
   font-family: "Segoe UI", sans-serif;
   color: #14324a;
@@ -137,6 +138,12 @@
   font-weight: 700;
   background: #14324a;
   color: #fff;
+  cursor: pointer;
+}
+
+.ilha-barra button.ativo {
+  background: #facc15;
+  color: #1e293b;
 }
 
 .ilha-barra span {
@@ -207,6 +214,16 @@
   height: 2px;
 }
 
+.ilha-mira.alvo {
+  border-color: #facc15;
+  box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.85);
+}
+
+.ilha-mira.alvo::before,
+.ilha-mira.alvo::after {
+  background: #facc15;
+}
+
 .ilha-army { left: 16px; }
 .ilha-compass {
   right: 16px;
@@ -260,13 +277,30 @@
 
 .ilha-power {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 88px;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 11;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(460px, calc(100% - 340px));
+  text-align: center;
   background: #14324a;
   color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   padding: 10px 14px;
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.35);
+}
+
+.ilha-celular .ilha-power {
+  left: 12px;
+  right: 118px;
+  bottom: 16px;
+  transform: none;
+  width: auto;
+  max-width: none;
+  text-align: left;
 }
 
 .ilha-conta,
@@ -579,6 +613,11 @@
   box-shadow: 0 0 0 2px #14324a;
 }
 
+.ilha-celular .ilha-icone-btn {
+  width: 42px;
+  height: 42px;
+}
+
 .ilha-mini-cabecalho {
   display: flex;
   align-items: center;
@@ -716,48 +755,156 @@
 
   .ilha-celular .ilha-army,
   .ilha-celular .ilha-enemies {
-    top: 96px;
+    top: 56px;
     padding: 5px 8px;
-    font-size: 13px;
+    font-size: 12.5px;
   }
 
   .ilha-celular .ilha-army { left: 8px; }
   .ilha-celular .ilha-enemies {
-    left: 108px;
-    max-width: calc(100% - 256px);
+    left: 100px;
+    right: 8px;
+    max-width: none;
     font-size: 11.5px;
-    line-height: 1.2;
+    line-height: 1.25;
   }
   .ilha-celular .ilha-compass { top: 8px; right: 8px; }
 
   .ilha-celular .ilha-base {
-    top: 148px;
+    top: 102px;
     left: 8px;
-    max-width: calc(100% - 176px);
-    max-height: 86px;
+    max-width: calc(100% - 178px);
+    max-height: 76px;
     overflow: auto;
     touch-action: pan-y;
     pointer-events: auto;
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   .ilha-celular .ilha-minimapa { top: 102px; }
 
   .ilha-celular .ilha-ferramentas {
-    top: 240px;
+    top: 184px;
     left: 8px;
-    width: calc(100% - 184px);
-    max-height: calc(100% - 260px);
+    z-index: 6;
+    width: 162px;
+    max-height: calc(100% - 316px);
     overflow: auto;
     touch-action: pan-y;
     pointer-events: auto;
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .ilha-celular .ilha-ferramentas p { grid-column: 1 / -1; }
   .ilha-celular .ilha-ferramentas-grade { grid-column: 1 / -1; }
-  .ilha-celular .ilha-conta { top: 304px; left: auto; right: 8px; }
+  .ilha-celular .ilha-conta {
+    top: 314px;
+    left: auto;
+    right: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-barra span.ilha-obs-sem-corpo {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-army,
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-enemies {
+    top: 84px;
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-base,
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-minimapa {
+    top: 132px;
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-ferramentas {
+    top: 214px;
+    max-height: calc(100% - 346px);
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-conta {
+    top: 344px;
+  }
+}
+
+.ilha-selecao-barra {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  z-index: 9;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.4);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ilha-selecao-barra span {
+  white-space: nowrap;
+}
+
+.ilha-selecao-barra button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #1e496b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.ilha-selecao-barra button.ativo {
+  background: #facc15;
+  color: #1e293b;
+}
+
+.ilha-selecao-barra button.ilha-selecao-limpar {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.ilha-mini-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.ilha-celular .ilha-mini-btn {
+  width: 40px;
+  height: 40px;
+}
+
+@media (max-width: 600px) {
+  .ilha-celular .ilha-selecao-barra {
+    bottom: 72px;
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+
+  .ilha-celular .ilha-selecao-barra button {
+    min-height: 40px;
+  }
+
+  .ilha-celular .ilha-barra span:not(.ilha-obs-sem-corpo) {
+    display: none;
+  }
 }
 
 .ilha-acoes-campo {
@@ -767,9 +914,50 @@
   z-index: 6;
   pointer-events: auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  max-width: calc(100% - 130px);
   padding: 6px;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.82);
+}
+
+.ilha-subbarra,
+.ilha-subbarra-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.ilha-subbarra {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding-top: 4px;
+  border-top: 1px solid rgba(20, 50, 74, 0.14);
+}
+
+.ilha-chip {
+  min-height: 28px;
+  padding: 4px 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px !important;
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ilha-chip.ativo {
+  background: #facc15 !important;
+  color: #1e293b !important;
+  border-color: #14324a;
+}
+
+.ilha-celular .ilha-chip {
+  min-height: 40px;
+  padding: 6px 10px !important;
+  font-size: 12px;
 }

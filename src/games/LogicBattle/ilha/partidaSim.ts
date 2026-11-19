@@ -10,6 +10,37 @@ import {
   RecursoNatural,
   SUBSOLO_CFG,
 } from './biomaRecursos'
+import {
+  BlocoMaterial,
+  BlocoMundo,
+  blocoMundoParaCentro,
+  bloqueiosDeBlocosMundo,
+  chaveBlocoMundo,
+  coletarEstruturaConexa,
+  construirAlturasColunas,
+  cotaVisaoHeroiBlocos,
+  cotaVisaoTorreBlocos,
+  criarBlocoMundo,
+  dentroLimiteBlocoMundo,
+  linhaVisaoLivre25D,
+  MapaBlocos,
+  planejarLinhaBlocos,
+  PlanoLinhaBlocos,
+  REQUISITOS_CONSAGRACAO,
+  SPEC_BLOCO_MATERIAL,
+} from './blocosMundo'
+import {
+  blocoColideHeroi,
+  blocoColideUnidades,
+  temRecursoParaMaterial,
+} from './alvoBlocoUnificado'
+import { meiaLarguraNv5 } from './blocosNv5Blueprints'
+import {
+  calcularEstornoMadeiraNv5,
+  COTA_ESTORNO_BLUEPRINT_NV5,
+  editarBlocoEmObraLivre,
+  meiaLarguraObraLivre,
+} from './obraBlocosLivres'
 import { Bloqueio, encaixarLivre, encontrarCaminho, Marco } from './caminho'
 import { applyGateWithRemainder, clampArmy } from '../domain/armyMath'
 import {
@@ -64,6 +95,8 @@ export interface Obra {
   construindoRestante?: number
   construindoTotal?: number
   blocosNv5?: Uint8Array
+  blocosLivres?: BlocoMundo[]
+  estornosMadeiraRestantes?: number
 }
 
 export function obraEmConstrucao(obra: Obra): boolean {
@@ -149,6 +182,7 @@ export interface PartidaState {
   relogioExtracao: number
   versaoRecursos: number
   subsoloCentro: { x: number; z: number } | null
+  blocosMapa: Record<string, BlocoMundo>
 }
 
 export type HeroiOrdem =
@@ -218,6 +252,44 @@ function raioDaObra(obra: Obra): number {
   return obra.tipo === 'torre' ? PARTIDA.visao.torre : PARTIDA.visao.obra
 }
 
+const cacheAlturasLoS = new WeakMap<PartidaState, Map<string, number>>()
+
+export function alturasLoSDoEstado(state: PartidaState): Map<string, number> {
+  const cached = cacheAlturasLoS.get(state)
+  if (cached) return cached
+  const temBlocosLivres = state.obras.some((o) => o.hp > 0 && Boolean(o.blocosLivres?.length))
+  if (!temBlocosLivres && Object.keys(state.blocosMapa).length === 0) {
+    const vazio = new Map<string, number>()
+    cacheAlturasLoS.set(state, vazio)
+    return vazio
+  }
+  const extras: { x: number; y: number; z: number }[] = []
+  for (const obra of state.obras) {
+    if (obra.hp <= 0 || !obra.blocosLivres) continue
+    for (const b of obra.blocosLivres) {
+      if (b.hp > 0) extras.push(b)
+    }
+  }
+  const mapa = construirAlturasColunas(state.blocosMapa, extras)
+  cacheAlturasLoS.set(state, mapa)
+  return mapa
+}
+
+export function visaoLivreNoEstado(
+  state: PartidaState,
+  origemX: number,
+  origemZ: number,
+  cotaObservadorBlocos: number,
+  alvoX: number,
+  alvoZ: number,
+  alvoY = 0,
+): boolean {
+  if (!PARTIDA.usarLoSPorAltura) return true
+  const alturas = alturasLoSDoEstado(state)
+  if (alturas.size === 0) return true
+  return linhaVisaoLivre25D(origemX, origemZ, cotaObservadorBlocos, alvoX, alvoZ, alturas, alvoY)
+}
+
 function dentroDaUniao(state: PartidaState, x: number, z: number): boolean {
   if (!state.semCorpo && Math.hypot(x - state.heroi.x, z - state.heroi.z) <= PARTIDA.visao.heroi) return true
   for (const unidade of state.unidades) {
@@ -226,7 +298,12 @@ function dentroDaUniao(state: PartidaState, x: number, z: number): boolean {
     }
   }
   for (const obra of state.obras) {
-    if (nossa(obra) && obra.hp > 0 && Math.hypot(x - obra.x, z - obra.z) <= raioDaObra(obra)) return true
+    if (!nossa(obra) || obra.hp <= 0) continue
+    if (Math.hypot(x - obra.x, z - obra.z) > raioDaObra(obra)) continue
+    if (obra.tipo === 'torre' && !obraEmConstrucao(obra)) {
+      if (!visaoLivreNoEstado(state, obra.x, obra.z, cotaVisaoTorreBlocos(obra.nivel), x, z, 0)) continue
+    }
+    return true
   }
   return false
 }
@@ -292,9 +369,23 @@ export function marcadoPelaTorre(state: PartidaState, unidade: Unidade): boolean
   let noOlho = false
   for (const torre of state.obras) {
     if (!nossa(torre) || torre.tipo !== 'torre' || torre.hp <= 0 || obraEmConstrucao(torre)) continue
+    const cota = cotaVisaoTorreBlocos(torre.nivel)
     const alcance = alcanceDaTorre(torre)
-    if (pontosDoCorpo(unidade).some((ponto) => Math.hypot(ponto.x - torre.x, ponto.z - torre.z) <= alcance)) return false
-    if (Math.hypot(unidade.x - torre.x, unidade.z - torre.z) <= PARTIDA.visao.torre) noOlho = true
+    if (
+      pontosDoCorpo(unidade).some(
+        (ponto) =>
+          Math.hypot(ponto.x - torre.x, ponto.z - torre.z) <= alcance &&
+          visaoLivreNoEstado(state, torre.x, torre.z, cota, ponto.x, ponto.z, 0),
+      )
+    ) {
+      return false
+    }
+    if (
+      Math.hypot(unidade.x - torre.x, unidade.z - torre.z) <= PARTIDA.visao.torre &&
+      visaoLivreNoEstado(state, torre.x, torre.z, cota, unidade.x, unidade.z, 0)
+    ) {
+      noOlho = true
+    }
   }
   return noOlho
 }
@@ -424,6 +515,7 @@ export function createPartida(mapaI = 0, mapaJ = 0, semCorpo = false): PartidaSt
     relogioExtracao: 0,
     versaoRecursos: 0,
     subsoloCentro: null,
+    blocosMapa: {},
   }
   return marcarChao(plantarBaseInimiga(vazia, mapaI, mapaJ))
 }
@@ -442,9 +534,10 @@ function cair(
   recursos: readonly RecursoNatural[],
   subsoloCentro: { x: number; z: number } | null,
   dt: number,
+  blocosMapa?: MapaBlocos,
 ): { y: number; vy: number } {
-  const piso = pisoUniversalEm(x, y, z, pedraNoChao, obras, recursos, subsoloCentro)
-  const teto = tetoUniversalEm(x, y, z, obras, subsoloCentro)
+  const piso = pisoUniversalEm(x, y, z, pedraNoChao, obras, recursos, subsoloCentro, blocosMapa)
+  const teto = tetoUniversalEm(x, y, z, obras, subsoloCentro, blocosMapa)
   let vy1 = vy - PARTIDA.gravidade * dt
   let y1 = y + vy1 * dt
   if (y1 > teto && vy1 > 0) {
@@ -465,6 +558,7 @@ export function pular(state: PartidaState): PartidaState {
     state.obras,
     state.recursos,
     state.subsoloCentro,
+    state.blocosMapa,
   )
   if (state.heroi.y > piso + 0.08) return state
   return { ...state, heroi: { ...state.heroi, y: piso, vy: PARTIDA.pulo } }
@@ -581,8 +675,15 @@ function meiaObra(tipo: PecaId): { hx: number; hz: number } {
   return { hx: caixa[0] / 2, hz: caixa[2] / 2 }
 }
 
-function bateObra(x: number, z: number, obras: readonly Obra[], ignorarId = -1, pes = 0): boolean {
-  return bateObraUniversal(x, z, obras, ignorarId, pes)
+function bateObra(
+  x: number,
+  z: number,
+  obras: readonly Obra[],
+  ignorarId = -1,
+  pes = 0,
+  blocosMapa?: MapaBlocos,
+): boolean {
+  return bateObraUniversal(x, z, obras, ignorarId, pes, blocosMapa)
 }
 
 function escorrega(
@@ -595,12 +696,13 @@ function escorrega(
   pes = 0,
   recursos: readonly RecursoNatural[] = [],
   subsoloCentro: { x: number; z: number } | null = null,
+  blocosMapa?: MapaBlocos,
 ): { x: number; z: number } {
   let x = x1
   let z = z1
   const bloqueia = (px: number, pz: number) =>
     bateObstaculo(px, pz, pes) ||
-    bateObra(px, pz, obras, -1, pes) ||
+    bateObra(px, pz, obras, -1, pes, blocosMapa) ||
     bateRecursoSuperficie(px, pz, pes, recursos)
   if (bloqueia(x, z)) {
     if (!bloqueia(x0, z)) x = x0
@@ -648,6 +750,45 @@ function nucleoDe(state: PartidaState): Obra | undefined {
   return nucleoNosso(state.obras)
 }
 
+export function podeFundarEm(
+  state: PartidaState,
+  tipo: PecaId,
+  x: number,
+  z: number,
+  opcoes?: { cobrarRecursos?: boolean; exigirRevelado?: boolean },
+): { ok: boolean; motivo?: string } {
+  if (state.derrota) return { ok: false, motivo: 'Partida encerrada' }
+  if (!Number.isFinite(x) || !Number.isFinite(z) || !dentroDoMapa(x, z)) {
+    return { ok: false, motivo: 'Fora dos limites do mapa' }
+  }
+  if (tipo === 'nucleo' && nucleoNosso(state.obras, false)) {
+    return { ok: false, motivo: 'Já existe um Núcleo aliado neste mapa' }
+  }
+  if (tipo !== 'nucleo' && !nucleoDe(state)) {
+    return { ok: false, motivo: 'Construa o Núcleo primeiro' }
+  }
+  if ((state.semCorpo || opcoes?.exigirRevelado) && PARTIDA.nuvem && !chaoRevelado(state, x, z)) {
+    return { ok: false, motivo: 'Explore a neblina antes de construir aqui' }
+  }
+  if (!state.semCorpo && state.heroi.y >= -0.9 && Math.hypot(x - state.heroi.x, z - state.heroi.z) < 1.6) {
+    return { ok: false, motivo: 'Afaste o herói do canteiro de obras' }
+  }
+  if (bateObstaculo(x, z) || bateObra(x, z, state.obras, -1, 0, state.blocosMapa)) {
+    return { ok: false, motivo: 'Espaço bloqueado por obra, obstáculo ou bloco' }
+  }
+  if (state.unidades.some((unidade) => unidade.hp > 0 && Math.hypot(unidade.x - x, unidade.z - z) < 1.4)) {
+    return { ok: false, motivo: 'Unidade ocupando o terreno' }
+  }
+  if (opcoes?.cobrarRecursos) {
+    const qtdMesmo = state.obras.filter((o) => nossa(o) && o.tipo === tipo && o.hp > 0).length
+    const custoMad = custoMadeiraObra(tipo, qtdMesmo)
+    if (custoMad > 0 && state.madeira < custoMad && state.credito < 1) {
+      return { ok: false, motivo: `Precisa ${custoMad} madeiras ou 1 licença` }
+    }
+  }
+  return { ok: true }
+}
+
 export function fundar(
   state: PartidaState,
   tipo: PecaId,
@@ -655,16 +796,7 @@ export function fundar(
   z: number,
   opcoes?: { emConstrucao?: boolean; cobrarRecursos?: boolean },
 ): PartidaState {
-  if (state.derrota || !Number.isFinite(x) || !Number.isFinite(z)) return state
-  if (!dentroDoMapa(x, z)) return state
-  if (tipo === 'nucleo' && nucleoNosso(state.obras, false)) return state
-  if (tipo !== 'nucleo' && !nucleoDe(state)) return state
-  if (state.semCorpo && PARTIDA.nuvem && !chaoRevelado(state, x, z)) return state
-  if (!state.semCorpo && state.heroi.y >= -0.9 && Math.hypot(x - state.heroi.x, z - state.heroi.z) < 1.6) return state
-  if (bateObstaculo(x, z) || bateObra(x, z, state.obras)) return state
-  if (state.unidades.some((unidade) => unidade.hp > 0 && Math.hypot(unidade.x - x, unidade.z - z) < 1.4)) {
-    return state
-  }
+  if (!podeFundarEm(state, tipo, x, z, { cobrarRecursos: opcoes?.cobrarRecursos }).ok) return state
 
   let madeira = state.madeira
   let credito = state.credito
@@ -783,8 +915,10 @@ export function repararObra(state: PartidaState, obraId: number): PartidaState {
 
 export function aproximacaoDaObra(obra: Obra, deX: number, deZ: number): { x: number; z: number } {
   const caixa = DIMENSOES_OBRA[obra.tipo]
-  const hx = (obra.blocosNv5 ? 3.1 : caixa[0] / 2) + 0.6
-  const hz = (obra.blocosNv5 ? 3.1 : caixa[2] / 2) + 0.6
+  const meiaLivre = obra.blocosLivres?.length ? meiaLarguraObraLivre(obra.blocosLivres, obra.x, obra.z) : null
+  const nv5 = meiaLarguraNv5()
+  const hx = (meiaLivre ? meiaLivre.hx : obra.blocosNv5 ? nv5 : caixa[0] / 2) + 0.6
+  const hz = (meiaLivre ? meiaLivre.hz : obra.blocosNv5 ? nv5 : caixa[2] / 2) + 0.6
   const dx = deX - obra.x
   const dz = deZ - obra.z
   const maior = Math.max(Math.abs(dx) / hx, Math.abs(dz) / hz)
@@ -802,7 +936,7 @@ export function evoluir(state: PartidaState, obraId: number): PartidaState {
   if (!usaCredito && !usaRecursos) return state
   const novoNivel = obra.nivel + 1
   const bonusHp = novoNivel >= 4 ? (novoNivel === 5 ? 50 : 30) : 0
-  const viraFortalezaNv5 = novoNivel >= 5 && obra.tipo !== 'portao'
+  const viraFortalezaNv5 = novoNivel >= 5 && !obra.blocosLivres?.length
   const obras = state.obras.map((item) => {
     if (item.id !== obraId) return item
     const novoMax = item.maxHp + bonusHp
@@ -811,7 +945,12 @@ export function evoluir(state: PartidaState, obraId: number): PartidaState {
       nivel: novoNivel,
       hp: novoMax,
       maxHp: novoMax,
-      ...(viraFortalezaNv5 ? { blocosNv5: garantirBlocosNv5(item) } : {}),
+      ...(viraFortalezaNv5
+        ? {
+            blocosNv5: garantirBlocosNv5(item),
+            estornosMadeiraRestantes: item.estornosMadeiraRestantes ?? COTA_ESTORNO_BLUEPRINT_NV5,
+          }
+        : {}),
     }
   })
   let heroi = state.heroi
@@ -850,6 +989,8 @@ export function editarBlocoObra(
   acao: 'adicionar' | 'remover',
 ): PartidaState {
   if (state.derrota) return state
+  if (!state.semCorpo && state.heroi.y < -0.9) return state
+  if (acao === 'adicionar' && state.madeira < 1) return state
   const obra = state.obras.find(
     (item) => item.id === obraId && nossa(item) && item.hp > 0 && !obraEmConstrucao(item) && Boolean(item.blocosNv5),
   )
@@ -865,13 +1006,360 @@ export function editarBlocoObra(
     state.semCorpo ? null : state.heroi,
   )
   if (!novosBlocos) return state
+  const estorno = calcularEstornoMadeiraNv5(obra.estornosMadeiraRestantes, acao)
   return {
     ...state,
-    madeira: acao === 'remover' ? state.madeira + 1 : Math.max(0, state.madeira - 1),
-    obras: state.obras.map((item) => (item.id === obraId ? { ...item, blocosNv5: novosBlocos } : item)),
+    madeira: Math.max(0, state.madeira + estorno.deltaMadeira),
+    obras: state.obras.map((item) =>
+      item.id === obraId
+        ? { ...item, blocosNv5: novosBlocos, estornosMadeiraRestantes: estorno.proximosEstornos }
+        : item,
+    ),
     versaoSolidos: state.versaoSolidos + 1,
     versaoRecursos: state.versaoRecursos + 1,
   }
+}
+
+function aplicarDeltaRecursoMaterial(
+  state: PartidaState,
+  material: BlocoMaterial,
+  deltaQtd: number,
+): Pick<PartidaState, 'madeira' | 'lingotes' | 'ouro'> {
+  const spec = SPEC_BLOCO_MATERIAL[material]
+  const delta = deltaQtd * spec.qtd
+  return {
+    madeira: spec.recurso === 'madeira' ? Math.max(0, state.madeira + delta) : state.madeira,
+    lingotes: spec.recurso === 'lingotes' ? Math.max(0, state.lingotes + delta) : state.lingotes,
+    ouro: spec.recurso === 'ouro' ? Math.max(0, state.ouro + delta) : state.ouro,
+  }
+}
+
+export function celulaColideObraExistente(state: PartidaState, gx: number, gy: number, gz: number): boolean {
+  const c = blocoMundoParaCentro(gx, gy, gz)
+  return bateObraUniversal(c.x, c.z, state.obras, -1, gy)
+}
+
+export function podeColocarBlocoMundoEm(state: PartidaState, gx: number, gy: number, gz: number): boolean {
+  if (!dentroLimiteBlocoMundo(gx, gy, gz)) return false
+  const c = blocoMundoParaCentro(gx, gy, gz)
+  if (PARTIDA.nuvem && !chaoRevelado(state, c.x, c.z)) return false
+  if (state.blocosMapa[chaveBlocoMundo(gx, gy, gz)]) return false
+  const heroiPos = state.semCorpo ? null : state.heroi
+  if (blocoColideHeroi(gx, gy, gz, heroiPos)) return false
+  if (blocoColideUnidades(gx, gy, gz, state.unidades)) return false
+  if (celulaColideObraExistente(state, gx, gy, gz)) return false
+  return true
+}
+
+export function editarBlocoMundo(
+  state: PartidaState,
+  gx: number,
+  gy: number,
+  gz: number,
+  acao: 'adicionar' | 'remover',
+  material: BlocoMaterial = 'madeira',
+): PartidaState {
+  if (state.derrota) return state
+  if (!state.semCorpo && state.heroi.y < -0.9) return state
+  const k = chaveBlocoMundo(gx, gy, gz)
+  if (acao === 'remover') {
+    const existente = state.blocosMapa[k]
+    if (!existente || existente.hp <= 0 || existente.lado !== 'nosso') return state
+    const proximo = { ...state.blocosMapa }
+    delete proximo[k]
+    const recursos = aplicarDeltaRecursoMaterial(state, existente.material, 1)
+    return {
+      ...state,
+      ...recursos,
+      blocosMapa: proximo,
+      versaoSolidos: state.versaoSolidos + 1,
+      versaoRecursos: state.versaoRecursos + 1,
+    }
+  }
+  if (!temRecursoParaMaterial(state, material, 1)) return state
+  if (!podeColocarBlocoMundoEm(state, gx, gy, gz)) return state
+  const recursos = aplicarDeltaRecursoMaterial(state, material, -1)
+  return {
+    ...state,
+    ...recursos,
+    blocosMapa: {
+      ...state.blocosMapa,
+      [k]: criarBlocoMundo(gx, gy, gz, material, 'nosso'),
+    },
+    versaoSolidos: state.versaoSolidos + 1,
+    versaoRecursos: state.versaoRecursos + 1,
+  }
+}
+
+export function planejarLinhaNoEstado(
+  state: PartidaState,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  altura: 1 | 2 | 3 = PARTIDA.alturaLinhaPadrao,
+  material: BlocoMaterial = PARTIDA.materialBlocoPadrao,
+): PlanoLinhaBlocos {
+  return planejarLinhaBlocos(state.blocosMapa, x0, z0, x1, z1, altura, material, (gx, gy, gz) =>
+    podeColocarBlocoMundoEm(state, gx, gy, gz),
+  )
+}
+
+export function construirLinhaBlocos(
+  state: PartidaState,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  altura: 1 | 2 | 3 = PARTIDA.alturaLinhaPadrao,
+  material: BlocoMaterial = PARTIDA.materialBlocoPadrao,
+): PartidaState {
+  if (state.derrota) return state
+  if (!state.semCorpo && state.heroi.y < -0.9) return state
+  const plano = planejarLinhaNoEstado(state, x0, z0, x1, z1, altura, material)
+  if (plano.celulas.length === 0) return state
+  if (!temRecursoParaMaterial(state, material, plano.celulas.length)) return state
+  const proximo: Record<string, BlocoMundo> = { ...state.blocosMapa }
+  for (const cel of plano.celulas) {
+    proximo[chaveBlocoMundo(cel.x, cel.y, cel.z)] = criarBlocoMundo(cel.x, cel.y, cel.z, material, 'nosso')
+  }
+  const recursos = aplicarDeltaRecursoMaterial(state, material, -plano.celulas.length)
+  return {
+    ...state,
+    ...recursos,
+    blocosMapa: proximo,
+    versaoSolidos: state.versaoSolidos + 1,
+    versaoRecursos: state.versaoRecursos + 1,
+  }
+}
+
+export function podeConsagrarEm(
+  state: PartidaState,
+  gx: number,
+  gy: number,
+  gz: number,
+  tipo: PecaId,
+): { ok: boolean; motivo?: string; totalBlocos?: number; altura?: number } {
+  if (state.derrota) return { ok: false, motivo: 'Partida encerrada' }
+  if (!state.semCorpo && state.heroi.y < -0.9) return { ok: false, motivo: 'Volte à superfície para consagrar' }
+  if (tipo === 'nucleo' && nucleoNosso(state.obras, false)) {
+    return { ok: false, motivo: 'Já existe um Núcleo aliado neste mapa' }
+  }
+  if (tipo !== 'nucleo' && !nucleoDe(state)) {
+    return { ok: false, motivo: 'É preciso ter um Núcleo vivo antes de consagrar esta obra' }
+  }
+  const res = coletarEstruturaConexa(state.blocosMapa, gx, gy, gz)
+  if (!res.ok) {
+    if (res.motivo === 'muito_grande') return { ok: false, motivo: 'Estrutura excede 256 blocos conectados' }
+    if (res.motivo === 'span_excedido') return { ok: false, motivo: 'Estrutura excede a área máxima de 13×13 blocos' }
+    return { ok: false, motivo: 'Clique em um bloco aliado livre para consagrar' }
+  }
+  const req = REQUISITOS_CONSAGRACAO[tipo]
+  if (res.blocos.length < req.minBlocos || res.altura < req.minAltura) {
+    return {
+      ok: false,
+      motivo: `${req.resumo} (atual: ${res.blocos.length} blocos, altura ${res.altura})`,
+      totalBlocos: res.blocos.length,
+      altura: res.altura,
+    }
+  }
+  if (tipo !== 'nucleo' && state.credito < 1 && state.ouro < 2) {
+    return { ok: false, motivo: 'Precisa 1 licença ou 2 ouros para consagrar' }
+  }
+  return { ok: true, totalBlocos: res.blocos.length, altura: res.altura }
+}
+
+export function consagrarEstruturaManual(
+  state: PartidaState,
+  gx: number,
+  gy: number,
+  gz: number,
+  tipo: PecaId,
+): PartidaState {
+  const validacao = podeConsagrarEm(state, gx, gy, gz, tipo)
+  if (!validacao.ok) return state
+  const res = coletarEstruturaConexa(state.blocosMapa, gx, gy, gz)
+  if (!res.ok) return state
+
+  let credito = state.credito
+  let ouro = state.ouro
+  if (tipo !== 'nucleo') {
+    if (credito >= 1) credito -= 1
+    else if (ouro >= 2) ouro -= 2
+    else return state
+  }
+
+  const proximoMapa = { ...state.blocosMapa }
+  let somaHp = 0
+  for (const b of res.blocos) {
+    delete proximoMapa[chaveBlocoMundo(b.x, b.y, b.z)]
+    somaHp += b.hp
+  }
+  const hpBase = tipo === 'nucleo' ? PARTIDA.nucleoHp : 50
+  const maxHp = Math.max(hpBase, somaHp)
+  const nivelInicial = tipo === 'torre' && res.altura >= 4 ? 5 : 1
+  const obra: Obra = {
+    id: state.nextId,
+    lado: 'nosso',
+    tipo,
+    x: res.centroX,
+    z: res.centroZ,
+    nivel: nivelInicial,
+    hp: maxHp,
+    maxHp,
+    gateApplied: false,
+    cooldown: 0,
+    blocosLivres: res.blocos.map((b) => ({ ...b })),
+  }
+  return marcarChao({
+    ...state,
+    credito,
+    ouro,
+    blocosMapa: proximoMapa,
+    obras: [...state.obras, obra],
+    nextId: state.nextId + 1,
+    versaoSolidos: state.versaoSolidos + 1,
+    versaoRecursos: state.versaoRecursos + 1,
+  })
+}
+
+export function editarBlocoObraLivre(
+  state: PartidaState,
+  obraId: number,
+  gx: number,
+  gy: number,
+  gz: number,
+  acao: 'adicionar' | 'remover',
+  material: BlocoMaterial = 'madeira',
+): PartidaState {
+  if (state.derrota) return state
+  if (!state.semCorpo && state.heroi.y < -0.9) return state
+  const obra = state.obras.find(
+    (item) => item.id === obraId && nossa(item) && item.hp > 0 && !obraEmConstrucao(item) && Boolean(item.blocosLivres?.length),
+  )
+  if (!obra || !obra.blocosLivres) return state
+  if (acao === 'adicionar' && !temRecursoParaMaterial(state, material, 1)) return state
+  const edit = editarBlocoEmObraLivre(
+    obra.blocosLivres,
+    gx,
+    gy,
+    gz,
+    acao,
+    material,
+    state.semCorpo ? null : state.heroi,
+    state.unidades,
+    state.blocosMapa,
+  )
+  if (!edit.ok) return state
+  const recursos = aplicarDeltaRecursoMaterial(state, edit.materialAfetado, acao === 'adicionar' ? -1 : 1)
+  const deltaHp = SPEC_BLOCO_MATERIAL[edit.materialAfetado].hp * (acao === 'adicionar' ? 1 : -1)
+  const novoMaxHp = Math.max(40, obra.maxHp + deltaHp)
+  const novoHp = Math.min(novoMaxHp, Math.max(1, obra.hp + (deltaHp > 0 ? deltaHp : 0)))
+  return {
+    ...state,
+    ...recursos,
+    obras: state.obras.map((item) =>
+      item.id === obraId ? { ...item, blocosLivres: edit.blocos, maxHp: novoMaxHp, hp: novoHp } : item,
+    ),
+    versaoSolidos: state.versaoSolidos + 1,
+    versaoRecursos: state.versaoRecursos + 1,
+  }
+}
+
+function livreParaTropa(
+  px: number,
+  pz: number,
+  obras: readonly Obra[],
+  recursos: readonly RecursoNatural[],
+  blocosMapa?: MapaBlocos,
+): boolean {
+  return (
+    dentroDoMapa(px, pz) &&
+    !bateObstaculo(px, pz) &&
+    !bateObra(px, pz, obras, -1, 0, blocosMapa) &&
+    !bateRecursoSuperficie(px, pz, 0, recursos)
+  )
+}
+
+export function pontosFormacaoTropa(
+  centroX: number,
+  centroZ: number,
+  quantidade: number,
+  obras: readonly Obra[] = [],
+  recursos: readonly RecursoNatural[] = [],
+  blocosMapa?: MapaBlocos,
+): { x: number; z: number }[] {
+  const centro = puxaLimite(centroX, centroZ)
+  if (quantidade <= 1) return [centro]
+  const espaco = PARTIDA.tropaEspacoFormacao
+  const validos: { x: number; z: number }[] = []
+  if (livreParaTropa(centro.x, centro.z, obras, recursos, blocosMapa)) validos.push(centro)
+  for (let anel = 1; validos.length < quantidade && anel <= 6; anel += 1) {
+    const pontosAnel = 6 * anel
+    const raio = anel * espaco
+    for (let i = 0; i < pontosAnel && validos.length < quantidade; i += 1) {
+      const ang = (i * 2 * Math.PI) / pontosAnel
+      const p = puxaLimite(centroX + Math.cos(ang) * raio, centroZ + Math.sin(ang) * raio)
+      if (!livreParaTropa(p.x, p.z, obras, recursos, blocosMapa)) continue
+      if (validos.some((v) => Math.hypot(v.x - p.x, v.z - p.z) < 0.5)) continue
+      validos.push(p)
+    }
+  }
+  const base = validos.length > 0 ? validos : [centro]
+  const resultado: { x: number; z: number }[] = []
+  for (let i = 0; i < quantidade; i += 1) {
+    resultado.push(base[i % base.length])
+  }
+  return resultado
+}
+
+function separarAliados(
+  unidades: Unidade[],
+  obras: readonly Obra[],
+  recursos: readonly RecursoNatural[],
+  dt: number,
+  blocosMapa?: MapaBlocos,
+): Unidade[] {
+  const aliadas = unidades.filter((u) => u.lado === 'aliado' && u.hp > 0)
+  if (aliadas.length < 2) return unidades
+  const raio = PARTIDA.tropaRaioSeparacao
+  const maxPasso = PARTIDA.allySpeed * 0.65 * Math.max(dt, 0.016)
+  const solto = PARTIDA.atlas === 'grade'
+  const empuxos = new Map<number, { x: number; z: number }>()
+  for (let i = 0; i < aliadas.length; i += 1) {
+    const a = aliadas[i]
+    let ex = 0
+    let ez = 0
+    for (let j = 0; j < aliadas.length; j += 1) {
+      if (i === j) continue
+      const b = aliadas[j]
+      const dx = a.x - b.x
+      const dz = a.z - b.z
+      const d = Math.hypot(dx, dz)
+      if (d >= raio) continue
+      if (d < 1e-4) {
+        const ang = (a.id * 2.399963) % (Math.PI * 2)
+        ex += Math.cos(ang) * maxPasso
+        ez += Math.sin(ang) * maxPasso
+      } else {
+        const forca = ((raio - d) / raio) * maxPasso
+        ex += (dx / d) * forca
+        ez += (dz / d) * forca
+      }
+    }
+    const mag = Math.hypot(ex, ez)
+    if (mag > 1e-5) {
+      const escala = mag > maxPasso ? maxPasso / mag : 1
+      empuxos.set(a.id, { x: ex * escala, z: ez * escala })
+    }
+  }
+  if (empuxos.size === 0) return unidades
+  return unidades.map((u) => {
+    const push = empuxos.get(u.id)
+    if (!push) return u
+    const pos = escorrega(u.x, u.z, u.x + push.x, u.z + push.z, obras, solto, 0, recursos, null, blocosMapa)
+    return { ...u, x: pos.x, z: pos.z }
+  })
 }
 
 export function criarTropa(state: PartidaState, obraId: number): PartidaState {
@@ -879,7 +1367,8 @@ export function criarTropa(state: PartidaState, obraId: number): PartidaState {
   const usaCredito = state.credito >= 1
   const usaOuro = state.ouro >= 2
   if (!usaCredito && !usaOuro) return state
-  if (aliadosVivos(state).length >= PARTIDA.allyCap) return state
+  const vivas = aliadosVivos(state)
+  if (vivas.length >= PARTIDA.allyCap) return state
   const obra = state.obras.find(
     (item) =>
       item.id === obraId &&
@@ -889,23 +1378,58 @@ export function criarTropa(state: PartidaState, obraId: number): PartidaState {
       (item.tipo === 'nucleo' || item.tipo === 'quartel'),
   )
   if (!obra) return state
-  const distSaida = obra.blocosNv5 ? 3.5 : 1.8
+  const meiaLivre = obra.blocosLivres?.length ? meiaLarguraObraLivre(obra.blocosLivres, obra.x, obra.z) : null
+  const distBase = meiaLivre
+    ? Math.max(meiaLivre.hx, meiaLivre.hz) + 0.75
+    : obra.blocosNv5
+      ? meiaLarguraNv5() + 0.55
+      : 1.8
+  let spawn = { x: obra.x + distBase, z: obra.z }
+  let melhorFallback = spawn
+  let melhorFolga = -1
+  let achouLimpo = false
+  for (let anel = 0; anel < 3 && !achouLimpo; anel += 1) {
+    const dist = distBase + anel * 1.1
+    for (let passo = 0; passo < 12; passo += 1) {
+      const ang = (passo * 2 * Math.PI) / 12
+      const cx = obra.x + Math.cos(ang) * dist
+      const cz = obra.z + Math.sin(ang) * dist
+      if (!livreParaTropa(cx, cz, state.obras, state.recursos, state.blocosMapa)) continue
+      const folga = vivas.reduce(
+        (menor, u) => Math.min(menor, Math.hypot(cx - u.x, cz - u.z)),
+        Number.POSITIVE_INFINITY,
+      )
+      if (folga > melhorFolga) {
+        melhorFolga = folga
+        melhorFallback = { x: cx, z: cz }
+      }
+      if (folga >= PARTIDA.tropaRaioSeparacao) {
+        spawn = { x: cx, z: cz }
+        achouLimpo = true
+        break
+      }
+    }
+  }
+  if (!achouLimpo) {
+    if (melhorFolga >= 0) {
+      spawn = melhorFallback
+    } else {
+      const cel = encaixarLivre(Math.round(obra.x / PARTIDA.celula), Math.round(obra.z / PARTIDA.celula), bloqueiosDe(state))
+      if (cel) spawn = { x: cel[0] * PARTIDA.celula, z: cel[1] * PARTIDA.celula }
+    }
+  }
   const unidade: Unidade = {
     id: state.nextId,
     lado: 'aliado',
     papel: 'tropa',
-    x: obra.x + distSaida,
-    z: obra.z,
+    x: spawn.x,
+    z: spawn.z,
     hp: 16,
     postura: 'ordens',
     ordem: null,
     cooldown: 0,
     segmentos: [],
     alerta: true,
-  }
-  if (bateObra(unidade.x, unidade.z, state.obras) || !dentroDoMapa(unidade.x, unidade.z)) {
-    unidade.x = obra.x
-    unidade.z = obra.z + distSaida
   }
   return marcarChao({
     ...state,
@@ -940,24 +1464,83 @@ export function idsNoRetangulo(
     .map((unidade) => unidade.id)
 }
 
+export interface SelecaoRts {
+  heroi: boolean
+  tropas: number[]
+}
+
+export function selecionarAoClicarUnidade(atual: SelecaoRts, id: number, shiftKey = false): SelecaoRts {
+  if (!shiftKey) return { heroi: false, tropas: [id] }
+  const existe = atual.tropas.includes(id)
+  return {
+    heroi: atual.heroi,
+    tropas: existe ? atual.tropas.filter((item) => item !== id) : [...atual.tropas, id],
+  }
+}
+
+export function selecionarAoClicarHeroi(atual: SelecaoRts, shiftKey = false): SelecaoRts {
+  if (!shiftKey) return { heroi: true, tropas: [] }
+  return { heroi: !atual.heroi, tropas: atual.tropas }
+}
+
+export function selecionarAoClicarChaoVazio(atual: SelecaoRts, modoMover = false): SelecaoRts {
+  return modoMover ? atual : { heroi: false, tropas: [] }
+}
+
+export function selecionarPorRetanguloEstado(
+  state: PartidaState,
+  atual: SelecaoRts,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  shiftKey = false,
+): SelecaoRts {
+  const noRet = idsNoRetangulo(state, x0, z0, x1, z1)
+  const minX = Math.min(x0, x1)
+  const maxX = Math.max(x0, x1)
+  const minZ = Math.min(z0, z1)
+  const maxZ = Math.max(z0, z1)
+  const heroiDentro =
+    !state.semCorpo &&
+    state.heroi.army > 0 &&
+    state.heroi.x >= minX &&
+    state.heroi.x <= maxX &&
+    state.heroi.z >= minZ &&
+    state.heroi.z <= maxZ
+  const combinadas = shiftKey ? Array.from(new Set([...atual.tropas, ...noRet])) : noRet
+  return {
+    heroi: shiftKey ? atual.heroi || heroiDentro : heroiDentro,
+    tropas: combinadas,
+  }
+}
+
 export function ordenar(state: PartidaState, ids: readonly number[], ordem: Ordem): PartidaState {
   if (state.derrota) return state
   const quer = new Set(ids)
+  const idsElegiveis = state.unidades
+    .filter((unidade) => quer.has(unidade.id) && unidade.lado === 'aliado' && unidade.hp > 0)
+    .map((unidade) => unidade.id)
+  if (idsElegiveis.length === 0) return state
   const bloqueios = bloqueiosDe(state)
-  let mudou = false
+  const slotsPorId = new Map<number, { x: number; z: number }>()
+  if (ordem.tipo === 'mover') {
+    const slots = pontosFormacaoTropa(ordem.x, ordem.z, idsElegiveis.length, state.obras, state.recursos, state.blocosMapa)
+    idsElegiveis.forEach((id, i) => slotsPorId.set(id, slots[i]))
+  }
+  const custoAgua =
+    state.lagoas.length > 0
+      ? (px: number, pz: number) => (emAguaRasa(state.lagoas, px, pz, 0) ? PARTIDA.custoAguaCaminho : 1)
+      : undefined
   const unidades = state.unidades.map((unidade) => {
     if (!quer.has(unidade.id) || unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
-    mudou = true
     if (ordem.tipo !== 'mover') return { ...unidade, postura: 'ordens' as const, ordem, rota: null }
-    const custoAgua =
-      state.lagoas.length > 0
-        ? (px: number, pz: number) => (emAguaRasa(state.lagoas, px, pz, 0) ? PARTIDA.custoAguaCaminho : 1)
-        : undefined
-    const marcos = encontrarCaminho(unidade.x, unidade.z, ordem.x, ordem.z, bloqueios, custoAgua)
+    const destino = slotsPorId.get(unidade.id) ?? { x: ordem.x, z: ordem.z }
+    const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua)
     return {
       ...unidade,
       postura: 'ordens' as const,
-      ordem,
+      ordem: { tipo: 'mover' as const, x: destino.x, z: destino.z },
       rota: {
         marcos: marcos ?? [],
         renovarEm: state.tempo + PARTIDA.recalcularSeg,
@@ -967,7 +1550,6 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
       },
     }
   })
-  if (!mudou) return state
   return { ...state, unidades }
 }
 
@@ -1303,6 +1885,7 @@ export function atirar(state: PartidaState): PartidaState {
   let alvo: Unidade | null = null
   let obraAlvo: Obra | null = null
   let melhor = Number.POSITIVE_INFINITY
+  const cotaHeroi = cotaVisaoHeroiBlocos(state.heroi.y)
   for (const unidade of state.unidades) {
     if (unidade.lado !== 'inimigo' || unidade.hp <= 0 || !inimigoVisivel(state, unidade)) continue
     for (const ponto of pontosDoCorpo(unidade)) {
@@ -1310,6 +1893,7 @@ export function atirar(state: PartidaState): PartidaState {
       const dz = ponto.z - state.heroi.z
       const alongChao = dx * fx + dz * fz
       if (alongChao < 0.35 || alongChao > alcance + 0.05) continue
+      if (!visaoLivreNoEstado(state, state.heroi.x, state.heroi.z, cotaHeroi, ponto.x, ponto.z, 0)) continue
       const corpo = aproximaCorpo(
         state.heroi.x,
         origemY,
@@ -1330,6 +1914,7 @@ export function atirar(state: PartidaState): PartidaState {
   for (const obra of state.obras) {
     if (nossa(obra) || obra.hp <= 0 || !cobertoAgora(state, obra.x, obra.z)) continue
     if (Math.hypot(obra.x - state.heroi.x, obra.z - state.heroi.z) > alcance) continue
+    if (!visaoLivreNoEstado(state, state.heroi.x, state.heroi.z, cotaHeroi, obra.x, obra.z, 0)) continue
     const entrada = entradaNaObra(state, obra, olhar, origemY)
     if (!Number.isFinite(entrada) || entrada > melhor + 1e-8) continue
     obraAlvo = obra
@@ -1392,6 +1977,7 @@ function moverUnidade(
   dt: number,
   obras: readonly Obra[],
   lagoas: readonly LagoaRasa[] = [],
+  blocosMapa?: MapaBlocos,
 ): Unidade {
   const dx = tx - unidade.x
   const dz = tz - unidade.z
@@ -1405,6 +1991,11 @@ function moverUnidade(
     unidade.x + (dx / dist) * passo,
     unidade.z + (dz / dist) * passo,
     obras,
+    false,
+    0,
+    [],
+    null,
+    blocosMapa,
   )
   return { ...unidade, x: prox.x, z: prox.z }
 }
@@ -1418,13 +2009,16 @@ function bloqueiosDe(state: PartidaState): Bloqueio[] {
   }))
   for (const obra of state.obras) {
     if (obra.hp <= 0 || obra.tipo === 'portao') continue
-    if (obra.blocosNv5) continue
+    if (obra.blocosNv5 || obra.blocosLivres?.length) continue
     const meia = meiaObra(obra.tipo)
     lista.push({ x: obra.x, z: obra.z, hx: meia.hx, hz: meia.hz })
   }
-  const obrasNv5 = state.obras.filter((o) => o.hp > 0 && Boolean(o.blocosNv5))
-  if (obrasNv5.length > 0) {
-    lista.push(...bloqueiosTerrenoEAldeaNv5(obrasNv5, []))
+  const obrasVoxelOuLivre = state.obras.filter((o) => o.hp > 0 && (Boolean(o.blocosNv5) || Boolean(o.blocosLivres?.length)))
+  if (obrasVoxelOuLivre.length > 0) {
+    lista.push(...bloqueiosTerrenoEAldeaNv5(obrasVoxelOuLivre, []))
+  }
+  if (Object.keys(state.blocosMapa).length > 0) {
+    lista.push(...bloqueiosDeBlocosMundo(state.blocosMapa))
   }
   return lista
 }
@@ -1475,6 +2069,7 @@ function avancarRota(
   bloqueios: readonly Bloqueio[],
   modo: 'fixo' | 'vivo',
   lagoas: readonly LagoaRasa[] = [],
+  blocosMapa?: MapaBlocos,
 ): Unidade {
   const atual = prepararRota(unidade, tx, tz, tempo, versao, bloqueios, modo, lagoas)
   if (atual.rota?.semCaminho) return atual
@@ -1483,7 +2078,7 @@ function avancarRota(
     marcos = marcos.slice(1)
   }
   const meta = marcos[0] ?? { x: tx, z: tz }
-  const moved = moverUnidade(atual, meta.x, meta.z, velocidade, dt, obras, lagoas)
+  const moved = moverUnidade(atual, meta.x, meta.z, velocidade, dt, obras, lagoas, blocosMapa)
   const chegou = modo === 'fixo' && Math.hypot(moved.x - tx, moved.z - tz) < 0.5
   return {
     ...moved,
@@ -1559,6 +2154,8 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
       state.versaoSolidos,
       bloqueios,
       'fixo',
+      state.lagoas,
+      state.blocosMapa,
     )
     const chegou = Math.hypot(andou.x - ordem.x, andou.z - ordem.z) < 0.5
     return {
@@ -1590,6 +2187,8 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
         state.versaoSolidos,
         bloqueios,
         'vivo',
+        state.lagoas,
+        state.blocosMapa,
       )
       atual = {
         ...state,
@@ -1620,6 +2219,8 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
       state.versaoSolidos,
       bloqueios,
       'vivo',
+      state.lagoas,
+      state.blocosMapa,
     )
     atual = {
       ...state,
@@ -1647,6 +2248,7 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
       ordem.recursos,
       ordem.subsoloCentro,
       dt,
+      ordem.blocosMapa,
     )
     return { ...ordem, heroi: { ...ordem.heroi, y: queda.y, vy: queda.vy } }
   }
@@ -1686,6 +2288,7 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
     state.heroi.y,
     state.recursos,
     state.subsoloCentro,
+    state.blocosMapa,
   )
   let gateArchApplied = state.gateArchApplied
   let army = state.heroi.army
@@ -1742,6 +2345,7 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
     state.recursos,
     state.subsoloCentro,
     dt,
+    state.blocosMapa,
   )
   return {
     ...state,
@@ -1817,10 +2421,35 @@ function danoHordaNoHeroi(state: PartidaState): PartidaState {
 }
 
 function emContatoComObra(px: number, pz: number, obra: Obra): boolean {
-  const m = obra.blocosNv5 ? { hx: 3.0, hz: 3.0 } : meiaObra(obra.tipo)
+  const m = obra.blocosLivres?.length
+    ? meiaLarguraObraLivre(obra.blocosLivres, obra.x, obra.z)
+    : obra.blocosNv5
+      ? { hx: meiaLarguraNv5(), hz: meiaLarguraNv5() }
+      : meiaObra(obra.tipo)
   const dx = Math.max(0, Math.abs(px - obra.x) - m.hx)
   const dz = Math.max(0, Math.abs(pz - obra.z) - m.hz)
   return Math.hypot(dx, dz) <= 0.98 || Math.hypot(px - obra.x, pz - obra.z) <= PARTIDA.nucleoContato
+}
+
+function blocoNossoAdjacente(px: number, pz: number, blocosMapa: MapaBlocos): BlocoMundo | null {
+  let melhor: BlocoMundo | null = null
+  let melhorDist = 1.45
+  const gxC = Math.round(px)
+  const gzC = Math.round(pz)
+  for (let gx = gxC - 1; gx <= gxC + 1; gx += 1) {
+    for (let gz = gzC - 1; gz <= gzC + 1; gz += 1) {
+      for (let gy = 0; gy <= 1; gy += 1) {
+        const bloco = blocosMapa[chaveBlocoMundo(gx, gy, gz)]
+        if (!bloco || bloco.hp <= 0 || bloco.lado !== 'nosso') continue
+        const d = Math.hypot(px - bloco.x, pz - bloco.z)
+        if (d < melhorDist) {
+          melhorDist = d
+          melhor = bloco
+        }
+      }
+    }
+  }
+  return melhor
 }
 
 function passoUnidades(state: PartidaState, dt: number): PartidaState {
@@ -1838,9 +2467,25 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
   }))
   let unidades = state.unidades.map((unidade) => ({ ...unidade, cooldown: Math.max(0, unidade.cooldown - dt) }))
   let army = state.heroi.army
+  let blocosMapa = state.blocosMapa
+  let mudouBlocoMapa = false
+  let quebrouBlocoMapa = false
 
   const vivo = (id: number) => unidades.find((unidade) => unidade.id === id && unidade.hp > 0)
   const obraInimigaViva = (id: number) => obras.find((obra) => obra.id === id && !nossa(obra) && obra.hp > 0)
+  const blocoMaisProximo = (px: number, pz: number): BlocoMundo | null => {
+    let melhor: BlocoMundo | null = null
+    let melhorDist = Number.POSITIVE_INFINITY
+    for (const b of Object.values(blocosMapa)) {
+      if (b.hp <= 0 || b.lado !== 'nosso' || b.y > 1) continue
+      const d = Math.hypot(px - b.x, pz - b.z)
+      if (d < melhorDist) {
+        melhorDist = d
+        melhor = b
+      }
+    }
+    return melhor
+  }
 
   unidades = unidades.map((unidade) => {
     if (unidade.hp <= 0) return unidade
@@ -1860,21 +2505,25 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       const meta = escolhido === -1 || escolhido === null
         ? { x: state.heroi.x, z: state.heroi.z }
         : cands.find((item) => item.id === escolhido) ?? { x: state.heroi.x, z: state.heroi.z }
-      return {
-        ...avancarRota(
-          unidade,
-          meta.x,
-          meta.z,
-          PARTIDA.enemySpeed,
-          dt,
-          obras,
-          state.tempo,
-          versao,
-          bloqueios,
-          'vivo',
-        ),
-        alerta: true,
+      const ido = avancarRota(
+        unidade,
+        meta.x,
+        meta.z,
+        PARTIDA.enemySpeed,
+        dt,
+        obras,
+        state.tempo,
+        versao,
+        bloqueios,
+        'vivo',
+        state.lagoas,
+        blocosMapa,
+      )
+      if (ido.rota?.semCaminho) {
+        const muro = blocoMaisProximo(unidade.x, unidade.z)
+        if (muro) return { ...moverUnidade(ido, muro.x, muro.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa), alerta: true }
       }
+      return { ...ido, alerta: true }
     }
     if ((unidade.papel === 'sitiante' || unidade.papel === 'dragao') && PARTIDA.levaAlvo === 'nucleo') {
       const nucleo = nucleoNosso(obras)
@@ -1897,13 +2546,19 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
           versao,
           bloqueios,
           'vivo',
+          state.lagoas,
+          blocosMapa,
         )
         if (!ido.rota?.semCaminho) return registrarTrilha(unidade, ido)
+        const muro = blocoMaisProximo(unidade.x, unidade.z)
         const solidos = obras.filter((obra) => nossa(obra) && obra.hp > 0 && obra.tipo !== 'portao')
         const id = maisPerto(unidade.x, unidade.z, solidos)
-        const alvo = solidos.find((obra) => obra.id === id)
-        if (!alvo) return registrarTrilha(unidade, ido)
-        return registrarTrilha(unidade, moverUnidade(ido, alvo.x, alvo.z, PARTIDA.enemySpeed, dt, obras))
+        const alvoObra = solidos.find((obra) => obra.id === id)
+        if (muro && (!alvoObra || Math.hypot(muro.x - unidade.x, muro.z - unidade.z) <= Math.hypot(alvoObra.x - unidade.x, alvoObra.z - unidade.z))) {
+          return registrarTrilha(unidade, moverUnidade(ido, muro.x, muro.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa))
+        }
+        if (!alvoObra) return registrarTrilha(unidade, ido)
+        return registrarTrilha(unidade, moverUnidade(ido, alvoObra.x, alvoObra.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa))
       }
     }
     if (unidade.lado === 'inimigo') {
@@ -1919,7 +2574,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       if (!alvo) return registrarTrilha(unidade, unidade)
       return registrarTrilha(
         unidade,
-        avancarRota(unidade, alvo.x, alvo.z, PARTIDA.enemySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo'),
+        avancarRota(unidade, alvo.x, alvo.z, PARTIDA.enemySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa),
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'mover') {
@@ -1934,6 +2589,8 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         versao,
         bloqueios,
         'fixo',
+        state.lagoas,
+        blocosMapa,
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacarObra') {
@@ -1963,6 +2620,8 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         versao,
         bloqueios,
         'vivo',
+        state.lagoas,
+        blocosMapa,
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacar') {
@@ -1995,6 +2654,8 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         versao,
         bloqueios,
         'vivo',
+        state.lagoas,
+        blocosMapa,
       )
     }
     if (unidade.postura === 'automatico') {
@@ -2008,7 +2669,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       if (id !== null) {
         const alvo = vivo(id)
         if (alvo) {
-          return avancarRota(unidade, alvo.x, alvo.z, PARTIDA.allySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo')
+          return avancarRota(unidade, alvo.x, alvo.z, PARTIDA.allySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
         }
       }
       const obrasHostis = obras.filter(
@@ -2022,16 +2683,34 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       const alvoObra = obraId === null ? undefined : obraInimigaViva(obraId)
       if (!alvoObra || emContatoComObra(unidade.x, unidade.z, alvoObra)) return unidade
       const peri = aproximacaoDaObra(alvoObra, unidade.x, unidade.z)
-      return avancarRota(unidade, peri.x, peri.z, PARTIDA.allySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo')
+      return avancarRota(unidade, peri.x, peri.z, PARTIDA.allySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
     }
     return unidade
   })
+
+  unidades = separarAliados(unidades, obras, state.recursos, dt, blocosMapa)
 
   const fere = (id: number, dano: number) => {
     unidades = unidades.map((unidade) => (unidade.id === id ? fereDragaoOuCorpo(unidade, dano) : unidade))
   }
   const fereObra = (id: number, dano: number) => {
     obras = obras.map((obra) => (obra.id === id ? aplicarDanoObra(obra, dano) : obra))
+  }
+  const fereBloco = (bloco: BlocoMundo, dano: number) => {
+    const k = chaveBlocoMundo(bloco.x, bloco.y, bloco.z)
+    const atual = blocosMapa[k]
+    if (!atual || atual.hp <= 0) return
+    if (!mudouBlocoMapa) {
+      blocosMapa = { ...blocosMapa }
+      mudouBlocoMapa = true
+    }
+    const novoHp = Math.max(0, atual.hp - dano)
+    if (novoHp <= 0) {
+      delete blocosMapa[k]
+      quebrouBlocoMapa = true
+    } else {
+      blocosMapa[k] = { ...atual, hp: novoHp }
+    }
   }
 
   for (const unidade of unidades) {
@@ -2094,15 +2773,31 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
           )
           continue
         }
+        const blocoBloqueando = unidade.rota?.semCaminho ? blocoNossoAdjacente(unidade.x, unidade.z, blocosMapa) : null
+        if (blocoBloqueando) {
+          fereBloco(blocoBloqueando, PARTIDA.danoSitio)
+          unidades = unidades.map((item) =>
+            item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
+          )
+        }
         continue
       }
       const tocadas = obras.filter((item) => nossa(item) && item.hp > 0 && emContatoComObra(unidade.x, unidade.z, item))
       const obraId = maisPerto(unidade.x, unidade.z, tocadas)
-      if (obraId === null) continue
-      fereObra(obraId, PARTIDA.danoSitio)
-      unidades = unidades.map((item) =>
-        item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
-      )
+      if (obraId !== null) {
+        fereObra(obraId, PARTIDA.danoSitio)
+        unidades = unidades.map((item) =>
+          item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
+        )
+        continue
+      }
+      const blocoAdj = unidade.rota?.semCaminho ? blocoNossoAdjacente(unidade.x, unidade.z, blocosMapa) : null
+      if (blocoAdj) {
+        fereBloco(blocoAdj, PARTIDA.danoSitio)
+        unidades = unidades.map((item) =>
+          item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
+        )
+      }
     }
   }
 
@@ -2113,14 +2808,16 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     if (!torre || torre.tipo !== 'torre' || torre.hp <= 0 || torre.cooldown > 0 || obraEmConstrucao(torre)) continue
     const alcance = alcanceDaTorre(torre)
     const danoTorre = PARTIDA.torreDano + torre.nivel
+    const cotaTorre = cotaVisaoTorreBlocos(torre.nivel)
 
-    // 1º: Prioridade tática máxima — abater em 1 tiro qualquer construção rival ainda em andaime no alcance!
+    // 1º: Prioridade tática máxima — abater em 1 tiro qualquer construção rival ainda em andaime no alcance (respeitando LoS 2.5D)!
     let andaimeId: number | null = null
     let melhorAndaime = alcance
     for (const rival of obras) {
       const hostil = torre.lado === 'inimigo' ? nossa(rival) : !nossa(rival)
       if (!hostil || !obraEmConstrucao(rival)) continue
       if (torre.lado !== 'inimigo' && !cobertoAgora(state, rival.x, rival.z)) continue
+      if (!visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, rival.x, rival.z, 0)) continue
       const dist = Math.hypot(rival.x - torre.x, rival.z - torre.z)
       if (dist <= alcance && dist <= melhorAndaime) {
         melhorAndaime = dist
@@ -2133,7 +2830,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       continue
     }
 
-    // 2º: Unidades hostis vivas (e herói presente para torre inimiga)
+    // 2º: Unidades hostis vivas (e herói presente para torre inimiga), respeitando LoS 2.5D por altura da torre
     let melhor = alcance
     let id: number | null = null
     for (const item of unidades) {
@@ -2141,7 +2838,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       if (!hostil || item.hp <= 0 || jaAlvo.has(item.id)) continue
       for (const ponto of pontosDoCorpo(item)) {
         const dist = Math.hypot(ponto.x - torre.x, ponto.z - torre.z)
-        if (dist <= alcance && dist <= melhor) {
+        if (dist <= alcance && dist <= melhor && visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, ponto.x, ponto.z, 0)) {
           melhor = dist
           id = item.id
         }
@@ -2149,7 +2846,9 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     }
     if (torre.lado === 'inimigo' && !state.semCorpo && state.heroi.y >= -0.9 && army > 0 && !jaAlvo.has(-1)) {
       const dist = Math.hypot(state.heroi.x - torre.x, state.heroi.z - torre.z)
-      if (dist <= alcance && dist <= melhor) id = -1
+      if (dist <= alcance && dist <= melhor && visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, state.heroi.x, state.heroi.z, state.heroi.y)) {
+        id = -1
+      }
     }
     if (id !== null) {
       jaAlvo.add(id)
@@ -2159,13 +2858,14 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       continue
     }
 
-    // 3º: Duelo entre construções — se não houver unidade hostil no alcance, alvejar a construção rival viva mais próxima!
+    // 3º: Duelo entre construções — se não houver unidade hostil no alcance, alvejar a construção rival viva com LoS livre!
     let obraRivalId: number | null = null
     let melhorObra = alcance
     for (const rival of obras) {
       const hostil = torre.lado === 'inimigo' ? nossa(rival) : !nossa(rival)
       if (!hostil || rival.hp <= 0) continue
       if (torre.lado !== 'inimigo' && !cobertoAgora(state, rival.x, rival.z)) continue
+      if (!visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, rival.x, rival.z, 0)) continue
       const dist = Math.hypot(rival.x - torre.x, rival.z - torre.z)
       if (dist <= alcance && dist <= melhorObra) {
         melhorObra = dist
@@ -2187,8 +2887,10 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     ...state,
     obras,
     unidades,
+    blocosMapa,
     heroi: army === state.heroi.army ? state.heroi : { ...state.heroi, army },
-    versaoSolidos: state.versaoSolidos + (morreuSolido ? 1 : 0),
+    versaoSolidos: state.versaoSolidos + (morreuSolido || quebrouBlocoMapa ? 1 : 0),
+    versaoRecursos: state.versaoRecursos + (quebrouBlocoMapa ? 1 : 0),
   }
 }
 
