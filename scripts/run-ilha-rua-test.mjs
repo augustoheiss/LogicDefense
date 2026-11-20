@@ -53,6 +53,10 @@ try {
   alvoBloco.run()
   const obraLivre = await server.ssrLoadModule('/src/games/LogicBattle/ilha/obraBlocosLivres.test.ts')
   obraLivre.run()
+  const atalhos = await server.ssrLoadModule('/src/games/LogicBattle/ilha/atalhosIlha.test.ts')
+  atalhos.run()
+  const raycast = await server.ssrLoadModule('/src/games/LogicBattle/ilha/raycastCena.test.ts')
+  raycast.run()
   console.log('ilha-rua: ok')
 } finally {
   await server.close()

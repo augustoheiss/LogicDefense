@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/domain/infiniteMathEngine.ts
+// src/games/LogicBattle/ilha/infiniteMathEngine.ts
 // Motor de Matemática Infinita Isomórfica (Zero Repetição) — Master Plan V6
 // Une todas as 18 Apostilas de `src/data/content.ts` + Lentes Heiss-Lab em
 // 4 Graus de Dificuldade Escolhíveis:
@@ -10,8 +10,7 @@
 //                         Torneiras, Divisores de 60/360, Balança Montar & Resolver, Trincheira de Chaves)
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { EngineId } from '../engines/engineContract'
-import { ConceptId, RedemptionChoice } from '../types'
+import { ConceptId, EngineId, RedemptionChoice } from './contaContratos'
 
 export type MathDifficultyTier = 1 | 2 | 3 | 4
 

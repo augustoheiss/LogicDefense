@@ -1,6 +1,6 @@
-import { applyGateWithRemainder, clampArmy } from '../domain/armyMath'
-import { RIGHT_CORRIDOR_TIER_BUFF_POLICIES } from '../run/bridge3d/bridge3dPolicies'
-import { Gate } from '../types'
+import { applyGateWithRemainder, clampArmy } from './armyMath'
+import { RIGHT_CORRIDOR_TIER_BUFF_POLICIES } from './buffsConta'
+import { Gate } from './contaContratos'
 
 export const RUA = {
   startZ: 0,

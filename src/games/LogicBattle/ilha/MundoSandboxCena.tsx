@@ -34,6 +34,8 @@ export interface MundoSandboxCenaProps {
   previewLinha?: { plano: PlanoLinhaBlocos; temRecurso: boolean } | null
   bloqueiaCliqueObra?: boolean
   onSelectObraInstanced?: (obraId: number, lado: 'nosso' | 'inimigo', button: number) => void
+  /** O ponteiro tocou uma obra instanciada, antes do `click`. Só repasse: a decisão é de `IlhaRua`. */
+  onTocarObraInstanced?: (obraId: number, pointerId: number, button: number) => boolean | void
   onPedirSubsolo: () => void
 }
 
@@ -52,6 +54,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
   previewLinha,
   bloqueiaCliqueObra,
   onSelectObraInstanced,
+  onTocarObraInstanced,
   onPedirSubsolo,
 }) => {
   const olharEfetivo = state.semCorpo ? 'imperio' : state.olhar
@@ -234,6 +237,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         groupRef={voxeisGroupRef}
         bloqueiaCliqueObra={bloqueiaCliqueObra}
         onSelectObra={onSelectObraInstanced}
+        onTocarObra={onTocarObraInstanced}
       />
       <BlocosMundoInstanced
         blocosMapa={state.blocosMapa}
@@ -249,6 +253,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         groupRef={obrasLivresGroupRef}
         bloqueiaCliqueObra={bloqueiaCliqueObra}
         onSelectObra={onSelectObraInstanced}
+        onTocarObra={onTocarObraInstanced}
       />
 
       {/* 6. Ghost Blueprint de Fundação (Torre/Obra seguindo cursor ou toque) */}

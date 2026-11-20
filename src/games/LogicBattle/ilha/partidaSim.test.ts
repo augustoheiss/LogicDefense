@@ -1,5 +1,5 @@
 import { contagemBuscas, zerarBuscas } from './caminho'
-import { chaveBlocoMundo } from './blocosMundo'
+import { chaveBlocoMundo, criarBlocoMundo } from './blocosMundo'
 import { COTA_ESTORNO_BLUEPRINT_NV5 } from './obraBlocosLivres'
 import { DIMENSOES_OBRA, GRAU_PARTIDA, OBSTACULOS, PARTIDA, PecaId } from './partidaPolicies'
 import {
@@ -54,6 +54,7 @@ import {
   selecionarAoClicarUnidade,
   selecionarPorRetanguloEstado,
   stepPartida,
+  yawAte,
 } from './partidaSim'
 
 function assert(condition: boolean, name: string): asserts condition {
@@ -213,7 +214,7 @@ export function run(): void {
   const nascida = criarTropa({ ...paga, credito: 1 }, nucleoId).unidades.find(
     (unidade) => unidade.lado === 'aliado',
   )
-  assert(nascida !== undefined && nascida.postura === 'ordens' && nascida.ordem === null, 'tropa nasce sem ordem')
+  assert(nascida !== undefined && nascida.postura === 'vigia' && nascida.posturaBase === 'vigia' && nascida.ordem === null, 'tropa nasce sem ordem')
   assert(Math.hypot(nascida.x - 0, nascida.z - 30) > 1.2, 'tropa nasce ao lado do núcleo')
 
   let cheia: PartidaState = { ...paga, credito: 30 }
@@ -246,12 +247,22 @@ export function run(): void {
     auto.unidades.filter((unidade) => ids.includes(unidade.id)).every((unidade) => unidade.ordem === null),
     'automático limpa a ordem',
   )
-  const autoPasso = stepPartida(auto, INPUT_PARADO, 1)
+  const origemAuto = auto.unidades.find((unidade) => unidade.id === ids[0])
+  assert(origemAuto !== undefined, 'origem do automático')
+  const autoPerto: PartidaState = {
+    ...auto,
+    unidades: auto.unidades
+      .filter((unidade) => unidade.lado !== 'inimigo' || unidade.id === inimigo.id)
+      .map((unidade) => (unidade.id === inimigo.id ? { ...unidade, x: origemAuto.x + 8, z: origemAuto.z } : unidade)),
+  }
+  const autoPasso = stepPartida(autoPerto, INPUT_PARADO, 1)
   const autoMexeu = autoPasso.unidades.find((unidade) => unidade.id === ids[0])
+  const hordaOito = autoPerto.unidades.find((unidade) => unidade.id === inimigo.id)
   assert(
     autoMexeu !== undefined &&
-      Math.hypot(autoMexeu.x - inimigo.x, autoMexeu.z - inimigo.z) <
-        Math.hypot(origemOrdem.x - inimigo.x, origemOrdem.z - inimigo.z) - 1,
+      hordaOito !== undefined &&
+      Math.hypot(autoMexeu.x - hordaOito.x, autoMexeu.z - hordaOito.z) <
+        Math.hypot(origemAuto.x - hordaOito.x, origemAuto.z - hordaOito.z) - 1,
     'automático aproxima',
   )
   const deVolta = ordenar(auto, ids, { tipo: 'mover', x: 4, z: 4 })
@@ -1154,7 +1165,7 @@ export function run(): void {
     segmentos: [] as number[],
     alerta: true,
   }
-  const umAtaqueDerruba = stepPartida({ ...obraFraca, unidades: [inimigoPerto] }, INPUT_PARADO, 0.1)
+  const umAtaqueDerruba = stepPartida({ ...obraFraca, unidades: [inimigoPerto], heroiPostura: 'calado' }, INPUT_PARADO, 0.1)
   const torreApos1Golpe = umAtaqueDerruba.obras.find((o) => o.id === torreFraca.id)!
   assert(torreApos1Golpe.hp === 0 && !obraEmConstrucao(torreApos1Golpe), 'um único ataque destrói construção em andaime')
   assert(umAtaqueDerruba.unidades[0].hp === 30, 'torre em construção não atira antes de ficar pronta')
@@ -1761,5 +1772,753 @@ export function run(): void {
   assert(
     Object.keys(cercoPed.blocosMapa).length === blocosPedAntes,
     'muralha de pedra (42 HP) resiste por mais tempo ao mesmo cerco que a madeira',
+  )
+
+  vigiaDeVerdade()
+}
+
+function vigiaDeVerdade() {
+  const cenaTiro = {
+    ...createPartida(),
+    olhar: 'primeira' as const,
+    obras: createPartida().obras.filter((obra) => obra.lado !== 'inimigo'),
+    unidades: [] as PartidaState['unidades'],
+    heroi: { ...createPartida().heroi, x: 0, z: 0, y: 0, yaw: Math.PI, pitch: 0, shootCooldown: 0, army: 10 },
+  }
+  const hordaTiro = {
+    id: 501,
+    lado: 'inimigo' as const,
+    papel: 'horda' as const,
+    x: 0,
+    z: 10,
+    hp: 40,
+    postura: 'automatico' as const,
+    ordem: null,
+    cooldown: 0,
+    segmentos: [] as number[],
+    alerta: true,
+  }
+  const antesTiro: PartidaState = { ...cenaTiro, unidades: [hordaTiro], blocosMapa: {} }
+  assert(!antesTiro.obras.some((obra) => obra.lado !== 'inimigo' && obra.tipo === 'torre'), 'fixture sem torre nossa')
+  const depoisTiro = stepPartida(antesTiro, INPUT_PARADO, PARTIDA.dtMax)
+  const ferida = depoisTiro.unidades.find((unidade) => unidade.id === 501)
+  assert(ferida !== undefined && ferida.hp === 28, 'vigia do herói tira 12')
+  assert(Math.abs(depoisTiro.heroi.yaw - yawAte(0, 0, 0, 10)) < 1e-6, 'vigia vira o yaw')
+  assert(
+    depoisTiro.heroi.shootCooldown === PARTIDA.shootCooldown - PARTIDA.dtMax,
+    'recarga da vigia desconta o passo',
+  )
+  assert(depoisTiro.heroi.x === 0 && depoisTiro.heroi.z === 0, 'vigia parada não anda')
+
+  const casaVigia = fundar({ ...createPartida(), credito: 4, unidades: [], obras: [], blocosMapa: {} }, 'nucleo', 0, 30)
+  const idCasa = casaVigia.obras.find((obra) => obra.lado !== 'inimigo' && obra.tipo === 'nucleo')!.id
+  const comSoldado = criarTropa(casaVigia, idCasa)
+  const soldadoVigia = comSoldado.unidades.find((unidade) => unidade.lado === 'aliado')!
+  const torreNossa = {
+    id: 880,
+    lado: 'nosso' as const,
+    tipo: 'torre' as const,
+    x: soldadoVigia.x,
+    z: soldadoVigia.z + 6,
+    nivel: 1,
+    hp: 50,
+    maxHp: 50,
+    gateApplied: false,
+    cooldown: 0,
+  }
+  const agressor = {
+    id: 881,
+    lado: 'inimigo' as const,
+    papel: 'horda' as const,
+    x: torreNossa.x + 1.4,
+    z: torreNossa.z,
+    hp: 20,
+    postura: 'automatico' as const,
+    ordem: null,
+    cooldown: 0,
+    segmentos: [] as number[],
+    alerta: true,
+  }
+  const alarme: PartidaState = {
+    ...comSoldado,
+    obras: [...comSoldado.obras, torreNossa],
+    unidades: [...comSoldado.unidades.filter((unidade) => unidade.lado === 'aliado'), agressor],
+  }
+  const alarmePasso = stepPartida(alarme, INPUT_PARADO, PARTIDA.dtMax)
+  const soldadoAlerta = alarmePasso.unidades.find((unidade) => unidade.id === soldadoVigia.id)
+  const torreDepois = alarmePasso.obras.find((obra) => obra.id === 880)
+  assert(torreDepois !== undefined && torreDepois.hp < 50, 'torre apanha do agressor')
+  assert(soldadoAlerta?.ancora != null, 'alarme enche a âncora dentro de 12 m')
+  const longeDoOlho: PartidaState = {
+    ...alarme,
+    unidades: alarme.unidades.map((unidade) =>
+      unidade.id === soldadoVigia.id ? { ...unidade, x: agressor.x + 15, z: agressor.z, ancora: null } : unidade,
+    ),
+  }
+  const semOlho = stepPartida(longeDoOlho, INPUT_PARADO, PARTIDA.dtMax)
+  assert(semOlho.unidades.find((unidade) => unidade.id === soldadoVigia.id)?.ancora == null, '15 m não dá alvo')
+  const muroBaixo = criarBlocoMundo(0, 0, 4, 'madeira')
+  const muroAlto = criarBlocoMundo(0, 1, 4, 'madeira')
+  const atrasDoMuro: PartidaState = {
+    ...casaVigia,
+    unidades: [
+      { ...soldadoVigia, x: 0, z: 0, ancora: null },
+      { ...agressor, id: 882, x: 0, z: 8, alerta: false },
+    ],
+    blocosMapa: {
+      [chaveBlocoMundo(0, 0, 4)]: muroBaixo,
+      [chaveBlocoMundo(0, 1, 4)]: muroAlto,
+    },
+  }
+  const muroPasso = stepPartida(atrasDoMuro, INPUT_PARADO, PARTIDA.dtMax)
+  assert(muroPasso.unidades.find((unidade) => unidade.id === soldadoVigia.id)?.ancora == null, 'muro de 2 bloqueia a vigia')
+
+  const moverColado: PartidaState = {
+    ...atrasDoMuro,
+    heroiPostura: 'calado',
+    heroi: { ...atrasDoMuro.heroi, x: -40, z: -40 },
+    blocosMapa: {},
+    unidades: [
+      {
+        ...soldadoVigia,
+        x: 0,
+        z: 0,
+        postura: 'ordens',
+        posturaBase: 'vigia',
+        ordem: { tipo: 'mover', x: 20, z: 0 },
+        rota: { marcos: [{ x: 20, z: 0 }], renovarEm: 99, semCaminho: false, versao: atrasDoMuro.versaoSolidos, modo: 'fixo' },
+        ancora: null,
+      },
+      { ...agressor, id: 883, x: 0.8, z: 0, hp: 20, alerta: false },
+    ],
+  }
+  const coladoPasso = stepPartida(moverColado, INPUT_PARADO, PARTIDA.dtMax)
+  assert(coladoPasso.unidades.find((unidade) => unidade.id === 883)?.hp === 20, 'mover não caça colado')
+
+  const quaseLa: PartidaState = {
+    ...moverColado,
+    unidades: [
+      {
+        ...soldadoVigia,
+        x: 0,
+        z: 0,
+        postura: 'ordens',
+        posturaBase: 'vigia',
+        ordem: { tipo: 'mover', x: 0.2, z: 0 },
+        rota: { marcos: [{ x: 0.2, z: 0 }], renovarEm: 99, semCaminho: false, versao: moverColado.versaoSolidos, modo: 'fixo' },
+        ancora: null,
+      },
+      { ...agressor, id: 884, x: 6, z: 0, hp: 20, alerta: false },
+    ],
+  }
+  const chegou = stepPartida(quaseLa, INPUT_PARADO, PARTIDA.dtMax)
+  const chegouSoldado = chegou.unidades.find((unidade) => unidade.id === soldadoVigia.id)
+  assert(chegouSoldado?.ordem === null && chegouSoldado.postura === 'vigia', 'chegada devolve a vigia')
+  const seguinte = stepPartida(chegou, INPUT_PARADO, PARTIDA.dtMax)
+  assert(seguinte.unidades.find((unidade) => unidade.id === soldadoVigia.id)?.ancora != null, 'depois de chegar volta a vigiar')
+
+  const semRota: PartidaState = {
+    ...quaseLa,
+    unidades: [
+      {
+        ...soldadoVigia,
+        x: 0,
+        z: 0,
+        postura: 'ordens',
+        posturaBase: 'vigia',
+        ordem: { tipo: 'mover', x: 30, z: 0 },
+        rota: { marcos: [], renovarEm: 99, semCaminho: true, versao: quaseLa.versaoSolidos, modo: 'fixo' },
+        ancora: null,
+      },
+    ],
+  }
+  const travado = stepPartida(semRota, INPUT_PARADO, PARTIDA.dtMax)
+  const travadoSoldado = travado.unidades.find((unidade) => unidade.id === soldadoVigia.id)
+  assert(travadoSoldado?.ordem?.tipo === 'mover' && travadoSoldado.postura === 'ordens', 'sem caminho não devolve a postura')
+
+  const baseEvo = fundar({ ...createPartida(), credito: 4, madeira: 10, ouro: 10 }, 'nucleo', 0, 30)
+  const comTorre = fundar(baseEvo, 'torre', 8, 30)
+  const idNucleoEvo = comTorre.obras.find((obra) => obra.tipo === 'nucleo' && obra.lado !== 'inimigo')!.id
+  const idTorreEvo = comTorre.obras.find((obra) => obra.tipo === 'torre' && obra.lado !== 'inimigo')!.id
+  const torreSubiu = evoluir({ ...comTorre, credito: 1 }, idTorreEvo)
+  assert(torreSubiu.obras.find((obra) => obra.id === idTorreEvo)?.nivel === 2, 'evoluir sobe a torre clicada')
+  assert(torreSubiu.obras.find((obra) => obra.id === idNucleoEvo)?.nivel === 1, 'evoluir da torre não sobe o núcleo')
+  assert(torreSubiu.credito === 0, 'evoluir desconta 1 licença')
+
+  const limpa = createPartida()
+  const campo: PartidaState = {
+    ...limpa,
+    heroiPostura: 'calado',
+    heroi: { ...limpa.heroi, x: -40, z: -40 },
+    obras: [],
+    unidades: [],
+    blocosMapa: {},
+  }
+  const tropaParada = {
+    id: 1,
+    lado: 'aliado' as const,
+    papel: 'tropa' as const,
+    x: 0,
+    z: 0,
+    hp: 16,
+    postura: 'vigia' as const,
+    posturaBase: 'vigia' as const,
+    ordem: null,
+    ancora: null,
+    cooldown: 0,
+    segmentos: [] as number[],
+    alerta: true,
+  }
+  const hordaParada = {
+    id: 2,
+    lado: 'inimigo' as const,
+    papel: 'horda' as const,
+    x: 0,
+    z: 0,
+    hp: 40,
+    postura: 'automatico' as const,
+    ordem: null,
+    cooldown: 0,
+    segmentos: [] as number[],
+    alerta: false,
+  }
+  const a16 = stepPartida(
+    { ...campo, unidades: [{ ...tropaParada }, { ...hordaParada, x: 16 }] },
+    INPUT_PARADO,
+    1,
+  )
+  assert(a16.unidades.find((unidade) => unidade.id === 1)?.z === 0, '16 m não aproxima')
+  const a146 = stepPartida(
+    { ...campo, unidades: [{ ...tropaParada }, { ...hordaParada, x: 14.6 }] },
+    INPUT_PARADO,
+    1,
+  )
+  assert(a146.unidades.find((unidade) => unidade.id === 1)?.z === 0, '14,6 m não aproxima')
+  const soltaBase: PartidaState = {
+    ...campo,
+    unidades: [
+      { ...tropaParada, z: 18, ancora: { x: 0, z: 0 } },
+      { ...hordaParada, z: 23 },
+    ],
+  }
+  const solta1 = stepPartida(soltaBase, INPUT_PARADO, PARTIDA.dtMax)
+  const solta2 = stepPartida(solta1, INPUT_PARADO, PARTIDA.dtMax)
+  const soltaSeg = stepPartida(soltaBase, INPUT_PARADO, 1)
+  for (const estado of [solta1, solta2, soltaSeg]) {
+    const tropa = estado.unidades.find((unidade) => unidade.id === 1)
+    assert(
+      tropa !== undefined && tropa.z === 18 && tropa.ancora?.x === 0 && tropa.ancora.z === 0,
+      'coleira de 22 m segura a horda',
+    )
+  }
+  const obraHostil = {
+    id: 9,
+    lado: 'inimigo' as const,
+    tipo: 'nucleo' as const,
+    x: 0,
+    z: 23,
+    nivel: 1,
+    hp: 100,
+    maxHp: 100,
+    gateApplied: false,
+    cooldown: 0,
+  }
+  const obraBase: PartidaState = {
+    ...campo,
+    obras: [obraHostil],
+    unidades: [{ ...tropaParada, z: 18, ancora: { x: 0, z: 0 } }],
+  }
+  const obra1 = stepPartida(obraBase, INPUT_PARADO, PARTIDA.dtMax)
+  const obra2 = stepPartida(obra1, INPUT_PARADO, PARTIDA.dtMax)
+  const obraSeg = stepPartida(obraBase, INPUT_PARADO, 1)
+  for (const estado of [obra1, obra2, obraSeg]) {
+    const tropa = estado.unidades.find((unidade) => unidade.id === 1)
+    assert(
+      tropa !== undefined && tropa.z === 18 && tropa.ancora?.x === 0 && tropa.ancora.z === 0,
+      'coleira de 22 m segura a obra hostil',
+    )
+  }
+  const dentro20 = stepPartida(
+    {
+      ...campo,
+      unidades: [
+        { ...tropaParada, ancora: { x: 0, z: 0 } },
+        { ...hordaParada, x: 20 },
+      ],
+    },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  const tropa20 = dentro20.unidades.find((unidade) => unidade.id === 1)
+  assert(
+    tropa20 !== undefined && tropa20.x > 0 && tropa20.ancora?.x === 0 && tropa20.ancora.z === 0,
+    '20 m da âncora, fora do olho, continua',
+  )
+  const dentro22 = stepPartida(
+    {
+      ...campo,
+      unidades: [
+        { ...tropaParada, ancora: { x: 0, z: 0 } },
+        { ...hordaParada, x: 22 },
+      ],
+    },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  const tropa22 = dentro22.unidades.find((unidade) => unidade.id === 1)
+  assert(
+    tropa22 !== undefined && tropa22.x > 0 && tropa22.ancora?.x === 0 && tropa22.ancora.z === 0,
+    '22 m exatos da âncora continuam',
+  )
+  const obraLonge = (x: number): PartidaState => ({
+    ...campo,
+    obras: [
+      {
+        id: 9,
+        lado: 'inimigo' as const,
+        tipo: 'nucleo' as const,
+        x,
+        z: 0,
+        nivel: 1,
+        hp: 100,
+        maxHp: 100,
+        gateApplied: false,
+        cooldown: 0,
+      },
+    ],
+    unidades: [{ ...tropaParada, ancora: { x: 0, z: 0 } }],
+  })
+  for (const distancia of [20, 22]) {
+    const andouObra = stepPartida(obraLonge(distancia), INPUT_PARADO, PARTIDA.dtMax)
+    const tropaObra = andouObra.unidades.find((unidade) => unidade.id === 1)
+    assert(
+      tropaObra !== undefined && tropaObra.x > 0 && tropaObra.ancora?.x === 0 && tropaObra.ancora.z === 0,
+      'obra hostil na coleira conserva a âncora',
+    )
+  }
+  const torreAlarme = {
+    id: 3,
+    lado: 'nosso' as const,
+    tipo: 'torre' as const,
+    x: 0,
+    z: 0,
+    nivel: 1,
+    hp: 50,
+    maxHp: 50,
+    gateApplied: false,
+    cooldown: 0,
+  }
+  const acordada = stepPartida(
+    {
+      ...campo,
+      obras: [torreAlarme],
+      unidades: [
+        { ...tropaParada, x: 1.4, z: 8, postura: 'ordens', posturaBase: 'vigia', ordem: null, ancora: null },
+        { ...hordaParada, id: 4, x: 1.4, z: 0, alerta: true, hp: 30 },
+      ],
+    },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  const acordadaTropa = acordada.unidades.find((unidade) => unidade.id === 1)
+  assert(
+    acordadaTropa?.postura === 'vigia' && acordadaTropa.ancora != null,
+    'alarme acorda tropa em ordens sem ordem',
+  )
+
+  // Ordem de atacar que acaba (alvo morto e nada mais à vista) devolve a postura de base.
+  // Sem isto a tropa que venceu fica em `ordens` sem ordem: muda, igual ao bug do mover.
+  const ordemAtacar = (alvoId: number): Partial<PartidaState['unidades'][number]> => ({
+    postura: 'ordens',
+    posturaBase: 'vigia',
+    ordem: { tipo: 'atacar', alvoId },
+    ancora: null,
+  })
+  const venceu = stepPartida(
+    { ...campo, obras: [], unidades: [{ ...tropaParada, ...ordemAtacar(99) }] },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  const venceuTropa = venceu.unidades.find((unidade) => unidade.id === 1)
+  assert(venceuTropa?.ordem == null, 'atacar sem alvo zera a ordem')
+  assert(venceuTropa?.postura === 'vigia', 'atacar acabou: devolve a vigia')
+
+  const ordemAtacarObra = (obraId: number): Partial<PartidaState['unidades'][number]> => ({
+    postura: 'ordens',
+    posturaBase: 'noLugar',
+    ordem: { tipo: 'atacarObra', obraId },
+    ancora: null,
+  })
+  const demoliu = stepPartida(
+    { ...campo, obras: [], unidades: [{ ...tropaParada, ...ordemAtacarObra(98) }] },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  const demoliuTropa = demoliu.unidades.find((unidade) => unidade.id === 1)
+  assert(demoliuTropa?.ordem == null, 'atacarObra sem obra zera a ordem')
+  assert(demoliuTropa?.postura === 'noLugar', 'atacarObra acabou: devolve a base escolhida, não a vigia')
+
+  // D-B1 (laudo do T2, medido pelo T1 com controle): atacarObra inclina o pitch para o centro da obra. Quando a
+  // obra cai a ordem some, mas o pitch fica para baixo e a vigia só vira o yaw. Com a obra colada (1,5 m) o
+  // pitch é -0,49 e os primeiros tiros vão ao chão: a primeira baixa na horda leva 30 passos em vez de 10.
+  // O teste compara com o controle (mesmo cenário, pitch já zerado) em vez de olhar só `hp < 40`: um teste
+  // frouxo passou sem correção na primeira tentativa, porque a horda acaba caindo mais tarde de qualquer jeito.
+  const primeiraBaixaDepoisDeDemolir = (zObra: number, nivelarPitch: boolean) => {
+    const base = createPartida()
+    const obra = {
+      id: 601,
+      lado: 'inimigo' as const,
+      tipo: 'nucleo' as const,
+      x: 0,
+      z: zObra,
+      nivel: 1,
+      hp: 12,
+      maxHp: 12,
+      gateApplied: false,
+      cooldown: 0,
+    }
+    const horda = {
+      id: 602,
+      lado: 'inimigo' as const,
+      papel: 'horda' as const,
+      x: 0,
+      z: 12,
+      hp: 400,
+      postura: 'automatico' as const,
+      ordem: null,
+      cooldown: 0,
+      segmentos: [] as number[],
+      alerta: false,
+    }
+    let estado: PartidaState = {
+      ...definirOlhar(base, 'imperio'),
+      obras: [obra],
+      unidades: [horda],
+      blocosMapa: {},
+      heroi: { ...base.heroi, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, shootCooldown: 0, army: 10 },
+      heroiOrdem: ordenarHeroi(base, { tipo: 'atacarObra', obraId: 601 }).heroiOrdem,
+    }
+    let passos = 0
+    while (estado.obras.some((o) => o.id === 601 && o.hp > 0) && passos < 80) {
+      estado = stepPartida(estado, INPUT_PARADO, PARTIDA.dtMax)
+      passos += 1
+    }
+    const caiu = !estado.obras.some((o) => o.id === 601 && o.hp > 0)
+    if (nivelarPitch) estado = { ...estado, heroi: { ...estado.heroi, pitch: 0 } }
+    const hpInicial = estado.unidades.find((u) => u.id === 602)!.hp
+    for (let i = 1; i <= 80; i++) {
+      estado = stepPartida(estado, INPUT_PARADO, PARTIDA.dtMax)
+      if (estado.unidades.find((u) => u.id === 602)!.hp < hpInicial) return { caiu, passo: i }
+    }
+    return { caiu, passo: null }
+  }
+  const colada = primeiraBaixaDepoisDeDemolir(1.5, false)
+  const controle = primeiraBaixaDepoisDeDemolir(1.5, true)
+  assert(colada.caiu && controle.caiu, 'D-B1 prepara: o herói derrubou a obra colada nos dois cenários')
+  assert(controle.passo !== null, 'D-B1 prepara: o controle (pitch zerado) acerta a horda')
+  assert(
+    colada.passo === controle.passo,
+    'D-B1: depois de derrubar a obra colada, a vigia acerta tão cedo quanto com o pitch nivelado',
+  )
+
+  // D-A1 (laudo do T2): o alvo mais perto da tropa pode estar FORA da coleira de 22 m da âncora. Hoje essa
+  // escolha vence e a tropa fica parada (return unidade), mesmo com um segundo alvo dentro do olho (12 m) e
+  // dentro da coleira. A coleira só pode segurar a tropa quando NÃO sobra nenhum alvo dentro dela.
+  const tropaNaBorda = { ...tropaParada, x: 0, z: 18, ancora: { x: 0, z: 0 } }
+  const hordaFora = { ...hordaParada, id: 21, x: 0, z: 23 }
+  const hordaDentro = { ...hordaParada, id: 22, x: 0, z: 12 }
+  const comDois = stepPartida(
+    { ...campo, unidades: [tropaNaBorda, hordaFora, hordaDentro] },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  const tropaDois = comDois.unidades.find((unidade) => unidade.id === 1)
+  assert(tropaDois !== undefined && tropaDois.z < 18, 'D-A1: com um alvo fora e outro dentro da coleira, a tropa vai ao de dentro')
+  assert(tropaDois.ancora?.x === 0 && tropaDois.ancora.z === 0, 'D-A1: a âncora original é conservada')
+  // O controle: só o alvo de fora. A coleira continua segurando a tropa e conservando a âncora.
+  const soFora = stepPartida({ ...campo, unidades: [tropaNaBorda, hordaFora] }, INPUT_PARADO, PARTIDA.dtMax)
+  const tropaSoFora = soFora.unidades.find((unidade) => unidade.id === 1)
+  assert(tropaSoFora?.z === 18 && tropaSoFora.ancora?.z === 0, 'D-A1 controle: só alvo fora da coleira segura a tropa')
+
+  // A5: o ritmo de tiros do herói não depende de uma ordem de ataque esquecida, nos dois olhares do corpo.
+  // O que isto MEDE: tiros por segundo (comportamento). O que isto NÃO prova: que dois chamadores de `atirar` não
+  // coexistem no mesmo passo. Provado por mutação: fazer `seguirOrdemHeroi` rodar junto com a vigia NÃO muda esta
+  // contagem, porque `atirar` recusa quando `shootCooldown > 0`, então um 2º chamador no mesmo passo é recusado
+  // pela própria recarga. A garantia «não atira duas vezes no mesmo passo» mora na recarga de `atirar`, e não na
+  // estrutura de `passoHeroi`. Conto os tiros pela VIDA da horda: cada tiro que acerta tira exatamente 12.
+  const hordaDoTiro = { ...hordaParada, id: 801, x: 0, z: 10, hp: 400, alerta: true }
+  const contarTiros = (estadoInicial: PartidaState, passos: number): number => {
+    let s = estadoInicial
+    const hpAntes = 400
+    for (let i = 0; i < passos; i++) s = stepPartida(s, INPUT_PARADO, PARTIDA.dtMax)
+    return Math.round((hpAntes - (s.unidades.find((u) => u.id === 801)?.hp ?? hpAntes)) / 12)
+  }
+  const heroiNoCorpo = (olhar: 'primeira' | 'terceira', ordem: PartidaState['heroiOrdem']): PartidaState => ({
+    ...definirOlhar(createPartida(), olhar),
+    obras: [],
+    unidades: [hordaDoTiro],
+    blocosMapa: {},
+    heroiOrdem: ordem,
+    heroi: { ...createPartida().heroi, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, shootCooldown: 0, army: 10 },
+  })
+  // 20 passos de 0,05 s = 1 s. Medido: os tiros saem nos passos 1, 11 e 21, de 10 em 10. A recarga de 0,45 s escrita
+  // no passo do tiro só é descontada no FIM do mesmo passo (`passoCurto` desconta depois de `passoHeroi`), então o
+  // `shootCooldown` fica em 0,40 e leva mais 9 passos para zerar. Em 20 passos cabem 2 tiros (passos 1 e 11).
+  const baseSemOrdem = contarTiros(heroiNoCorpo('primeira', null), 20)
+  assert(baseSemOrdem === 2, `A5 controle: em 20 passos o herói parado dá 2 tiros (deu ${baseSemOrdem})`)
+  for (const olharCorpo of ['primeira', 'terceira'] as const) {
+    const comAtacar = contarTiros(heroiNoCorpo(olharCorpo, { tipo: 'atacar', alvoId: 801, rota: null }), 20)
+    assert(comAtacar === baseSemOrdem, `A5: no corpo (${olharCorpo}) uma ordem de atacar esquecida não dobra os tiros (${comAtacar} vs ${baseSemOrdem})`)
+    const comAtacarObra = contarTiros(heroiNoCorpo(olharCorpo, { tipo: 'atacarObra', obraId: 999, rota: null }), 20)
+    assert(comAtacarObra === baseSemOrdem, `A5: no corpo (${olharCorpo}) uma ordem de atacarObra esquecida não dobra os tiros (${comAtacarObra} vs ${baseSemOrdem})`)
+  }
+  // No império a ordem de atacar É executada por seguirOrdemHeroi, e a vigia só roda sem ordem: continua <= 1 tiro por passo.
+  const noImperioAtacando = contarTiros(
+    { ...heroiNoCorpo('primeira', { tipo: 'atacar', alvoId: 801, rota: null }), olhar: 'imperio' },
+    20,
+  )
+  assert(noImperioAtacando === baseSemOrdem, `A5: no império, atacando, os tiros seguem o ritmo da recarga (${noImperioAtacando} vs ${baseSemOrdem})`)
+
+  // A4 (plano da fase 2): o preço de evoluir sai dos literais 1/2/2 do miolo de `evoluir` e vai para PARTIDA, uma vez,
+  // e o painel lê dali. Os valores continuam os mesmos; a prova de que `evoluir` LÊ a constante e não um literal
+  // escondido é mudar o preço só pela constante e ver a função reagir.
+  assert(PARTIDA.custoEvoluirCredito === 1, 'A4: o crédito de evoluir é 1 licença')
+  assert(PARTIDA.custoEvoluirMadeira === 2, 'A4: a madeira de evoluir é 2')
+  assert(PARTIDA.custoEvoluirOuro === 2, 'A4: o ouro de evoluir é 2')
+  const comRecursos = { ...comTorre, credito: 0, madeira: 5, ouro: 5 }
+  const evoluiuPorRecurso = evoluir(comRecursos, idTorreEvo)
+  assert(
+    evoluiuPorRecurso.madeira === 3 && evoluiuPorRecurso.ouro === 3 && evoluiuPorRecurso.credito === 0,
+    'A4: sem licença, evoluir cobra 2 madeiras e 2 ouros',
+  )
+  const precoMutavel = PARTIDA as unknown as { custoEvoluirCredito: number; custoEvoluirMadeira: number; custoEvoluirOuro: number }
+  const precoOriginal = { ...precoMutavel }
+  try {
+    precoMutavel.custoEvoluirCredito = 3
+    precoMutavel.custoEvoluirMadeira = 4
+    precoMutavel.custoEvoluirOuro = 1
+    const recusouPorPreco = evoluir({ ...comTorre, credito: 2, madeira: 0, ouro: 0 }, idTorreEvo)
+    assert(
+      recusouPorPreco.obras.find((o) => o.id === idTorreEvo)?.nivel === 1,
+      'A4: com o preço da constante em 3 licenças, 2 licenças não bastam',
+    )
+    const pagouNovoPreco = evoluir({ ...comTorre, credito: 3, madeira: 0, ouro: 0 }, idTorreEvo)
+    assert(
+      pagouNovoPreco.obras.find((o) => o.id === idTorreEvo)?.nivel === 2 && pagouNovoPreco.credito === 0,
+      'A4: com o preço da constante em 3 licenças, 3 licenças evoluem e cobram 3',
+    )
+    const pagouRecursosNovo = evoluir({ ...comTorre, credito: 0, madeira: 4, ouro: 1 }, idTorreEvo)
+    assert(
+      pagouRecursosNovo.obras.find((o) => o.id === idTorreEvo)?.nivel === 2 && pagouRecursosNovo.madeira === 0 && pagouRecursosNovo.ouro === 0,
+      'A4: o preço em recursos também vem da constante (4 madeiras e 1 ouro)',
+    )
+  } finally {
+    Object.assign(precoMutavel, precoOriginal)
+  }
+  assert(PARTIDA.custoEvoluirCredito === 1 && PARTIDA.custoEvoluirMadeira === 2 && PARTIDA.custoEvoluirOuro === 2, 'A4: o teste restaurou o preço')
+
+  // D-B1-CANCEL (laudo V2 do T2): zerar o pitch só quando a obra MORRE deixa de fora o jogador que CANCELA o
+  // ataque antes (manda o herói andar, ou troca de olhar). No império ninguém controla o pitch, então ele fica
+  // preso e a vigia atira no chão contra uma horda contida atrás de uma mureta, onde nada a faz chegar mais perto.
+  // A mureta é o que torna o defeito permanente: em campo aberto a horda anda até a mira e o prejuízo é só atraso.
+  // A mureta tem de fechar o caminho de lado a lado (o mapa vai de -56 a +56 m; o caminho em grade usa -28..28).
+  // Um bloco só cobre 1 m e a horda o contorna: o 1º rascunho deste teste usou um bloco e passou sem correção.
+  const muretaBloco = (gz: number) => {
+    const blocos: Record<string, ReturnType<typeof criarBlocoMundo>> = {}
+    for (let gx = -28; gx <= 28; gx++) blocos[chaveBlocoMundo(gx, 0, gz)] = criarBlocoMundo(gx, 0, gz, 'madeira')
+    return blocos
+  }
+  const cenaCancelamento = (cancelar: (s: PartidaState) => PartidaState): PartidaState => {
+    const base = createPartida()
+    const obraGrande = {
+      id: 701,
+      lado: 'inimigo' as const,
+      tipo: 'nucleo' as const,
+      x: 0,
+      z: 1.5,
+      nivel: 1,
+      hp: 400,
+      maxHp: 400,
+      gateApplied: false,
+      cooldown: 0,
+    }
+    const hordaContida = {
+      id: 702,
+      lado: 'inimigo' as const,
+      papel: 'horda' as const,
+      x: 0,
+      z: 12,
+      hp: 400,
+      postura: 'automatico' as const,
+      ordem: null,
+      cooldown: 0,
+      segmentos: [] as number[],
+      alerta: true,
+    }
+    let s: PartidaState = {
+      ...definirOlhar(base, 'imperio'),
+      obras: [obraGrande],
+      unidades: [hordaContida],
+      blocosMapa: muretaBloco(6),
+      heroi: { ...base.heroi, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, shootCooldown: 0, army: 10 },
+      heroiOrdem: ordenarHeroi(base, { tipo: 'atacarObra', obraId: 701 }).heroiOrdem,
+    }
+    s = stepPartida(s, INPUT_PARADO, PARTIDA.dtMax)
+    assert(s.heroi.pitch < -0.2, 'D-B1-CANCEL prepara: atacarObra inclinou o pitch e a obra segue de pé')
+    assert(s.obras.some((o) => o.id === 701 && o.hp > 0), 'D-B1-CANCEL prepara: a obra grande não caiu no 1º passo')
+    s = cancelar(s)
+    // Segura o herói parado, sem ordem. A horda está contida pela mureta: quem a acerta é a vigia ou ninguém.
+    s = { ...s, obras: s.obras.filter((o) => o.id !== 701), heroiOrdem: null }
+    for (let i = 0; i < 100; i++) s = stepPartida(s, INPUT_PARADO, PARTIDA.dtMax)
+    return s
+  }
+  const aposMover = cenaCancelamento((s) => ordenarHeroi(s, { tipo: 'mover', x: 0, z: 0.2 }))
+  assert(
+    (aposMover.unidades.find((u) => u.id === 702)?.hp ?? 400) < 400,
+    'D-B1-CANCEL: cancelar atacarObra com um mover não deixa o pitch preso: a vigia acerta a horda contida',
+  )
+  const aposOlhar = cenaCancelamento((s) => definirOlhar(definirOlhar(s, 'primeira'), 'imperio'))
+  assert(
+    (aposOlhar.unidades.find((u) => u.id === 702)?.hp ?? 400) < 400,
+    'D-B1-CANCEL: cancelar atacarObra trocando de olhar não deixa o pitch preso: a vigia acerta a horda contida',
+  )
+  // No corpo o pitch é do jogador (mouse). A vigia continua sem tocar nele.
+  const noCorpo = stepPartida(
+    {
+      ...definirOlhar(createPartida(), 'primeira'),
+      obras: [],
+      unidades: [{ ...hordaParada, id: 703, x: 0, z: 6, hp: 400, alerta: true }],
+      blocosMapa: {},
+      heroi: { ...createPartida().heroi, x: 0, y: 0, z: 0, yaw: 0, pitch: -0.25, shootCooldown: 0, army: 10 },
+    },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  assert(Math.abs(noCorpo.heroi.pitch - -0.25) < 1e-9, 'D-B1-CANCEL controle: no corpo a vigia não mexe no pitch do jogador')
+
+  // D-A1-CROSS (laudo V2 do T2): meus retornos precoces ("há alvo no olho mas todos fora da coleira: segura")
+  // rodavam ANTES de avaliar os candidatos dentro da coleira que não estão no olho (naColeira, naColeiraObra)
+  // e as obras no olho. Um alvo de fora do olho de 12 m, mas dentro dos 22 m da âncora, é válido e tem de ganhar.
+  const nucleoHostilCross = (id: number, z: number) => ({
+    id,
+    lado: 'inimigo' as const,
+    tipo: 'nucleo' as const,
+    x: 0,
+    z,
+    nivel: 1,
+    hp: 100,
+    maxHp: 100,
+    gateApplied: false,
+    cooldown: 0,
+  })
+  const passoCross = (obrasCross: ReturnType<typeof nucleoHostilCross>[], hordas: (typeof hordaParada)[]) =>
+    stepPartida({ ...campo, obras: obrasCross, unidades: [tropaNaBorda, ...hordas] }, INPUT_PARADO, PARTIDA.dtMax).unidades.find(
+      (unidade) => unidade.id === 1,
+    )
+  // 3a: horda fora da coleira no olho (z=23) + horda dentro da coleira, fora do olho (z=4: 14 m da tropa, 4 m da âncora).
+  const cross3a = passoCross([], [{ ...hordaParada, id: 61, z: 23 }, { ...hordaParada, id: 62, z: 4 }])
+  assert(cross3a !== undefined && cross3a.z < 18 && cross3a.ancora?.z === 0, 'D-A1-CROSS 3a: horda fora no olho + horda dentro da coleira fora do olho: vai à de dentro')
+  // 3b: horda fora da coleira no olho (z=23) + núcleo hostil no olho E dentro da coleira (z=12).
+  const cross3b = passoCross([nucleoHostilCross(63, 12)], [{ ...hordaParada, id: 64, z: 23 }])
+  assert(cross3b !== undefined && cross3b.z < 18 && cross3b.ancora?.z === 0, 'D-A1-CROSS 3b: horda fora no olho + núcleo dentro do olho e da coleira: vai ao núcleo')
+  // 3c: núcleo hostil fora da coleira no olho (z=23) + núcleo dentro da coleira, fora do olho (z=4).
+  const cross3c = passoCross([nucleoHostilCross(65, 23), nucleoHostilCross(66, 4)], [])
+  assert(cross3c !== undefined && cross3c.z < 18 && cross3c.ancora?.z === 0, 'D-A1-CROSS 3c: núcleo fora no olho + núcleo dentro da coleira fora do olho: vai ao de dentro')
+  // Controles: sem NENHUM candidato dentro da coleira a tropa segura e conserva a âncora; sem alvo nenhum, apaga.
+  const crossSegura = passoCross([], [{ ...hordaParada, id: 67, z: 23 }])
+  assert(crossSegura?.z === 18 && crossSegura.ancora?.z === 0, 'D-A1-CROSS controle: só alvo fora da coleira segura e conserva a âncora')
+  const crossSemAlvo = passoCross([], [])
+  assert(crossSemAlvo?.ancora == null, 'D-A1-CROSS controle: sem alvo nenhum a âncora é apagada')
+
+  // O espelho de obras: dois núcleos hostis no olho de 12 m, um fora da coleira e outro dentro dela.
+  const nucleoHostil = (id: number, z: number) => ({
+    id,
+    lado: 'inimigo' as const,
+    tipo: 'nucleo' as const,
+    x: 0,
+    z,
+    nivel: 1,
+    hp: 100,
+    maxHp: 100,
+    gateApplied: false,
+    cooldown: 0,
+  })
+  const obrasComDois = stepPartida(
+    { ...campo, obras: [nucleoHostil(31, 23), nucleoHostil(32, 12)], unidades: [tropaNaBorda] },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  const tropaObras = obrasComDois.unidades.find((unidade) => unidade.id === 1)
+  assert(tropaObras !== undefined && tropaObras.z < 18, 'D-A1 obras: com um núcleo fora e outro dentro da coleira, a tropa vai ao de dentro')
+  assert(tropaObras.ancora?.x === 0 && tropaObras.ancora.z === 0, 'D-A1 obras: a âncora original é conservada')
+  // D-B4 (laudo do T2): a ordem do herói nasce no império e só lá é executada. Sair para o corpo com uma ordem
+  // de mover em curso deixava `heroiOrdem` presa: o herói parado não vigiava até o jogador mexer no WASD.
+  const hordaPerto = { ...hordaParada, id: 51, x: 0, z: 10, alerta: true, hp: 40 }
+  const noImperio = ordenarHeroi(definirOlhar(createPartida(), 'imperio'), { tipo: 'mover', x: 30, z: 30 })
+  assert(noImperio.heroiOrdem?.tipo === 'mover', 'D-B4 prepara: a ordem de mover foi gravada no império')
+  for (const corpoOlhar of ['primeira', 'terceira'] as const) {
+    const saiu = definirOlhar(noImperio, corpoOlhar)
+    assert(saiu.heroiOrdem === null, `D-B4: sair do império para ${corpoOlhar} descarta a ordem de mover`)
+    const parado = stepPartida(
+      {
+        ...saiu,
+        obras: [],
+        unidades: [hordaPerto],
+        blocosMapa: {},
+        heroi: { ...saiu.heroi, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, shootCooldown: 0, army: 10 },
+      },
+      INPUT_PARADO,
+      PARTIDA.dtMax,
+    )
+    assert(
+      (parado.unidades.find((unidade) => unidade.id === 51)?.hp ?? 40) < 40,
+      `D-B4: no corpo (${corpoOlhar}), parado, o herói vigia mesmo tendo saído do império com uma ordem`,
+    )
+  }
+  // O controle: ficar no império com a ordem preserva a ordem. Só a saída a descarta.
+  assert(definirOlhar(noImperio, 'imperio').heroiOrdem?.tipo === 'mover', 'D-B4 controle: continuar no império conserva a ordem')
+
+  // D-B3 (laudo do T2): o alarme acorda a tropa em `ordens` sem ordem e grava `vigia`, mesmo que a base escolhida
+  // pelo jogador seja `calado` ou `noLugar`. O silêncio pedido não pode ser desfeito por um golpe na torre.
+  const agressorDoAlarme = { ...hordaParada, id: 41, x: 1.4, z: 0, alerta: true, hp: 30 }
+  for (const base of ['calado', 'noLugar'] as const) {
+    const dormiu = stepPartida(
+      {
+        ...campo,
+        obras: [torreAlarme],
+        unidades: [
+          { ...tropaParada, x: 1.4, z: 8, postura: 'ordens' as const, posturaBase: base, ordem: null, ancora: null },
+          agressorDoAlarme,
+        ],
+      },
+      INPUT_PARADO,
+      PARTIDA.dtMax,
+    )
+    const tropaDormida = dormiu.unidades.find((unidade) => unidade.id === 1)
+    assert(
+      tropaDormida !== undefined && tropaDormida.postura === 'ordens' && tropaDormida.ancora == null,
+      `D-B3: o alarme não acorda a tropa cuja base é ${base}`,
+    )
+  }
+
+  // D-B2 (laudo do T2): postura(..., 'automatico') não gravava posturaBase. Calado -> automatico -> ordem de
+  // atacar -> fim voltava a 'calado', a base ANTIGA. A UI só chama vigia/noLugar/calado, então hoje só a API
+  // exportada tem essa lacuna; o contrato fecha porque `automatico` é um valor legítimo de Postura.
+  const calada = postura({ ...campo, unidades: [{ ...tropaParada, postura: 'calado', posturaBase: 'calado' }] }, [1], 'automatico')
+  assert(calada.unidades[0].posturaBase === 'automatico', 'D-B2: postura automatico grava a base nova, não conserva calado')
+  const depoisDoAtaque = stepPartida(
+    {
+      ...postura(calada, [1], 'automatico'),
+      unidades: [{ ...calada.unidades[0], postura: 'ordens', ordem: { tipo: 'atacar', alvoId: 99 } }],
+    },
+    INPUT_PARADO,
+    PARTIDA.dtMax,
+  )
+  assert(depoisDoAtaque.unidades[0].postura === 'automatico', 'D-B2: fim da ordem devolve automatico, a última base escolhida')
+  const obrasSoFora = stepPartida({ ...campo, obras: [nucleoHostil(31, 23)], unidades: [tropaNaBorda] }, INPUT_PARADO, PARTIDA.dtMax)
+  const tropaObrasFora = obrasSoFora.unidades.find((unidade) => unidade.id === 1)
+  assert(
+    tropaObrasFora?.z === 18 && tropaObrasFora.ancora?.z === 0,
+    'D-A1 obras controle: só núcleo fora da coleira segura a tropa e conserva a âncora',
   )
 }

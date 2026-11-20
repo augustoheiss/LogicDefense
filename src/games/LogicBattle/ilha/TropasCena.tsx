@@ -4,8 +4,7 @@ import type { Group, Mesh } from 'three'
 import { PARTIDA } from './partidaPolicies'
 import type { PartidaState, Unidade } from './partidaSim'
 import { inimigoVisivel } from './partidaSim'
-
-const semRaycast = () => null
+import { raycastCondicional, semRaycast } from './raycastCena'
 
 interface TropasCenaProps {
   sim: React.MutableRefObject<PartidaState>
@@ -106,25 +105,25 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
             onPointerUp={(event) => concluirRmbInimigo(event, unidade)}
           >
             {unidade.papel === 'dragao' ? (
-              <mesh position={[0, 0.8, 0]} raycast={bloquearClique ? semRaycast : undefined}>
+              <mesh position={[0, 0.8, 0]} raycast={raycastCondicional(bloquearClique)}>
                 <boxGeometry args={[1.2, 1.1, 1.4]} />
                 <meshStandardMaterial color={corArmadura} />
               </mesh>
             ) : (
               <>
-                <mesh position={[0, 0.14, 0]} raycast={bloquearClique ? semRaycast : undefined}>
+                <mesh position={[0, 0.14, 0]} raycast={raycastCondicional(bloquearClique)}>
                   <boxGeometry args={[0.34, 0.28, 0.26]} />
                   <meshStandardMaterial color="#0f172a" />
                 </mesh>
-                <mesh position={[0, 0.5, 0]} raycast={bloquearClique ? semRaycast : undefined}>
+                <mesh position={[0, 0.5, 0]} raycast={raycastCondicional(bloquearClique)}>
                   <boxGeometry args={[0.42, 0.52, 0.28]} />
                   <meshStandardMaterial color={corArmadura} />
                 </mesh>
-                <mesh position={[0, 0.9, 0]} raycast={bloquearClique ? semRaycast : undefined}>
+                <mesh position={[0, 0.9, 0]} raycast={raycastCondicional(bloquearClique)}>
                   <sphereGeometry args={[0.17, 10, 10]} />
                   <meshStandardMaterial color={unidade.lado === 'aliado' ? '#fde68a' : '#fca5a5'} />
                 </mesh>
-                <mesh position={[0, 1.01, 0]} raycast={bloquearClique ? semRaycast : undefined}>
+                <mesh position={[0, 1.01, 0]} raycast={raycastCondicional(bloquearClique)}>
                   <boxGeometry args={[0.36, 0.13, 0.36]} />
                   <meshStandardMaterial
                     color={
@@ -132,11 +131,11 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
                     }
                   />
                 </mesh>
-                <mesh position={[-0.27, 0.5, 0.05]} raycast={bloquearClique ? semRaycast : undefined}>
+                <mesh position={[-0.27, 0.5, 0.05]} raycast={raycastCondicional(bloquearClique)}>
                   <boxGeometry args={[0.09, 0.38, 0.28]} />
                   <meshStandardMaterial color={unidade.lado === 'aliado' ? '#15803d' : '#7f1d1d'} />
                 </mesh>
-                <mesh position={[0.27, 0.58, 0.08]} raycast={bloquearClique ? semRaycast : undefined}>
+                <mesh position={[0.27, 0.58, 0.08]} raycast={raycastCondicional(bloquearClique)}>
                   <boxGeometry args={[0.07, 0.62, 0.07]} />
                   <meshStandardMaterial color={unidade.lado === 'aliado' ? '#e2e8f0' : '#fda4af'} />
                 </mesh>
@@ -180,7 +179,7 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
                 if (node) corposRef.current.set(chave, node)
                 else corposRef.current.delete(chave)
               }}
-              raycast={bloquearClique ? semRaycast : undefined}
+              raycast={raycastCondicional(bloquearClique)}
               onClick={(event) => {
                 if (modoBlocoRef.current) return
                 event.stopPropagation()

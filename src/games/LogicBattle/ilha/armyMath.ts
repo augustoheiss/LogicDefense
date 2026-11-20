@@ -1,8 +1,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// src/games/LogicBattle/domain/armyMath.ts — Aritmética Exata de Portões (§3.2 C1)
+// src/games/LogicBattle/ilha/armyMath.ts — Aritmética exata dos portões usada pela ilha
 // ──────────────────────────────────────────────────────────────────────────────
-import { ARMY_CAP } from '../config/unitTiers'
-import { ArmyCount, Gate } from '../types'
+import { ARMY_CAP, ArmyCount, Gate } from './contaContratos'
 
 export function clampArmy(value: number): ArmyCount {
   if (Number.isNaN(value) || value <= 0) {

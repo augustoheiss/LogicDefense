@@ -42,7 +42,7 @@ import {
   meiaLarguraObraLivre,
 } from './obraBlocosLivres'
 import { Bloqueio, encaixarLivre, encontrarCaminho, Marco } from './caminho'
-import { applyGateWithRemainder, clampArmy } from '../domain/armyMath'
+import { applyGateWithRemainder, clampArmy } from './armyMath'
 import {
   GRAU_PARTIDA,
   DIMENSOES_OBRA,
@@ -119,7 +119,9 @@ export interface Unidade {
   z: number
   hp: number
   postura: Postura
+  posturaBase?: Postura
   ordem: Ordem | null
+  ancora?: { x: number; z: number } | null
   cooldown: number
   segmentos: number[]
   alerta: boolean
@@ -171,6 +173,7 @@ export interface PartidaState {
   pedraNoChao: boolean
   versaoSolidos: number
   heroiOrdem: HeroiOrdem | null
+  heroiPostura?: Postura
   chaoVisto: Uint8Array
   versaoChao: number
   semCorpo: boolean
@@ -504,6 +507,7 @@ export function createPartida(mapaI = 0, mapaJ = 0, semCorpo = false): PartidaSt
     pedraNoChao: true,
     versaoSolidos: 0,
     heroiOrdem: null,
+    heroiPostura: 'vigia',
     chaoVisto: new Uint8Array(LADO_CHAO * LADO_CHAO),
     versaoChao: 0,
     semCorpo,
@@ -611,6 +615,9 @@ export function alternarSubsolo(state: PartidaState): PartidaState {
 export function definirOlhar(state: PartidaState, olhar: Olhar): PartidaState {
   if (state.semCorpo) return state
   if (state.olhar === olhar) return state
+  // A ordem do herói nasce no império e só lá é executada. Levada para o corpo ficaria presa: bloquearia a vigia
+  // (`mover`) ou ficaria obsoleta (`atacar`) até o jogador mexer no WASD (D-B4).
+  if (olhar !== 'imperio' && state.heroiOrdem) return { ...state, olhar, heroiOrdem: null }
   return { ...state, olhar }
 }
 
@@ -931,8 +938,8 @@ export function evoluir(state: PartidaState, obraId: number): PartidaState {
   if (state.derrota) return state
   const obra = state.obras.find((item) => item.id === obraId && item.hp > 0 && nossa(item) && !obraEmConstrucao(item))
   if (!obra || obra.nivel >= PARTIDA.nivelMaximoObra) return state
-  const usaCredito = state.credito >= 1
-  const usaRecursos = state.madeira >= 2 && state.ouro >= 2
+  const usaCredito = state.credito >= PARTIDA.custoEvoluirCredito
+  const usaRecursos = state.madeira >= PARTIDA.custoEvoluirMadeira && state.ouro >= PARTIDA.custoEvoluirOuro
   if (!usaCredito && !usaRecursos) return state
   const novoNivel = obra.nivel + 1
   const bonusHp = novoNivel >= 4 ? (novoNivel === 5 ? 50 : 30) : 0
@@ -969,9 +976,9 @@ export function evoluir(state: PartidaState, obraId: number): PartidaState {
   }
   return {
     ...state,
-    credito: usaCredito ? state.credito - 1 : state.credito,
-    madeira: usaCredito ? state.madeira : state.madeira - 2,
-    ouro: usaCredito ? state.ouro : state.ouro - 2,
+    credito: usaCredito ? state.credito - PARTIDA.custoEvoluirCredito : state.credito,
+    madeira: usaCredito ? state.madeira : state.madeira - PARTIDA.custoEvoluirMadeira,
+    ouro: usaCredito ? state.ouro : state.ouro - PARTIDA.custoEvoluirOuro,
     obras,
     heroi,
     unidades,
@@ -1425,8 +1432,10 @@ export function criarTropa(state: PartidaState, obraId: number): PartidaState {
     x: spawn.x,
     z: spawn.z,
     hp: 16,
-    postura: 'ordens',
+    postura: 'vigia',
+    posturaBase: 'vigia',
     ordem: null,
+    ancora: null,
     cooldown: 0,
     segmentos: [],
     alerta: true,
@@ -1534,12 +1543,14 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
       : undefined
   const unidades = state.unidades.map((unidade) => {
     if (!quer.has(unidade.id) || unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
-    if (ordem.tipo !== 'mover') return { ...unidade, postura: 'ordens' as const, ordem, rota: null }
+    const posturaBase = baseGuardada(unidade)
+    if (ordem.tipo !== 'mover') return { ...unidade, postura: 'ordens' as const, posturaBase, ordem, rota: null }
     const destino = slotsPorId.get(unidade.id) ?? { x: ordem.x, z: ordem.z }
     const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua)
     return {
       ...unidade,
       postura: 'ordens' as const,
+      posturaBase,
       ordem: { tipo: 'mover' as const, x: destino.x, z: destino.z },
       rota: {
         marcos: marcos ?? [],
@@ -1560,10 +1571,14 @@ export function postura(state: PartidaState, ids: readonly number[], valor: Post
   const unidades = state.unidades.map((unidade) => {
     if (!quer.has(unidade.id) || unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
     mudou = true
+    const limpa = valor === 'automatico' || valor === 'vigia' || valor === 'noLugar' || valor === 'calado'
     return {
       ...unidade,
       postura: valor,
-      ordem: valor === 'automatico' ? null : unidade.ordem,
+      // `ordens` não é base: é só o estado de quem cumpre uma ordem. Qualquer outro valor é a nova base.
+      posturaBase: valor === 'ordens' ? unidade.posturaBase : valor,
+      ordem: limpa ? null : unidade.ordem,
+      ancora: limpa ? null : unidade.ancora,
     }
   })
   if (!mudou) return state
@@ -2079,10 +2094,13 @@ function avancarRota(
   }
   const meta = marcos[0] ?? { x: tx, z: tz }
   const moved = moverUnidade(atual, meta.x, meta.z, velocidade, dt, obras, lagoas, blocosMapa)
-  const chegou = modo === 'fixo' && Math.hypot(moved.x - tx, moved.z - tz) < 0.5
+  const chegou = modo === 'fixo' && moved.ordem?.tipo === 'mover' && Math.hypot(moved.x - tx, moved.z - tz) < 0.5
+  const devolve = chegou && moved.lado === 'aliado'
   return {
     ...moved,
-    ordem: chegou && moved.ordem?.tipo === 'mover' ? null : moved.ordem,
+    ordem: chegou ? null : moved.ordem,
+    postura: devolve ? (moved.posturaBase ?? 'vigia') : moved.postura,
+    ancora: devolve ? null : moved.ancora,
     rota: atual.rota ? { ...atual.rota, marcos: chegou ? [] : marcos } : moved.rota,
   }
 }
@@ -2104,7 +2122,7 @@ function sombraDoHeroi(state: PartidaState, rota: Rota | null): Unidade {
   }
 }
 
-function yawAte(x: number, z: number, tx: number, tz: number): number {
+export function yawAte(x: number, z: number, tx: number, tz: number): number {
   return Math.atan2(-(tx - x), tz - z)
 }
 
@@ -2136,6 +2154,60 @@ export function ordenarHeroi(state: PartidaState, ordem: Ordem): PartidaState {
     return { ...state, heroiOrdem: { tipo: 'atacarObra', obraId: ordem.obraId, rota: null } }
   }
   return { ...state, heroiOrdem: { tipo: 'atacar', alvoId: ordem.alvoId, rota: null } }
+}
+
+export function posturaHeroi(state: PartidaState, valor: Postura): PartidaState {
+  if (state.derrota || state.semCorpo) return state
+  if ((state.heroiPostura ?? 'vigia') === valor) return state
+  return { ...state, heroiPostura: valor }
+}
+
+function baseGuardada(unidade: Unidade): Postura {
+  if (unidade.posturaBase) return unidade.posturaBase
+  if (
+    unidade.postura === 'vigia' ||
+    unidade.postura === 'noLugar' ||
+    unidade.postura === 'calado' ||
+    unidade.postura === 'automatico'
+  ) {
+    return unidade.postura
+  }
+  return 'vigia'
+}
+
+// Fim de uma ordem de ataque: zera a ordem e devolve a postura de base. Sem isto a tropa
+// que venceu fica em `ordens` sem ordem, e esse ramo nem persegue nem fere.
+function encerrarOrdemDeAtaque(unidade: Unidade): Unidade {
+  return { ...unidade, ordem: null, postura: unidade.posturaBase ?? 'vigia', ancora: null, rota: null }
+}
+
+function vigiarHeroi(state: PartidaState): PartidaState {
+  if (state.derrota || state.semCorpo || state.heroi.army <= 0) return state
+  if ((state.heroiPostura ?? 'vigia') !== 'vigia') return state
+  if (state.heroiOrdem?.tipo === 'mover') return state
+  // No império ninguém controla o pitch: o que há nele é resto de uma ordem (atacarObra o inclina para o centro da
+  // obra), e a ordem pode acabar de várias formas (obra cai, mover, troca de olhar). Aqui ele é neutro, por qualquer
+  // caminho. No corpo o pitch é do jogador e a vigia nunca o toca. Vem ANTES do teto: um pitch preso acima dele
+  // bloquearia a vigia sem nunca poder ser corrigido (D-B1-CANCEL).
+  if (state.olhar === 'imperio' && state.heroi.pitch !== 0) {
+    state = { ...state, heroi: { ...state.heroi, pitch: 0 } }
+  }
+  if (Math.abs(state.heroi.pitch) >= PARTIDA.pitchTetoTiro) return state
+  if (state.heroi.shootCooldown > 0) return state
+  let melhor: Unidade | null = null
+  let distMelhor: number = PARTIDA.visao.heroi
+  const cota = cotaVisaoHeroiBlocos(state.heroi.y)
+  for (const unidade of state.unidades) {
+    if (unidade.lado !== 'inimigo' || unidade.hp <= 0 || unidade.papel === 'isca') continue
+    const dist = Math.hypot(unidade.x - state.heroi.x, unidade.z - state.heroi.z)
+    if (dist > distMelhor) continue
+    if (!visaoLivreNoEstado(state, state.heroi.x, state.heroi.z, cota, unidade.x, unidade.z, 0)) continue
+    distMelhor = dist
+    melhor = unidade
+  }
+  if (!melhor) return state
+  const yaw = yawAte(state.heroi.x, state.heroi.z, melhor.x, melhor.z)
+  return atirar({ ...state, heroi: { ...state.heroi, yaw } })
 }
 
 function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
@@ -2171,7 +2243,10 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
   }
   if (ordem.tipo === 'atacarObra') {
     const obra = state.obras.find((item) => item.id === ordem.obraId && item.hp > 0 && !nossa(item))
-    if (!obra) return { ...state, heroiOrdem: null }
+    // A ordem escreveu um pitch para o centro da obra. Acabou a obra, acabou a ordem: devolve o pitch ao
+    // nível, senão a vigia atira no chão (a 1,5 m o pitch fica em -0,49 e a primeira baixa demora 1 s a mais).
+    // Só aqui: no corpo o pitch é do jogador, e a vigia nunca o mexe.
+    if (!obra) return { ...state, heroiOrdem: null, heroi: { ...state.heroi, pitch: 0 } }
     const dist = Math.hypot(state.heroi.x - obra.x, state.heroi.z - obra.z)
     let atual = state
     if (dist > PARTIDA.shootRange * 0.8) {
@@ -2237,7 +2312,8 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
 function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): PartidaState {
   if (state.semCorpo) return state
   if (state.olhar === 'imperio') {
-    const ordem = seguirOrdemHeroi(state, dt)
+    let ordem = seguirOrdemHeroi(state, dt)
+    if (!ordem.heroiOrdem) ordem = vigiarHeroi(ordem)
     const queda = cair(
       ordem.heroi.y,
       ordem.heroi.vy,
@@ -2257,8 +2333,12 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
     ? Math.max(-1, Math.min(1, input.eixoY ?? 0))
     : (input.forward ? 1 : 0) - (input.back ? 1 : 0)
   const lado = analogico ? Math.max(-1, Math.min(1, input.eixoX ?? 0)) : input.strafe
-  if (state.heroiOrdem && (Math.abs(drive) > 0.2 || Math.abs(lado) > 0.2)) {
+  const andando = Math.abs(drive) > 0.2 || Math.abs(lado) > 0.2
+  if (state.heroiOrdem && andando) {
     state = { ...state, heroiOrdem: null }
+  }
+  if (!andando && state.heroiOrdem?.tipo !== 'mover') {
+    state = vigiarHeroi(state)
   }
   const yaw = state.heroi.yaw
   const fx = -Math.sin(yaw)
@@ -2452,6 +2532,119 @@ function blocoNossoAdjacente(px: number, pz: number, blocosMapa: MapaBlocos): Bl
   return melhor
 }
 
+function passoVigiaUnidade(
+  state: PartidaState,
+  unidade: Unidade,
+  unidades: readonly Unidade[],
+  obras: readonly Obra[],
+  dt: number,
+  bloqueios: readonly Bloqueio[],
+  versao: number,
+  blocosMapa: MapaBlocos,
+): Unidade {
+  if (unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
+  if (unidade.postura === 'calado' || unidade.postura === 'noLugar') return unidade
+  if (unidade.postura !== 'vigia' && unidade.postura !== 'automatico') return unidade
+  const inimigos = unidades.filter((item) => item.lado === 'inimigo' && item.hp > 0)
+  const vistos = inimigos.filter(
+    (item) =>
+      Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.visao.tropa &&
+      visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), item.x, item.z, 0),
+  )
+  const ancoraInicial = unidade.ancora ?? null
+  let ancora = ancoraInicial
+  // Com âncora, só concorre quem está dentro da coleira. Escolher o mais perto da tropa antes de olhar a
+  // coleira deixava um alvo de fora vencer, e a tropa parava ignorando outro, dentro do olho e da coleira (D-A1).
+  const vistosNaColeira = ancoraInicial
+    ? vistos.filter((item) => Math.hypot(item.x - ancoraInicial.x, item.z - ancoraInicial.z) <= PARTIDA.acquireAliado)
+    : vistos
+  let alvoId = maisPerto(unidade.x, unidade.z, vistosNaColeira)
+  // A decisão "há alvo fora da coleira, então segura" só pode ser tomada DEPOIS das quatro buscas (unidade no
+  // olho, unidade na coleira, obra no olho, obra na coleira), no desfecho abaixo. Antes disso ela cortava as
+  // buscas seguintes e ignorava candidatos válidos (D-A1-CROSS).
+  if (alvoId === null && ancoraInicial) {
+    const naColeira = inimigos.filter(
+      (item) => Math.hypot(item.x - ancoraInicial.x, item.z - ancoraInicial.z) <= PARTIDA.acquireAliado,
+    )
+    alvoId = maisPerto(unidade.x, unidade.z, naColeira)
+  }
+  const alvo = alvoId === null ? undefined : inimigos.find((item) => item.id === alvoId)
+  if (alvo) {
+    if (!ancora) ancora = { x: unidade.x, z: unidade.z }
+    else if (Math.hypot(alvo.x - ancora.x, alvo.z - ancora.z) > PARTIDA.acquireAliado) {
+      return unidade
+    }
+    const comAncora = { ...unidade, ancora }
+    if (Math.hypot(alvo.x - unidade.x, alvo.z - unidade.z) <= PARTIDA.melee) return comAncora
+    return avancarRota(
+      comAncora,
+      alvo.x,
+      alvo.z,
+      PARTIDA.allySpeed,
+      dt,
+      obras,
+      state.tempo,
+      versao,
+      bloqueios,
+      'vivo',
+      state.lagoas,
+      blocosMapa,
+    )
+  }
+  const obrasHostis = obras.filter(
+    (item) =>
+      !nossa(item) &&
+      item.hp > 0 &&
+      cobertoAgora(state, item.x, item.z) &&
+      Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.visao.tropa &&
+      visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), item.x, item.z, 0),
+  )
+  // Mesma regra da unidade (D-A1): com âncora, só concorre a obra dentro da coleira.
+  const obrasNaColeira = ancoraInicial
+    ? obrasHostis.filter((item) => Math.hypot(item.x - ancoraInicial.x, item.z - ancoraInicial.z) <= PARTIDA.acquireAliado)
+    : obrasHostis
+  const obraId = maisPerto(unidade.x, unidade.z, obrasNaColeira)
+  let alvoObra = obraId === null ? undefined : obras.find((item) => item.id === obraId && item.hp > 0)
+  if (!alvoObra && ancora) {
+    const presa = ancora
+    const naColeiraObra = obras.filter(
+      (item) =>
+        !nossa(item) &&
+        item.hp > 0 &&
+        Math.hypot(item.x - presa.x, item.z - presa.z) <= PARTIDA.acquireAliado,
+    )
+    const idColeira = maisPerto(unidade.x, unidade.z, naColeiraObra)
+    alvoObra = idColeira === null ? undefined : obras.find((item) => item.id === idColeira && item.hp > 0)
+  }
+  if (!alvoObra) {
+    // Nenhum candidato dentro da coleira. Se ainda há alvo no olho, mas todos fora dela, a tropa segura onde está
+    // e conserva a âncora (sem isso a perseguição deslizaria). Sem alvo nenhum, a âncora some.
+    if (ancoraInicial && (vistos.length > 0 || obrasHostis.length > 0)) return unidade
+    return unidade.ancora ? { ...unidade, ancora: null } : unidade
+  }
+  if (!ancora) ancora = { x: unidade.x, z: unidade.z }
+  else if (Math.hypot(alvoObra.x - ancora.x, alvoObra.z - ancora.z) > PARTIDA.acquireAliado) {
+    return unidade
+  }
+  const comObra = { ...unidade, ancora }
+  if (emContatoComObra(unidade.x, unidade.z, alvoObra)) return comObra
+  const peri = aproximacaoDaObra(alvoObra, unidade.x, unidade.z)
+  return avancarRota(
+    comObra,
+    peri.x,
+    peri.z,
+    PARTIDA.allySpeed,
+    dt,
+    obras,
+    state.tempo,
+    versao,
+    bloqueios,
+    'vivo',
+    state.lagoas,
+    blocosMapa,
+  )
+}
+
 function passoUnidades(state: PartidaState, dt: number): PartidaState {
   const obrasVivas = state.obras.filter((obra) => nossa(obra) && obra.hp > 0)
   const alvosObra = obrasVivas.map((obra) => ({ id: obra.id, x: obra.x, z: obra.z }))
@@ -2601,7 +2794,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         const obrasHostis = obras.filter((item) => !nossa(item) && item.hp > 0 && cobertoAgora(state, item.x, item.z))
         const proxId = maisPerto(unidade.x, unidade.z, obrasHostis)
         alvoObra = proxId === null ? undefined : obraInimigaViva(proxId)
-        if (!alvoObra) return { ...unidade, ordem: null }
+        if (!alvoObra) return encerrarOrdemDeAtaque(unidade)
         ordem = { tipo: 'atacarObra', obraId: alvoObra.id }
         rota = null
       }
@@ -2637,7 +2830,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         if (!alvo) {
           const obrasHostis = obras.filter((item) => !nossa(item) && item.hp > 0 && cobertoAgora(state, item.x, item.z))
           const obraId = maisPerto(unidade.x, unidade.z, obrasHostis)
-          if (obraId === null) return { ...unidade, ordem: null }
+          if (obraId === null) return encerrarOrdemDeAtaque(unidade)
           return { ...unidade, ordem: { tipo: 'atacarObra', obraId }, rota: null }
         }
         ordem = { tipo: 'atacar', alvoId: alvo.id }
@@ -2658,32 +2851,8 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         blocosMapa,
       )
     }
-    if (unidade.postura === 'automatico') {
-      const inimigos = unidades.filter(
-        (item) =>
-          item.lado === 'inimigo' &&
-          item.hp > 0 &&
-          Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.acquireAliado,
-      )
-      const id = maisPerto(unidade.x, unidade.z, inimigos)
-      if (id !== null) {
-        const alvo = vivo(id)
-        if (alvo) {
-          return avancarRota(unidade, alvo.x, alvo.z, PARTIDA.allySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
-        }
-      }
-      const obrasHostis = obras.filter(
-        (item) =>
-          !nossa(item) &&
-          item.hp > 0 &&
-          cobertoAgora(state, item.x, item.z) &&
-          Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.acquireAliado,
-      )
-      const obraId = maisPerto(unidade.x, unidade.z, obrasHostis)
-      const alvoObra = obraId === null ? undefined : obraInimigaViva(obraId)
-      if (!alvoObra || emContatoComObra(unidade.x, unidade.z, alvoObra)) return unidade
-      const peri = aproximacaoDaObra(alvoObra, unidade.x, unidade.z)
-      return avancarRota(unidade, peri.x, peri.z, PARTIDA.allySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
+    if (unidade.postura === 'vigia' || unidade.postura === 'automatico' || unidade.postura === 'noLugar' || unidade.postura === 'calado') {
+      return passoVigiaUnidade(state, unidade, unidades, obras, dt, bloqueios, versao, blocosMapa)
     }
     return unidade
   })
@@ -2713,9 +2882,28 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     }
   }
 
+  const agressores = new Set<number>()
   for (const unidade of unidades) {
     if (unidade.hp <= 0 || unidade.cooldown > 0) continue
     if (unidade.lado === 'aliado') {
+      if (unidade.postura === 'calado') continue
+      if (unidade.postura === 'noLugar') {
+        const inimigosParados = unidades.filter(
+          (item) => item.lado === 'inimigo' && item.hp > 0 && Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.melee,
+        )
+        const paradoId = maisPerto(unidade.x, unidade.z, inimigosParados)
+        const parado = paradoId === null ? undefined : unidades.find((item) => item.id === paradoId && item.hp > 0)
+        if (
+          parado &&
+          visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), parado.x, parado.z, 0)
+        ) {
+          fere(parado.id, PARTIDA.danoAutomatico)
+          unidades = unidades.map((item) =>
+            item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
+          )
+        }
+        continue
+      }
       if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacarObra') {
         const alvoObra = obraInimigaViva(unidade.ordem.obraId)
         if (alvoObra && emContatoComObra(unidade.x, unidade.z, alvoObra)) {
@@ -2728,7 +2916,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       }
       let alvoId: number | null = null
       if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacar') alvoId = unidade.ordem.alvoId
-      if (unidade.postura === 'automatico') {
+      if (unidade.postura === 'automatico' || unidade.postura === 'vigia') {
         const inimigos = unidades.filter((item) => item.lado === 'inimigo' && item.hp > 0)
         alvoId = maisPerto(unidade.x, unidade.z, inimigos.filter((item) => Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.melee + 0.2))
       }
@@ -2743,7 +2931,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
           continue
         }
       }
-      if (unidade.postura === 'automatico') {
+      if (unidade.postura === 'automatico' || unidade.postura === 'vigia') {
         const obrasEmContato = obras.filter((item) => !nossa(item) && item.hp > 0 && emContatoComObra(unidade.x, unidade.z, item))
         const obraId = maisPerto(unidade.x, unidade.z, obrasEmContato)
         if (obraId !== null) {
@@ -2760,6 +2948,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         const nucleo = nucleoNosso(obras)
         if (nucleo && emContatoComObra(unidade.x, unidade.z, nucleo)) {
           fereObra(nucleo.id, PARTIDA.danoSitio)
+          agressores.add(unidade.id)
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -2768,6 +2957,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         const obraNoCaminho = obras.find((obra) => nossa(obra) && obra.hp > 0 && emContatoComObra(unidade.x, unidade.z, obra))
         if (obraNoCaminho) {
           fereObra(obraNoCaminho.id, PARTIDA.danoSitio)
+          agressores.add(unidade.id)
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -2786,6 +2976,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       const obraId = maisPerto(unidade.x, unidade.z, tocadas)
       if (obraId !== null) {
         fereObra(obraId, PARTIDA.danoSitio)
+        agressores.add(unidade.id)
         unidades = unidades.map((item) =>
           item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
         )
@@ -2876,6 +3067,31 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       fereObra(obraRivalId, danoTorre)
       obras = obras.map((item) => (item.id === torre.id ? { ...item, cooldown: PARTIDA.torreCooldown } : item))
     }
+  }
+
+  if (agressores.size > 0) {
+    unidades = unidades.map((unidade) => {
+      if (unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
+      if (unidade.postura === 'calado' || unidade.postura === 'noLugar') return unidade
+      if (unidade.ordem) return unidade
+      if (unidade.postura !== 'vigia' && unidade.postura !== 'automatico' && unidade.postura !== 'ordens') return unidade
+      // Quem cumpre ordem volta à base que o jogador escolheu. Se a base é calado ou no lugar, o alarme não a desfaz.
+      if (unidade.postura === 'ordens' && (unidade.posturaBase === 'calado' || unidade.posturaBase === 'noLugar')) return unidade
+      const visto = unidades.find(
+        (ag) =>
+          agressores.has(ag.id) &&
+          ag.hp > 0 &&
+          Math.hypot(ag.x - unidade.x, ag.z - unidade.z) <= PARTIDA.visao.tropa &&
+          visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), ag.x, ag.z, 0),
+      )
+      if (!visto) return unidade
+      return {
+        ...unidade,
+        postura: unidade.postura === 'ordens' ? ('vigia' as const) : unidade.postura,
+        posturaBase: unidade.postura === 'ordens' ? (unidade.posturaBase ?? 'vigia') : unidade.posturaBase,
+        ancora: unidade.ancora ?? { x: unidade.x, z: unidade.z },
+      }
+    })
   }
 
   const morreuSolido = state.obras.some((antes) => {
