@@ -1,7 +1,7 @@
-import { Gate } from '../types'
+import { Gate } from './contaContratos'
 
 export type Olhar = 'primeira' | 'terceira' | 'imperio'
-export type Postura = 'ordens' | 'automatico'
+export type Postura = 'ordens' | 'automatico' | 'vigia' | 'noLugar' | 'calado'
 export type PecaId = 'nucleo' | 'torre' | 'portao' | 'quartel' | 'britador' | 'serraria' | 'mina'
 export type Papel = 'horda' | 'tropa' | 'sitiante' | 'isca' | 'dragao'
 export type PoliticaMinimapas = 'atual' | 'alguns' | 'todos'
@@ -98,6 +98,10 @@ export const PARTIDA = {
   reparoLingotes: 3,
   reparoCredito: 2,
   nivelMaximoObra: 5,
+  // Preço de evoluir uma obra, em qualquer nível: 1 licença, ou 2 madeiras + 2 ouros. `evoluir` e o painel leem daqui.
+  custoEvoluirCredito: 1,
+  custoEvoluirMadeira: 2,
+  custoEvoluirOuro: 2,
   rebroteArvoreSeg: 45,
   aguaFatorVelocidade: 0.55,
   custoAguaCaminho: 2.2,

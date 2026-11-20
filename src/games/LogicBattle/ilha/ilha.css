@@ -96,8 +96,7 @@
 }
 
 .ilha-hud strong,
-.ilha-hud button,
-.ilha-plate {
+.ilha-hud button {
   pointer-events: auto;
 }
 
@@ -121,6 +120,99 @@
   flex-wrap: wrap;
   gap: 6px;
   max-width: min(640px, calc(100% - 32px));
+}
+
+/* O painel é irmão do HUD (fora de `.ilha-hud`, que cria um stacking context em z-index 4): só assim ele disputa
+   a camada com o minimapa (8) e fica abaixo do card de confirmação (12). Dentro do HUD o minimapa sempre vencia. */
+.ilha-painel-obra {
+  position: absolute;
+  top: 64px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(240px, calc(100% - 24px));
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  pointer-events: auto;
+}
+
+.ilha-painel-obra strong {
+  /* distribui as quebras: sem isto «(Nv.» fica numa linha e «1)» sozinho na outra */
+  text-wrap: balance;
+}
+
+.ilha-painel-obra p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Wrapper dos dois botões. No desktop é uma coluna (como era); no celular vira grade de 2 colunas (bloco abaixo). */
+.ilha-painel-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Celular (390×844), coluna da direita, medida de cima para baixo: minimapa 201→397, «Fazer conta» 413→454, FAIXA LIVRE
+   454→654, Pular 654→722, Atirar 734→822. A faixa livre tem ~200 px e o painel inteiro tem ~225: o painel ancora a base
+   logo acima do Pular (`bottom: 196px`) e rola por dentro (`max-height: 190px`) em vez de invadir quem mora ali.
+   Medido: com `bottom: 132px` ele cobria 85% do Pular e roubava o toque; com `bottom: 192px` cobria «Fazer conta»
+   (2.669 px²), o botão que abre a conta matemática. O corpo tem Pular e Atirar, o império não. */
+.ilha-celular .ilha-painel-obra {
+  top: auto;
+  right: 8px;
+  bottom: 196px;
+  /* 172 px: o painel começa em x = 210, depois do retículo de mira (18 px no centro, x 186-204 num 390). Com 194 px de
+     largura ele cobria 89% da mira (288 de 324 px²) e o jogador perdia a pontaria com o painel aberto no corpo. */
+  width: min(172px, calc(100% - 218px));
+  /* 164 px, medido em toque real (banner 99 px): o painel acaba em 648 (bottom 196) e «Fazer conta» em «Observando»
+     acaba em 484, então 648 - 164 = 484 encosta sem invadir. Com 190 px ele entrava 26 px em «Fazer conta» (2.567 px²). */
+  max-height: 164px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  gap: 5px;
+}
+
+/* Conteúdo compacto para caber nos 164 px SEM rolagem: o T2 mediu overflow de 70 px (Torre/Quartel) e 94 px (Mina)
+   com o layout empilhado, o que cortava «Editar blocos» e escondia o aviso. Aqui os botões ficam lado a lado. */
+.ilha-celular .ilha-painel-obra strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.ilha-celular .ilha-painel-obra p {
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.ilha-celular .ilha-painel-acoes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ilha-celular .ilha-painel-obra button {
+  min-height: 44px;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  line-height: 1.15;
+}
+
+.ilha-painel-obra button {
+  min-height: 42px;
+  min-width: 42px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #14324a;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .ilha-barra {
@@ -239,6 +331,13 @@
   position: absolute;
   left: 16px;
   top: 108px;
+  /* A linha lista o nível de CADA obra nossa e cresce com o número delas. Sem teto ela passava por baixo do painel da
+     obra (coluna da direita: 240 px + 12 de margem). Para antes dele e fica numa linha só, com reticências: quebrar
+     a linha empurrava a base por cima das ferramentas, que ficam em `top: 156px` supondo UMA linha (medido: 10 px). */
+  max-width: calc(100% - 280px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: #14324a;
   color: #fff;
   border-radius: 10px;
@@ -497,6 +596,9 @@
   font-size: 13px;
   font-weight: 700;
   text-align: center;
+  /* Só informa: não pode roubar o clique da obra ou do chão que está atrás (F2-D6). O <Html> pai já é none; a
+     regra de `.ilha-hud ... { pointer-events: auto }` chegava a esta placa e anulava isso. */
+  pointer-events: none;
 }
 
 .ilha-minimapa {
@@ -960,4 +1062,14 @@
   min-height: 40px;
   padding: 6px 10px !important;
   font-size: 12px;
+}
+
+/* Celular: teto de 190 px para a barra de ações do campo. Num contêiner flex com `flex-wrap` o navegador dá à caixa a
+   largura MÁXIMA permitida quando o conteúdo quebra de linha, e não a da linha mais larga: com o `max-width` do desktop
+   (calc(100% - 130px) = 260 px) ela media 260 px com 143 px de conteúdo. Essa caixa vazia (l 16-276, t 632-732) invadia o
+   painel da obra (l 210-382) em 1.056 px² depois de «Editar blocos» (F2-D1, medido em toque real). `width: max-content`
+   NÃO resolve (medido: o teto vence). Com 190 px a caixa acaba em x = 206, antes do painel (x = 210), e os 3 ícones de 42 px
+   mais os chips (143 px) cabem em duas linhas. */
+.ilha-celular .ilha-acoes-campo {
+  max-width: 190px;
 }

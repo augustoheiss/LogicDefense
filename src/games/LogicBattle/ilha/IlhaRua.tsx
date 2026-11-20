@@ -8,7 +8,7 @@ import {
   InfiniteMathChallenge,
   MATH_CHALLENGE_TIER_POLICIES,
   MathDifficultyTier,
-} from '../domain/infiniteMathEngine'
+} from './infiniteMathEngine'
 import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
 import {
   AlvoEdicaoUnificado,
@@ -71,6 +71,7 @@ import {
   vetorDoOlhar,
   PartidaState,
   postura,
+  posturaHeroi,
 } from './partidaSim'
 import {
   decidirAcaoPonteiro,
@@ -92,7 +93,26 @@ import {
   voltarAoCorpo,
 } from './atlas'
 import { IconeId, IconeSvg, META_INTENCOES } from './ilhaIcones'
+import {
+  alvoDoTeclado,
+  cliqueAbreOPainelDaObra,
+  destinoDoToque,
+  jogoTomaConfirmar,
+  painelValido,
+  paraPropagacaoDoPointerdown,
+  precoDeEvoluir,
+  proximaEntradaPorTeclado,
+  teclaDoBotaoFocado,
+} from './atalhosIlha'
+
+// O preço de evoluir, lido da mesma constante que `evoluir` cobra. Nenhum texto da tela reescreve esse número.
+const PRECO_EVOLUIR = precoDeEvoluir({
+  credito: PARTIDA.custoEvoluirCredito,
+  madeira: PARTIDA.custoEvoluirMadeira,
+  ouro: PARTIDA.custoEvoluirOuro,
+})
 import { MundoSandboxCena } from './MundoSandboxCena'
+import { raycastCondicional, semRaycast } from './raycastCena'
 import { TropasCena } from './TropasCena'
 import './ilha.css'
 
@@ -172,7 +192,6 @@ type Controle = {
 }
 
 const RAIO_MANCHE = 56
-const semRaycast = () => null
 
 function Cena(props: {
   sim: React.MutableRefObject<PartidaState>
@@ -196,7 +215,10 @@ function Cena(props: {
   onQuadro: (texto: string) => void
   modoBloco: 'adicionar' | 'remover' | null
   modoBlocoRef: React.MutableRefObject<'adicionar' | 'remover' | null>
-  materialBlocoRef: React.MutableRefObject<BlocoMaterial>
+  obraBlocoAlvoIdRef: React.MutableRefObject<number | null>
+  /** `pointerId` do clique que caiu numa obra nossa: o container consome e não atira (A2b). */
+  ponteiroDaObraRef: React.MutableRefObject<number | null>
+materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   modoLinhaRef: React.MutableRefObject<boolean>
   alturaLinhaRef: React.MutableRefObject<1 | 2 | 3>
   modoConsagrarRef: React.MutableRefObject<PecaId | null>
@@ -239,6 +261,33 @@ function Cena(props: {
   const linhaDrag = useRef<{ x0: number; z0: number; pointerId: number } | null>(null)
   const rmbDrag = useRef<{ x: number; y: number; worldX: number; worldZ: number; pointerId: number } | null>(null)
   const ultimoBoxSelectMs = useRef(0)
+
+  // O ponteiro tocou a obra `obraId`. Se o clique vai abrir o painel dela, marca o ponteiro como «da obra»: o container
+  // consome a marca e não atira nem prende o mouse (A2b). Serve às três malhas (comum e as duas instanciadas), que só
+  // informam QUAL obra foi tocada; quem decide é a regra pura, com o estado de verdade (hp, olhar, modo de edição).
+  const marcarPonteiroDaObra = (obraId: number, pointerId: number, botao: number): boolean => {
+    const atual = props.sim.current
+    const emEdicao = Boolean(props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current)
+    const peca = atual.obras.find((item) => item.id === obraId) ?? null
+    if (!cliqueAbreOPainelDaObra(peca, { botao, olhar: atual.olhar, modoEdicao: emEdicao, semCorpo: atual.semCorpo })) return false
+    props.ponteiroDaObraRef.current = pointerId
+    return true
+  }
+  /**
+   * `pointerdown` de uma obra, para as TRÊS malhas (comum, Nv5 e consagrada). Obra nossa marca o ponteiro (A2b). Obra
+   * inimiga viva e visível devolve `true`: a malha PARA o raycast do R3F, senão uma obra nossa colinear atrás marcava o
+   * ponteiro e o tiro/ordem na inimiga morria sem efeito (OBS-F2-5). A regra é `paraPropagacaoDoPointerdown`.
+   */
+  const pointerdownDaObra = (obraId: number, pointerId: number, botao: number): boolean => {
+    if (marcarPonteiroDaObra(obraId, pointerId, botao)) return false
+    const atual = props.sim.current
+    const emEdicao = Boolean(props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current)
+    const peca = atual.obras.find((item) => item.id === obraId)
+    return paraPropagacaoDoPointerdown(
+      peca ? { lado: peca.lado, hp: peca.hp, coberta: cobertoAgora(atual, peca.x, peca.z) } : null,
+      { botao, modoEdicao: emEdicao },
+    )
+  }
   const { camera, gl, raycaster } = useThree()
 
   const soloNoNdc = (ndcX: number, ndcY: number, planoY = 0) => {
@@ -363,6 +412,11 @@ function Cena(props: {
 
     if (escolhido) {
       const cand = candidatos[escolhido.obraId]
+      const alvoPainel = props.obraBlocoAlvoIdRef.current
+      if (alvoPainel !== null) {
+        const idHit = cand.kind === 'mundo' ? null : cand.meta.obraId
+        if (idHit !== alvoPainel) return null
+      }
       if (cand.kind === 'nv5') {
         const obra = state.obras.find((o) => o.id === cand.meta.obraId)
         if (!obra) return null
@@ -446,7 +500,8 @@ function Cena(props: {
     }
 
     // Sem hit em bloco existente: em modo adicionar, permite colocar bloco livre direto no chão!
-    if (modoAtual === 'adicionar') {
+    // Com o editor preso a UMA obra (painel), o chão livre é o editor global: o painel não pode usá-lo (F2-D3).
+    if (modoAtual === 'adicionar' && props.obraBlocoAlvoIdRef.current === null) {
       const chao = soloNoNdc(ndc.x, ndc.y, 0)
       if (!chao) return null
       if (olharDesenho !== 'imperio') {
@@ -924,10 +979,16 @@ function Cena(props: {
         ghostObra={props.ghostObra}
         previewLinha={props.previewLinha}
         bloqueiaCliqueObra={Boolean(props.modoBloco || props.modoLinhaRef.current || props.modoConsagrarRef.current)}
+        onTocarObraInstanced={(obraId, pointerId, botao) => pointerdownDaObra(obraId, pointerId, botao)}
         onSelectObraInstanced={(obraId) => {
           if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current) return
           if (props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160) return
           const atual = props.sim.current
+          const pecaInst = atual.obras.find((item) => item.id === obraId)
+          if (pecaInst && pecaInst.hp > 0 && pecaInst.lado !== 'inimigo') {
+            props.onObra(obraId)
+            return
+          }
           if (atual.semCorpo || atual.olhar === 'imperio') props.onObra(obraId)
         }}
         onPedirSubsolo={props.onPedirSubsolo}
@@ -952,11 +1013,11 @@ function Cena(props: {
           props.onHeroi(event.nativeEvent.shiftKey)
         }}
       >
-        <mesh position={[0, 0.2, 0]} raycast={props.modoBloco ? semRaycast : undefined}>
+        <mesh position={[0, 0.2, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
           <boxGeometry args={[0.7, 1.1, 0.5]} />
           <meshStandardMaterial color="#3b82f6" />
         </mesh>
-        <mesh position={[0, 0.95, 0]} raycast={props.modoBloco ? semRaycast : undefined}>
+        <mesh position={[0, 0.95, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
           <sphereGeometry args={[0.28, 12, 12]} />
           <meshStandardMaterial color="#f2b544" />
         </mesh>
@@ -1015,11 +1076,8 @@ function Cena(props: {
             visivel={visivel}
             modoBloco={Boolean(props.modoBloco || props.modoLinhaRef.current || props.modoConsagrarRef.current)}
             onPointerDown={(event) => {
-              if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current || event.nativeEvent.button !== 2) return
-              const atual = props.sim.current
-              const peca = atual.obras.find((item) => item.id === obra.id)
-              if (!peca || peca.hp <= 0 || peca.lado !== 'inimigo' || !cobertoAgora(atual, peca.x, peca.z)) return
-              event.stopPropagation()
+              // Esta malha roda antes do `pointerdown` do container, que atiraria (medido: R3F vem antes).
+              if (pointerdownDaObra(obra.id, event.pointerId, event.nativeEvent.button)) event.stopPropagation()
             }}
             onPointerUp={(event) => {
               if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current || event.nativeEvent.button !== 2) return
@@ -1036,7 +1094,7 @@ function Cena(props: {
               const peca = atual.obras.find((item) => item.id === obra.id)
               if (!peca || peca.hp <= 0 || (peca.lado === 'inimigo' && !cobertoAgora(atual, peca.x, peca.z))) return
               event.stopPropagation()
-              if (atual.semCorpo || atual.olhar === 'imperio') props.onObra(obra.id)
+              if (peca.lado !== 'inimigo' || atual.semCorpo || atual.olhar === 'imperio') props.onObra(obra.id)
             }}
           />
         )
@@ -1104,6 +1162,11 @@ export const IlhaRua: React.FC = () => {
   const tool = useRef<PecaId | null>(null)
   const dragou = useRef(false)
   const evoluirId = useRef<number | null>(null)
+  const obraBlocoAlvoIdRef = useRef<number | null>(null)
+  const ponteiroDaObraRef = useRef<number | null>(null)
+  const [painelObraId, setPainelObraId] = useState<number | null>(null)
+  const painelObraRef = useRef<number | null>(null)
+  const evoluirPainelRef = useRef<() => void>(() => {})
   const [heroiEscolhido, setHeroiEscolhido] = useState(false)
   const [caixa, setCaixa] = useState<{ x: number; y: number; x2: number; y2: number } | null>(null)
   const selected = useRef<number[]>([])
@@ -1119,6 +1182,11 @@ export const IlhaRua: React.FC = () => {
   const [power, setPower] = useState('')
   const [ferramenta, setFerramenta] = useState('')
   const [intencao, setIntencao] = useState<IconeId | null>(null)
+  const intencaoRef = useRef<IconeId | null>(null)
+  intencaoRef.current = intencao
+  const confirmarRef = useRef<(acao: IconeId) => void>(() => {})
+  const entradaPorTeclado = useRef(false)
+  const confirmarSimRef = useRef<HTMLButtonElement | null>(null)
   const [menuMiniAberto, setMenuMiniAberto] = useState(true)
   const [painelBlocosAberto, setPainelBlocosAberto] = useState(false)
   const [modoBloco, setModoBloco] = useState<'adicionar' | 'remover' | null>(null)
@@ -1178,6 +1246,10 @@ export const IlhaRua: React.FC = () => {
     definirSelecao([])
     setModoMoverTouch(false)
     evoluirId.current = null
+    // A cena trocou: o painel e o id preso do editor de blocos eram de uma obra do quadrado anterior (A3).
+    painelObraRef.current = null
+    obraBlocoAlvoIdRef.current = null
+    setPainelObraId(null)
     tool.current = null
     dragou.current = false
     voxelAlvoRef.current = null
@@ -1327,9 +1399,39 @@ export const IlhaRua: React.FC = () => {
   aplicarEdicaoVoxelRef.current = aplicarEdicaoVoxel
 
   useEffect(() => {
+    // O jogador chegou no controle focado pelo teclado (Tab) ou por clique? `:focus-visible` não diz:
+    // o Chrome o liga na primeira tecla depois do clique. Quem guarda a origem é este ref.
+    const registrarPonteiro = () => {
+      entradaPorTeclado.current = proximaEntradaPorTeclado({ tipo: 'ponteiro' }, entradaPorTeclado.current)
+    }
+    window.addEventListener('pointerdown', registrarPonteiro, true)
     const down = (event: KeyboardEvent) => {
+      entradaPorTeclado.current = proximaEntradaPorTeclado({ tipo: 'tecla', code: event.code }, entradaPorTeclado.current)
       if (modalOpen.current) return
       if (event.code === 'Escape') {
+        // O card de confirmação fica NA FRENTE do painel (z-index 12 contra 10): o Esc fecha o que está por cima
+        // primeiro, e o painel de trás espera o próximo Esc (OBS-F2-2). Com card aberto o painel não é tocado aqui;
+        // o card cai nos ramos de baixo, que já o fecham junto com a ferramenta/fantasma, como sempre fizeram.
+        if (
+          painelObraRef.current !== null &&
+          intencaoRef.current === null &&
+          !modoBlocoRef.current &&
+          !modoLinhaRef.current &&
+          !modoConsagrarRef.current
+        ) {
+          painelObraRef.current = null
+          obraBlocoAlvoIdRef.current = null
+          setPainelObraId(null)
+          return
+        }
+        // Card na frente de um modo de edição (bloco, linha, consagrar): o 1º Esc fecha SÓ o card. O modo fica atrás e
+        // espera o próximo Esc. Sem isto o Esc fechava o modo escondido e o jogador via um Esc que não fez nada
+        // (OBS-F2-2b, medido: card + painel + modoBloco => 1º Esc sem efeito visível, 2º fecha o card, 3º o painel).
+        // Não vira um `return` solto para todo card: o ramo da ferramenta, mais abaixo, fecha card + fantasma juntos.
+        if (intencaoRef.current !== null && (modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current)) {
+          setIntencao(null)
+          return
+        }
         if (modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) {
           modoBlocoRef.current = null
           modoLinhaRef.current = false
@@ -1356,7 +1458,26 @@ export const IlhaRua: React.FC = () => {
       if (event.code === 'Digit1') irParaOlharRef.current('primeira')
       if (event.code === 'Digit2') irParaOlharRef.current('terceira')
       if (event.code === 'Digit3') irParaOlharRef.current('imperio')
-      if (event.code === 'Space') {
+      const alvoTecla = alvoDoTeclado(event.target)
+      if (
+        jogoTomaConfirmar(
+          event.code,
+          alvoTecla,
+          {
+            cardAberto: intencaoRef.current !== null,
+            // O painel só conta aberto enquanto a obra dele existe, é nossa e está viva (A3b: painel fantasma).
+            painelAberto: painelValido(painelObraRef.current, sim.current.obras, estadoCorpo(atlasRef.current).derrota),
+          },
+          entradaPorTeclado.current,
+        )
+      ) {
+        event.preventDefault()
+        if (event.repeat) return
+        if (intencaoRef.current) confirmarRef.current(intencaoRef.current)
+        else evoluirPainelRef.current()
+        return
+      }
+      if (event.code === 'Space' && !teclaDoBotaoFocado(alvoTecla, entradaPorTeclado.current)) {
         event.preventDefault()
         if (event.repeat || sim.current.olhar === 'imperio' || sim.current.derrota || sim.current.semCorpo) return
         publicar(pular(sim.current))
@@ -1468,6 +1589,7 @@ export const IlhaRua: React.FC = () => {
     window.addEventListener('pointerup', stopLook)
     window.addEventListener('pointercancel', stopLook)
     return () => {
+      window.removeEventListener('pointerdown', registrarPonteiro, true)
       window.removeEventListener('keydown', down, true)
       window.removeEventListener('keyup', up)
       window.removeEventListener('pointermove', moveLook)
@@ -1475,6 +1597,34 @@ export const IlhaRua: React.FC = () => {
       window.removeEventListener('pointercancel', stopLook)
     }
   }, [])
+
+  // O editor de blocos preso a uma obra do painel só vale enquanto o modo bloco está armado. O modo termina por muitos
+  // caminhos (Esc, a barra normal, outra ferramenta, outra obra) e o alvo ficava preso ao id antigo, travando depois a
+  // edição normal de blocos livres (F2-D3). Aqui é o funil: `modoBloco` virou `null`, o alvo do painel é descartado.
+  useEffect(() => {
+    if (modoBloco === null) obraBlocoAlvoIdRef.current = null
+  }, [modoBloco])
+
+  // A obra do painel morreu, sumiu ou trocou de dono, ou a partida acabou: o painel fecha de verdade. Só esconder
+  // deixava o id vivo no ref, e o Espaço deixava de pular com um painel invisível (A3b, e de novo na derrota,
+  // OBS-F2-1). `hud` muda a cada publicação do estado. A derrota que vale é a do CORPO (a mesma de `podeComandar` e do
+  // JSX), lida no render: `hud.derrota` é a da cena OBSERVADA, e com o corpo morrendo em outro quadrado ela não muda,
+  // então o painel ficava preso no ref (OBS-F2-1b, medido pelo T2 observando outro quadrado).
+  const derrotaDoCorpo = estadoCorpo(atlasRef.current).derrota
+  useEffect(() => {
+    const id = painelObraRef.current
+    if (id === null) return
+    if (painelValido(id, hud.obras, derrotaDoCorpo)) return
+    painelObraRef.current = null
+    obraBlocoAlvoIdRef.current = null
+    setPainelObraId(null)
+  }, [hud.obras, derrotaDoCorpo])
+
+  // Card aberto: o foco entra no diálogo, em Confirmar. Sem isso o foco fica no ícone que o abriu e
+  // Enter ou Espaço só reabrem o card em vez de confirmá-lo (D-C1 do laudo do T2).
+  useEffect(() => {
+    if (intencao) confirmarSimRef.current?.focus({ preventScroll: true })
+  }, [intencao])
 
   const escolherFerramenta = (peca: PecaId, nome: string) => {
     if (!podeComandar()) return
@@ -1529,6 +1679,10 @@ export const IlhaRua: React.FC = () => {
 
   const nucleoQualquer = hud.obras.find((obra) => obra.tipo === 'nucleo' && obra.lado !== 'inimigo')
   const nucleo = nucleoQualquer && nucleoQualquer.hp > 0 ? nucleoQualquer : undefined
+  const niveisNossos = hud.obras
+    .filter((obra) => obra.lado !== 'inimigo' && obra.hp > 0)
+    .map((obra) => `${META_INTENCOES[obra.tipo].titulo} Nv. ${obra.nivel}`)
+    .join(' · ')
   const ruinaNossa =
     hud.obras.find((obra) => obra.lado !== 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0) ??
     hud.obras.find((obra) => obra.lado !== 'inimigo' && obra.hp <= 0)
@@ -1536,10 +1690,27 @@ export const IlhaRua: React.FC = () => {
   const vivosAliadosSet = new Set(tropasVivas.map((unidade) => unidade.id))
   const selectedVivas = selectedIds.filter((id) => vivosAliadosSet.has(id))
   const emOrdens = tropasVivas.filter((unidade) => unidade.postura === 'ordens').length
-  const emAuto = tropasVivas.filter((unidade) => unidade.postura === 'automatico').length
+  const emVigia = tropasVivas.filter((unidade) => unidade.postura === 'vigia' || unidade.postura === 'automatico').length
+  const posturaMarcada = (valor: 'vigia' | 'noLugar' | 'calado') => {
+    const tropasAlvo =
+      selectedVivas.length > 0
+        ? tropasVivas.filter((unidade) => selectedVivas.includes(unidade.id))
+        : heroiEscolhido
+          ? []
+          : tropasVivas
+    if (tropasAlvo.length === 0 && !heroiEscolhido) return valor === 'vigia'
+    const tropasOk = tropasAlvo.every((unidade) => unidade.postura === valor)
+    const heroiOk = !heroiEscolhido || (hud.heroiPostura ?? 'vigia') === valor
+    return tropasOk && heroiOk
+  }
   const dragaoVivo = hud.unidades.find((unidade) => unidade.papel === 'dragao' && inimigoVisivel(hud, unidade))
   const corpoAtual = estadoCorpo(atlasRef.current)
   const derrotado = corpoAtual.derrota
+  // A mesma regra de `painelValido` decide aqui, no efeito que fecha o painel e no Enter: obra nossa e viva, e a
+  // partida em andamento (OBS-F2-1: na derrota a tela de derrota manda). `derrotado` vem do corpo.
+  const obraPainel = painelValido(painelObraId, hud.obras, derrotado)
+    ? hud.obras.find((obra) => obra.id === painelObraId)
+    : undefined
   const tatico = hud.semCorpo || hud.olhar === 'imperio'
   const heroiSelecionavel = heroiEscolhido && !hud.semCorpo
   const temSelecaoAtiva = tatico && !derrotado && (heroiSelecionavel || selectedVivas.length > 0)
@@ -1549,6 +1720,20 @@ export const IlhaRua: React.FC = () => {
       : heroiSelecionavel
         ? 'Herói selecionado'
         : `${selectedVivas.length} ${selectedVivas.length === 1 ? 'tropa' : 'tropas'}`
+
+  const aplicarPostura = (valor: 'vigia' | 'noLugar' | 'calado') => {
+    const temTropa = selected.current.length > 0
+    const ids = temTropa
+      ? selected.current
+      : heroiEscolhido
+        ? []
+        : sim.current.unidades.filter((unidade) => unidade.lado === 'aliado' && unidade.hp > 0).map((unidade) => unidade.id)
+    let atual = sim.current
+    if (ids.length > 0) atual = postura(atual, ids, valor)
+    if (heroiEscolhido) atual = posturaHeroi(atual, valor)
+    if (atual === sim.current) return
+    publicar(atual)
+  }
 
   const confirmarIntencao = (acao: IconeId) => {
     setIntencao(null)
@@ -1580,7 +1765,7 @@ export const IlhaRua: React.FC = () => {
             ? 'Construção já está no Nível 5 (máximo)'
             : obraEmConstrucao(antes)
               ? 'Aguarde concluir a construção antes de evoluir'
-              : 'Precisa 1 licença ou 2 madeiras + 2 ouros para evoluir',
+              : `Precisa de ${PRECO_EVOLUIR} para evoluir`,
         )
       }
       return
@@ -1609,7 +1794,9 @@ export const IlhaRua: React.FC = () => {
         setPower(
           vivasCount >= PARTIDA.allyCap
             ? `Limite máximo de ${PARTIDA.allyCap} tropas atingido`
-            : 'Precisa 1 licença ou 2 ouros para recrutar tropa',
+            : obraEmConstrucao(casa)
+              ? 'Aguarde concluir a construção'
+              : 'Precisa 1 licença ou 2 ouros para recrutar tropa',
         )
         return
       }
@@ -1650,12 +1837,7 @@ export const IlhaRua: React.FC = () => {
       return
     }
     if (acao === 'automatico') {
-      const ids =
-        selected.current.length > 0
-          ? selected.current
-          : sim.current.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).map((u) => u.id)
-      definirSelecao(ids)
-      publicar(postura(sim.current, ids, 'automatico'))
+      aplicarPostura('vigia')
       return
     }
     if (acao === 'reparar') {
@@ -1777,6 +1959,30 @@ export const IlhaRua: React.FC = () => {
     }
   }
 
+  const evoluirDoPainel = () => {
+    const id = painelObraRef.current
+    if (id == null) return
+    const antes = sim.current.obras.find((obra) => obra.id === id)
+    if (!antes) return
+    const prox = evoluir(sim.current, id)
+    publicar(prox)
+    const depois = prox.obras.find((obra) => obra.id === id)
+    if (depois && depois.nivel > antes.nivel) {
+      setFerramenta(`${META_INTENCOES[depois.tipo].titulo} (Nv. ${depois.nivel})`)
+      setPower(`${META_INTENCOES[depois.tipo].titulo} evoluiu para Nv. ${depois.nivel}!`)
+    } else {
+      setPower(
+        antes.nivel >= PARTIDA.nivelMaximoObra
+          ? 'Construção já está no Nível 5 (máximo)'
+          : obraEmConstrucao(antes)
+            ? 'Aguarde concluir a construção antes de evoluir'
+            : `Precisa de ${PRECO_EVOLUIR} para evoluir`,
+      )
+    }
+  }
+  evoluirPainelRef.current = evoluirDoPainel
+  confirmarRef.current = confirmarIntencao
+
   const temMinaPronta = hud.obras.some(
     (obra) => obra.lado !== 'inimigo' && obra.tipo === 'mina' && obra.hp > 0 && !obraEmConstrucao(obra),
   )
@@ -1791,7 +1997,7 @@ export const IlhaRua: React.FC = () => {
         const target = event.target as HTMLElement
         if (
           target.closest(
-            'button, .ilha-modal, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-ferramentas',
+            'button, .ilha-modal, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-ferramentas, .ilha-painel-obra',
           )
         )
           return
@@ -1808,9 +2014,23 @@ export const IlhaRua: React.FC = () => {
         const toque = event.pointerType === 'touch'
         if (toque) setCelular(true)
         if (toque) {
+          // A malha da obra marca o ponteiro também no toque. O container LÊ o marcador e o consome (zera), e um dedo
+          // que caiu numa obra nossa abre o painel pelo `onClick` da malha: NÃO vira manche nem arrasto de câmera
+          // (F2-D4, medido em toque real: tocar a obra na metade esquerda armava o joystick). Sem `preventDefault`
+          // aqui, para o navegador seguir com o `click` que abre o painel.
           const retangulo = event.currentTarget.getBoundingClientRect()
           const localX = event.clientX - retangulo.left
-          if (localX < retangulo.width * 0.45 && sim.current.olhar !== 'imperio' && !sim.current.semCorpo) {
+          const destino = destinoDoToque({
+            marcadoPelaObra: ponteiroDaObraRef.current,
+            pointerId: event.pointerId,
+            x: localX,
+            largura: retangulo.width,
+            olhar: sim.current.olhar,
+            semCorpo: sim.current.semCorpo,
+          })
+          ponteiroDaObraRef.current = null
+          if (destino === 'obra') return
+          if (destino === 'manche') {
             event.preventDefault()
             stickPonteiro.current = event.pointerId
             stickOrigem.current = { x: event.clientX, y: event.clientY }
@@ -1824,7 +2044,7 @@ export const IlhaRua: React.FC = () => {
             if (knobEl.current) knobEl.current.style.transform = 'translate(0px, 0px)'
             return
           }
-          if (sim.current.olhar === 'imperio' || sim.current.semCorpo) {
+          if (destino === 'imperio') {
             if (modoBlocoRef.current || modoConsagrarRef.current) {
               blocoPonteiro.current = {
                 pointerId: event.pointerId,
@@ -1850,6 +2070,11 @@ export const IlhaRua: React.FC = () => {
           }
           return
         }
+        // A malha da obra nossa roda ANTES deste handler e marca o ponteiro. Consome AQUI, antes de qualquer retorno
+        // antecipado: um mouse tem sempre o mesmo `pointerId`, e o marcador que sobrava (retorno do império, de
+        // «Observando» ou de um modo de edição) engolia o 1º tiro depois (OBS-F2-4, medido: 0 tiros contra 1).
+        const ponteiroDaObra = ponteiroDaObraRef.current === event.pointerId
+        ponteiroDaObraRef.current = null
         if (sim.current.olhar === 'imperio' || sim.current.semCorpo) {
           if ((modoBlocoRef.current || modoConsagrarRef.current) && event.button === 0) {
             blocoPonteiro.current = {
@@ -1874,14 +2099,15 @@ export const IlhaRua: React.FC = () => {
           }
           return
         }
-        if (event.button === 0 && !sim.current.derrota) {
+        if (event.button === 0 && !sim.current.derrota && !ponteiroDaObra) {
           segurandoTiro.current = true
           tiroPonteiro.current = event.pointerId
           publicar(atirar(sim.current))
         }
         lookDrag.current = { x: event.clientX, y: event.clientY }
         lookPonteiro.current = event.pointerId
-        pedirLock(event.currentTarget.querySelector('canvas'))
+        // Clique na obra abre o painel: o pointer lock esconderia o cursor e impediria de clicar nele.
+        if (!ponteiroDaObra) pedirLock(event.currentTarget.querySelector('canvas'))
       }}
     >
       <Canvas camera={{ position: [0, 6, -8], fov: 55 }}>
@@ -1895,6 +2121,8 @@ export const IlhaRua: React.FC = () => {
           selectedIds={selectedIds}
           modoBloco={modoBloco}
           modoBlocoRef={modoBlocoRef}
+          obraBlocoAlvoIdRef={obraBlocoAlvoIdRef}
+          ponteiroDaObraRef={ponteiroDaObraRef}
           materialBlocoRef={materialBlocoRef}
           modoLinhaRef={modoLinhaRef}
           alturaLinhaRef={alturaLinhaRef}
@@ -1997,19 +2225,27 @@ export const IlhaRua: React.FC = () => {
             }
           }}
           onObra={(id) => {
-            if (!podeComandar() || modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) return
             const obra = sim.current.obras.find((item) => item.id === id)
             if (!obra || obra.hp <= 0) return
-            if (obra.lado === 'inimigo') {
-              if (selected.current.length === 0 && (!heroiEscolhido || sim.current.semCorpo)) return
-              let atual = sim.current
-              if (heroiEscolhido && !atual.semCorpo) atual = ordenarHeroi(atual, { tipo: 'atacarObra', obraId: obra.id })
-              if (selected.current.length > 0) atual = ordenar(atual, selected.current, { tipo: 'atacarObra', obraId: obra.id })
-              publicar(atual)
+            if (obra.lado !== 'inimigo') {
+              if (modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) return
+              // Partida encerrada: a tela de derrota manda. Painel interativo por cima dela evolui obra de partida
+              // que já acabou (OBS-F2-1). A mesma regra do efeito, do Enter e do JSX, com a derrota do corpo.
+              if (!painelValido(id, sim.current.obras, estadoCorpo(atlasRef.current).derrota)) return
+              evoluirId.current = id
+              painelObraRef.current = id
+              setPainelObraId(id)
+              setFerramenta(`${META_INTENCOES[obra.tipo].titulo} (Nv. ${obra.nivel})`)
+              // O painel tem botões: com o mouse preso no canvas (pointer lock) o jogador não alcança nenhum (F2-D5).
+              document.exitPointerLock?.()
               return
             }
-            evoluirId.current = id
-            setFerramenta(`${META_INTENCOES[obra.tipo].titulo} (Nv. ${obra.nivel})`)
+            if (!podeComandar() || modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) return
+            if (selected.current.length === 0 && (!heroiEscolhido || sim.current.semCorpo)) return
+            let atual = sim.current
+            if (heroiEscolhido && !atual.semCorpo) atual = ordenarHeroi(atual, { tipo: 'atacarObra', obraId: obra.id })
+            if (selected.current.length > 0) atual = ordenar(atual, selected.current, { tipo: 'atacarObra', obraId: obra.id })
+            publicar(atual)
           }}
           onRect={(x0, z0, x1, z1, shiftKey) => {
             if (!podeComandar() || modoBlocoRef.current) return
@@ -2090,10 +2326,20 @@ export const IlhaRua: React.FC = () => {
         <div className="ilha-army" data-testid="ilha-exercito">
           Exército {corpoAtual.heroi.army}
         </div>
-        <div className="ilha-base" data-testid="ilha-base">
+        <div
+          className="ilha-base"
+          data-testid="ilha-base"
+          // Uma linha só, com reticências (ilha.css): o texto completo, com o nível de cada obra, fica no tooltip.
+          ref={(el) => {
+            if (el) el.title = el.textContent ?? ''
+          }}
+        >
           {nucleoQualquer
-            ? `Núcleo nível ${nucleoQualquer.nivel} · vida ${Math.max(0, Math.ceil(nucleoQualquer.hp))} · tropas ${tropasVivas.length} · ${emOrdens} em ordens · ${emAuto} no automático`
+            ? `Núcleo nível ${nucleoQualquer.nivel} · vida ${Math.max(0, Math.ceil(nucleoQualquer.hp))} · tropas ${tropasVivas.length} · ${emOrdens} em ordens · ${emVigia} em vigia`
             : 'Sem base'}
+          {/* Os alertas vêm ANTES da lista de obras: com 5+ obras a lista é longa e as reticências (ilha.css) comiam o que
+              vinha depois, justamente o contador «Leva em Xs» e o aviso de obra frágil (medido: início em x 2062 numa
+              caixa que acaba em 1176). A lista de níveis é a parte que pode ficar só no tooltip. */}
           {hud.obras.some((obra) => obra.lado !== 'inimigo' && obraEmConstrucao(obra))
             ? ` · ${hud.obras.filter((obra) => obra.lado !== 'inimigo' && obraEmConstrucao(obra)).length} em obras (frágil!)`
             : ''}
@@ -2106,6 +2352,7 @@ export const IlhaRua: React.FC = () => {
           {hud.obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0)
             ? ' · Núcleo inimigo destruído · sem novas levas'
             : ''}
+          {nucleoQualquer ? ` · ${niveisNossos}` : ''}
         </div>
         <div className="ilha-enemies" data-testid="ilha-recursos">
           Licenças {hud.credito} · Madeira {hud.madeira} · Ouro {hud.ouro}
@@ -2236,12 +2483,33 @@ export const IlhaRua: React.FC = () => {
               </button>
               <button
                 type="button"
-                className={intencao === 'automatico' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                className={posturaMarcada('vigia') ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
                 data-testid="ilha-automatico"
-                aria-label={META_INTENCOES.automatico.titulo}
-                onClick={() => setIntencao('automatico')}
+                aria-label="Vigia"
+                aria-pressed={posturaMarcada('vigia')}
+                onClick={() => aplicarPostura('vigia')}
               >
                 <IconeSvg id="automatico" size={18} />
+              </button>
+              <button
+                type="button"
+                className={posturaMarcada('noLugar') ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                data-testid="ilha-postura-no-lugar"
+                aria-label="No lugar"
+                aria-pressed={posturaMarcada('noLugar')}
+                onClick={() => aplicarPostura('noLugar')}
+              >
+                <IconeSvg id="desmarcar" size={18} />
+              </button>
+              <button
+                type="button"
+                className={posturaMarcada('calado') ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                data-testid="ilha-postura-calado"
+                aria-label="Calado"
+                aria-pressed={posturaMarcada('calado')}
+                onClick={() => aplicarPostura('calado')}
+              >
+                <IconeSvg id="cancelar" size={18} />
               </button>
               {(temMinaPronta || noSubsoloHud) && (
                 <button
@@ -2463,6 +2731,10 @@ export const IlhaRua: React.FC = () => {
                 event.preventDefault()
                 publicar(pular(sim.current))
               }}
+              onClick={(event) => {
+                // Teclado (Enter ou Espaço no botão focado): `detail` é 0. Mouse e toque já pularam no pointerdown.
+                if (event.detail === 0) publicar(pular(sim.current))
+              }}
             >
               Pular
             </button>
@@ -2494,6 +2766,16 @@ export const IlhaRua: React.FC = () => {
                   tiroPonteiro.current = null
                 }
               }}
+              onClick={(event) => {
+                // Teclado (Enter ou Espaço no botão focado): `detail` é 0. Mouse e toque já agiram no pointerdown.
+                if (event.detail !== 0) return
+                if (sim.current.derrota || sim.current.olhar === 'imperio' || sim.current.semCorpo) return
+                if (modoBlocoRef.current) {
+                  aplicarEdicaoVoxelRef.current()
+                  return
+                }
+                publicar(atirar(sim.current))
+              }}
             >
               {modoBloco === 'adicionar' ? 'Pôr' : modoBloco === 'remover' ? 'Tirar' : 'Atirar'}
             </button>
@@ -2516,6 +2798,45 @@ export const IlhaRua: React.FC = () => {
           <span ref={knobEl} />
         </div>
       </div>
+      {obraPainel && (
+        <div className="ilha-painel-obra" data-testid="ilha-painel-obra" role="dialog" aria-label={META_INTENCOES[obraPainel.tipo].titulo}>
+          <strong data-testid="ilha-painel-titulo">
+            {META_INTENCOES[obraPainel.tipo].titulo} (Nv. {obraPainel.nivel})
+          </strong>
+          <p>{PRECO_EVOLUIR}.</p>
+          {/* No celular os dois botões ficam lado a lado (ilha.css): empilhados somavam 70 px de overflow e cortavam
+              «Editar blocos» e o aviso (F2-D1, medido em toque real). No desktop seguem empilhados. */}
+          <div className="ilha-painel-acoes">
+            <button type="button" data-testid="ilha-painel-evoluir" onClick={evoluirDoPainel}>
+              Evoluir
+            </button>
+            <button
+              type="button"
+              data-testid="ilha-painel-blocos"
+              onClick={() => {
+                // Entrar no editor solta a ferramenta de fundação armada, como o Esc faz: com `tool.current` vivo o próximo
+                // clique no chão tentava FUNDAR a obra em vez de editar bloco (OBS-F2-3, lido no ref: 'mina' sobrevive
+                // ao painel e a «Editar blocos»).
+                tool.current = null
+                setGhostObra(null)
+                setPreviewLinha(null)
+                setFerramenta('')
+                obraBlocoAlvoIdRef.current = obraPainel.id
+                modoLinhaRef.current = false
+                setModoLinhaBlocos(false)
+                modoConsagrarRef.current = null
+                setModoConsagrar(null)
+                modoBlocoRef.current = 'adicionar'
+                setModoBloco('adicionar')
+                setPainelBlocosAberto(true)
+              }}
+            >
+              Editar blocos
+            </button>
+          </div>
+          <p>Mover e apagar não existem nesta leva.</p>
+        </div>
+      )}
       {intencao && (
         <div className="ilha-confirmar-card" data-testid="ilha-confirmar-card" role="dialog" aria-label={META_INTENCOES[intencao].titulo}>
           <div className="ilha-confirmar-topo">
@@ -2538,6 +2859,7 @@ export const IlhaRua: React.FC = () => {
             </button>
             <button
               type="button"
+              ref={confirmarSimRef}
               className="ilha-confirmar-sim"
               data-testid="ilha-confirmar-sim"
               onClick={() => confirmarIntencao(intencao)}

@@ -1,5 +1,5 @@
-import { generateInfiniteChallenge } from '../domain/infiniteMathEngine'
-import { RIGHT_CORRIDOR_TIER_BUFF_POLICIES } from '../run/bridge3d/bridge3dPolicies'
+import { generateInfiniteChallenge } from './infiniteMathEngine'
+import { RIGHT_CORRIDOR_TIER_BUFF_POLICIES } from './buffsConta'
 import {
   aimRua,
   applyTierPower,

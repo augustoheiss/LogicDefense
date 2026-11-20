@@ -14,8 +14,8 @@ import {
 } from './blocosMundo'
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
 import { chaoRevelado, cobertoAgora, Obra, obraEmConstrucao, PartidaState } from './partidaSim'
+import { raycastCondicional, semRaycast } from './raycastCena'
 
-const semRaycast = () => null
 const MAX_BLOCOS_INST = 1024
 const MAX_VOXEIS_NV5_INST = 2048
 const MAX_PREVIEW_LINHA = 256
@@ -129,7 +129,10 @@ export const ObrasLivresInstanced: React.FC<{
   groupRef?: React.RefObject<Group | null>
   bloqueiaCliqueObra?: boolean
   onSelectObra?: (obraId: number, lado: 'nosso' | 'inimigo', button: number) => void
-}> = ({ state, versaoSolidos, versaoChao, groupRef, bloqueiaCliqueObra, onSelectObra }) => {
+  /** O ponteiro tocou esta obra (antes do `click`): quem decide se o container deve atirar é `IlhaRua`. */
+  /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
+  onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
+}> = ({ state, versaoSolidos, versaoChao, groupRef, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
   const refs = useRef<Record<BlocoMaterial, InstancedMesh | null>>({
     madeira: null,
     pedra: null,
@@ -194,6 +197,13 @@ export const ObrasLivresInstanced: React.FC<{
             }}
             args={[undefined, undefined, MAX_BLOCOS_INST]}
             frustumCulled={false}
+            onPointerDown={(event) => {
+              if (bloqueiaCliqueObra || !onTocarObra) return
+              const lista = event.object.userData?.blocoObraLivreIndices as IndiceBlocoMundo[] | undefined
+              const meta = event.instanceId !== undefined && lista ? lista[event.instanceId] : undefined
+              if (!meta || meta.obraId === undefined) return
+              if (onTocarObra(meta.obraId, event.pointerId, event.nativeEvent.button)) event.stopPropagation()
+            }}
             onPointerUp={(event) => {
               if (bloqueiaCliqueObra || !onSelectObra || event.nativeEvent.button !== 2) return
               const lista = event.object.userData?.blocoObraLivreIndices as IndiceBlocoMundo[] | undefined
@@ -240,7 +250,10 @@ export const ObrasNv5Instanced: React.FC<{
   groupRef?: React.RefObject<Group | null>
   bloqueiaCliqueObra?: boolean
   onSelectObra?: (obraId: number, lado: 'nosso' | 'inimigo', button: number) => void
-}> = ({ state, versaoSolidos, versaoChao, groupRef, bloqueiaCliqueObra, onSelectObra }) => {
+  /** O ponteiro tocou esta obra (antes do `click`): quem decide se o container deve atirar é `IlhaRua`. */
+  /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
+  onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
+}> = ({ state, versaoSolidos, versaoChao, groupRef, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
   const refs = useRef<Record<TomNv5, InstancedMesh | null>>({
     pedra: null,
     madeira: null,
@@ -302,6 +315,24 @@ export const ObrasNv5Instanced: React.FC<{
           }}
           args={[undefined, undefined, MAX_VOXEIS_NV5_INST]}
           frustumCulled={false}
+          onPointerDown={(event) => {
+            if (bloqueiaCliqueObra || !onTocarObra) return
+            const lista = event.object.userData?.voxelNv5Indices as IndiceVoxelNv5[] | undefined
+            const meta = event.instanceId !== undefined && lista ? lista[event.instanceId] : undefined
+            if (!meta) return
+            if (onTocarObra(meta.obraId, event.pointerId, event.nativeEvent.button)) event.stopPropagation()
+          }}
+          onPointerUp={(event) => {
+            // Botão direito sobre uma obra INIMIGA Nv5: ordem de ataque, como nas outras duas malhas. Sem este handler o
+            // `pointerdown` já para a propagação (OBS-F2-5) e o clique direito não chegava a lugar nenhum: antes caía no
+            // chão e virava `mover`, errado; depois do OBS-F2-5 sumia (OBS-F2-6, achado do T2).
+            if (bloqueiaCliqueObra || !onSelectObra || event.nativeEvent.button !== 2) return
+            const lista = event.object.userData?.voxelNv5Indices as IndiceVoxelNv5[] | undefined
+            const meta = event.instanceId !== undefined && lista ? lista[event.instanceId] : undefined
+            if (!meta || meta.lado !== 'inimigo') return
+            event.stopPropagation()
+            onSelectObra(meta.obraId, meta.lado, 2)
+          }}
           onClick={(event) => {
             if (bloqueiaCliqueObra || !onSelectObra) return
             const lista = event.object.userData?.voxelNv5Indices as IndiceVoxelNv5[] | undefined
@@ -400,7 +431,8 @@ function SilhuetaPeca({
   opacidade?: number
   semColisaoRay?: boolean
 }) {
-  const ray = semColisaoRay ? semRaycast : undefined
+  // `raycastCondicional`, nunca `undefined`: o R3F ignora `undefined` e a malha ficava sem clique para sempre (F2-D7).
+  const ray = raycastCondicional(Boolean(semColisaoRay))
   const matProps = transparente
     ? { transparent: true, opacity: opacidade, depthWrite: false }
     : { roughness: 0.72 }

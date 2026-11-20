@@ -83,7 +83,7 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
     id: 'evoluir',
     titulo: 'Evoluir Construção (Nv. 1 → 5)',
     resumo: 'Aumenta vida, alcance e altura escalável. No Nível 5 libera interior caminhável e edição de blocos!',
-    detalhe: 'Custo: 1 licença (ou 2 ouros + 2 madeiras em níveis altos). Confirmar evolução da obra?',
+    detalhe: 'Custo: 1 licença, ou 2 madeiras e 2 ouros.',
   },
   tropa: {
     id: 'tropa',
@@ -105,9 +105,9 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
   },
   automatico: {
     id: 'automatico',
-    titulo: 'Postura Automática',
-    resumo: 'Tropas selecionadas patrulham e atacam unidades e obras inimigas por conta própria.',
-    detalhe: 'Confirmar mudança para postura automática?',
+    titulo: 'Vigia',
+    resumo: 'A tropa e o herói enfrentam quem entra na visão e não atravessam o mapa.',
+    detalhe: 'Vigia, no lugar ou calado. Aplica na hora.',
   },
   reparar: {
     id: 'reparar',
