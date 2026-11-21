@@ -43,6 +43,7 @@ import {
 } from './obraBlocosLivres'
 import { Bloqueio, encaixarLivre, encontrarCaminho, Marco } from './caminho'
 import { applyGateWithRemainder, clampArmy } from './armyMath'
+import { aplicarFatorAoBuff, fatorDoBuff } from './buffPorErro'
 import {
   GRAU_PARTIDA,
   DIMENSOES_OBRA,
@@ -144,6 +145,25 @@ export interface Altar {
   cz: number
   resolvido: boolean
   aviso: string
+  /**
+   * A vida que a CONTA deu ao herói (depois − antes, no próprio `aplicarConta`, onde os dois valores são exatos). Só existe depois de
+   * resolvido. O toast do altar lê daqui: o `onHud` só vê o estado do fim do passo, já contaminado por dano (torre, horda) e por
+   * ganho de arco/portão do MESMO passo, e dizia «Vida no máximo» com o herói perdendo vida (T2, rodada 3, C.2).
+   */
+  ganhoVida?: number
+  /** A licença que a conta pagou (reduzida pelos erros). Só existe depois de resolvido; o toast lê daqui, como lê a vida. */
+  ganhoCredito?: number
+  /**
+   * Quantas vezes o jogador ERROU esta conta (E3: «errou a alternativa, perde o buff pela metade; cada vez que errar acontece isso»). Começa em 0 e vive no
+   * estado da simulação, que continua pura e determinística: o erro é um fato do estado, e não um relógio. Soma 1 num clique errado do modal
+   * (`registrarErroNoAltar`) e ao ENTRAR numa placa errada do mundo (`altarNoPasso`). `aplicarConta` o lê para reduzir o buff.
+   */
+  erros: number
+  /**
+   * Qual placa ERRADA o herói está pisando AGORA (0..3), ou null. Existe para o erro contar uma vez por ENTRADA: o `stepPartida` roda 20 a 60 vezes por
+   * segundo e o herói fica parado em cima da placa; sem isto, 1 segundo na placa errada seriam 60 erros e o buff iria a zero.
+   */
+  placaPisada: 0 | 1 | 2 | 3 | null
 }
 
 export interface PartidaInput {
@@ -1589,28 +1609,30 @@ export function aplicarConta(state: PartidaState, tier: 1 | 2 | 3 | 4): PartidaS
   if (state.derrota) return state
   const spec = GRAU_PARTIDA[tier]
   const inimigos = vivosInimigos(state)
-  const wipe =
-    inimigos.length === 0
-      ? 0
-      : spec.wipe >= 1
-        ? inimigos.length
-        : Math.max(1, Math.round(inimigos.length * spec.wipe))
+  // E3: cada erro nesta conta divide o buff por 2 (`buffPorErro`, módulo puro). Sem erro (ou sem altar aberto, como nos testes antigos) o fator é 1 e o resultado
+  // é IDÊNTICO ao de antes: vida cheia, recursos cheios e o mesmo abate. O erro vem do `altar` (estado da simulação), não de um argumento: o piso físico chama
+  // esta função dentro do `stepPartida` e não tem como receber um contador da camada de interface.
+  const buff = aplicarFatorAoBuff(
+    { vida: spec.bonus, credito: spec.credito, madeira: tier * 2, ouro: tier, wipe: spec.wipe, inimigosVivos: inimigos.length },
+    fatorDoBuff(state.altar?.erros ?? 0),
+  )
   const perto = [...inimigos].sort((a, b) => {
     const da = (a.x - state.heroi.x) ** 2 + (a.z - state.heroi.z) ** 2
     const db = (b.x - state.heroi.x) ** 2 + (b.z - state.heroi.z) ** 2
     return da - db
   })
-  const mata = new Set(perto.slice(0, wipe).map((unidade) => unidade.id))
+  const mata = new Set(perto.slice(0, buff.abates).map((unidade) => unidade.id))
+  const armyDepois = clampArmy(state.heroi.army + buff.vida)
   return {
     ...state,
-    credito: state.credito + spec.credito,
-    madeira: state.madeira + tier * 2,
-    ouro: state.ouro + tier,
-    heroi: { ...state.heroi, army: clampArmy(state.heroi.army + spec.bonus) },
+    credito: state.credito + buff.credito,
+    madeira: state.madeira + buff.madeira,
+    ouro: state.ouro + buff.ouro,
+    heroi: { ...state.heroi, army: armyDepois },
     unidades: state.unidades.map((unidade) =>
       mata.has(unidade.id) ? { ...unidade, hp: 0, segmentos: [] } : unidade,
     ),
-    altar: state.altar ? { ...state.altar, resolvido: true, aviso: '' } : null,
+    altar: state.altar ? { ...state.altar, resolvido: true, aviso: '', ganhoVida: armyDepois - state.heroi.army, ganhoCredito: buff.credito } : null,
   }
 }
 
@@ -1630,8 +1652,21 @@ export function abrirAltar(state: PartidaState, tier: 1 | 2 | 3 | 4, correta: 0 
       cz: state.heroi.z,
       resolvido: false,
       aviso: '',
+      erros: 0,
+      placaPisada: null,
     },
   }
+}
+
+/**
+ * Soma 1 erro à conta aberta (o clique errado do modal). Sem conta aberta, ou já resolvida, não faz nada: não há buff a reduzir e o erro depois do acerto
+ * não conta. É a MESMA regra que o piso errado do mundo aplica em `altarNoPasso`: os dois caminhos de resposta chegam ao mesmo contador, e por isso a regra
+ * «errou, perde metade» não se contorna errando num caminho e acertando no outro.
+ */
+export function registrarErroNoAltar(state: PartidaState): PartidaState {
+  const altar = state.altar
+  if (!altar || altar.resolvido) return state
+  return { ...state, altar: { ...altar, erros: altar.erros + 1 } }
 }
 
 export function invocarDragao(state: PartidaState): PartidaState {
@@ -2479,8 +2514,15 @@ function altarNoPasso(state: PartidaState): PartidaState {
     const ponto = pontos[indice]
     if (Math.hypot(state.heroi.x - ponto.x, state.heroi.z - ponto.z) > PARTIDA.altarRaio) continue
     if (indice === altar.correta) return aplicarConta(state, altar.tier)
-    return { ...state, altar: { ...altar, aviso: 'Esse piso não é a resposta.' } }
+    // E3: placa ERRADA. O erro conta na ENTRADA, não a cada passo: o herói fica parado em cima da placa por dezenas de passos (o `stepPartida` roda 20 a 60
+    // vezes por segundo) e sem a memória de qual placa ele já está pisando, 1 segundo parado seriam ~60 erros e o buff iria a zero. Ir de uma placa errada
+    // direto a outra errada conta de novo (a placa pisada mudou).
+    const placa = indice as 0 | 1 | 2 | 3
+    if (altar.placaPisada === placa) return state
+    return { ...state, altar: { ...altar, aviso: 'Esse piso não é a resposta.', erros: altar.erros + 1, placaPisada: placa } }
   }
+  // fora de todas as placas: esquece a placa pisada, para voltar a ela depois contar como errar DE NOVO
+  if (altar.placaPisada !== null) return { ...state, altar: { ...altar, placaPisada: null } }
   return state
 }
 

@@ -7,6 +7,19 @@
 export interface AlvoDoTeclado {
   readonly tag: string
   readonly ehCampoDeTexto: boolean
+  /**
+   * O elemento TRATA o próprio teclado (declara `data-teclado-proprio`): um `<div tabindex=0>` como o selo de vida, que não é botão mas responde a
+   * Enter/Espaço/Escape. O jogo escuta o `keydown` na CAPTURA da window, antes de qualquer `onKeyDown` do React; sem esta marca ele agia primeiro
+   * (o herói pulava, o card era confirmado, o Esc fechava o card) e o `stopPropagation` do componente chegava tarde.
+   */
+  readonly ehControleProprio: boolean
+  /**
+   * O elemento TEM algo a fechar com o Esc AGORA (declara `data-esc-proprio`): o selo só enquanto a legenda está aberta. É diferente de
+   * `ehControleProprio`: Enter/Espaço o selo trata SEMPRE; o Esc só quando há legenda. Sem esta separação, com o foco no selo e a legenda
+   * FECHADA, o jogo não agia (o selo era «dono») e o selo também não (nada a fechar): o card/painel ficava PRESO até o foco sair do selo
+   * (regressão do meu 1º conserto, achada pelo revisor independente e reproduzida no jogo real).
+   */
+  readonly tratouEscape: boolean
 }
 
 export interface ConfirmavelAberto {
@@ -27,9 +40,12 @@ const TECLAS_QUE_MOVEM_O_FOCO = new Set(['Tab'])
 
 /** Lê o alvo do evento sem depender do DOM: o teste passa um objeto simples. */
 export function alvoDoTeclado(alvo: unknown): AlvoDoTeclado {
-  const lido = (alvo ?? {}) as { tagName?: unknown; isContentEditable?: unknown }
+  const lido = (alvo ?? {}) as { tagName?: unknown; isContentEditable?: unknown; dataset?: { tecladoProprio?: unknown; escProprio?: unknown } }
   const tag = typeof lido.tagName === 'string' && lido.tagName !== '' ? lido.tagName.toUpperCase() : 'BODY'
-  return { tag, ehCampoDeTexto: CAMPOS_DE_TEXTO.has(tag) || lido.isContentEditable === true }
+  // `?.` já cobre dataset ausente, nulo ou de tipo estranho (provado por enumeração: 20 entradas, 0 divergências): não precisa de guarda à parte.
+  const ehControleProprio = lido.dataset?.tecladoProprio !== undefined
+  const tratouEscape = lido.dataset?.escProprio !== undefined
+  return { tag, ehCampoDeTexto: CAMPOS_DE_TEXTO.has(tag) || lido.isContentEditable === true, ehControleProprio, tratouEscape }
 }
 
 /**
@@ -48,7 +64,18 @@ export function proximaEntradaPorTeclado(entrada: EntradaDoJogador, atual: boole
  */
 export function teclaDoBotaoFocado(alvo: AlvoDoTeclado, entradaPorTeclado: boolean): boolean {
   if (alvo.ehCampoDeTexto) return true
+  // Controle que trata o próprio teclado: a tecla é dele venha o foco de Tab OU de clique (um div não ganha foco sem um dos dois).
+  if (alvo.ehControleProprio) return true
   return entradaPorTeclado && ATIVAVEIS_PELO_TECLADO.has(alvo.tag)
+}
+
+/**
+ * O Esc é do jogo (fecha card, painel, ferramenta)? Não é quando o foco está num campo de texto ou num controle que TEM algo a fechar com o Esc
+ * AGORA (`data-esc-proprio`: o selo só enquanto a legenda está aberta): ele fecha a PRÓPRIA legenda e o jogo não deve fechar o card por baixo.
+ * Com a legenda FECHADA o selo não tem nada a fechar, então o Esc é do jogo (senão o card ficava preso). Botão não trata Esc: o dele é do jogo.
+ */
+export function jogoTomaEscape(alvo: AlvoDoTeclado): boolean {
+  return !alvo.ehCampoDeTexto && !alvo.tratouEscape
 }
 
 export interface PrecoDeEvoluir {

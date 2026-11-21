@@ -49,6 +49,7 @@ import {
   PartidaInput,
   PartidaState,
   postura,
+  registrarErroNoAltar,
   selecionarAoClicarChaoVazio,
   selecionarAoClicarHeroi,
   selecionarAoClicarUnidade,
@@ -80,16 +81,19 @@ export function run(): void {
   const inicio = createPartida()
   assert(inicio.olhar === 'terceira' && inicio.heroi.army === 10 && inicio.heroi.z === 0, 'inicio')
   assert(inicio.credito === 4, 'licença inicial 4')
+  // L5.2 (decisão do usuário, 20/11): a tabela das contas é BASE 2, `bônus = 2^(grau+1)`: +4, +8, +16, +32. Antes era 4/6/8/12 (sem regra: números soltos). O teste
+  // confere os 4 valores E a regra, para que mudar a tabela sem mudar a regra (ou o contrário) seja acusado. `wipe` e `credito` NÃO mudam nesta etapa.
   assert(
-    GRAU_PARTIDA[1].bonus === 4 &&
-      GRAU_PARTIDA[2].bonus === 6 &&
-      GRAU_PARTIDA[3].bonus === 8 &&
-      GRAU_PARTIDA[4].bonus === 12,
-    'bônus 4 6 8 12',
+    GRAU_PARTIDA[1].bonus === 4 && GRAU_PARTIDA[2].bonus === 8 && GRAU_PARTIDA[3].bonus === 16 && GRAU_PARTIDA[4].bonus === 32,
+    'L5.2: bônus em base 2 = 4 8 16 32',
   )
-  assert(aplicarConta(createPartida(), 2).heroi.army === 16, 'grau 2 soma 6')
-  assert(aplicarConta(createPartida(), 3).heroi.army === 18, 'grau 3 soma 8')
-  assert(aplicarConta(createPartida(), 4).heroi.army === 22, 'grau 4 soma 12')
+  for (const g of [1, 2, 3, 4] as const) assert(GRAU_PARTIDA[g].bonus === 2 ** (g + 1), `L5.2: o bônus do grau ${g} segue a regra 2^(g+1) (${2 ** (g + 1)}), veio ${GRAU_PARTIDA[g].bonus}`)
+  assert(GRAU_PARTIDA[2].bonus === 2 * GRAU_PARTIDA[1].bonus && GRAU_PARTIDA[3].bonus === 2 * GRAU_PARTIDA[2].bonus && GRAU_PARTIDA[4].bonus === 2 * GRAU_PARTIDA[3].bonus, 'L5.2: cada grau DOBRA o anterior')
+  assert(GRAU_PARTIDA[1].wipe === 0.35 && GRAU_PARTIDA[2].wipe === 0.6 && GRAU_PARTIDA[3].wipe === 0.85 && GRAU_PARTIDA[4].wipe === 1, 'L5.2: o abate (wipe) NÃO mudou')
+  assert(GRAU_PARTIDA[1].credito === 1 && GRAU_PARTIDA[2].credito === 1 && GRAU_PARTIDA[3].credito === 2 && GRAU_PARTIDA[4].credito === 2, 'L5.2: a licença NÃO mudou')
+  assert(aplicarConta(createPartida(), 2).heroi.army === 10 + 8, 'grau 2 soma 8')
+  assert(aplicarConta(createPartida(), 3).heroi.army === 10 + 16, 'grau 3 soma 16')
+  assert(aplicarConta(createPartida(), 4).heroi.army === 10 + 32, 'grau 4 soma 32')
   assert(!inicio.derrota && inicio.obras.every((obra) => obra.lado === 'inimigo'), 'o jogador começa sem base')
   const baseInicial = inicio.obras.find((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo')
   assert(
@@ -417,6 +421,30 @@ export function run(): void {
   }
   const pisou = stepPartida(noPiso, INPUT_PARADO, 0.05)
   assert(pisou.altar?.resolvido === true && pisou.heroi.army === inicio.heroi.army + GRAU_PARTIDA[1].bonus, 'piso norte paga a conta')
+  // L5.1 / rodada 3 do T2 (C.2): o ganho REAL da conta fica gravado no próprio altar, no ponto onde o antes e o depois são exatos.
+  // O `onHud` só vê o estado já atualizado e dano do MESMO passo (torre −7, horda −3, arco/portão +10) o contaminava: o toast dizia
+  // «Vida no máximo» com o herói perdendo vida, ou «+14» por causa de um portão.
+  assert(pisou.altar?.ganhoVida === GRAU_PARTIDA[1].bonus, 'altar guarda o ganho REAL da conta (grau 1 = o bônus da tabela, sem o dano do passo)')
+  assert(abrirAltar(inicio, 1, 0).altar?.ganhoVida === undefined, 'altar ainda não resolvido não tem ganho gravado')
+  // O ganho gravado é o da CONTA, não o do quadro: uma torre inimiga atirando no MESMO passo derruba a vida DEPOIS (passoUnidades vem
+  // depois de altarNoPasso), mas o ganho da conta continua sendo o bônus. Vida final < vida inicial + bônus, ganho intacto.
+  const torreNoAlcance: PartidaState = {
+    ...noPiso,
+    obras: [
+      ...noPiso.obras,
+      { id: 9001, lado: 'inimigo', tipo: 'torre', x: noPiso.heroi.x + 6, z: noPiso.heroi.z, nivel: 1, hp: 60, maxHp: 60, gateApplied: false, cooldown: 0 },
+    ],
+  }
+  const sobTorre = stepPartida(torreNoAlcance, INPUT_PARADO, 0.05)
+  assert(sobTorre.altar?.resolvido === true, 'a conta resolve mesmo com torre inimiga no alcance')
+  assert(sobTorre.altar?.ganhoVida === GRAU_PARTIDA[1].bonus, 'ganho gravado = bônus da conta, ignorando o tiro da torre do mesmo passo')
+  assert(sobTorre.heroi.army < inicio.heroi.army + GRAU_PARTIDA[1].bonus, 'controle: a torre de fato tirou vida no mesmo passo (senão o teste não prova nada)')
+  // O ganho gravado é a DIFERENÇA REAL (depois − antes), não o bônus da tabela copiado às cegas. Hoje os dois só divergem quando o clamp corta
+  // a soma: com a vida no teto do `clampArmy` (1e300) a conta NÃO soma nada, e gravar `spec.bonus` mentiria («+4» com a vida parada).
+  // Caso ARTIFICIAL (1e300 não é jogável) mas é o único em que a diferença real e o bônus divergem ANTES da L5.2; quando o
+  // `PARTIDA.vidaCap` de 999.999 existir, a L5.2 acrescenta o caso jogável (vida 999.997 + bônus 4 = ganho 2).
+  const noTetoDoClamp = stepPartida({ ...noPiso, heroi: { ...noPiso.heroi, army: 1e300 } }, INPUT_PARADO, 0.05)
+  assert(noTetoDoClamp.altar?.ganhoVida === 0, 'vida no teto: a conta não soma nada, o ganho gravado é 0 (não o bônus 4 da tabela)')
   const errado = abrirAltar(inicio, 1, 0)
   const noErrado = stepPartida(
     {
@@ -427,6 +455,78 @@ export function run(): void {
     0.05,
   )
   assert(noErrado.altar?.resolvido !== true && noErrado.heroi.army === inicio.heroi.army, 'piso errado não paga')
+
+  // ── E3: «errou a alternativa, perde o buff pela metade; cada vez que errar acontece isso» (usuário, 20/11/2026) ─────────────────────────────────────────────
+  // O erro tem DOIS caminhos (clicar numa alternativa do modal; pisar numa placa errada do altar no mundo) e a regra vale nos dois. O contador mora no
+  // `Altar` (estado da simulação, que continua pura e determinística), e `aplicarConta` o lê. Com 0 erros o resultado é IDÊNTICO ao de antes (invariante).
+  {
+    // (1) sem erro: nada muda. As 4 tabelas de hoje (vida, licença, madeira, ouro), com o altar aberto e sem erro.
+    for (const tier of [1, 2, 3, 4] as const) {
+      const a = abrirAltar(createPartida(), tier, 0)
+      const r = aplicarConta(a, tier)
+      assert(r.heroi.army === 10 + GRAU_PARTIDA[tier].bonus && r.credito === 4 + GRAU_PARTIDA[tier].credito, `E3: sem erro o grau ${tier} paga o buff CHEIO (vida e licença)`)
+      assert(r.madeira === createPartida().madeira + tier * 2 && r.ouro === createPartida().ouro + tier, `E3: sem erro o grau ${tier} paga madeira e ouro cheios`)
+    }
+    // (2) o erro do MODAL: cada chamada soma 1 erro; sem altar aberto não faz nada (nada a registrar, e não cria altar).
+    const a0 = abrirAltar(createPartida(), 3, 0)
+    assert(a0.altar?.erros === 0, 'E3: o altar nasce com 0 erros')
+    const a1 = registrarErroNoAltar(a0)
+    const a2 = registrarErroNoAltar(a1)
+    assert(a1.altar?.erros === 1 && a2.altar?.erros === 2, 'E3: cada clique errado soma 1 erro')
+    assert(registrarErroNoAltar(createPartida()).altar === null, 'E3: sem altar aberto, errar não cria nada')
+    assert(a0.altar?.erros === 0, 'E3: registrar erro não muda o estado de ANTES (imutável)')
+    // erro DEPOIS do acerto não conta: a conta já foi paga e o contador fica como estava (o caderno de estudo, E2, lerá este número: não pode crescer sozinho)
+    const resolvida = aplicarConta(registrarErroNoAltar(a0), 3)
+    assert(resolvida.altar?.resolvido === true && resolvida.altar?.erros === 1, 'E3: (controle) a conta resolvida com 1 erro guarda erros = 1')
+    const erroTardio = registrarErroNoAltar(resolvida)
+    assert(erroTardio === resolvida && erroTardio.altar?.erros === 1, `E3: errar DEPOIS de resolvida não conta nem muda o estado (erros ${erroTardio.altar?.erros}, esperado 1)`)
+    // (3) acertar depois de errar paga o buff REDUZIDO: 1 erro = metade, 2 erros = um quarto (vida arredonda PARA CIMA e fica >= 1; recursos arredondam para baixo).
+    const base = abrirAltar(createPartida(), 4, 0) // grau 4: bônus 32 (base 2, L5.2), licença 2, madeira +8, ouro +4, wipe 100 %
+    const cheio = aplicarConta(base, 4)
+    const umErro = aplicarConta(registrarErroNoAltar(base), 4)
+    const doisErros = aplicarConta(registrarErroNoAltar(registrarErroNoAltar(base)), 4)
+    assert(cheio.heroi.army === 10 + 32 && umErro.heroi.army === 10 + 16 && doisErros.heroi.army === 10 + 8, `E3: vida do grau 4: cheio +32, 1 erro +16, 2 erros +8 (veio +${cheio.heroi.army - 10}/+${umErro.heroi.army - 10}/+${doisErros.heroi.army - 10})`)
+    assert(umErro.credito === base.credito + 1 && doisErros.credito === base.credito + 0, `E3: licença do grau 4: 1 erro paga 1 (2 × 0,5), 2 erros pagam 0 (veio +${umErro.credito - base.credito}/+${doisErros.credito - base.credito})`)
+    assert(umErro.madeira === base.madeira + 4 && umErro.ouro === base.ouro + 2, 'E3: madeira e ouro caem pela metade com 1 erro')
+    // o ganho gravado no altar é o da conta REDUZIDA (o toast lê dele)
+    assert(umErro.altar?.ganhoVida === 16 && cheio.altar?.ganhoVida === 32, 'E3: o ganho de vida gravado no altar é o REDUZIDO (16) e o cheio (32)')
+    // e o de LICENÇA também: o toast do piso físico lia `GRAU_PARTIDA[tier].credito` (a licença CHEIA) e dizia «+6 de vida e 2 licenças» a quem recebeu 1
+    assert(cheio.altar?.ganhoCredito === 2 && umErro.altar?.ganhoCredito === 1 && doisErros.altar?.ganhoCredito === 0, `E3: o ganho de licença gravado no altar acompanha o buff (2 / 1 / 0; veio ${cheio.altar?.ganhoCredito}/${umErro.altar?.ganhoCredito}/${doisErros.altar?.ganhoCredito})`)
+    assert(abrirAltar(createPartida(), 4, 0).altar?.ganhoCredito === undefined, 'E3: altar ainda não resolvido não tem ganho de licença gravado')
+    // (4) o abate de inimigos também cai. 6 inimigos vivos, grau 4 (wipe 100 %): 6 sem erro; 1 erro = round(6 × 1 × 0,5) = 3; 5 erros = no mínimo 1.
+    const inimigo = (id: number): PartidaState['unidades'][number] => ({ id, lado: 'inimigo', papel: 'horda', x: 20 + id, z: 20, hp: 12, postura: 'automatico', ordem: null, cooldown: 0, segmentos: [], alerta: false })
+    const seis: PartidaState = { ...abrirAltar(createPartida(), 4, 0), unidades: [7001, 7002, 7003, 7004, 7005, 7006].map(inimigo) }
+    const vivos = (s: PartidaState): number => s.unidades.filter((u) => u.lado === 'inimigo' && u.hp > 0).length
+    assert(vivos(seis) === 6, 'E3: o cenário de 6 inimigos montou 6 inimigos vivos (senão o abate abaixo não prova nada)')
+    assert(vivos(aplicarConta(seis, 4)) === 0, 'E3: sem erro o grau 4 abate os 6')
+    assert(vivos(aplicarConta(registrarErroNoAltar(seis), 4)) === 3, 'E3: com 1 erro o grau 4 abate 3 de 6')
+    let muitos = seis
+    for (let i = 0; i < 5; i++) muitos = registrarErroNoAltar(muitos)
+    assert(vivos(aplicarConta(muitos, 4)) === 5, 'E3: com 5 erros ainda abate pelo menos 1 inimigo (piso)')
+    // (5) PISO FÍSICO: pisar numa placa ERRADA conta 1 erro, mas ficar parado em cima dela NÃO conta de novo a cada passo.
+    const alt = abrirAltar(createPartida(), 1, 0)
+    const naErrada = { ...alt, heroi: { ...alt.heroi, x: alt.altar!.cx + PARTIDA.altarPasso, z: alt.altar!.cz } }
+    const p1 = stepPartida(naErrada, INPUT_PARADO, 0.05)
+    assert(p1.altar?.erros === 1 && p1.altar?.resolvido !== true, 'E3: pisar numa placa errada conta 1 erro (e não paga)')
+    let parado = p1
+    for (let i = 0; i < 40; i++) parado = stepPartida(parado, INPUT_PARADO, 0.05)
+    assert(parado.altar?.erros === 1, `E3: ficar PARADO na placa errada (40 passos) não conta de novo (veio ${parado.altar?.erros})`)
+    // sair da placa e voltar a ela = errar DE NOVO
+    const saiu = stepPartida({ ...parado, heroi: { ...parado.heroi, x: alt.altar!.cx + 40, z: alt.altar!.cz + 40 } }, INPUT_PARADO, 0.05)
+    assert(saiu.altar?.erros === 1, 'E3: sair da placa não conta erro')
+    const voltou = stepPartida({ ...saiu, heroi: { ...saiu.heroi, x: alt.altar!.cx + PARTIDA.altarPasso, z: alt.altar!.cz } }, INPUT_PARADO, 0.05)
+    assert(voltou.altar?.erros === 2, 'E3: sair e voltar para a MESMA placa errada conta como errar de novo')
+    // ir de uma placa errada DIRETO para outra errada também conta
+    const outra = stepPartida({ ...p1, heroi: { ...p1.heroi, x: alt.altar!.cx - PARTIDA.altarPasso, z: alt.altar!.cz } }, INPUT_PARADO, 0.05)
+    assert(outra.altar?.erros === 2, 'E3: ir de uma placa errada direto para outra errada conta 1 erro a mais')
+    // (6) o piso CERTO depois de errar paga o buff reduzido (o jogador não escapa da regra errando no modal e acertando no piso)
+    const errouNoModal = registrarErroNoAltar(abrirAltar(createPartida(), 4, 0))
+    const certo = stepPartida({ ...errouNoModal, heroi: { ...errouNoModal.heroi, x: errouNoModal.altar!.cx, z: errouNoModal.altar!.cz + PARTIDA.altarPasso } }, INPUT_PARADO, 0.05)
+    assert(certo.altar?.resolvido === true && certo.altar?.ganhoVida === 16, `E3: errar no modal e acertar no PISO paga o buff reduzido (ganho ${certo.altar?.ganhoVida}, esperado 16)`)
+    // (7) cada conta começa limpa: o altar seguinte nasce com 0 erros mesmo depois de uma conta com erros.
+    assert(abrirAltar(doisErros, 2, 1).altar?.erros === 0, 'E3: a conta seguinte começa com 0 erros')
+  }
+
 
   let marco = inicio
   for (let i = 0; i < 80 && !marco.ruaPercorrida; i++) marco = anda(marco, 0.1)
