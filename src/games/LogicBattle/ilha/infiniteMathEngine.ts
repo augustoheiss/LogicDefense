@@ -11,6 +11,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 
 import { ConceptId, EngineId, RedemptionChoice } from './contaContratos'
+import { GERADORES_PROBLEMAS } from './geradoresProblemas'
 
 export type MathDifficultyTier = 1 | 2 | 3 | 4
 
@@ -326,7 +327,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: ans - 10,
-              diagnosticPt: `Confira a subida de dezena: ${A} + ${falta} fecha ${roundA}, e ${roundA} + ${remB} = ${ans}!`,
+              diagnosticPt: `Confira a subida de dezena: ${A} + ${falta} fecha ${roundA}. Agora some ${roundA} com ${remB} contando as dezenas, uma de cada vez.`,
             },
             {
               value: ans + falta * 2,
@@ -354,6 +355,10 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
       if (A % 10 >= unitB) {
         A = Math.floor(A / 10) * 10 + randInt(rng, 1, unitB - 1)
       }
+      // Coincidência A === 2B (a resposta A − B igual ao próprio B, ex.: 78 − 39 = 39): o diagnóstico da 1ª errada cita o ${B} e passaria a ENTREGAR a resposta
+      // (E2.5). Sem laço (gerador nunca tem laço sem teto) e sem sorteio extra: troca só a UNIDADE de A por outra unidade válida (1 ou 2, ambas < unitB, que é
+      // 7, 8 ou 9). Medido por enumeração de TODO o espaço do gerador: 121 colisões → 0, e `A % 10 < unitB` e `A > B` (as invariantes do gerador) continuam valendo.
+      if (A === 2 * B) A = Math.floor(A / 10) * 10 + (A % 10 === 1 ? 2 : 1)
       const realAns = A - B
       const newA = A + shift
       const newB = B + shift
@@ -391,7 +396,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: realAns + 10,
-              diagnosticPt: `Cuidado com a dezena: ${newA} − ${newB} resulta em ${realAns}.`,
+              diagnosticPt: `Cuidado com a dezena: depois de somar +${shift} nos dois lados, subtraia ${newB} de ${newA} contando as dezenas e as unidades em separado.`,
             },
             {
               value: realAns - shift * 2,
@@ -459,7 +464,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: ans + 20,
-              diagnosticPt: `Quase! Confira o dobro de ${mult === 4 ? d1 : d2} = ${ans}.`,
+              diagnosticPt: `Passou do último dobro: dobre ${mult === 4 ? d1 : d2} com cuidado, dezena por dezena, e some só o que falta.`,
             },
           ],
           rng,
@@ -512,11 +517,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: ans + 50,
-              diagnosticPt: `Confira a metade de ${evenN}: ${evenN} ÷ 2 = ${half} → ${ans}.`,
+              diagnosticPt: `Confira a metade de ${evenN}: ela multiplicada por 2 tem de devolver ${evenN}. Só depois multiplique essa metade por 10.`,
             },
             {
               value: ans - 10,
-              diagnosticPt: `Como ${evenN} é par, ${evenN} × 5 termina em zero: ${ans}!`,
+              diagnosticPt: `Terminar em zero é só metade da pista (esta alternativa também termina). Falta conferir a metade de ${evenN} e o ×10 depois dela.`,
             },
           ],
           rng,
@@ -534,7 +539,10 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
       const mode = randInt(rng, 0, 2)
       if (mode === 0) {
         const x = randInt(rng, 14, 65)
-        const a = randInt(rng, 8, 35)
+        const aSorteado = randInt(rng, 8, 35)
+        // a === x: o diagnóstico cita o `a` (dado do enunciado) e ele seria a resposta (E2.5). Sem laço nem sorteio extra; enumerado em todo o espaço (1.456
+        // combinações): 22 colisões → 0, `a` continua em 8..35. Os modos 1 e 2 não têm colisão possível (0 em todo o espaço).
+        const a = aSorteado === x ? (aSorteado < 35 ? aSorteado + 1 : aSorteado - 1) : aSorteado
         const b = x + a
         const methods: MentalSolutionMethod[] = [
           {
@@ -570,7 +578,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: x + 10,
-                diagnosticPt: `Quase! Confira a dezena em ${b} − ${a} = ${x}.`,
+                diagnosticPt: `Quase! A diferença é de uma dezena: refaça ${b} − ${a} conferindo a casa das dezenas e a das unidades.`,
               },
               {
                 value: Math.max(1, x - 5),
@@ -622,7 +630,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: total - each,
-                diagnosticPt: `${total - each} seriam apenas ${div - 1} capitães. Para ${div} capitães: ${total}!`,
+                diagnosticPt: `${total - each} cobre apenas ${div - 1} capitães. O baú precisa pagar os ${div}: multiplique ${each} por ${div}.`,
               },
             ],
             rng,
@@ -666,11 +674,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: x + 10,
-                diagnosticPt: `Confira a soma das dezenas: ${c} + ${gasto} = ${x}.`,
+                diagnosticPt: `Confira a soma das dezenas de ${c} + ${gasto}: este valor passou uma dezena do ponto certo.`,
               },
               {
                 value: x - 10,
-                diagnosticPt: `Quase! ${c} + ${gasto} fecha ${x}.`,
+                diagnosticPt: `Quase! Para desfazer a retirada, some ${gasto} a ${c}; este valor ficou uma dezena abaixo.`,
               },
             ],
             rng,
@@ -730,11 +738,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: ans - B,
-              diagnosticPt: `Quase! ${halfA} × ${doubleB} fecha exatamente ${ans}.`,
+              diagnosticPt: `Quase! Dobrar ${B} e cortar ${A} ao meio está certo, mas este valor ficou um grupo de ${B} abaixo: reconte a multiplicação de ${halfA} por ${doubleB}.`,
             },
             {
               value: ans + doubleB,
-              diagnosticPt: `Você somou um grupo duplo a mais: ${halfA} × ${doubleB} = ${ans}.`,
+              diagnosticPt: `Você somou um grupo duplo a mais (${doubleB}): só multiplique ${halfA} por ${doubleB}, sem acrescentar mais nada.`,
             },
           ],
           rng,
@@ -793,7 +801,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: ans + 10,
-                diagnosticPt: `Confira o dígito central: ${d1} + ${d2} = ${midSum} → ${ans}.`,
+                diagnosticPt: `Confira o dígito central: some ${d1} + ${d2} e ponha o resultado entre eles. Este valor passou uma dezena do certo.`,
               },
             ],
             rng,
@@ -843,7 +851,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: ans - 10,
-                diagnosticPt: `Quase! ${roundProd} − ${B} = ${ans}.`,
+                diagnosticPt: `Quase! Refaça ${roundProd} − ${B} conferindo as dezenas: este valor ficou uma dezena abaixo do certo.`,
               },
             ],
             rng,
@@ -905,11 +913,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             [
               {
                 value: ans * 2,
-                diagnosticPt: `Confira a fração: ${base}% de ${pct} resulta em ${ans}.`,
+                diagnosticPt: `Confira a fração: este valor é o DOBRO do certo. Tome ${base}% de ${pct}, ou seja, ${base}/100 de ${pct}, e não duas vezes isso.`,
               },
               {
                 value: Math.max(1, ans - 5),
-                diagnosticPt: `${pct} × ${base} ÷ 100 = ${ans}.`,
+                diagnosticPt: `Este valor ficou abaixo: multiplique ${pct} por ${base} e só depois divida por 100, sem perder nenhuma casa no meio.`,
               },
               {
                 value: pct + base,
@@ -923,7 +931,10 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
         // O Detetive do Universo: "A é quantos % de B?"
         const pctPool = [10, 20, 25, 30, 40, 50, 75]
         const ansPct = randPick(rng, pctPool)
-        const mult = randPick(rng, [2, 3, 4, 5, 6, 8])
+        // `mult` 5 dava B = 100 (a «porcentagem de 100» é o próprio número: «40 de 100 = 40 %», sem conta e sem graça) e, de quebra, A === a resposta: o diagnóstico
+        // da 1ª errada citava o A e entregava a resposta (E2.5). O par (ansPct 40, mult 2) dava B = 40 === a resposta pelo mesmo motivo. Enumerado em todo o
+        // espaço (42 combinações): 8 colisões → 0.
+        const mult = randPick(rng, ansPct === 40 ? [3, 4, 6, 8] : [2, 3, 4, 6, 8])
         const B =
           ansPct === 25 || ansPct === 75
             ? 4 * mult * 5
@@ -965,12 +976,12 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               {
                 value: Math.min(95, ansPct + 15),
                 label: `${Math.min(95, ansPct + 15)}%`,
-                diagnosticPt: `Dividindo ${A} por ${B} e multiplicando por 100 obtemos ${ansPct}%.`,
+                diagnosticPt: `Este percentual passou do ponto: divida ${A} por ${B} e multiplique por 100 para achar quantos por cento ${A} é de ${B}.`,
               },
               {
                 value: Math.max(5, ansPct - 10),
                 label: `${Math.max(5, ansPct - 10)}%`,
-                diagnosticPt: `Confira: ${ansPct}% de ${B} fecha exatamente ${A}!`,
+                diagnosticPt: `Este percentual ficou baixo: teste-o. Calcule quanto vale esse percentual de ${B} e compare com ${A}.`,
               },
             ],
             rng,
@@ -1025,11 +1036,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: -ans,
-                diagnosticPt: `Como ele subiu de −${subsolo} para +${altura}, o deslocamento é positivo (+${ans})!`,
+                diagnosticPt: `O sinal está invertido: ele SUBIU de −${subsolo} para +${altura}, então o deslocamento tem de ser positivo.`,
               },
               {
                 value: ans + 10,
-                diagnosticPt: `Somando ${subsolo} + ${altura} fechamos exatamente ${ans}.`,
+                diagnosticPt: `A ideia de somar ${subsolo} com ${altura} está certa, mas este valor passou uma dezena: refaça a soma contando as dezenas e as unidades.`,
               },
             ],
             rng,
@@ -1039,8 +1050,13 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
         // Perdão de dívida: -Saldo - (-Multa) + Bonus
         const dividaInicial = randInt(rng, 120, 450)
         const multaPerdoada = randInt(rng, 80, dividaInicial - 20)
-        const bonus = randInt(rng, 150, 400)
-        const ans = -dividaInicial + multaPerdoada + bonus
+        const bonusSorteado = randInt(rng, 150, 400)
+        // O resultado igual à dívida, à multa, ao bônus ou aos ganhos faria o diagnóstico (que cita os quatro) ENTREGÁ-LO (E2.5). SEM laço e sem sorteio extra: se
+        // colidir, o bônus anda UMA unidade. Enumerado em todo o espaço (15.453.066 combinações): 63.792 colisões (0,41 %) → 0 com +1.
+        const resultadoCom = (b: number): number => -dividaInicial + multaPerdoada + b
+        const colide = [dividaInicial, multaPerdoada, bonusSorteado, multaPerdoada + bonusSorteado].includes(resultadoCom(bonusSorteado))
+        const bonus = colide ? bonusSorteado + 1 : bonusSorteado
+        const ans = resultadoCom(bonus)
         const methods: MentalSolutionMethod[] = [
           {
             badge: '💳 Jeito 1 — Cancelar Dívida é Ganhar Crédito',
@@ -1075,11 +1091,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: ans + 20,
-                diagnosticPt: `Quase! (${multaPerdoada} + ${bonus}) − ${dividaInicial} = ${ans}.`,
+                diagnosticPt: `Quase! Some os ganhos (${multaPerdoada} + ${bonus}) e desconte ${dividaInicial}: este valor passou vinte do certo.`,
               },
               {
                 value: -ans,
-                diagnosticPt: `Como os ganhos (${multaPerdoada + bonus}) superam ou abatem −${dividaInicial}, confira o sinal final: ${ans}.`,
+                diagnosticPt: `O tamanho do número pode estar certo, mas o SINAL não: compare o que o Reino pagou (multa cancelada mais bônus) com a dívida de ${dividaInicial} para ver de que lado do zero o saldo termina.`,
               },
             ],
             rng,
@@ -1099,7 +1115,13 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
       const C = randPick(rng, [4, 5, 6, 7, 8, 9])
       const prod = B * C
       const isSub = rng() < 0.45
-      const A = isSub ? prod + randInt(rng, 12, 48) : randInt(rng, 14, 52)
+      const Asorteado = isSub ? prod + randInt(rng, 12, 48) : randInt(rng, 14, 52)
+      // A resposta (A − prod, ou A + prod) igual a B, C ou ao produto fazia o diagnóstico (que cita B, C e o produto) ENTREGÁ-LA (E2.5). SEM laço (gerador nunca
+      // tem laço sem teto) e sem sorteio extra: se colidir, A anda UMA unidade. Enumerado em todo o espaço (3.648 combinações): 27 colisões, e uma unidade basta
+      // em todas (pior caso medido = 1 passo), 0 colisões depois. O teste de `diagnosticosSemGabarito` exige 0 vazamentos, então uma mudança de faixa que
+      // criasse um 2º passo seria acusada em vez de passar em silêncio.
+      const respostaDe = (a: number): number => (isSub ? a - prod : a + prod)
+      const A = [B, C, prod].includes(respostaDe(Asorteado)) ? Asorteado + 1 : Asorteado
       const ans = isSub ? A - prod : A + prod
       const trap = isSub ? (A - B) * C : (A + B) * C
       const opSymbol = isSub ? '−' : '+'
@@ -1141,7 +1163,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: ans + 10,
-              diagnosticPt: `O produto é ${prod}; confira ${A} ${opSymbol} ${prod} = ${ans}.`,
+              diagnosticPt: `O produto é ${prod}; agora refaça ${A} ${opSymbol} ${prod} conferindo as dezenas: este valor passou uma dezena do certo.`,
             },
           ],
           rng,
@@ -1203,11 +1225,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: C + roundTarget,
-              diagnosticPt: `O fator comum ${C} MULTIPLICA o resultado de (${A} ${op} ${B}): ${C} × ${roundTarget} = ${ans}!`,
+              diagnosticPt: `O fator comum ${C} MULTIPLICA o resultado de (${A} ${op} ${B}); você somou ${C} com ${roundTarget}. Troque a soma por uma multiplicação.`,
             },
             {
               value: ans - C,
-              diagnosticPt: `Como ${A} ${op} ${B} = ${roundTarget} redondo, ${C} × ${roundTarget} = ${ans}!`,
+              diagnosticPt: `Como ${A} ${op} ${B} dá um número redondo (${roundTarget}), multiplique-o por ${C}. Este valor ficou um grupo de ${C} abaixo.`,
             },
           ],
           rng,
@@ -1266,11 +1288,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: sumRound + diff,
-                diagnosticPt: `Multiplique a soma (${sumRound}) pela diferença (${diff}): ${sumRound} × ${diff} = ${ans}!`,
+                diagnosticPt: `Multiplique a soma (${sumRound}) pela diferença (${diff}); você somou os dois em vez de multiplicar.`,
               },
               {
                 value: ans - sumRound,
-                diagnosticPt: `A diferença (${A} − ${B}) vale ${diff}, então ${sumRound} × ${diff} = ${ans}.`,
+                diagnosticPt: `A diferença (${A} − ${B}) vale ${diff}: multiplique-a pela soma (${sumRound}). Este valor ficou uma soma inteira (${sumRound}) abaixo do certo.`,
               },
             ],
             rng,
@@ -1317,11 +1339,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: base * base + d * d,
-                diagnosticPt: `Na diferença de quadrados nós SUBTRAÍMOS ${d}² (${base * base} − ${d * d} = ${ans})!`,
+                diagnosticPt: `Na diferença de quadrados nós SUBTRAÍMOS ${d}² (${d * d}) de ${base * base}; você somou.`,
               },
               {
                 value: base * base - d,
-                diagnosticPt: `Subtraímos ${d} ao QUADRADO (${d * d}), ficando ${base * base} − ${d * d} = ${ans}.`,
+                diagnosticPt: `Subtraímos ${d} ao QUADRADO (${d * d}), e não ${d}. Refaça a subtração de ${base * base} com esse valor.`,
               },
             ],
             rng,
@@ -1363,15 +1385,15 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             [
               {
                 value: n * n * 100 + 25,
-                diagnosticPt: `Você fez ${n}×${n} no início, mas o truque multiplica ${n} pelo SUCESSOR (${n + 1}): ${n}×${n + 1} = ${prefix} → ${ans}!`,
+                diagnosticPt: `Você fez ${n}×${n} no início, mas o truque multiplica ${n} pelo SUCESSOR (${n + 1}): refaça o começo com ${n} × ${n + 1} e coloque 25 no final.`,
               },
               {
                 value: (n + 1) * (n + 1) * 100 + 25,
-                diagnosticPt: `Multiplique ${n} por ${n + 1} (= ${prefix}) e coloque 25 no final: ${ans}.`,
+                diagnosticPt: `O começo é ${n} × ${n + 1}, e não o sucessor ao quadrado: refaça esse produto e só então coloque 25 no final.`,
               },
               {
                 value: num * 2,
-                diagnosticPt: `${num}² é ${num} × ${num} (= ${ans}), e não o dobro de ${num}!`,
+                diagnosticPt: `${num}² é ${num} × ${num}, e não o dobro de ${num}: use o truque do sucessor e coloque 25 no final.`,
               },
             ],
             rng,
@@ -1432,15 +1454,15 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
           [
             {
               value: Math.max(1, Math.round((chosen.num * multTarget) / (chosen.den === 9 ? 10 : 100))),
-              diagnosticPt: `Cuidado: dízima periódica tem denominador ${chosen.den} (e não ${chosen.den + 1})!`,
+              diagnosticPt: `Cuidado: o denominador de uma dízima periódica é feito só de noves (um 9 para cada algarismo que se repete), e não uma potência de dez.`,
             },
             {
               value: ans + chosen.simpNum,
-              diagnosticPt: `${multTarget} ÷ ${chosen.simpDen} = ${multTarget / chosen.simpDen}, vezes ${chosen.simpNum} fecha ${ans}.`,
+              diagnosticPt: `Este valor passou um pouco do certo: divida ${multTarget} pelo denominador da fração geratriz e multiplique pelo numerador, sem somar nada no fim.`,
             },
             {
               value: Math.max(1, ans - chosen.simpNum),
-              diagnosticPt: `Pela fração geratriz ${chosen.simpNum}/${chosen.simpDen} × ${multTarget}, o valor exato é ${ans}.`,
+              diagnosticPt: `Este valor ficou um pouco abaixo do certo: aplique a fração geratriz sobre o número pedido e não tire nada no fim.`,
             },
           ],
           rng,
@@ -1493,15 +1515,15 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
           [
             {
               value: mid,
-              diagnosticPt: `${mid} é o valor de ${k}x juntos! Falta dividir por ${k} para achar 1 único x.`,
+              diagnosticPt: `Este valor é o de todos os x juntos! Falta dividir pela quantidade de x para achar 1 único x.`,
             },
             {
               value: Math.max(1, Math.round((isMinus ? c - b : c + b) / k)),
-              diagnosticPt: `Ao voltar no tempo, fazemos a operação INVERSA de ${isMinus ? `−${b} (somamos +${b})` : `+${b} (subtraímos −${b})`}!`,
+              diagnosticPt: `Ao voltar no tempo, fazemos a operação INVERSA da última ação: ${isMinus ? 'o −' : 'o +'} do enunciado vira ${isMinus ? '+' : '−'} aqui.`,
             },
             {
               value: x + 2,
-              diagnosticPt: `Quase! ${mid} ÷ ${k} = ${x}.`,
+              diagnosticPt: `Quase! Refaça a última divisão: este valor passou dois do certo.`,
             },
           ],
           rng,
@@ -1553,15 +1575,15 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
           [
             {
               value: q1 + q2,
-              diagnosticPt: `Você somou ${q1} + ${q2}, mas como os termos estão multiplicando, fazemos ${q1} × ${q2} = ${ans}!`,
+              diagnosticPt: `Você somou ${q1} + ${q2}, mas os dois quocientes estão MULTIPLICANDO: multiplique-os, sem somar.`,
             },
             {
               value: (q1 - 1) * q2,
-              diagnosticPt: `${N1} ÷ ${d1} vale ${q1}, e ${q1} × ${q2} = ${ans}.`,
+              diagnosticPt: `Confira a divisão do PRIMEIRO número de cada parêntese (o 1º do primeiro parêntese pelo 1º do segundo): este resultado ficou um grupo abaixo do certo, sinal de que esse quociente saiu menor do que deveria.`,
             },
             {
               value: q1 * (q2 + 1),
-              diagnosticPt: `${N2} ÷ ${d2} vale ${q2}, então ${q1} × ${q2} = ${ans}.`,
+              diagnosticPt: `Confira a divisão do SEGUNDO número de cada parêntese (o 2º do primeiro parêntese pelo 2º do segundo): este resultado passou um grupo do certo, sinal de que esse quociente saiu maior do que deveria.`,
             },
           ],
           rng,
@@ -1628,77 +1650,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             {
               value: totalCapacity - unitSliceLiters * 2,
               label: `${totalCapacity - unitSliceLiters * 2} L`,
-              diagnosticPt: `Cada 1/${den} vale ${unitSliceLiters} L; multiplicando por ${den} partes chegamos a ${totalCapacity} L.`,
-            },
-          ],
-          rng,
-        ),
-      }
-    },
-  },
-  {
-    archetypeId: 'g4_problema_regra3_inversa_equipe',
-    tier: 4,
-    conceptId: 'divisao_por_fracao',
-    codexSlug: 'regra-de-ouro-2',
-    lensTitlePt: '⚙️ Problema Contextualizado: A Engrenagem do Tempo (Regra de 3 Inversa)',
-    synthesize: (rng) => {
-      const pairs: Array<{ p1: number; t1: number; p2: number }> = [
-        { p1: 3, t1: 20, p2: 5 },
-        { p1: 4, t1: 15, p2: 6 },
-        { p1: 2, t1: 18, p2: 6 },
-        { p1: 5, t1: 14, p2: 7 },
-        { p1: 6, t1: 12, p2: 8 },
-        { p1: 4, t1: 12, p2: 8 },
-        { p1: 3, t1: 16, p2: 6 },
-        { p1: 8, t1: 10, p2: 10 },
-      ]
-      const { p1, t1, p2 } = randPick(rng, pairs)
-      const totalWorkHours = p1 * t1
-      const ans = totalWorkHours / p2
-      const extraWorkers = p2 - p1
-      const methods: MentalSolutionMethod[] = [
-        {
-          badge: '⚡ Jeito 1 — Carga Total de Trabalho (Invariante)',
-          summary: `${p1} engenheiros × ${t1} horas = ${totalWorkHours} horas-engenheiro de obra total. Dividindo entre ${p2} engenheiros: ${totalWorkHours} ÷ ${p2} = ${ans} horas!`,
-        },
-        {
-          badge: '🔄 Jeito 2 — Proporção Inversa (Mais Gente = Menos Tempo)',
-          summary: `A equipe aumentou de ${p1} para ${p2}, então o tempo reduz na razão inversa (${p1}/${p2}) × ${t1} = ${ans} horas!`,
-        },
-        {
-          badge: '⚖️ Jeito 3 — Conservação do Retângulo',
-          summary: `${p1} × ${t1} = ${p2} × Tempo → Tempo = ${ans} horas!`,
-        },
-      ]
-      return {
-        expressionBadge: `${p1} × ${t1}h = ${p2} × ?h`,
-        questionPt: `PROBLEMA (A Regra de Ouro – Aula 2): Uma equipe de ${p1} engenheiros ergue uma torre de defesa em ${t1} horas. Se mais ${extraWorkers} engenheiros se juntarem ao grupo (totalizando ${p2} engenheiros no mesmo ritmo), em quantas horas a torre ficará pronta?`,
-        luzGuiaPt: `Cuidado para não multiplicar cruzado direto! Mais engenheiros trabalhando juntos levam MENOS tempo. Qual é o total de "horas-engenheiro" da obra (${p1} × ${t1})?`,
-        stepByStepPt: `Passo 1: Esforço total da obra = ${p1} × ${t1} = ${totalWorkHours} horas-engenheiro.\nPasso 2: Divida ${totalWorkHours} pelos ${p2} engenheiros trabalhando juntos!`,
-        guidedWalkthroughPt: methods.map((m) => `${m.badge}: ${m.summary}`).join('\n'),
-        methods,
-        realLifeTipPt: `A Regra de Três Inversa é a matemática da colaboração: dividir o peso multiplica o tempo livre!`,
-        correctValue: ans,
-        choices: buildFourChoices(
-          ans,
-          `${ans} horas`,
-          `Mestre da Engrenagem do Tempo! ${p1} × ${t1} = ${totalWorkHours} horas-obra, que divididas por ${p2} engenheiros levam apenas ${ans} horas!`,
-          [
-            {
-              value: Math.round((t1 * p2) / p1),
-              label: `${Math.round((t1 * p2) / p1)} horas`,
-              diagnosticPt: `Armadilha do "multiplica cruzado"! Com mais pessoas ajudando (${p2}), o tempo DIMINUI (proporção inversa), e não aumenta!`,
-            },
-            {
-              value: Math.max(1, t1 - extraWorkers),
-              label: `${Math.max(1, t1 - extraWorkers)} horas`,
-              diagnosticPt: `A redução é proporcional (${totalWorkHours} ÷ ${p2} = ${ans}h), e não subtraindo ${extraWorkers} horas!`,
-            },
-            {
-              value: totalWorkHours,
-              label: `${totalWorkHours} horas`,
-              diagnosticPt: `${totalWorkHours} é o esforço total (${p1}×${t1}); falta dividir pelos ${p2} engenheiros!`,
+              diagnosticPt: `Cada 1/${den} vale ${unitSliceLiters} L; multiplique por ${den} partes. Este valor ficou duas fatias (2 × ${unitSliceLiters} L) abaixo do tanque inteiro.`,
             },
           ],
           rng,
@@ -1765,11 +1717,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
             },
             {
               value: usedNum * cfg.unitVal,
-              diagnosticPt: `${usedNum * cfg.unitVal} é a parte gasta (${usedNum}/${cfg.remDen}); somando com os ${remainderCoins} restantes temos ${totalCoins}!`,
+              diagnosticPt: `${usedNum * cfg.unitVal} é só a parte gasta (${usedNum}/${cfg.remDen}); o total inclui também as ${remainderCoins} moedas que restaram.`,
             },
             {
               value: totalCoins + cfg.unitVal * 2,
-              diagnosticPt: `Cada 1/${cfg.remDen} vale ${cfg.unitVal}; vezes ${cfg.remDen} fecha ${totalCoins}.`,
+              diagnosticPt: `Cada 1/${cfg.remDen} vale ${cfg.unitVal}; multiplique por ${cfg.remDen}. Este valor passou duas partes (2 × ${cfg.unitVal}) do total.`,
             },
           ],
           rng,
@@ -1830,11 +1782,11 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
               },
               {
                 value: finalVal * div,
-                diagnosticPt: `Você multiplicou ${finalVal} por ${div} antes de desfazer o ${isMinus ? `−${delta}` : `+${delta}`}!`,
+                diagnosticPt: `Você multiplicou antes de desfazer o ${isMinus ? 'desconto' : 'acréscimo'}: primeiro volte no tempo, e só depois multiplique pela parte que a fração representa!`,
               },
               {
                 value: (isMinus ? finalVal - delta : finalVal + delta) * div,
-                diagnosticPt: `Para voltar no tempo, usamos a operação INVERSA de ${isMinus ? `−${delta} (+${delta})` : `+${delta} (−${delta})`}!`,
+                diagnosticPt: `Para voltar no tempo, usamos a operação INVERSA ${isMinus ? 'do desconto (somamos)' : 'do acréscimo (subtraímos)'}, e não a mesma operação.`,
               },
             ],
             rng,
@@ -1902,138 +1854,38 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
       }
     },
   },
-  {
-    archetypeId: 'g4_problema_senhores_do_tempo_divisores',
-    tier: 4,
-    conceptId: 'divisao_euclidiana_resto',
-    codexSlug: 'segredo-divisores',
-    lensTitlePt: '🕰️ Problema Contextualizado: Os Senhores do Tempo & Números Perfeitos',
-    synthesize: (rng) => {
-      const sub = randInt(rng, 0, 2)
-      if (sub === 0) {
-        // Contagem de divisores de 12, 18, 20, 24, 28, 30, 36, 60
-        const items: Array<{ n: number; count: number; listStr: string; factorHint: string }> = [
-          { n: 12, count: 6, listStr: '1, 2, 3, 4, 6 e 12', factorHint: 'Forme os pares que multiplicados dão 12: (1×12), (2×6), (3×4)' },
-          { n: 18, count: 6, listStr: '1, 2, 3, 6, 9 e 18', factorHint: 'Forme os pares que multiplicados dão 18: (1×18), (2×9), (3×6)' },
-          { n: 20, count: 6, listStr: '1, 2, 4, 5, 10 e 20', factorHint: 'Forme os pares que multiplicados dão 20: (1×20), (2×10), (4×5)' },
-          { n: 24, count: 8, listStr: '1, 2, 3, 4, 6, 8, 12 e 24', factorHint: 'Forme os 4 pares que multiplicados dão 24: (1×24), (2×12), (3×8), (4×6)' },
-          { n: 30, count: 8, listStr: '1, 2, 3, 5, 6, 10, 15 e 30', factorHint: 'Forme os pares que multiplicados dão 30: (1×30), (2×15), (3×10), (5×6)' },
-          { n: 60, count: 12, listStr: '1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30 e 60', factorHint: 'O Senhor do Tempo (60) tem 6 pares de divisores: (1×60), (2×30), (3×20), (4×15), (5×12), (6×10)' },
-        ]
-        const item = randPick(rng, items)
-        const methods: MentalSolutionMethod[] = [
-          {
-            badge: '🌈 Jeito 1 — Arco-Íris de Pares de Fatores',
-            summary: `${item.factorHint} → são exatamente ${item.count} divisores (${item.listStr})!`,
-          },
-          {
-            badge: '🧬 Jeito 2 — Fórmula dos Expoentes Primos',
-            summary: `Fatorando ${item.n} em primos e somando +1 a cada expoente, o produto dos expoentes fecha ${item.count} divisores!`,
-          },
-          {
-            badge: '🕰️ Jeito 3 — Divisões Exatas',
-            summary: `Há ${item.count} maneiras diferentes de dividir ${item.n} soldados em pelotões iguais sem sobrar resto!`,
-          },
-        ]
-        return {
-          expressionBadge: `Divisores(${item.n}) = ?`,
-          questionPt: `PROBLEMA (O Segredo dos Divisores): Por que números como ${item.n} são tão usados para organizar tempo e pelotões? De quantas maneiras diferentes podemos dividir ${item.n} soldados em grupos iguais sem sobrar ninguém (ou seja, quantos divisores naturais o número ${item.n} possui)?`,
-          luzGuiaPt: `Dica do Arco-Íris: conte os divisores sempre em PARES que multiplicados dão ${item.n}, começando por (1 e ${item.n}), (2 e ${item.n / 2})...`,
-          stepByStepPt: `${item.factorHint}. Conte quantos números aparecem nesses pares!`,
-          guidedWalkthroughPt: methods.map((m) => `${m.badge}: ${m.summary}`).join('\n'),
-          methods,
-          realLifeTipPt: `Usamos 24 horas e 60 minutos porque eles têm muito mais divisores exatos do que 10 ou 100!`,
-          correctValue: item.count,
-          choices: buildFourChoices(
-            item.count,
-            `${item.count} divisores`,
-            `Investigação digna de Sherlock! Os divisores de ${item.n} são ${item.listStr} (total de ${item.count})!`,
-            [
-              {
-                value: item.count - 2,
-                label: `${item.count - 2} divisores`,
-                diagnosticPt: `Você esqueceu de contar um par (como 1 e ${item.n})! Formando os pares completos temos ${item.count} divisores.`,
-              },
-              {
-                value: item.count + 2,
-                label: `${item.count + 2} divisores`,
-                diagnosticPt: `Os pares exatos de ${item.n} são (${item.listStr}), totalizando ${item.count} divisores.`,
-              },
-              {
-                value: item.count / 2,
-                label: `${item.count / 2} divisores`,
-                diagnosticPt: `${item.count / 2} é a quantidade de PARES; como cada par tem 2 números, são ${item.count} divisores!`,
-              },
-            ],
-            rng,
-          ),
-        }
-      } else {
-        // Engrenagens / Torneiras em paralelo: T1 e T2 horas -> (T1 * T2) / (T1 + T2)
-        const tPairs: Array<{ t1: number; t2: number; together: number }> = [
-          { t1: 3, t2: 6, together: 2 },
-          { t1: 4, t2: 12, together: 3 },
-          { t1: 6, t2: 12, together: 4 },
-          { t1: 5, t2: 20, together: 4 },
-          { t1: 10, t2: 15, together: 6 },
-          { t1: 12, t2: 24, together: 8 },
-        ]
-        const tp = randPick(rng, tPairs)
-        const methods: MentalSolutionMethod[] = [
-          {
-            badge: '⚡ Jeito 1 — Fração por Hora (1/T₁ + 1/T₂)',
-            summary: `Em 1 hora, a Forja A faz 1/${tp.t1} e a Forja B faz 1/${tp.t2}. Juntas fazem 1/${tp.t1} + 1/${tp.t2} = 1/${tp.together} da obra por hora → terminam em ${tp.together} horas!`,
-          },
-          {
-            badge: '🪄 Jeito 2 — Produto sobre a Soma',
-            summary: `(T₁ × T₂) ÷ (T₁ + T₂) = (${tp.t1} × ${tp.t2}) ÷ (${tp.t1} + ${tp.t2}) = ${tp.t1 * tp.t2} ÷ ${tp.t1 + tp.t2} = ${tp.together} horas!`,
-          },
-          {
-            badge: '🧱 Jeito 3 — Múltiplo Comum de Horas',
-            summary: `Em ${tp.t1 * tp.t2} horas, A faria ${tp.t2} cargas e B faria ${tp.t1} cargas (${tp.t1 + tp.t2} cargas). Logo, 1 carga leva ${tp.t1 * tp.t2} ÷ ${tp.t1 + tp.t2} = ${tp.together} horas!`,
-          },
-        ]
-        return {
-          expressionBadge: `1/${tp.t1} + 1/${tp.t2} = 1/?`,
-          questionPt: `PROBLEMA (Torneiras e Razões — Apostila de Frações #7): Uma forja abastece o forte sozinha em ${tp.t1} horas, enquanto uma segunda forja leva ${tp.t2} horas. Se ambas forem ligadas juntas ao mesmo tempo, em quantas horas abastecerão tudo?`,
-          luzGuiaPt: `Em 1 hora, a primeira faz 1/${tp.t1} e a segunda faz 1/${tp.t2}. Some as duas frações (ou use Produto ÷ Soma)!`,
-          stepByStepPt: `1/${tp.t1} + 1/${tp.t2} = (${tp.t2} + ${tp.t1}) / ${tp.t1 * tp.t2} = 1/${tp.together} por hora. Logo levam ${tp.together} horas!`,
-          guidedWalkthroughPt: methods.map((m) => `${m.badge}: ${m.summary}`).join('\n'),
-          methods,
-          realLifeTipPt: `Duas máquinas trabalhando em paralelo somam suas velocidades (1/T₁ + 1/T₂), e nunca os seus tempos!`,
-          correctValue: tp.together,
-          choices: buildFourChoices(
-            tp.together,
-            `${tp.together} horas`,
-            `Perfeito! Somando as taxas 1/${tp.t1} + 1/${tp.t2} = 1/${tp.together}, juntas elas terminam em apenas ${tp.together} horas!`,
-            [
-              {
-                value: tp.t1 + tp.t2,
-                label: `${tp.t1 + tp.t2} horas`,
-                diagnosticPt: `Duas forjas trabalhando juntas terminam MAIS RÁPIDO que a mais rápida sozinha (${tp.t1}h), nunca na soma dos tempos!`,
-              },
-              {
-                value: Math.round((tp.t1 + tp.t2) / 2),
-                label: `${Math.round((tp.t1 + tp.t2) / 2)} horas`,
-                diagnosticPt: `${Math.round((tp.t1 + tp.t2) / 2)}h seria a média simples; em paralelo somamos as frações 1/${tp.t1} + 1/${tp.t2} = 1/${tp.together} → ${tp.together}h!`,
-              },
-              {
-                value: Math.abs(tp.t2 - tp.t1),
-                label: `${Math.abs(tp.t2 - tp.t1)} horas`,
-                diagnosticPt: `Usando (Produto ÷ Soma) = (${tp.t1}×${tp.t2}) ÷ (${tp.t1}+${tp.t2}) = ${tp.together} horas!`,
-              },
-            ],
-            rng,
-          ),
-        }
-      }
-    },
-  },
+  // L7: geradores de problema por construção direta (MMC, regra de 3, média, conjuntos, razão). O de regra de 3 inversa SUBSTITUI o
+  // antigo de 8 pares (mesmo archetypeId): ver geradoresProblemas.ts.
+  ...GERADORES_PROBLEMAS,
 ]
 
 // ──────────────────────────────────────────────────────────────────────────────
 // API PÚBLICA: SÍNTESE INFINITA COM ANEL DE COOLDOWN ESTRATIFICADO
 // ──────────────────────────────────────────────────────────────────────────────
+/** Leitura do catálogo (só id e grau): permite aos testes conferir QUEM está no sorteio sem expor o array mutável nem os `synthesize`. */
+export function listarArquetipos(): Array<{ archetypeId: string; tier: MathDifficultyTier }> {
+  return ARCHETYPE_GENERATORS.map((g) => ({ archetypeId: g.archetypeId, tier: g.tier }))
+}
+
+/**
+ * Gera UM problema de um arquétipo ESCOLHIDO, de forma determinística pela semente, SEM tocar no anel anti-repetição nem na fila de arquétipos (o estado de
+ * módulo de `generateInfiniteChallenge`). Existe para os TESTES: chamar `generateInfiniteChallenge` 300 vezes por arquétipo misturava os sorteios e dependia de
+ * sorte para cair no arquétipo desejado. O jogo NÃO usa esta função (ele continua em `generateInfiniteChallenge`, que registra o que já foi visto).
+ */
+export function sintetizarArquetipo(archetypeId: string, seed: number): ReturnType<ArchetypeGeneratorSpec['synthesize']> {
+  const spec = ARCHETYPE_GENERATORS.find((g) => g.archetypeId === archetypeId)
+  if (!spec) throw new Error(`sintetizarArquetipo: arquétipo desconhecido «${archetypeId}»`)
+  let s = seed >>> 0
+  if (s === 0) s = 0x6d2b79f5
+  const rng = (): number => {
+    s = (s + 0x6d2b79f5) >>> 0
+    let t = Math.imul(s ^ (s >>> 15), 1 | s)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  return spec.synthesize(rng)
+}
+
 export interface GenerateInfiniteChallengeOptions {
   tier: MathDifficultyTier
   seed?: number

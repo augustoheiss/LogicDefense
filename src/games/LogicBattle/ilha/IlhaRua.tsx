@@ -5,6 +5,8 @@ import type { Group, InstancedMesh, Mesh } from 'three'
 import { Object3D, Vector2 } from 'three'
 import {
   generateInfiniteChallenge,
+  getRecentMathSignaturesSnapshot,
+  hydrateSeenMathSignatures,
   InfiniteMathChallenge,
   MATH_CHALLENGE_TIER_POLICIES,
   MathDifficultyTier,
@@ -27,7 +29,7 @@ import {
 import { meiaLarguraNv5 } from './blocosNv5Blueprints'
 import { validarAdicionarBlocoObraLivre } from './obraBlocosLivres'
 import { IndiceBlocoMundo, IndiceVoxelNv5, ObraArquiteturaMesh } from './ObrasArquiteturaCena'
-import { GRAU_PARTIDA, OBSTACULOS, Olhar, PARTIDA, PecaId } from './partidaPolicies'
+import { OBSTACULOS, Olhar, PARTIDA, PecaId } from './partidaPolicies'
 import {
   abrirAltar,
   alcanceDoTiro,
@@ -61,6 +63,7 @@ import {
   podeConsagrarEm,
   podeFundarEm,
   pular,
+  registrarErroNoAltar,
   repararObra,
   pontosDoCorpo,
   selecionarAoClicarChaoVazio,
@@ -93,11 +96,15 @@ import {
   voltarAoCorpo,
 } from './atlas'
 import { IconeId, IconeSvg, META_INTENCOES } from './ilhaIcones'
+import { armazenamentoDoNavegador, carregarAssinaturas, salvarAssinaturas } from './memoriaDeContas'
+import { textoDaContaComErros } from './buffPorErro'
+import { carregarCaderno, chaveCurta, registrarTentativa, salvarCaderno, type Caderno } from './cadernoDeEstudo'
 import {
   alvoDoTeclado,
   cliqueAbreOPainelDaObra,
   destinoDoToque,
   jogoTomaConfirmar,
+  jogoTomaEscape,
   painelValido,
   paraPropagacaoDoPointerdown,
   precoDeEvoluir,
@@ -113,6 +120,8 @@ const PRECO_EVOLUIR = precoDeEvoluir({
 })
 import { MundoSandboxCena } from './MundoSandboxCena'
 import { raycastCondicional, semRaycast } from './raycastCena'
+import { SeloDeVida } from './SeloDeVida'
+import { textoGanhoDaConta } from './textosVida'
 import { TropasCena } from './TropasCena'
 import './ilha.css'
 
@@ -1147,6 +1156,13 @@ export const IlhaRua: React.FC = () => {
   const quadro = useRef('')
   const [mapaTick, setMapaTick] = useState(0)
   const timeScale = useRef(1)
+  const memoriaRestaurada = useRef(false)
+  // Caderno de estudo (E2): carregado UMA vez, atualizado a cada conta resolvida. `desafioAtual` e `abertaEmMs` guardam a conta ABERTA numa ref (não no estado do React): o
+  // `onHud` do canvas é um callback que pode enxergar um `challenge` velho, e a ref sempre tem o da conta de agora. `contaGravada` evita gravar a mesma conta duas vezes.
+  const cadernoRef = useRef<Caderno | null>(null)
+  const desafioAtual = useRef<InfiniteMathChallenge | null>(null)
+  const abertaEmMs = useRef(0)
+  const contaGravada = useRef(true)
   const modalOpen = useRef(false)
   const keys = useRef<Controle>({ forward: false, back: false, strafe: 0 })
   const lookDrag = useRef<{ x: number; y: number } | null>(null)
@@ -1408,7 +1424,9 @@ export const IlhaRua: React.FC = () => {
     const down = (event: KeyboardEvent) => {
       entradaPorTeclado.current = proximaEntradaPorTeclado({ tipo: 'tecla', code: event.code }, entradaPorTeclado.current)
       if (modalOpen.current) return
-      if (event.code === 'Escape') {
+      // O Esc é do jogo, EXCETO com o foco num campo de texto ou num controle que trata o próprio Esc (selo de vida: ele fecha a PRÓPRIA legenda).
+      // Este handler é de CAPTURA na window e roda antes do onKeyDown do React: sem esta consulta o card/painel fechava por baixo da legenda.
+      if (event.code === 'Escape' && jogoTomaEscape(alvoDoTeclado(event.target))) {
         // O card de confirmação fica NA FRENTE do painel (z-index 12 contra 10): o Esc fecha o que está por cima
         // primeiro, e o painel de trás espera o próximo Esc (OBS-F2-2). Com card aberto o painel não é tocado aqui;
         // o card cai nos ramos de baixo, que já o fecham junto com a ferramenta/fantasma, como sempre fizeram.
@@ -1645,8 +1663,20 @@ export const IlhaRua: React.FC = () => {
   const openConta = (nextTier: MathDifficultyTier) => {
     if (sim.current.semCorpo || estadoCorpo(atlasRef.current).derrota) return
     setTier(nextTier)
+    // Memória de contas (E1): na PRIMEIRA conta da carga da página, restaura as assinaturas já vistas (o anel do motor mora em memória e zera ao
+    // recarregar; sem isto, quem abre as contas nos mesmos instantes de partida reencontra as MESMAS perguntas: medido 100 % em 400 pares).
+    // `hydrateSeenMathSignatures` é idempotente (ignora o que já está no anel); `armazenamentoDoNavegador()` e `salvar` nunca lançam.
+    if (!memoriaRestaurada.current) {
+      memoriaRestaurada.current = true
+      hydrateSeenMathSignatures(carregarAssinaturas(armazenamentoDoNavegador()))
+    }
     const proxima = generateInfiniteChallenge({ tier: nextTier, seed: 42 + nextTier + sim.current.tempo })
+    salvarAssinaturas(armazenamentoDoNavegador(), getRecentMathSignaturesSnapshot())
     setChallenge(proxima)
+    // Caderno (E2): esta é a conta de AGORA. Guarda o desafio e o instante (para o tempo até acertar) e destrava a gravação (uma conta grava UMA vez).
+    desafioAtual.current = proxima
+    abertaEmMs.current = performance.now()
+    contaGravada.current = false
     setNote('')
     setOpen(true)
     const correta = proxima.choices.findIndex((item) => item.isCorrect)
@@ -1655,16 +1685,47 @@ export const IlhaRua: React.FC = () => {
     document.exitPointerLock?.()
   }
 
+  /**
+   * Caderno de estudo (E2): grava a conta que ACABOU de ser resolvida (acerto), com os erros que o aluno cometeu antes e o tempo que levou. É o ÚNICO ponto de gravação, chamado
+   * pelos DOIS caminhos de acerto (clicar no modal e pisar na placa certa): a conta resolve em lugares diferentes, e gravar em cada um por conta própria arriscava gravar 0 ou 2 vezes.
+   * `contaGravada` é a trava (zerada no `openConta`). Nunca lança: o caderno é um extra, e um armazenamento quebrado não pode atrapalhar o jogo.
+   */
+  const gravarConta = (erros: number) => {
+    const desafio = desafioAtual.current
+    if (!desafio || contaGravada.current) return
+    contaGravada.current = true
+    const armazenamento = armazenamentoDoNavegador()
+    if (cadernoRef.current === null) cadernoRef.current = carregarCaderno(armazenamento)
+    cadernoRef.current = registrarTentativa(cadernoRef.current, {
+      q: Date.now(),
+      g: desafio.tier,
+      c: desafio.conceptId,
+      a: desafio.archetypeId,
+      e: erros,
+      t: Math.max(0, Math.round(performance.now() - abertaEmMs.current)),
+      k: chaveCurta(desafio.signature),
+    })
+    salvarCaderno(armazenamento, cadernoRef.current)
+  }
+
   const answer = (choiceId: string) => {
     if (!challenge) return
     const choice = challenge.choices.find((item) => item.id === choiceId)
     if (!choice) return
     if (!choice.isCorrect) {
+      // E3: errar custa. Cada clique errado soma 1 erro NA CONTA ABERTA (o `Altar`, estado da simulação), e `aplicarConta` divide o buff por 2 a cada erro. Pisar
+      // numa placa errada no mundo soma no MESMO contador (`altarNoPasso`), então a regra não se contorna escolhendo um caminho ou o outro.
+      publicar(registrarErroNoAltar(sim.current))
       setNote(choice.diagnosticPt)
       return
     }
-    publicar(aplicarConta(sim.current, tier))
-    setPower(`${GRAU_PARTIDA[tier].bonus} soldados e ${GRAU_PARTIDA[tier].credito} licença`)
+    // O ganho é lido do estado ANTES e DEPOIS da conta, não da tabela: com a vida no teto o bônus da tabela mentiria.
+    const antes = sim.current
+    const depois = aplicarConta(antes, tier)
+    publicar(depois)
+    gravarConta(antes.altar?.erros ?? 0)
+    // O crédito mostrado é o que a conta de fato pagou (reduzido pelos erros), não o da tabela: lido do estado, como a vida. O motivo da redução vai ao lado.
+    setPower(textoDaContaComErros(textoGanhoDaConta(antes.heroi.army, depois.heroi.army, depois.credito - antes.credito), antes.altar?.erros ?? 0))
     setOpen(false)
   }
 
@@ -1997,7 +2058,7 @@ export const IlhaRua: React.FC = () => {
         const target = event.target as HTMLElement
         if (
           target.closest(
-            'button, .ilha-modal, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-ferramentas, .ilha-painel-obra',
+            'button, .ilha-modal, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-ferramentas, .ilha-painel-obra, .ilha-army',
           )
         )
           return
@@ -2165,7 +2226,13 @@ export const IlhaRua: React.FC = () => {
             }
             if (state.altar?.resolvido && modalOpen.current) {
               setOpen(false)
-              setPower(`${GRAU_PARTIDA[state.altar.tier].bonus} soldados pelo piso certo`)
+              gravarConta(state.altar.erros)
+              // O `aplicarConta` já rodou dentro do `stepPartida` e este `onHud` só vê o estado do FIM do passo, já contaminado por dano
+              // (torre, horda) e por ganho de arco/portão do mesmo passo. Por isso o ganho vem do próprio altar, gravado por `aplicarConta`
+              // onde o antes e o depois são exatos. Sem o campo (não deveria ocorrer) o texto cai em «só as licenças»: nunca inventa.
+              const ganho = state.altar.ganhoVida
+              // E3: a licença também vem do altar (reduzida pelos erros), e o motivo da redução aparece ao lado, para o jogador ver POR QUE rendeu menos.
+              setPower(textoDaContaComErros(textoGanhoDaConta(0, ganho === undefined ? Number.NaN : ganho, state.altar.ganhoCredito ?? 0), state.altar.erros))
             }
             if (state.altar?.aviso) setNote(state.altar.aviso)
             const tiro =
@@ -2323,9 +2390,7 @@ export const IlhaRua: React.FC = () => {
             {hud.semCorpo ? 'Observando · Império' : olharNome(hud.olhar)}
           </span>
         </div>
-        <div className="ilha-army" data-testid="ilha-exercito">
-          Exército {corpoAtual.heroi.army}
-        </div>
+        <SeloDeVida vida={corpoAtual.heroi.army} />
         <div
           className="ilha-base"
           data-testid="ilha-base"
@@ -2662,7 +2727,7 @@ export const IlhaRua: React.FC = () => {
         {derrotado ? (
           <>
             <div className="ilha-fim">
-              {corpoAtual.obras.some((obra) => obra.lado !== 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0) ? 'A base caiu.' : 'O exército caiu.'}
+              {corpoAtual.obras.some((obra) => obra.lado !== 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0) ? 'A base caiu.' : 'O herói caiu.'}
             </div>
             <button
               type="button"

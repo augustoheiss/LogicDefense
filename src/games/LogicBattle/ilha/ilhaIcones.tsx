@@ -52,7 +52,7 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
   portao: {
     id: 'portao',
     titulo: 'Portão Matemático (+10)',
-    resumo: 'Arco tático que soma +10 soldados ao atravessar. No Nv. 5 vira arco triunfal fortificado com corredor aberto!',
+    resumo: 'Arco tático que soma +10 de vida ao herói ao atravessar. No Nv. 5 vira arco triunfal fortificado com corredor aberto!',
     detalhe: 'Custo: 2 madeiras (ou 1 licença). Deseja posicionar com a planta transparente?',
   },
   quartel: {

@@ -317,6 +317,68 @@
 }
 
 .ilha-army { left: 16px; }
+
+/* O selo de vida é um CORAÇÃO e o número, sem o texto «Vida do herói» à mostra (decisão do usuário, 20/11). A legenda aparece com o
+   mouse em cima (:hover, desktop) e pelo ESTADO `.aberta` (toque, Enter/Espaço), que o `Escape`, o toque fora e a perda de foco fecham.
+   O FOCO sozinho NÃO abre (rodada 4 do T2, WCAG 1.4.13 «Dismissible»): se `:focus` abrisse, o Escape fecharia o estado e o foco, que
+   continua no selo, a reabriria. O `:hover` do celular é emulado e pegajoso: por isso o toque usa o estado, e não o `:hover`. */
+.ilha-army {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Só ele recebe ponteiro (o `.ilha-hud` é pointer-events:none): sem isto o :hover nunca dispara e a legenda não aparece. */
+  pointer-events: auto;
+  cursor: help;
+  outline-offset: 2px;
+}
+.ilha-army-icone { flex: none; color: #ff6b6b; }
+.ilha-army-valor { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ilha-army-legenda {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  /* Não empurra nada nem rouba o toque do jogo por baixo. */
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #fff;
+  color: #14324a;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.35);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 13;
+}
+.ilha-army.aberta .ilha-army-legenda {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* O mouse mostra a legenda pela classe `.mouse-em-cima`, que o componente liga SÓ com `pointerType === 'mouse'` (onPointerEnter/Leave), e NÃO pelo
+   `:hover`: o toque (num 2-em-1, Chromebook, iPad com trackpad, onde `(hover:hover) and (pointer:fine)` casa) deixa o `:hover` verdadeiro e a legenda
+   ficava PRESA depois de o 2º toque fechar o estado (reproduzido no jogo real; com o `:hover` neutralizado a mesma sequência fecha). */
+.ilha-army.mouse-em-cima .ilha-army-legenda {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* Desktop e tablet: a legenda abre à DIREITA do selo. Abaixo dele ficam os recursos («Licenças 4 · Madeira…»), e cobri-los (2.568 px²,
+   medido) esconde justamente o que se lê junto da vida. A faixa à direita do selo está livre. No celular (<= 600 px) fica abaixo. */
+@media (min-width: 601px) {
+  .ilha-army-legenda {
+    top: 50%;
+    left: calc(100% + 8px);
+    transform: translateY(-50%);
+  }
+  .ilha-army.aberta .ilha-army-legenda { transform: translateY(-50%); }
+}
+@media (min-width: 601px) {
+  .ilha-army.mouse-em-cima .ilha-army-legenda { transform: translateY(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ilha-army-legenda { transition: none; transform: none; }
+}
 .ilha-compass {
   right: 16px;
   width: 48px;

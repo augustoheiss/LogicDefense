@@ -140,11 +140,18 @@ export const PARTIDA = {
   },
 } as const
 
+/**
+ * O que uma conta CERTA paga, por grau. `bonus` (vida do herói) é BASE 2, decisão do usuário (20/11/2026): `bonus = 2^(grau + 1)` = +4, +8, +16, +32: cada grau
+ * DOBRA o anterior, e quem faz as contas difíceis cresce bem mais que quem faz as fáceis. Antes era 4/6/8/12 (sem regra). É UMA constante só, reajustável com
+ * mais jogadores. `wipe` (fração dos inimigos abatida) e `credito` (licenças) NÃO mudaram. Cada ERRO divide o buff por 2 (`buffPorErro`, E3), então o grau 4
+ * rende +32, +16, +8, +4… conforme os erros. Os 3 graus seguintes do plano (+64, +128, +256: Hardcore, Super hardcore, Especialista) NÃO entram aqui: precisam
+ * de uma fonte de questões que ainda não existe (ENEM, E6/E7), e um modo vazio não se vende.
+ */
 export const GRAU_PARTIDA: Record<1 | 2 | 3 | 4, { wipe: number; bonus: number; credito: number }> = {
   1: { wipe: 0.35, bonus: 4, credito: 1 },
-  2: { wipe: 0.6, bonus: 6, credito: 1 },
-  3: { wipe: 0.85, bonus: 8, credito: 2 },
-  4: { wipe: 1, bonus: 12, credito: 2 },
+  2: { wipe: 0.6, bonus: 8, credito: 1 },
+  3: { wipe: 0.85, bonus: 16, credito: 2 },
+  4: { wipe: 1, bonus: 32, credito: 2 },
 }
 
 export const PLUS_TEN: Gate = {

@@ -3,6 +3,7 @@ import {
   cliqueAbreOPainelDaObra,
   destinoDoToque,
   jogoTomaConfirmar,
+  jogoTomaEscape,
   paraPropagacaoDoPointerdown,
   precoDeEvoluir,
   painelValido,
@@ -15,10 +16,17 @@ function assert(condition: boolean, name: string): asserts condition {
   if (!condition) throw new Error(name)
 }
 
-const corpo: AlvoDoTeclado = { tag: 'BODY', ehCampoDeTexto: false }
-const botao: AlvoDoTeclado = { tag: 'BUTTON', ehCampoDeTexto: false }
-const campo: AlvoDoTeclado = { tag: 'INPUT', ehCampoDeTexto: true }
-const link: AlvoDoTeclado = { tag: 'A', ehCampoDeTexto: false }
+const corpo: AlvoDoTeclado = { tag: 'BODY', ehCampoDeTexto: false, ehControleProprio: false, tratouEscape: false }
+const botao: AlvoDoTeclado = { tag: 'BUTTON', ehCampoDeTexto: false, ehControleProprio: false, tratouEscape: false }
+const campo: AlvoDoTeclado = { tag: 'INPUT', ehCampoDeTexto: true, ehControleProprio: false, tratouEscape: false }
+const link: AlvoDoTeclado = { tag: 'A', ehCampoDeTexto: false, ehControleProprio: false, tratouEscape: false }
+// O selo de vida: um <div role="img" tabindex=0> que TRATA o próprio Enter/Espaço/Escape (data-teclado-proprio). Não é BUTTON, então a regra antiga
+// («só botão/link/campo é dono da tecla») deixava o jogo agir ANTES do onKeyDown do selo (captura na window): o herói pulava, o card era
+// confirmado, o Esc fechava o card. Achado do revisor independente da L5.1, provado no jogo real.
+// selo com a legenda FECHADA: trata Enter/Espaco (ehControleProprio) mas NAO tem nada a fechar com o Esc (tratouEscape false)
+const selo: AlvoDoTeclado = { tag: 'DIV', ehCampoDeTexto: false, ehControleProprio: true, tratouEscape: false }
+// selo com a legenda ABERTA: o Esc e dele (fecha a legenda)
+const seloAberto: AlvoDoTeclado = { tag: 'DIV', ehCampoDeTexto: false, ehControleProprio: true, tratouEscape: true }
 
 export function run(): void {
   const semNada = { cardAberto: false, painelAberto: false }
@@ -184,4 +192,32 @@ export function run(): void {
   assert(alvoDoTeclado({ tagName: 'DIV', isContentEditable: true }).ehCampoDeTexto, 'contenteditable é campo de texto')
   assert(alvoDoTeclado({ tagName: 'INPUT' }).ehCampoDeTexto, 'input é campo de texto')
   assert(!alvoDoTeclado({ tagName: 'CANVAS' }).ehCampoDeTexto, 'canvas não é campo de texto')
+
+  // ── controle que trata o PROPRIO teclado (selo de vida): a tecla e dele, venha o foco de Tab OU de clique ──────────────────────────────
+  assert(alvoDoTeclado({ tagName: 'div', dataset: { tecladoProprio: '' } }).ehControleProprio, 'data-teclado-proprio marca o elemento como dono da propria tecla')
+  assert(alvoDoTeclado({ tagName: 'div', dataset: { tecladoProprio: 'true' } }).ehControleProprio, 'o valor do atributo nao importa, so a presenca')
+  assert(!alvoDoTeclado({ tagName: 'div', dataset: {} }).ehControleProprio, 'sem o atributo nao e controle proprio')
+  assert(!alvoDoTeclado({ tagName: 'div' }).ehControleProprio, 'sem dataset nao e controle proprio (nao quebra)')
+  assert(!alvoDoTeclado(null).ehControleProprio && !alvoDoTeclado(undefined).ehControleProprio, 'alvo nulo nao e controle proprio')
+  assert(teclaDoBotaoFocado(selo, false), 'selo focado por CLIQUE: a tecla e do selo (um div nao ganha foco so por Tab)')
+  assert(teclaDoBotaoFocado(selo, true), 'selo focado por Tab: a tecla e do selo')
+  assert(!jogoTomaConfirmar('Enter', selo, comCard, false), 'Enter no selo NAO confirma o card do jogo (bug provado no jogo real)')
+  assert(!jogoTomaConfirmar('Space', selo, comCard, true), 'Espaco no selo NAO confirma o card')
+  assert(!jogoTomaConfirmar('Enter', selo, comPainel, false), 'Enter no selo NAO evolui o painel da obra')
+  assert(jogoTomaConfirmar('Enter', corpo, comCard, false), 'regressao: sem controle proprio o Enter ainda confirma o card')
+
+  // ── Escape: com o foco num controle que trata o proprio Esc, o jogo nao fecha card/painel por baixo ───────────────────────────────────
+  assert(jogoTomaEscape(corpo), 'Esc com o foco no corpo e do jogo (fecha card/painel/ferramenta)')
+  assert(jogoTomaEscape(botao), 'Esc num botao continua do jogo (botao nao trata Esc)')
+  assert(jogoTomaEscape(campo) === false, 'Esc num campo de texto fica com o campo')
+  assert(jogoTomaEscape(seloAberto) === false, 'Esc no selo com a legenda ABERTA fica com o selo (ele fecha a propria legenda)')
+  // REGRESSAO achada pelo revisor no MEU conserto (provada no jogo real): foco no selo, legenda FECHADA, card aberto: o Esc tem de fechar o card.
+  // `data-teclado-proprio` (Enter/Espaco) vale SEMPRE; `data-esc-proprio` (o Esc) so enquanto ha legenda para fechar.
+  assert(jogoTomaEscape(selo) === true, 'Esc no selo com a legenda FECHADA e do JOGO (senao o card/painel fica preso: ninguem trata o Esc)')
+  assert(teclaDoBotaoFocado(selo, false), 'Enter/Espaco no selo continuam do selo mesmo com a legenda fechada (o bug original do pulo)')
+  // o atributo que declara «trato o Esc agora»
+  assert(alvoDoTeclado({ tagName: 'div', dataset: { tecladoProprio: '', escProprio: '' } }).tratouEscape, 'data-esc-proprio declara que o controle trata o Esc agora')
+  assert(!alvoDoTeclado({ tagName: 'div', dataset: { tecladoProprio: '' } }).tratouEscape, 'sem data-esc-proprio o Esc nao e do controle (so Enter/Espaco)')
+  assert(!alvoDoTeclado({ tagName: 'div' }).tratouEscape && !alvoDoTeclado(null).tratouEscape, 'sem dataset nao quebra')
+  assert(alvoDoTeclado({ tagName: 'div', dataset: { escProprio: '' } }).tratouEscape, 'data-esc-proprio vale sozinho (independe de data-teclado-proprio)')
 }
