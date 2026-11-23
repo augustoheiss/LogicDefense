@@ -8,8 +8,10 @@ import { semente } from '../geradoresBase'
 import { protegerCifraoMoeda, protegerMarkdownInline, type GrauDificuldade } from './contratosEstudo'
 import { validarDesafioZeroSpoiler } from './validadorDicas'
 import { ENEM_MATEMATICA_LOTE1 } from './bancos/enemMatematicaLote1'
+import { classificarFigurasParaApresentacao } from './figurasEnem'
 import { GERADORES_ENEM_PARAMETRICOS } from './geradoresEnem'
 import {
+  carregarEnemLote1Lazy,
   limparCacheEnemLazy,
   resolverConceitoMotorParaTema,
   selecionarProximoDesafio,
@@ -252,4 +254,43 @@ export async function run(): Promise<void> {
   assert(getRecentMathSignaturesSnapshot().length > 0, 'esperava assinatura registrada antes do reset')
   resetSeenMathMemory()
   assert(getRecentMathSignaturesSnapshot().length === 0, 'resetSeenMathMemory não limpou a memória do motor')
+
+  // 12. Acervo completo lazy inclui ENEM Lotes 1..5, ETEC e SENAI e respeita preferirOrigem
+  limparCacheEnemLazy()
+  const bancoCompleto = await carregarEnemLote1Lazy()
+  assert(bancoCompleto.some((d) => d.origem === 'enem_oficial'), 'banco completo deve conter ENEM')
+  assert(bancoCompleto.some((d) => d.origem === 'etec_oficial'), 'banco completo deve conter ETEC')
+  assert(bancoCompleto.some((d) => d.origem === 'senai_oficial'), 'banco completo deve conter SENAI')
+  assert(bancoCompleto.some((d) => d.id.startsWith('enem2024_q144') || d.referenciaOficial?.ano === 2024), 'banco completo deve conter ENEM Lote 5')
+
+  const selEtec = await selecionarProximoDesafio({
+    grau: 5,
+    estadoEstudo: estadoEstudoVazio(),
+    preferirOrigem: 'etec_oficial',
+    seed: 123,
+  })
+  assert(selEtec.origem === 'etec_oficial', `esperava etec_oficial, veio ${selEtec.origem}`)
+
+  const selSenai = await selecionarProximoDesafio({
+    grau: 6,
+    estadoEstudo: estadoEstudoVazio(),
+    preferirOrigem: 'senai_oficial',
+    seed: 456,
+  })
+  assert(selSenai.origem === 'senai_oficial', `esperava senai_oficial, veio ${selSenai.origem}`)
+
+  // 13. Classificação de figuras separa enunciado, alternativas visuais e tabela duplicada
+  const classificadasAlt = classificarFigurasParaApresentacao(
+    [
+      { src: '/a.png', alt: 'Gráfico', largura: 600, altura: 400, papel: 'enunciado', tipoVisual: 'grafico' },
+      { src: '/t.png', alt: 'Tabela', largura: 500, altura: 300, papel: 'enunciado', tipoVisual: 'tabela' },
+      { src: '/altA.png', alt: 'Alt A', largura: 200, altura: 150, papel: 'alternativa', letra: 'A' },
+      { src: '/altB.png', alt: 'Alt B', largura: 200, altura: 150, papel: 'alternativa', letra: 'B' },
+      { src: '/altC.png', alt: 'Alt C', largura: 200, altura: 150, papel: 'alternativa', letra: 'C' },
+    ],
+    { enunciadoTemTabela: true },
+  )
+  assert(classificadasAlt.enunciado.length === 1, `esperava 1 figura de enunciado (sem tabela duplicada), veio ${classificadasAlt.enunciado.length}`)
+  assert(classificadasAlt.modoAlternativaVisual === true, 'esperava modoAlternativaVisual ativo com 3 letras')
+  assert(classificadasAlt.alternativasPorLetra.B?.src === '/altB.png', 'faltou alternativa visual B')
 }

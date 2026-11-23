@@ -18,6 +18,8 @@ import {
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
 import { chaoRevelado, cobertoAgora, obraEmConstrucao, PartidaState } from './partidaSim'
 import type { AlvoEdicaoVoxel } from './verticalidadeVoxel'
+import { FundacoesObrasCena } from './visual/FundacaoObraCena'
+import { classificarSuporteObra } from './visual/suporteFundacao'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 
 export interface MundoSandboxCenaProps {
@@ -238,7 +240,13 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         </group>
       )}
 
-      {/* 5. Construções Nível 5+ Entráveis (InstancedMesh), Blocos Livres do Mapa e Obras Consagradas */}
+      {/* 5. Fundações Aterradas (Terra vs Água + Animação de Obra), Construções Nível 5+ e Blocos Livres */}
+      <FundacoesObrasCena
+        state={state}
+        lagoas={lagoas}
+        texturasBlocos={texturasBlocos}
+        sombrasAtivas={sombrasAtivas}
+      />
       <ObrasNv5Instanced
         state={state}
         versaoSolidos={state.versaoSolidos}
@@ -278,6 +286,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
           x={ghostObra.x}
           z={ghostObra.z}
           valido={ghostObra.valido}
+          sobreAgua={classificarSuporteObra(lagoas, ghostObra.x, ghostObra.z, DIMENSOES_OBRA[ghostObra.tipo]) === 'agua'}
         />
       )}
 

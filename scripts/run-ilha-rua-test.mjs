@@ -74,8 +74,62 @@ try {
   const dicasSemGabarito = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/dicasSemGabarito.test.ts')
   const geradoresEnemMod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/geradoresEnem.ts')
   const enemLote1Mod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/enemMatematicaLote1.ts')
+  const enemLote2Mod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/enemMatematicaLote2.ts')
+  const enemLote3Mod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/enemMatematicaLote3.ts')
+  const enemLote4Mod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/enemMatematicaLote4.ts')
+  const enemLote5Mod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/enemMatematicaLote5.ts')
+  const etecLote1Mod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/etecMatematicaLote1.ts')
+  const senaiLote1Mod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/senaiMatematicaLote1.ts')
+  const figurasEnemManifest = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/figurasEnem.manifest.ts')
+  const figurasEtecManifest = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/figurasEtec.manifest.ts')
+  const figurasSenaiManifest = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/figurasSenai.manifest.ts')
+  const gabaritosMod = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/bancos/gabaritosMatematicaEnem.ts')
+  for (const desafio of [
+    ...enemLote2Mod.ENEM_MATEMATICA_LOTE2,
+    ...enemLote3Mod.ENEM_MATEMATICA_LOTE3,
+    ...enemLote4Mod.ENEM_MATEMATICA_LOTE4,
+    ...enemLote5Mod.ENEM_MATEMATICA_LOTE5,
+  ]) {
+    const ref = desafio.referenciaOficial
+    const letra = gabaritosMod.letraDoGabarito(ref.ano, ref.questao)
+    const correta = desafio.alternativas.find((a) => a.correta)?.letra
+    if (letra !== correta) {
+      throw new Error(`gabarito de ${desafio.id} é ${letra}, e a alternativa marcada é ${correta}`)
+    }
+  }
+  const { existsSync } = await import('node:fs')
+  for (const desafio of [
+    ...enemLote5Mod.ENEM_MATEMATICA_LOTE5,
+    ...etecLote1Mod.ETEC_MATEMATICA_LOTE1,
+    ...senaiLote1Mod.SENAI_MATEMATICA_LOTE1,
+  ]) {
+    if (!desafio.chaveFigura) continue
+    const chave = desafio.chaveFigura
+    const lista =
+      chave.startsWith('etec:')
+        ? figurasEtecManifest.FIGURAS[chave]
+        : chave.startsWith('senai:')
+          ? figurasSenaiManifest.FIGURAS[chave]
+          : figurasEnemManifest.FIGURAS_ENEM[chave]
+    if (!lista || lista.length === 0) {
+      throw new Error(`chaveFigura sem entrada no manifesto: ${desafio.id} (${chave})`)
+    }
+    for (const fig of lista) {
+      const rel = fig.src.replace(/^\/+/, '')
+      const full = path.join(root, 'public', rel)
+      if (!existsSync(full)) {
+        throw new Error(`figura ausente em disco para ${desafio.id}: ${full}`)
+      }
+    }
+  }
   dicasSemGabarito.run([
     ...enemLote1Mod.ENEM_MATEMATICA_LOTE1,
+    ...enemLote2Mod.ENEM_MATEMATICA_LOTE2,
+    ...enemLote3Mod.ENEM_MATEMATICA_LOTE3,
+    ...enemLote4Mod.ENEM_MATEMATICA_LOTE4,
+    ...enemLote5Mod.ENEM_MATEMATICA_LOTE5,
+    ...etecLote1Mod.ETEC_MATEMATICA_LOTE1,
+    ...senaiLote1Mod.SENAI_MATEMATICA_LOTE1,
     ...geradoresEnemMod.GERADORES_ENEM_PARAMETRICOS.map((g) => g.reserva()),
   ])
   const repositorioEstudoTest = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/repositorioEstudo.test.ts')
@@ -124,6 +178,8 @@ try {
   memoriaMinimapas.run()
   const biomaVisual = await server.ssrLoadModule('/src/games/LogicBattle/ilha/visual/biomaVisual.test.ts')
   await biomaVisual.run()
+  const fundacaoEInimigos = await server.ssrLoadModule('/src/games/LogicBattle/ilha/visual/fundacaoEInimigos.test.ts')
+  fundacaoEInimigos.run()
   console.log('ilha-rua: ok')
 } finally {
   await server.close()

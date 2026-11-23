@@ -674,10 +674,12 @@ export const GhostBlueprintObra: React.FC<{
   x: number
   z: number
   valido: boolean
-}> = ({ tipo, x, z, valido }) => {
-  const cor = valido ? '#22c55e' : '#ef4444'
-  const corBorda = valido ? '#86efac' : '#fecaca'
+  sobreAgua?: boolean
+}> = ({ tipo, x, z, valido, sobreAgua = false }) => {
+  const cor = valido ? (sobreAgua ? '#38bdf8' : '#22c55e') : '#ef4444'
+  const corBorda = valido ? (sobreAgua ? '#bae6fd' : '#86efac') : '#fecaca'
   const dim = DIMENSOES_OBRA[tipo]
+  const ySolo = sobreAgua ? -0.36 : -0.43
 
   return (
     <group position={[x, 0, z]} name="ghost-blueprint-obra">
@@ -691,11 +693,26 @@ export const GhostBlueprintObra: React.FC<{
         opacidade={0.42}
         semColisaoRay
       />
-      {/* Base de marcação no solo */}
-      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
-        <planeGeometry args={[dim[0] + 0.35, dim[2] + 0.35]} />
-        <meshBasicMaterial color={cor} transparent opacity={0.32} depthWrite={false} />
+      {/* Base de marcação no solo ou na lâmina d'água */}
+      <mesh position={[0, ySolo, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+        <planeGeometry args={[dim[0] + 0.9, dim[2] + 0.9]} />
+        <meshBasicMaterial color={cor} transparent opacity={0.34} depthWrite={false} />
       </mesh>
+      {sobreAgua ? (
+        ([-dim[0] * 0.44, dim[0] * 0.44] as const).map((px) =>
+          ([-dim[2] * 0.44, dim[2] * 0.44] as const).map((pz) => (
+            <mesh key={`gp-${px}-${pz}`} position={[px, -0.22, pz]} raycast={semRaycast}>
+              <cylinderGeometry args={[0.09, 0.1, 0.46, 6]} />
+              <meshBasicMaterial color={corBorda} transparent opacity={0.55} depthWrite={false} />
+            </mesh>
+          )),
+        )
+      ) : (
+        <mesh position={[0, -0.22, 0]} raycast={semRaycast}>
+          <boxGeometry args={[dim[0] + 0.35, 0.44, dim[2] + 0.35]} />
+          <meshBasicMaterial color={cor} transparent opacity={0.28} depthWrite={false} />
+        </mesh>
+      )}
       <mesh position={[0, dim[1] / 2, 0]} raycast={semRaycast}>
         <boxGeometry args={[dim[0] + 0.12, dim[1] + 0.12, dim[2] + 0.12]} />
         <meshBasicMaterial color={corBorda} wireframe transparent opacity={0.85} depthWrite={false} />
@@ -736,7 +753,7 @@ export const ObraArquiteturaMesh: React.FC<{
   onPointerDown: (event: ThreeEvent<PointerEvent>) => void
   onPointerUp: (event: ThreeEvent<PointerEvent>) => void
   onClick: (event: ThreeEvent<MouseEvent>) => void
-}> = ({ obra, visivel, modoBloco, sombrasAtivas = false, onPointerDown, onPointerUp, onClick }) => {
+}> = ({ obra, visivel, modoBloco, onPointerDown, onPointerUp, onClick }) => {
   const ruina = obra.hp <= 0
   const construindo = obraEmConstrucao(obra)
   const temBlocosLivres = Boolean((obra as Obra & { blocosLivres?: readonly BlocoMundo[] }).blocosLivres?.length)
@@ -751,12 +768,12 @@ export const ObraArquiteturaMesh: React.FC<{
   if (ruina) {
     return (
       <group position={[obra.x, 0, obra.z]}>
-        <mesh position={[0, 0.16, 0]} raycast={semRaycast}>
-          <boxGeometry args={[dim[0] * 0.95, 0.32, dim[2] * 0.95]} />
+        <mesh position={[0, -0.08, 0]} raycast={semRaycast}>
+          <boxGeometry args={[dim[0] * 0.92, 0.28, dim[2] * 0.92]} />
           <meshStandardMaterial color={obra.lado === 'inimigo' ? '#292524' : '#57534e'} roughness={0.95} />
         </mesh>
-        <mesh position={[-0.35, 0.38, 0.2]} rotation={[0.2, 0.4, -0.3]} raycast={semRaycast}>
-          <boxGeometry args={[0.55, 0.35, 0.48]} />
+        <mesh position={[-0.35, 0.12, 0.2]} rotation={[0.2, 0.4, -0.3]} raycast={semRaycast}>
+          <boxGeometry args={[0.55, 0.32, 0.48]} />
           <meshStandardMaterial color="#44403c" roughness={0.95} />
         </mesh>
       </group>
@@ -780,23 +797,25 @@ export const ObraArquiteturaMesh: React.FC<{
           semColisaoRay={modoBloco}
         />
       </group>
-      {sombrasAtivas && !construindo && (
-        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow raycast={semRaycast}>
-          <circleGeometry args={[Math.max(dim[0], dim[2]) * 0.72, 16]} />
-          <meshStandardMaterial color="#0f172a" transparent opacity={0.18} depthWrite={false} />
-        </mesh>
-      )}
-      {/* Andaimes visuais durante a fase frágil de construção */}
+      {/* Andaimes visuais ancorados até o chão durante a fase de construção */}
       {construindo && (
         <group>
-          {([-dim[0] * 0.55, dim[0] * 0.55] as const).map((px) =>
-            ([-dim[2] * 0.55, dim[2] * 0.55] as const).map((pz) => (
-              <mesh key={`and-${px}-${pz}`} position={[px, dim[1] * 0.5, pz]} raycast={semRaycast}>
-                <cylinderGeometry args={[0.05, 0.05, dim[1], 6]} />
-                <meshStandardMaterial color="#d97706" />
+          {([-dim[0] * 0.56, dim[0] * 0.56] as const).map((px) =>
+            ([-dim[2] * 0.56, dim[2] * 0.56] as const).map((pz) => (
+              <mesh key={`and-${px}-${pz}`} position={[px, (dim[1] - 0.45) * 0.5, pz]} raycast={semRaycast}>
+                <cylinderGeometry args={[0.055, 0.065, dim[1] + 0.45, 6]} />
+                <meshStandardMaterial color="#92400e" roughness={0.9} />
               </mesh>
             )),
           )}
+          <mesh position={[0, dim[1] * 0.45, dim[2] * 0.56]} raycast={semRaycast}>
+            <boxGeometry args={[dim[0] * 1.18, 0.08, 0.08]} />
+            <meshStandardMaterial color="#d97706" roughness={0.85} />
+          </mesh>
+          <mesh position={[0, dim[1] * 0.45, -dim[2] * 0.56]} raycast={semRaycast}>
+            <boxGeometry args={[dim[0] * 1.18, 0.08, 0.08]} />
+            <meshStandardMaterial color="#d97706" roughness={0.85} />
+          </mesh>
         </group>
       )}
     </group>

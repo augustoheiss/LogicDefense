@@ -5,8 +5,8 @@
  *  - Graus 1..4: `generateInfiniteChallenge` (`infiniteMathEngine.ts`) com foco em temas fracos
  *    (`preferredConceptId`), adaptado para `DesafioUnificado` via `adaptarDesafioMotor` com dicas
  *    100% livres de spoiler.
- *  - Graus 5..7: Lote oficial ENEM (`enemMatematicaLote1.ts`, carregado por `import()` dinâmico
- *    em chunk separado) + 4 motores paramétricos ENEM-like (`geradoresEnem.ts`).
+ *  - Graus 5..7: Lotes oficiais ENEM (`enemMatematicaLote1.ts`, `enemMatematicaLote2.ts` e
+ *    `enemMatematicaLote3.ts` e `enemMatematicaLote4.ts`, carregados por `import()` dinâmico) + motores paramétricos ENEM-like.
  *
  * Respeita anel anti-repetição, revisão espaçada (`proximaRevisaoEmMs`), falhas de rede/chunk
  * (cai para os motores paramétricos) e treino direcionado pelo botão "Treinar agora" do Caderno.
@@ -68,8 +68,24 @@ let cacheEnemLote1: Promise<readonly DesafioUnificado[]> | null = null
 
 export function carregarEnemLote1Lazy(): Promise<readonly DesafioUnificado[]> {
   if (!cacheEnemLote1) {
-    cacheEnemLote1 = import('./bancos/enemMatematicaLote1')
-      .then((mod) => mod.ENEM_MATEMATICA_LOTE1)
+    cacheEnemLote1 = Promise.all([
+      import('./bancos/enemMatematicaLote1'),
+      import('./bancos/enemMatematicaLote2'),
+      import('./bancos/enemMatematicaLote3'),
+      import('./bancos/enemMatematicaLote4'),
+      import('./bancos/enemMatematicaLote5'),
+      import('./bancos/etecMatematicaLote1'),
+      import('./bancos/senaiMatematicaLote1'),
+    ])
+      .then(([lote1, lote2, lote3, lote4, lote5, etec1, senai1]) => [
+        ...lote1.ENEM_MATEMATICA_LOTE1,
+        ...lote2.ENEM_MATEMATICA_LOTE2,
+        ...lote3.ENEM_MATEMATICA_LOTE3,
+        ...lote4.ENEM_MATEMATICA_LOTE4,
+        ...lote5.ENEM_MATEMATICA_LOTE5,
+        ...etec1.ETEC_MATEMATICA_LOTE1,
+        ...senai1.SENAI_MATEMATICA_LOTE1,
+      ])
       .catch(() => {
         cacheEnemLote1 = null
         return [] as readonly DesafioUnificado[]
@@ -86,7 +102,7 @@ export interface OpcoesSelecaoQuestao {
   readonly grau: GrauDificuldade
   readonly estadoEstudo: EstadoEstudoLocal
   readonly temaPreferido?: string | null
-  readonly preferirOrigem?: 'auto' | 'enem_oficial' | 'motor_parametrico'
+  readonly preferirOrigem?: 'auto' | 'enem_oficial' | 'senai_oficial' | 'etec_oficial' | 'motor_parametrico'
   readonly assinaturasVistas?: ReadonlySet<string> | readonly string[]
   readonly arquetiposRecentes?: readonly string[]
   readonly seed?: number
@@ -201,7 +217,16 @@ export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Pr
     }
   }
 
-  const doGrauEnem = bancoEnem.filter((d) => d.grau === opcoes.grau)
+  const origemExplicitaOficial =
+    opcoes.preferirOrigem === 'enem_oficial' ||
+    opcoes.preferirOrigem === 'senai_oficial' ||
+    opcoes.preferirOrigem === 'etec_oficial'
+      ? opcoes.preferirOrigem
+      : null
+
+  const doGrauEnem = bancoEnem.filter(
+    (d) => d.grau === opcoes.grau && (!origemExplicitaOficial || d.origem === origemExplicitaOficial),
+  )
   const elegiveisEnem = doGrauEnem.filter((d) => {
     if (vistosSet.has(d.assinatura)) return false
     if (ultimoArquetipo && d.arquetipoOuItemId === ultimoArquetipo) return false
@@ -227,7 +252,7 @@ export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Pr
 
   const deveUsarMotor =
     opcoes.preferirOrigem === 'motor_parametrico' ||
-    (opcoes.preferirOrigem !== 'enem_oficial' &&
+    (!origemExplicitaOficial &&
       ((elegiveisEnem.length === 0 && temMotorFresco) ||
         (elegiveisEnem.length > 0 &&
           temMotorFresco &&
