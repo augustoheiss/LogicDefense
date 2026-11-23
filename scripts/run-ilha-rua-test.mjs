@@ -120,6 +120,10 @@ try {
   cameraImperio.run()
   const gestaoObra = await server.ssrLoadModule('/src/games/LogicBattle/ilha/gestaoObra.test.ts')
   gestaoObra.run()
+  const memoriaMinimapas = await server.ssrLoadModule('/src/games/LogicBattle/ilha/memoriaMinimapas.test.ts')
+  memoriaMinimapas.run()
+  const biomaVisual = await server.ssrLoadModule('/src/games/LogicBattle/ilha/visual/biomaVisual.test.ts')
+  await biomaVisual.run()
   console.log('ilha-rua: ok')
 } finally {
   await server.close()

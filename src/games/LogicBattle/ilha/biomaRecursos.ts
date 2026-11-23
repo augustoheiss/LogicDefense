@@ -1,6 +1,7 @@
+import { camadaDoMapa } from './camadaDoMapa'
 import { producaoNoNivel } from './evolucaoObra'
 
-export type BiomaId = 'clareira' | 'bosque' | 'serra_ouro' | 'ribeira'
+export type BiomaId = 'clareira' | 'bosque' | 'serra_ouro' | 'ribeira' | 'tundra_cristal' | 'basalto_brasa'
 
 export interface RecursoNatural {
   id: number
@@ -44,14 +45,27 @@ function hashInt(a: number, b: number, sal: number): number {
 
 export function biomaDoQuadrado(i: number, j: number): BiomaId {
   if (i === 0 && j === 0) return 'clareira'
-  const opcoes: readonly BiomaId[] = ['bosque', 'serra_ouro', 'ribeira', 'clareira']
-  return opcoes[hashInt(i, j, 0x1047) % opcoes.length]
+  if (camadaDoMapa(i, j) <= 1) {
+    const opcoesCamada1: readonly BiomaId[] = ['bosque', 'serra_ouro', 'ribeira', 'clareira']
+    return opcoesCamada1[hashInt(i, j, 0x1047) % opcoesCamada1.length]
+  }
+  const opcoesAvancadas: readonly BiomaId[] = [
+    'bosque',
+    'serra_ouro',
+    'ribeira',
+    'clareira',
+    'tundra_cristal',
+    'basalto_brasa',
+  ]
+  return opcoesAvancadas[hashInt(i, j, 0x1047) % opcoesAvancadas.length]
 }
 
 export function corDoChaoBioma(bioma: BiomaId): string {
   if (bioma === 'bosque') return '#4d7c4f'
   if (bioma === 'serra_ouro') return '#8c8265'
   if (bioma === 'ribeira') return '#65946e'
+  if (bioma === 'tundra_cristal') return '#cbd5e1'
+  if (bioma === 'basalto_brasa') return '#3f3c42'
   return '#7f9b72'
 }
 
@@ -75,9 +89,38 @@ export function gerarPaisagemBioma(
   const lagoas: LagoaRasa[] = []
   let nextId = startId
 
-  const qtdArvores = bioma === 'bosque' ? 16 : bioma === 'ribeira' ? 10 : bioma === 'clareira' ? 8 : 5
-  const qtdOuro = bioma === 'serra_ouro' ? 8 : bioma === 'clareira' ? 3 : 4
-  const qtdLagoas = bioma === 'ribeira' ? 3 : bioma === 'bosque' ? 1 : i === 0 && j === 0 ? 1 : 0
+  const qtdArvores =
+    bioma === 'bosque'
+      ? 16
+      : bioma === 'ribeira'
+        ? 10
+        : bioma === 'clareira'
+          ? 8
+          : bioma === 'tundra_cristal'
+            ? 7
+            : bioma === 'basalto_brasa'
+              ? 4
+              : 5
+  const qtdOuro =
+    bioma === 'basalto_brasa'
+      ? 9
+      : bioma === 'serra_ouro'
+        ? 8
+        : bioma === 'tundra_cristal'
+          ? 5
+          : bioma === 'clareira'
+            ? 3
+            : 4
+  const qtdLagoas =
+    bioma === 'ribeira'
+      ? 3
+      : bioma === 'tundra_cristal'
+        ? 2
+        : bioma === 'bosque' || bioma === 'basalto_brasa'
+          ? 1
+          : i === 0 && j === 0
+            ? 1
+            : 0
 
   for (let k = 0; k < qtdLagoas; k++) {
     const h1 = hashInt(i * 31 + k, j * 17 - k, 0x77aa11)

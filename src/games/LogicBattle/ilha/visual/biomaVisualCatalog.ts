@@ -1,0 +1,291 @@
+import type { BiomaId } from '../biomaRecursos'
+
+export type CopaFormato = 'redonda' | 'pinheiro' | 'retorcida' | 'nevada' | 'petrificada'
+
+export interface BiomaVisualResource {
+  readonly id: BiomaId
+  readonly nome: string
+  readonly subtitulo: string
+  readonly ceuTopo: string
+  readonly ceuHorizonte: string
+  readonly corSol: string
+  readonly intensidadeSol: number
+  readonly posicaoSol: readonly [number, number, number]
+  readonly luzCeu: string
+  readonly luzChao: string
+  readonly intensidadeHemisf: number
+  readonly fogCor: string
+  readonly fogNearCorpo: number
+  readonly fogFarCorpo: number
+  readonly fogNearImperio: number
+  readonly fogFarImperio: number
+  readonly soloCorBase: string
+  readonly soloCorDetalhe: string
+  readonly estradaCorBase: string
+  readonly estradaCorRejunte: string
+  readonly margemCorBase: string
+  readonly aguaCorRasa: string
+  readonly aguaCorFunda: string
+  readonly aguaEspumaCor: string
+  readonly aguaCongelada: boolean
+  readonly aguaEmissiva: boolean
+  readonly troncoCor: string
+  readonly copaCorPrimaria: string
+  readonly copaCorSecundaria: string
+  readonly copaFormato: CopaFormato
+  readonly rochaCor: string
+  readonly ouroCor: string
+  readonly ouroEmissivo: string
+  readonly gramaCorBase: string
+  readonly gramaCorPonta: string
+  readonly coresFlores: readonly [string, string, string]
+  readonly densidadeGrama: number
+  readonly densidadeFlores: number
+}
+
+export const BIOMA_VISUAL_CATALOG: Readonly<Record<BiomaId, BiomaVisualResource>> = {
+  clareira: {
+    id: 'clareira',
+    nome: 'Clareira do Pioneiro',
+    subtitulo: 'Prado dourado com estrada antiga e lagoa cristalina',
+    ceuTopo: '#38bdf8',
+    ceuHorizonte: '#bae6fd',
+    corSol: '#fff5d6',
+    intensidadeSol: 1.55,
+    posicaoSol: [26, 38, 18],
+    luzCeu: '#e0f2fe',
+    luzChao: '#4d6b41',
+    intensidadeHemisf: 0.72,
+    fogCor: '#cbe8f8',
+    fogNearCorpo: 34,
+    fogFarCorpo: 98,
+    fogNearImperio: 72,
+    fogFarImperio: 165,
+    soloCorBase: '#5c8a47',
+    soloCorDetalhe: '#436c33',
+    estradaCorBase: '#94a3b8',
+    estradaCorRejunte: '#475569',
+    margemCorBase: '#d6be8a',
+    aguaCorRasa: '#38bdf8',
+    aguaCorFunda: '#0369a1',
+    aguaEspumaCor: '#e0f2fe',
+    aguaCongelada: false,
+    aguaEmissiva: false,
+    troncoCor: '#7c4a24',
+    copaCorPrimaria: '#15803d',
+    copaCorSecundaria: '#4ade80',
+    copaFormato: 'redonda',
+    rochaCor: '#64748b',
+    ouroCor: '#facc15',
+    ouroEmissivo: '#ca8a04',
+    gramaCorBase: '#3f6f2e',
+    gramaCorPonta: '#84cc16',
+    coresFlores: ['#fde047', '#f8fafc', '#60a5fa'],
+    densidadeGrama: 1.0,
+    densidadeFlores: 1.0,
+  },
+  bosque: {
+    id: 'bosque',
+    nome: 'Bosque Ancestral',
+    subtitulo: 'Pinheiros densos, solo de musgo e neblina esmeralda',
+    ceuTopo: '#1e6b6b',
+    ceuHorizonte: '#99d5c9',
+    corSol: '#d9f99d',
+    intensidadeSol: 1.32,
+    posicaoSol: [20, 34, 24],
+    luzCeu: '#bbf7d0',
+    luzChao: '#1f3d2b',
+    intensidadeHemisf: 0.68,
+    fogCor: '#a7d7c5',
+    fogNearCorpo: 26,
+    fogFarCorpo: 82,
+    fogNearImperio: 68,
+    fogFarImperio: 155,
+    soloCorBase: '#385f3d',
+    soloCorDetalhe: '#254329',
+    estradaCorBase: '#6b7280',
+    estradaCorRejunte: '#374151',
+    margemCorBase: '#8c7a5b',
+    aguaCorRasa: '#2dd4bf',
+    aguaCorFunda: '#115e59',
+    aguaEspumaCor: '#ccfbf1',
+    aguaCongelada: false,
+    aguaEmissiva: false,
+    troncoCor: '#5c3419',
+    copaCorPrimaria: '#14532d',
+    copaCorSecundaria: '#16a34a',
+    copaFormato: 'pinheiro',
+    rochaCor: '#475569',
+    ouroCor: '#facc15',
+    ouroEmissivo: '#a16207',
+    gramaCorBase: '#1e4625',
+    gramaCorPonta: '#4ade80',
+    coresFlores: ['#a7f3d0', '#fef08a', '#c4b5fd'],
+    densidadeGrama: 1.15,
+    densidadeFlores: 0.85,
+  },
+  serra_ouro: {
+    id: 'serra_ouro',
+    nome: 'Serra do Ouro',
+    subtitulo: 'Cânion dourado ao entardecer com veios metálicos',
+    ceuTopo: '#c2410c',
+    ceuHorizonte: '#fed7aa',
+    corSol: '#fde68a',
+    intensidadeSol: 1.68,
+    posicaoSol: [-32, 26, 22],
+    luzCeu: '#ffedd5',
+    luzChao: '#61482c',
+    intensidadeHemisf: 0.66,
+    fogCor: '#f5cfa0',
+    fogNearCorpo: 34,
+    fogFarCorpo: 100,
+    fogNearImperio: 74,
+    fogFarImperio: 168,
+    soloCorBase: '#9c7c52',
+    soloCorDetalhe: '#6e5232',
+    estradaCorBase: '#a8a29e',
+    estradaCorRejunte: '#57534e',
+    margemCorBase: '#d4b483',
+    aguaCorRasa: '#38bdf8',
+    aguaCorFunda: '#0284c7',
+    aguaEspumaCor: '#fef3c7',
+    aguaCongelada: false,
+    aguaEmissiva: false,
+    troncoCor: '#6b4226',
+    copaCorPrimaria: '#718329',
+    copaCorSecundaria: '#a3a635',
+    copaFormato: 'retorcida',
+    rochaCor: '#78716c',
+    ouroCor: '#fbbf24',
+    ouroEmissivo: '#d97706',
+    gramaCorBase: '#7c6a2e',
+    gramaCorPonta: '#ca8a04',
+    coresFlores: ['#fb923c', '#fde047', '#fef3c7'],
+    densidadeGrama: 0.48,
+    densidadeFlores: 0.35,
+  },
+  ribeira: {
+    id: 'ribeira',
+    nome: 'Ribeira Cristalina',
+    subtitulo: 'Várzea fértil repleta de lagoas e vitórias-régias',
+    ceuTopo: '#0284c7',
+    ceuHorizonte: '#bae6fd',
+    corSol: '#ffffff',
+    intensidadeSol: 1.48,
+    posicaoSol: [22, 42, -16],
+    luzCeu: '#e0f2fe',
+    luzChao: '#3d6952',
+    intensidadeHemisf: 0.78,
+    fogCor: '#bfe9f7',
+    fogNearCorpo: 34,
+    fogFarCorpo: 102,
+    fogNearImperio: 74,
+    fogFarImperio: 170,
+    soloCorBase: '#4d8a64',
+    soloCorDetalhe: '#356649',
+    estradaCorBase: '#9ca3af',
+    estradaCorRejunte: '#4b5563',
+    margemCorBase: '#e2cc9c',
+    aguaCorRasa: '#22d3ee',
+    aguaCorFunda: '#0e7490',
+    aguaEspumaCor: '#ecfeff',
+    aguaCongelada: false,
+    aguaEmissiva: false,
+    troncoCor: '#6b4423',
+    copaCorPrimaria: '#0d9488',
+    copaCorSecundaria: '#34d399',
+    copaFormato: 'redonda',
+    rochaCor: '#64748b',
+    ouroCor: '#facc15',
+    ouroEmissivo: '#ca8a04',
+    gramaCorBase: '#2d6a4f',
+    gramaCorPonta: '#52b788',
+    coresFlores: ['#f472b6', '#ffffff', '#fde047'],
+    densidadeGrama: 1.05,
+    densidadeFlores: 1.2,
+  },
+  tundra_cristal: {
+    id: 'tundra_cristal',
+    nome: 'Tundra Cristal',
+    subtitulo: 'Neve cintilante, lagos congelados e ouro glacial',
+    ceuTopo: '#312e81',
+    ceuHorizonte: '#a5f3fc',
+    corSol: '#e0f2fe',
+    intensidadeSol: 1.45,
+    posicaoSol: [28, 28, -24],
+    luzCeu: '#dbeafe',
+    luzChao: '#64748b',
+    intensidadeHemisf: 0.8,
+    fogCor: '#cffafe',
+    fogNearCorpo: 30,
+    fogFarCorpo: 94,
+    fogNearImperio: 70,
+    fogFarImperio: 162,
+    soloCorBase: '#dbeafe',
+    soloCorDetalhe: '#94a3b8',
+    estradaCorBase: '#94a3b8',
+    estradaCorRejunte: '#475569',
+    margemCorBase: '#bae6fd',
+    aguaCorRasa: '#67e8f9',
+    aguaCorFunda: '#0284c7',
+    aguaEspumaCor: '#f8fafc',
+    aguaCongelada: true,
+    aguaEmissiva: false,
+    troncoCor: '#475569',
+    copaCorPrimaria: '#0f766e',
+    copaCorSecundaria: '#e0f2fe',
+    copaFormato: 'nevada',
+    rochaCor: '#64748b',
+    ouroCor: '#7dd3fc',
+    ouroEmissivo: '#0284c7',
+    gramaCorBase: '#94a3b8',
+    gramaCorPonta: '#e0f2fe',
+    coresFlores: ['#38bdf8', '#f8fafc', '#a78bfa'],
+    densidadeGrama: 0.3,
+    densidadeFlores: 0.4,
+  },
+  basalto_brasa: {
+    id: 'basalto_brasa',
+    nome: 'Basalto Brasa',
+    subtitulo: 'Terras vulcânicas de obsidiana e fendas ferventes',
+    ceuTopo: '#450a0a',
+    ceuHorizonte: '#ea580c',
+    corSol: '#fdba74',
+    intensidadeSol: 1.5,
+    posicaoSol: [-26, 30, -20],
+    luzCeu: '#fed7aa',
+    luzChao: '#27272a',
+    intensidadeHemisf: 0.62,
+    fogCor: '#7c2d12',
+    fogNearCorpo: 28,
+    fogFarCorpo: 88,
+    fogNearImperio: 68,
+    fogFarImperio: 158,
+    soloCorBase: '#3f3c42',
+    soloCorDetalhe: '#1f1d24',
+    estradaCorBase: '#52525b',
+    estradaCorRejunte: '#f97316',
+    margemCorBase: '#27272a',
+    aguaCorRasa: '#fb923c',
+    aguaCorFunda: '#9a3412',
+    aguaEspumaCor: '#fef08a',
+    aguaCongelada: false,
+    aguaEmissiva: true,
+    troncoCor: '#27272a',
+    copaCorPrimaria: '#57534e',
+    copaCorSecundaria: '#f97316',
+    copaFormato: 'petrificada',
+    rochaCor: '#18181b',
+    ouroCor: '#fbbf24',
+    ouroEmissivo: '#ea580c',
+    gramaCorBase: '#44403c',
+    gramaCorPonta: '#f97316',
+    coresFlores: ['#fb923c', '#fde047', '#ef4444'],
+    densidadeGrama: 0.25,
+    densidadeFlores: 0.3,
+  },
+}
+
+export function nomeDoBioma(bioma: BiomaId): string {
+  return BIOMA_VISUAL_CATALOG[bioma].nome
+}
