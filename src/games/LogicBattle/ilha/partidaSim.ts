@@ -60,6 +60,14 @@ import {
   TEMPO_CONSTRUCAO,
   type GrauConta,
 } from './partidaPolicies'
+import { alcanceDaTorreNoNivel, custoDeEvoluir, danoDaTorreNoNivel, fatorDoNivel, nivelDaBaseInimiga, quantidadeDaLevaNaOnda, tropaVidaNoNivel, vidaMaximaNoNivel } from './evolucaoObra'
+
+export { nivelDaBaseInimiga }
+
+/** Quantos inimigos a leva da onda `onda` traz: 4 na primeira e depois 1, 2 ou 3 conforme o nível da base inimiga (a tabela, `evolucaoObra.ts`). O teto de 12 inimigos vivos é aplicado por `passoOnda`. */
+export function quantidadeDaLeva(onda: number): number {
+  return quantidadeDaLevaNaOnda(onda, PARTIDA.levaPrimeira, PARTIDA.levaSeguinte)
+}
 import {
   afastarDeFortalezaNv5,
   bateObraUniversal,
@@ -207,6 +215,17 @@ export interface PartidaState {
   madeira: number
   ouro: number
   relogioExtracao: number
+  /**
+   * A fração de madeira e ouro que a produção por nível deixou para o próximo ciclo (a serraria do nível 3 com árvore rende 4,5 por ciclo, e o estoque é inteiro). Ausente = 0: o jogo sem obras evoluídas é o de
+   * sempre. Vive no estado (a simulação continua pura e determinística) e é lido e escrito só por `passoRecursosNaturais`.
+   */
+  restoExtracao?: { madeira: number; ouro: number }
+  /**
+   * HÁ outra base NOSSA viva em OUTRO mapa do atlas (pedido do usuário, 23/11: «se você perder a base em outro minimapa, mesmo tendo a sua base forte no seu minimapa inicial, você perde o jogo inteiro»). Escrito SÓ pelo
+   * atlas, que enxerga todas as fichas; a partida sozinha não sabe de outros mapas. Ligado, a queda do núcleo DESTE mapa não decreta a derrota (a regra do usuário de 20/11: derrota = nenhum núcleo nosso em NENHUM quadrado).
+   * Ausente ou falso = partida isolada (um mapa só, todo teste antigo): a queda do núcleo encerra, como sempre foi.
+   */
+  outraBaseViva?: boolean
   versaoRecursos: number
   subsoloCentro: { x: number; z: number } | null
   blocosMapa: Record<string, BlocoMundo>
@@ -306,9 +325,13 @@ export const CELULAS_DO_DISCO: readonly { x: number; z: number; i: number }[] = 
   return lista
 })()
 
+/**
+ * O raio de visão de uma obra. A da TORRE é o próprio alcance dela (`alcanceDaTorre`: 22 m no nível 1, +2 m por nível), em uma fonte só: pedido do usuário (23/11) «a torre atira mesmo sem eu ver, porque a visão dela é
+ * maior» e a escolha dele de que evoluir aumenta alcance E visão. A torre nunca atira no que não enxerga, e a nuvem que ela abre cresce com o nível.
+ */
 function raioDaObra(obra: Obra): number {
   if (obraEmConstrucao(obra)) return PARTIDA.visao.obra
-  return obra.tipo === 'torre' ? PARTIDA.visao.torre : PARTIDA.visao.obra
+  return obra.tipo === 'torre' ? alcanceDaTorre(obra) : PARTIDA.visao.obra
 }
 
 const cacheAlturasLoS = new WeakMap<PartidaState, Map<string, number>>()
@@ -419,8 +442,9 @@ export function inimigoVisivel(state: PartidaState, unidade: Unidade): boolean {
   return dentroDaUniao(state, unidade.x, unidade.z)
 }
 
+/** O alcance da torre, em metros, vem da tabela de evolução (`alcanceDaTorreNoNivel`): 22 m no nível 1 (a visão dela, mais que os 18 m do tiro do herói) e +2 m por nível. A torre INIMIGA e a NOSSA usam a mesma regra. */
 export function alcanceDaTorre(torre: Obra): number {
-  return PARTIDA.torreAlcance + (torre.nivel - 1) * 2
+  return alcanceDaTorreNoNivel(torre.nivel)
 }
 
 export function marcadoPelaTorre(state: PartidaState, unidade: Unidade): boolean {
@@ -440,7 +464,7 @@ export function marcadoPelaTorre(state: PartidaState, unidade: Unidade): boolean
       return false
     }
     if (
-      Math.hypot(unidade.x - torre.x, unidade.z - torre.z) <= PARTIDA.visao.torre &&
+      Math.hypot(unidade.x - torre.x, unidade.z - torre.z) <= alcance &&
       visaoLivreNoEstado(state, torre.x, torre.z, cota, unidade.x, unidade.z, 0)
     ) {
       noOlho = true
@@ -1019,8 +1043,11 @@ export function podeEvoluir(state: PartidaState, obraId: number): { ok: boolean;
   if (!obra || obra.hp <= 0 || !nossa(obra)) return { ok: false, codigo: 'inexistente', motivo: 'Obra não encontrada' }
   if (obraEmConstrucao(obra)) return { ok: false, codigo: 'construcao', motivo: 'Aguarde concluir a construção antes de evoluir' }
   if (obra.nivel >= PARTIDA.nivelMaximoObra) return { ok: false, codigo: 'maximo', motivo: 'Construção já está no Nível 5 (máximo)' }
-  const usaCredito = state.credito >= PARTIDA.custoEvoluirCredito
-  const usaRecursos = state.madeira >= PARTIDA.custoEvoluirMadeira && state.ouro >= PARTIDA.custoEvoluirOuro
+  // O preço vem da tabela (`custoDeEvoluir`, 1,5× por nível): a MESMA que o painel e a lista leem. `null` só no nível máximo, já tratado acima.
+  const preco = custoDeEvoluir(obra.nivel)
+  if (!preco) return { ok: false, codigo: 'maximo', motivo: 'Construção já está no Nível 5 (máximo)' }
+  const usaCredito = state.credito >= preco.credito
+  const usaRecursos = state.madeira >= preco.madeira && state.ouro >= preco.ouro
   if (!usaCredito && !usaRecursos) return { ok: false, codigo: 'recurso', motivo: 'Falta licença ou recursos para evoluir' }
   const viraFortaleza = obra.nivel + 1 >= 5 && !obra.blocosLivres?.length && !obra.blocosNv5
   if (viraFortaleza && !fortalezaNv5Cabe(state, obra)) {
@@ -1034,15 +1061,18 @@ export function evoluir(state: PartidaState, obraId: number): PartidaState {
   const obra = state.obras.find((item) => item.id === obraId && item.hp > 0 && nossa(item) && !obraEmConstrucao(item))
   if (!obra || obra.nivel >= PARTIDA.nivelMaximoObra) return state
   if (!podeEvoluir(state, obraId).ok) return state
-  const usaCredito = state.credito >= PARTIDA.custoEvoluirCredito
-  const usaRecursos = state.madeira >= PARTIDA.custoEvoluirMadeira && state.ouro >= PARTIDA.custoEvoluirOuro
+  const preco = custoDeEvoluir(obra.nivel)
+  if (!preco) return state
+  const usaCredito = state.credito >= preco.credito
+  const usaRecursos = state.madeira >= preco.madeira && state.ouro >= preco.ouro
   if (!usaCredito && !usaRecursos) return state
   const novoNivel = obra.nivel + 1
-  const bonusHp = novoNivel >= 4 ? (novoNivel === 5 ? 50 : 30) : 0
   const viraFortalezaNv5 = novoNivel >= 5 && !obra.blocosLivres?.length
   const obras = state.obras.map((item) => {
     if (item.id !== obraId) return item
-    const novoMax = item.maxHp + bonusHp
+    // A vida máxima do novo nível sai da tabela (1,5× por nível), a partir da vida do NÍVEL 1: a obra guarda só a do nível atual, então a base é a atual dividida pelo fator do nível atual (o inverso exato da
+    // tabela). Uma obra nunca ganha menos vida ao evoluir.
+    const novoMax = Math.max(item.maxHp, vidaMaximaNoNivel(item.maxHp / fatorDoNivel(item.nivel), novoNivel))
     return {
       ...item,
       nivel: novoNivel,
@@ -1072,9 +1102,9 @@ export function evoluir(state: PartidaState, obraId: number): PartidaState {
   }
   return {
     ...state,
-    credito: usaCredito ? state.credito - PARTIDA.custoEvoluirCredito : state.credito,
-    madeira: usaCredito ? state.madeira : state.madeira - PARTIDA.custoEvoluirMadeira,
-    ouro: usaCredito ? state.ouro : state.ouro - PARTIDA.custoEvoluirOuro,
+    credito: usaCredito ? state.credito - preco.credito : state.credito,
+    madeira: usaCredito ? state.madeira : state.madeira - preco.madeira,
+    ouro: usaCredito ? state.ouro : state.ouro - preco.ouro,
     obras,
     heroi,
     unidades,
@@ -1527,7 +1557,8 @@ export function criarTropa(state: PartidaState, obraId: number): PartidaState {
     papel: 'tropa',
     x: spawn.x,
     z: spawn.z,
-    hp: 16,
+    // A tropa nasce com a vida do NÍVEL da obra que a recruta (quartel ou núcleo): 16 no nível 1, como era; 1,5× por nível (`tropaVidaNoNivel`).
+    hp: tropaVidaNoNivel(obra.nivel),
     postura: 'vigia',
     posturaBase: 'vigia',
     ordem: null,
@@ -1647,7 +1678,13 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
       ...unidade,
       postura: 'ordens' as const,
       posturaBase,
-      ordem: { tipo: 'mover' as const, x: destino.x, z: destino.z },
+      ordem: {
+        tipo: 'mover' as const,
+        x: destino.x,
+        z: destino.z,
+        // M5: a intenção de ir ALÉM do mapa sobrevive ao `puxaLimite` da formação (a mesma régua do herói em `transferir`: 56 já é fora). Sem isso o atlas nunca saberia que a tropa quer passar.
+        ...(Math.abs(ordem.x) >= PARTIDA.radius || Math.abs(ordem.z) >= PARTIDA.radius ? { alem: { x: ordem.x, z: ordem.z } } : {}),
+      },
       rota: {
         marcos: marcos ?? [],
         renovarEm: state.tempo + PARTIDA.recalcularSeg,
@@ -1832,7 +1869,9 @@ function crescerBaseInimiga(state: PartidaState, numero: number): PartidaState {
     tipo,
     x,
     z,
-    nivel: 1,
+    // O NÍVEL DA TABELA do estágio (1 a 5, sobe a cada 3 ondas): a torre inimiga atira com o dano e o alcance dele. O `nivel` do NÚCLEO segue marcando o estágio inteiro (acima); a vida da peça NÃO muda com o nível
+    // (o M2 fixa 50 e 40 vezes o fator de camada): 23/11, pedido do usuário «os inimigos da base inimiga também devem evoluir».
+    nivel: nivelDaBaseInimiga(numero),
     hp,
     maxHp: hp,
     gateApplied: false,
@@ -3144,7 +3183,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     const torre = obras.find((item) => item.id === torreId)
     if (!torre || torre.tipo !== 'torre' || torre.hp <= 0 || torre.cooldown > 0 || obraEmConstrucao(torre)) continue
     const alcance = alcanceDaTorre(torre)
-    const danoTorre = PARTIDA.torreDano + torre.nivel
+    const danoTorre = danoDaTorreNoNivel(torre.nivel)
     const cotaTorre = cotaVisaoTorreBlocos(torre.nivel)
 
     // 1º: Prioridade tática máxima — abater em 1 tiro qualquer construção rival ainda em andaime no alcance (respeitando LoS 2.5D)!
@@ -3189,7 +3228,9 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     }
     if (id !== null) {
       jaAlvo.add(id)
-      if (id === -1) army = clampVidaPartida(army - danoTorre)
+      // A vida do HERÓI é um inteiro (`clampVidaPartida` faz `floor`, o HUD mostra o número exato). O dano da torre agora é fracionário a partir do nível 3 (13,5), e `army − 13,5` com `floor` já tiraria 14 por acaso
+      // do arredondamento: o `ceil` explícito diz a regra em voz alta (um golpe nunca tira «meio ponto» a menos) e não depende do `floor` de outra função. Unidades e obras têm vida fracionária: o dano vale inteiro.
+      if (id === -1) army = clampVidaPartida(army - Math.ceil(danoTorre))
       else fere(id, danoTorre)
       obras = obras.map((item) => (item.id === torre.id ? { ...item, cooldown: PARTIDA.torreCooldown } : item))
       continue
@@ -3268,7 +3309,7 @@ function passoOnda(state: PartidaState, dt: number): PartidaState {
   const dragao = numero % 3 === 0 && numero !== 1
   if (dragao) return crescerBaseInimiga(nascerDragaoDaLeva({ ...state, ondaRelogio: 0, ondaNumero: numero }), numero)
   const saida = saidaDaBase(inimigo, alvoDaSaida(state, inimigo))
-  const quantidade = numero === 1 ? PARTIDA.levaPrimeira : PARTIDA.levaSeguinte
+  const quantidade = quantidadeDaLeva(numero)
   const bloqueios = bloqueiosDe(state)
   const hp = vidaDaLeva(numero, fatorDoEstado(state))
   const novos: Unidade[] = []
@@ -3307,6 +3348,8 @@ function checaDerrota(antes: PartidaState, state: PartidaState): PartidaState {
   const nucleo = nucleoNosso(state.obras, false)
   const caiuAgora = nucleoAntes !== undefined && nucleoAntes.hp > 0 && nucleo !== undefined && nucleo.hp <= 0
   if (!caiuAgora) return state
+  // Com outra base nossa viva em outro mapa (o atlas escreve `outraBaseViva`), perder ESTA não encerra o jogo: só cai a ÚLTIMA base. O herói morto (vida 0, acima) segue sendo derrota: a ressurreição (L4) é outra fatia.
+  if (state.outraBaseViva === true) return state
   return { ...state, derrota: true }
 }
 
@@ -3324,7 +3367,7 @@ function passoCurto(state: PartidaState, input: PartidaInput, dt: number): Parti
   const minas = atual.obras.filter(
     (o) => nossa(o) && o.tipo === 'mina' && o.hp > 0 && !obraEmConstrucao(o),
   )
-  const eco = passoRecursosNaturais(atual.recursos, serrarias, minas, atual.relogioExtracao, dt)
+  const eco = passoRecursosNaturais(atual.recursos, serrarias, minas, atual.relogioExtracao, dt, atual.restoExtracao)
 
   atual = {
     ...atual,
@@ -3333,6 +3376,7 @@ function passoCurto(state: PartidaState, input: PartidaInput, dt: number): Parti
     madeira: atual.madeira + eco.ganhoMadeira,
     ouro: atual.ouro + eco.ganhoOuro,
     relogioExtracao: eco.relogioExtracao,
+    restoExtracao: eco.restos,
     versaoRecursos: eco.mudouMalha ? atual.versaoRecursos + 1 : atual.versaoRecursos,
     heroi: { ...atual.heroi, shootCooldown: Math.max(0, atual.heroi.shootCooldown - dt) },
   }

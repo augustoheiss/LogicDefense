@@ -4,7 +4,9 @@ import {
   Atlas,
   atualizarAlerta,
   colocarHeroi,
+  converterUnidadeDeMapa,
   criarAtlas,
+  ladoDaTravessia,
   definirPoliticaMinimapas,
   donoDoMapa,
   escreverCena,
@@ -196,9 +198,25 @@ export function run(): void {
   const caiuLonge = fichaEm(passeio, 0, 0)!
   assert(nasceuNaBase && marchou, 'a leva nasce na base real e marcha antes de atacar')
   assert(caiuLonge.state.obras.find((obra) => obra.id === nucleoReal.id)?.hp === 0 && caiuLonge.alerta === 'vermelho', 'a leva real destrói a base remota e avisa')
-  assert(!caiuLonge.state.derrota && !estadoCorpo(passeio).derrota, 'a ruína sem corpo não derrota o jogador no vizinho')
+  // REGRA MUDOU (23/11, pedido do usuário + a decisão dele de 20/11: «derrota = nenhum núcleo nosso em NENHUM quadrado»). Antes (22/11) este caso afirmava que a ruína da única base, longe do herói, NÃO derrotava («a ruína sem
+  // corpo não derrota o jogador no vizinho»): a ficha remota não tinha o corpo e a partida só olhava o próprio mapa. Agora o atlas enxerga TODOS os mapas: o herói está vivo no vizinho, mas a ÚNICA base que o jogador
+  // tinha caiu e não resta núcleo nosso em nenhum quadrado: o jogo acaba (a base é o coração: sem ela não há onde ressuscitar). O que continua valendo é que a ficha remota NÃO decreta a derrota sozinha: quem decreta é o atlas.
+  assert(!caiuLonge.state.derrota, 'a ruína da ficha remota não carrega a derrota dentro de si (quem decreta é o atlas, que enxerga todos os mapas)')
+  assert(estadoCorpo(passeio).derrota === true, 'caiu a ÚLTIMA base (nenhum núcleo nosso em nenhum quadrado): o jogo acaba, mesmo com o herói vivo longe')
+  // O resto deste caso (a ficha da ruína persiste sob a pressão dos residentes) NÃO é sobre a derrota: refaz o passeio com uma SEGUNDA base nossa longe, em (3, 1), que a leva não alcança, para o jogo seguir vivo.
+  // A base longe é fundada com o herói PRESENTE (`semCorpo: false`): sem corpo o jogo recusa fundar em chão não revelado («Explore a neblina antes de construir aqui»). Só depois a ficha vira `semCorpo`, como as de fora do corpo.
+  // Cada mapa tem a SUA base inimiga e a sua leva (a `createPartida` planta uma em todo mapa): medido por `diag-ficha-longe.mjs`, a leva de (3,1) destruiu a base de lá em 30 s, ANTES da de (0,0). A base longe fica forte (5.000) e a
+  // base inimiga de lá é silenciada: o caso é «uma segunda base viva» e não a defesa dela.
+  const baseLongeBruta = fundar({ ...createPartida(), unidades: [] }, 'nucleo', -30, -30)
+  const baseLonge = { ...baseLongeBruta, semCorpo: true, obras: baseLongeBruta.obras.map((obra) => (obra.lado === 'nosso' ? { ...obra, hp: 5000, maxHp: 5000 } : { ...obra, cooldown: 1e9 })) }
+  assert(baseLonge.obras.some((obra) => obra.lado === 'nosso' && obra.tipo === 'nucleo' && obra.hp > 0), '(arranjo) a segunda base nossa EXISTE na ficha longe')
+  let passeioVivo = colocarHeroi(escreverCena(criarAtlas(), baseReal), 56.1, 0)
+  passeioVivo = escreverFicha(passeioVivo, 3, 1, baseLonge, 'cheio')
+  for (let segundo = 0; segundo < 80; segundo++) passeioVivo = stepAtlas(passeioVivo, INPUT_PARADO, 1)
+  assert(fichaEm(passeioVivo, 0, 0)!.state.obras.find((obra) => obra.id === nucleoReal.id)?.hp === 0 && estadoCorpo(passeioVivo).derrota === false, 'com uma segunda base viva em outro mapa, a mesma ruína NÃO acaba o jogo')
+  passeio = passeioVivo
   passeio = colocarHeroi(passeio, LADO_MAPA * 2, 0)
-  passeio = escreverFicha(passeio, 3, 1, { ...createPartida(), semCorpo: true }, 'cheio')
+  passeio = escreverFicha(passeio, 3, 1, baseLonge, 'cheio')
   assert(fichaEm(passeio, 0, 0)?.ritmo === 'lento' && fichaEm(passeio, 0, 0)?.alerta === 'vermelho', 'ruína nossa persiste sob pressão dos residentes')
 
   const baseComTropa = criarTropa(baseReal, nucleoReal.id)
@@ -483,5 +501,179 @@ export function run(): void {
     a = escreverFicha(a, 1, 0, { ...conquistado, obras: [...conquistado.obras, nossaObra(9001, 40)] }, 'cheio')
     assert(dono(a, 1, 0) === 'nosso', 'M4.e: fundar no (1,0) o torna NOSSO no resumo')
     assert(resumoAtlas(a).every((r) => r.dono === 'nosso' || r.dono === 'inimigo' || r.dono === 'selvagem'), 'M4.e: todo mapa do resumo tem um dono válido')
+  }
+  // ── M5: as TROPAS atravessam de mapa (pedido do usuário, 23/11: «pode fazer tropas atravessar de mapa»). Decisões do usuário (AskUserQuestion, 23/11): continuam a ORDEM do outro lado (o destino de `mover` é
+  // convertido); ficam no mapa para onde foram e lutam ali (o mapa fica NOSSO por causa delas); o limite de 24 vale POR MAPA. Contrato [D-minha]: só tropa aliada VIVA cruza (inimigo nunca); ao cruzar ganha um id
+  // NOVO do mapa de destino (cada ficha tem o seu `nextId`: um id herdado colidiria com uma unidade de lá quando o vizinho envelhecer); `atacar` e `atacarObra` são CANCELADAS (o alvo ficou no mapa antigo); a
+  // posição, o destino de `mover`, a âncora, a rota e a trilha são convertidos pela MESMA régua do herói (`x − 112·Δi`).
+  {
+    const tropaDe = (id: number, x: number, z: number, extra: Partial<Unidade> = {}): Unidade => ({ id, lado: 'aliado', papel: 'tropa', x, z, hp: 16, postura: 'ordens', ordem: null, cooldown: 0, segmentos: [], alerta: false, ...extra })
+    const nossas = (f: { state: PartidaState }) => f.state.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0)
+
+    // M5.a: a função pura: converte posição, ordem de mover, âncora, rota e trilha; cancela atacar/atacarObra; devolve um id novo
+    const comOrdemMover = tropaDe(9, 60, 3, { ordem: { tipo: 'mover', x: 70, z: 5 }, ancora: { x: 58, z: 2 }, trilha: [{ x: 57, z: 3 }, { x: 56.5, z: 3 }], rota: { marcos: [{ x: 64, z: 4 }, { x: 70, z: 5 }], renovarEm: 1, semCaminho: false, versao: 3, modo: 'fixo' } })
+    const c = converterUnidadeDeMapa(comOrdemMover, 1, 0, 40)
+    assert(c.id === 40, `M5.a: a tropa que cruza ganha o id NOVO do mapa de destino (veio ${c.id})`)
+    assert(c.x === 60 - 112 && c.z === 3, `M5.a: a posição converte pela régua do herói: x − 112·Δi, z − 112·Δj (veio ${c.x},${c.z})`)
+    assert(c.ordem?.tipo === 'mover' && c.ordem.x === 70 - 112 && c.ordem.z === 5, `M5.a: o DESTINO da ordem de mover é convertido junto: a tropa continua andando do outro lado (veio ${JSON.stringify(c.ordem)})`)
+    assert(c.ancora?.x === 58 - 112 && c.ancora.z === 2, 'M5.a: a âncora é convertida')
+    assert(c.trilha?.length === 2 && c.trilha[0].x === 57 - 112 && c.trilha[1].x === 56.5 - 112, 'M5.a: a trilha é convertida ponto a ponto')
+    assert(c.rota?.marcos[0].x === 64 - 112 && c.rota.marcos[1].x === 70 - 112 && c.rota.marcos[1].z === 5, 'M5.a: os marcos da rota são convertidos')
+    assert(c.hp === 16 && c.papel === 'tropa' && c.lado === 'aliado' && c.postura === 'ordens', 'M5.a: vida, papel, lado e postura NÃO mudam')
+    const norte = converterUnidadeDeMapa(tropaDe(9, 4, 60), 0, 1, 41)
+    assert(norte.x === 4 && norte.z === 60 - 112, 'M5.a: o eixo z converte do mesmo jeito (Δj = 1)')
+    const diag = converterUnidadeDeMapa(tropaDe(9, -60, -61), -1, -1, 42)
+    assert(diag.x === -60 + 112 && diag.z === -61 + 112, 'M5.a: oeste e sul convertem com o sinal certo (Δi = −1, Δj = −1)')
+    const comAlem = converterUnidadeDeMapa(tropaDe(9, 55.4, 3, { ordem: { tipo: 'mover', x: 55.65, z: 3, alem: { x: 70, z: 5 } } }), 1, 0, 46)
+    assert(comAlem.ordem?.tipo === 'mover' && comAlem.ordem.x === 70 - 112 && comAlem.ordem.z === 5, `M5.a: com \`alem\`, o destino do outro lado é o ORIGINAL convertido (70 − 112 = −42), NÃO o x/z preso na borda (55,65 − 112 = −56,35; veio ${JSON.stringify(comAlem.ordem)})`)
+    assert(comAlem.ordem?.tipo === 'mover' && !('alem' in comAlem.ordem), 'M5.a: `alem` NÃO é levado ao mapa novo (lá o destino já é interno)')
+    const atk = converterUnidadeDeMapa(tropaDe(9, 60, 3, { ordem: { tipo: 'atacar', alvoId: 77 } }), 1, 0, 43)
+    assert(atk.ordem === null, 'M5.a: `atacar` é CANCELADA: o alvo ficou no mapa antigo (um alvoId igual no mapa novo seria OUTRA unidade)')
+    const atkObra = converterUnidadeDeMapa(tropaDe(9, 60, 3, { ordem: { tipo: 'atacarObra', obraId: 7 } }), 1, 0, 44)
+    assert(atkObra.ordem === null, 'M5.a: `atacarObra` também é cancelada')
+    assert(converterUnidadeDeMapa(tropaDe(9, 60, 3), 1, 0, 45).ordem === null && converterUnidadeDeMapa(tropaDe(9, 60, 3), 1, 0, 45).rota == null, 'M5.a: sem ordem nem rota segue sem ordem nem rota (nada inventado)')
+    assert(comOrdemMover.x === 60 && comOrdemMover.ordem?.tipo === 'mover' && comOrdemMover.ordem.x === 70, 'M5.a: a função é PURA: a unidade original não foi alterada')
+
+    // arranjo do atlas: um núcleo nosso e 3 tropas no mapa (0,0), em fila perto da borda leste
+    const montar = (): { atlas: Atlas; ids: number[] } => {
+      const base = criarAtlas()
+      let s = fundar(base.fichas[0].state, 'nucleo', 30, 0)
+      const n = s.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!
+      for (let k = 0; k < 3; k++) s = criarTropa({ ...s, credito: 30 }, n.id)
+      s = { ...s, unidades: s.unidades.filter((u) => u.lado !== 'inimigo'), obras: s.obras.filter((o) => o.lado === 'nosso') }
+      return { atlas: escreverCena(base, s), ids: s.unidades.filter((u) => u.lado === 'aliado').map((u) => u.id) }
+    }
+    // 0,05 s por chamada: é o que o JOGO passa ao atlas (`IlhaRua`: `Math.min(dt, 0.05)`). Com 0,25 s a última posição com a ordem ainda viva cai a x = 54,0 e o limiar de travessia (54,6) perderia tropas, o que o jogo real nunca faz.
+    const andar = (a: Atlas, segundos: number): Atlas => { let x = a; for (let t = 0; t < segundos - 1e-9; t += 0.05) x = stepAtlas(x, INPUT_PARADO, 0.05); return x }
+
+    // M5.b: uma tropa ordenada para ALÉM da borda CRUZA: sai do (0,0), aparece no (1,0), segue a ordem e não perde nem duplica ninguém
+    const { atlas: a0, ids } = montar()
+    const alvoId = ids[0]
+    const nTropas0 = nossas(fichaEm(a0, 0, 0)!).length
+    const ordenada = escreverCena(a0, ordenar(estadoCena(a0), [alvoId], { tipo: 'mover', x: 70, z: 0 }))
+    const depois = andar(ordenada, 25)
+    const f0 = fichaEm(depois, 0, 0)!
+    const f1 = fichaEm(depois, 1, 0)
+    assert(f1 !== undefined, 'M5.b: o mapa (1,0) NASCEU quando a tropa chegou à borda (como nasce para o herói)')
+    assert(nossas(f1).length === 1, `M5.b: o (1,0) tem exatamente 1 tropa nossa (veio ${nossas(f1).length})`)
+    assert(nossas(f0).length === nTropas0 - 1, `M5.b: o (0,0) perdeu exatamente 1 (era ${nTropas0}, ficou ${nossas(f0).length}): ninguém sumiu nem foi duplicado`)
+    assert(!f0.state.unidades.some((u) => u.id === alvoId), 'M5.b: o id antigo SAIU do mapa de origem')
+    const chegou = nossas(f1)[0]
+    assert(chegou.x > -56 && chegou.x < 56 && Math.abs(chegou.z) < 56, `M5.b: a tropa está DENTRO do quadrado do mapa novo (x=${chegou.x.toFixed(1)}), nunca fora dele`)
+    assert(chegou.x < -40, `M5.b: ela chegou pela BORDA OESTE do (1,0), onde entrou (x=${chegou.x.toFixed(1)} < −40): a continuidade do espaço`)
+    assert(!f1.state.unidades.some((u) => u.lado === 'aliado' && u.id !== chegou.id), 'M5.b: só 1 aliada no (1,0)')
+
+    // M5.c: a tropa continua a ORDEM do outro lado e CHEGA ao destino convertido (70 − 112 = −42), e o corpo (herói) segue onde estava
+    assert(Math.abs(chegou.x - (70 - 112)) < 1.5 && Math.abs(chegou.z) < 1.5, `M5.c: ela chegou ao destino convertido (≈ −42, 0) e não parou na borda (veio ${chegou.x.toFixed(1)},${chegou.z.toFixed(1)})`)
+    assert(chegou.ordem === null || chegou.ordem.tipo !== 'atacar', 'M5.c: nenhuma ordem de atacar sobrou')
+    assert(depois.heroiI === 0 && depois.heroiJ === 0 && !estadoCorpo(depois).derrota, 'M5.c: o herói NÃO foi junto (a tropa atravessa sozinha) e a partida segue')
+
+    // M5.d: o id da tropa que cruzou NÃO colide com nada do mapa de destino
+    const idsDestino = f1.state.unidades.map((u) => u.id).concat(f1.state.obras.map((o) => o.id))
+    assert(new Set(idsDestino).size === idsDestino.length, `M5.d: nenhum id repetido no mapa de destino (${JSON.stringify(idsDestino)})`)
+    assert(f1.state.nextId > Math.max(...idsDestino), 'M5.d: o `nextId` do destino está à frente de todos os ids (a próxima unidade que nascer lá não colide)')
+
+    // M5.e: o mapa de destino fica NOSSO por causa da tropa (o minimapa da M4 azul) e o resumo o mostra
+    assert(donoDoMapa(f1) === 'nosso' && resumoAtlas(depois).find((r) => r.i === 1 && r.j === 0)?.dono === 'nosso', 'M5.e: um mapa onde só há tropa nossa é NOSSO no minimapa')
+
+    // M5.f: inimigos NUNCA cruzam, e tropa MORTA também não
+    const comInimigoNaBorda = (): Atlas => {
+      const { atlas } = montar()
+      const s = estadoCena(atlas)
+      const inimigo: Unidade = { id: s.nextId, lado: 'inimigo', papel: 'horda', x: 60, z: 0, hp: 12, postura: 'automatico', ordem: null, cooldown: 0, segmentos: [], alerta: false }
+      return escreverCena(atlas, { ...s, nextId: s.nextId + 1, unidades: [...s.unidades, inimigo] })
+    }
+    const apos = andar(comInimigoNaBorda(), 5)
+    assert(!fichaEm(apos, 1, 0) || !fichaEm(apos, 1, 0)!.state.unidades.some((u) => u.lado === 'inimigo' && u.papel === 'horda' && u.x < -40), 'M5.f: um inimigo fora do quadrado NÃO atravessa para o mapa vizinho (só tropa NOSSA cruza)')
+    const morta = montar()
+    const sMorta = estadoCena(morta.atlas)
+    const comMorta = escreverCena(morta.atlas, { ...sMorta, unidades: [...sMorta.unidades, tropaDe(sMorta.nextId, 60, 0, { hp: 0 })], nextId: sMorta.nextId + 1 })
+    assert(!fichaEm(andar(comMorta, 3), 1, 0), 'M5.f: tropa MORTA (hp 0) fora do quadrado NÃO faz nascer mapa nem cruza')
+
+    // M5.g: o limite de 24 vale POR MAPA: um destino com 24 tropas ainda recebe a que cruza (decisão do usuário); e uma tropa que cruza não conta duas vezes
+    const cheio = montar()
+    let sCheio = estadoCena(cheio.atlas)
+    const extras = Array.from({ length: 21 }, (_, k) => tropaDe(sCheio.nextId + k, -12 + k * 0.4, 20))
+    sCheio = { ...sCheio, nextId: sCheio.nextId + 21, unidades: [...sCheio.unidades, ...extras] }
+    assert(nossas({ state: sCheio }).length === 24, 'M5.g: (arranjo) o mapa de origem tem as 24 tropas do limite')
+    const cheioOrdenado = escreverCena(cheio.atlas, ordenar(sCheio, [cheio.ids[0]], { tipo: 'mover', x: 70, z: 0 }))
+    const cheioDepois = andar(cheioOrdenado, 25)
+    assert(nossas(fichaEm(cheioDepois, 1, 0)!).length === 1 && nossas(fichaEm(cheioDepois, 0, 0)!).length === 23, 'M5.g: origem 24 → 23 e destino 0 → 1: o limite é por mapa e a soma se conserva')
+
+    // M5.i: ninguém atravessa por ACASO: a tropa só cruza se recebeu uma ORDEM de mover para um ponto FORA do quadrado. Uma tropa que anda até a borda por uma ordem para um ponto DENTRO do mapa, ou que
+    // fica em vigia colada à borda, NÃO cruza (senão uma guarda posta na beira do mapa fugiria sozinha). Medido antes de desenhar: o A* prende um destino fora do mapa em x = 55,65 e, com qualquer obra, devolve
+    // `null` (sem caminho); então a tropa CHEGA à borda e fica lá com a ordem viva até o atlas a transferir.
+    const guarda = montar()
+    const sg = estadoCena(guarda.atlas)
+    const naBorda = { ...sg, unidades: sg.unidades.map((u) => (u.id === guarda.ids[0] ? { ...u, x: 55.3, z: 0, ordem: null, postura: 'vigia' as const } : u)) }
+    const guardaNaBorda = andar(escreverCena(guarda.atlas, naBorda), 6)
+    assert(!fichaEm(guardaNaBorda, 1, 0) && nossas(fichaEm(guardaNaBorda, 0, 0)!).length === 3, 'M5.i: uma tropa em VIGIA colada à borda (sem ordem para fora) NÃO atravessa')
+    const ordemInterna = escreverCena(guarda.atlas, ordenar(sg, [guarda.ids[0]], { tipo: 'mover', x: 55, z: 0 }))
+    const internaDepois = andar(ordemInterna, 12)
+    assert(!fichaEm(internaDepois, 1, 0) && nossas(fichaEm(internaDepois, 0, 0)!).length === 3, 'M5.i: ordem de mover para um ponto DENTRO do mapa (mesmo colado à borda) NÃO atravessa')
+    const atacando = escreverCena(guarda.atlas, { ...sg, unidades: sg.unidades.map((u) => (u.id === guarda.ids[0] ? { ...u, x: 55.3, z: 0, postura: 'ordens' as const, ordem: { tipo: 'atacar' as const, alvoId: 1 } } : u)) })
+    assert(!fichaEm(andar(atacando, 3), 1, 0), 'M5.i: ordem de ATACAR perto da borda NÃO atravessa (só `mover` para fora)')
+
+    // M5.j: o herói e a tropa podem cruzar no MESMO passo sem se atrapalhar (cada um pelo seu caminho)
+    const juntos = montar()
+    const sj = estadoCena(juntos.atlas)
+    const heroiNaBorda = escreverCena(juntos.atlas, { ...ordenar(sj, [juntos.ids[0]], { tipo: 'mover', x: 70, z: 0 }), heroi: { ...sj.heroi, x: 56.2, z: 0 } })
+    const dep = andar(heroiNaBorda, 20)
+    assert(dep.heroiI === 1 && nossas(fichaEm(dep, 1, 0)!).length >= 1, 'M5.j: o herói cruzou e a tropa que ele deixaria também chega ao (1,0)')
+    assert(new Set(fichaEm(dep, 1, 0)!.state.unidades.map((u) => u.id)).size === fichaEm(dep, 1, 0)!.state.unidades.length, 'M5.j: nenhum id repetido no (1,0) com herói e tropa cruzando juntos')
+
+    // M5.l: a DECISÃO de cruzar, caso a caso, direto na função (a mutação mostrou que M5.f e M5.i montavam inimigo e tropa morta SEM ordem, então o `null` vinha da ordem ausente e a checagem de lado e de vida
+    // nunca era exercitada). Cada caso isola UMA condição: tudo igual ao CONTROLE (aliada viva, mover com `alem`, na borda) menos o que está escrito.
+    {
+      const controle: Unidade = tropaDe(1, 55.3, 0, { ordem: { tipo: 'mover', x: 55.65, z: 0, alem: { x: 70, z: 0 } } })
+      const decide = (u: Unidade) => ladoDaTravessia(u)
+      assert(JSON.stringify(decide(controle)) === '{"dI":1,"dJ":0}', 'M5.l: CONTROLE: aliada viva, mover com alem, na borda leste cruza para (+1, 0)')
+      assert(decide({ ...controle, lado: 'inimigo' }) === null, 'M5.l: o MESMO caso com um INIMIGO não cruza (só tropa NOSSA)')
+      assert(decide({ ...controle, hp: 0 }) === null && decide({ ...controle, hp: -1 }) === null && decide({ ...controle, hp: Number.NaN }) === null, 'M5.l: o MESMO caso com a tropa MORTA (hp 0, negativo ou NaN) não cruza')
+      assert(decide({ ...controle, ordem: { tipo: 'mover', x: 55.6, z: 0 } }) === null, 'M5.l: o MESMO caso SEM `alem` (mover interno colado à borda) não cruza')
+      assert(decide({ ...controle, ordem: null }) === null && decide({ ...controle, ordem: { tipo: 'atacar', alvoId: 5 } }) === null, 'M5.l: o MESMO caso sem ordem de mover (vigia, atacar) não cruza, mesmo colado à borda')
+      assert(decide({ ...controle, x: 30 }) === null && decide({ ...controle, x: 54.5 }) === null, 'M5.l: o MESMO caso longe da borda (x = 30 e x = 54,5, abaixo do limiar de 54,6) não cruza')
+      assert(JSON.stringify(decide({ ...controle, x: 54.6 })) === '{"dI":1,"dJ":0}', 'M5.l: no limiar exato (x = 54,6) cruza')
+      // os 4 lados e a diagonal: cada eixo olha o SEU sinal e a SUA posição
+      assert(JSON.stringify(decide(tropaDe(1, -55.3, 0, { ordem: { tipo: 'mover', x: -55.65, z: 0, alem: { x: -70, z: 0 } } }))) === '{"dI":-1,"dJ":0}', 'M5.l: oeste: cruza para (−1, 0)')
+      assert(JSON.stringify(decide(tropaDe(1, 0, 55.3, { ordem: { tipo: 'mover', x: 0, z: 55.65, alem: { x: 0, z: 70 } } }))) === '{"dI":0,"dJ":1}', 'M5.l: norte: cruza para (0, +1)')
+      assert(JSON.stringify(decide(tropaDe(1, 0, -55.3, { ordem: { tipo: 'mover', x: 0, z: -55.65, alem: { x: 0, z: -70 } } }))) === '{"dI":0,"dJ":-1}', 'M5.l: sul: cruza para (0, −1)')
+      assert(JSON.stringify(decide(tropaDe(1, 55.3, 55.3, { ordem: { tipo: 'mover', x: 55.65, z: 55.65, alem: { x: 70, z: 70 } } }))) === '{"dI":1,"dJ":1}', 'M5.l: diagonal: cruza para (+1, +1)')
+      // a posição de um eixo NÃO basta: o destino de x está fora, mas a tropa está a meio caminho em x (30) e junto à borda de z: só z decide, e z não tem destino fora → null
+      assert(decide(tropaDe(1, 30, 55.3, { ordem: { tipo: 'mover', x: 55.65, z: 55.65, alem: { x: 70, z: 10 } } })) === null, 'M5.l: o destino está fora em x mas a tropa só está colada à borda em z: NÃO cruza')
+      assert(decide(tropaDe(1, 55.3, 0, { ordem: { tipo: 'mover', x: 55.65, z: 0, alem: { x: 70, z: 70 } } }))?.dJ === 0, 'M5.l: o destino está fora em z mas a tropa NÃO está colada à borda em z (z = 0): só cruza em x (dJ = 0)')
+      // a borda do DESTINO: 56 já é fora (a mesma régua do herói); 55,99 é dentro
+      assert(decide({ ...controle, ordem: { tipo: 'mover', x: 55.65, z: 0, alem: { x: 56, z: 0 } } })?.dI === 1, 'M5.l: destino em exatamente 56 já é FORA')
+      assert(decide({ ...controle, ordem: { tipo: 'mover', x: 55.65, z: 0, alem: { x: 55.99, z: 0 } } }) === null, 'M5.l: destino em 55,99 é DENTRO: não cruza')
+      assert(decide({ ...controle, ordem: { tipo: 'mover', x: -55.65, z: 0, alem: { x: -56, z: 0 } } }) === null, 'M5.l: destino a oeste (−56) mas a tropa está na borda LESTE: o lado da posição tem de bater com o do destino (não cruza)')
+    }
+
+    // M5.m: cruzar pelos OUTROS lados no atlas real, e o mapa novo herda o ESTÁGIO e a CAMADA (a mutação mostrou que só o leste e só o estágio 0 eram exercitados)
+    for (const [ox, oz, i, j, rotulo] of [[-70, 0, -1, 0, 'oeste'], [0, 70, 0, 1, 'norte'], [0, -70, 0, -1, 'sul'], [70, 70, 1, 1, 'diagonal']] as const) {
+      const m = montar()
+      const sm = estadoCena(m.atlas)
+      const nuc = sm.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!
+      const posta = { ...sm, unidades: sm.unidades.map((u) => (u.id === m.ids[0] ? { ...u, x: ox === 0 ? nuc.x : Math.sign(ox) * 50, z: oz === 0 ? 0 : Math.sign(oz) * 50 } : u)) }
+      const ordenado = escreverCena(m.atlas, ordenar(posta, [m.ids[0]], { tipo: 'mover', x: ox, z: oz }))
+      const fim = andar(ordenado, 12)
+      const destinoF = fichaEm(fim, i, j)
+      assert(destinoF !== undefined && nossas(destinoF).length === 1, `M5.m: a tropa cruzou para o ${rotulo} (${i}, ${j}) e o mapa nasceu`)
+      assert(nossas(fichaEm(fim, 0, 0)!).length === 2, `M5.m: ${rotulo}: a origem ficou com 2 (perdeu exatamente 1)`)
+      assert(Math.abs(nossas(destinoF)[0].x) <= 56 && Math.abs(nossas(destinoF)[0].z) <= 56, `M5.m: ${rotulo}: a tropa está DENTRO do quadrado do mapa novo`)
+    }
+    {
+      // estágio e camada: o mapa novo nasce com o inimigo no estágio do mapa de ORIGEM e com a vida da camada do LUGAR (a mesma regra de qualquer vizinho)
+      const m = montar()
+      const origemEvoluida = escreverCena(m.atlas, evoluirInimigo(estadoCena(m.atlas), 1, 4))
+      const so = estadoCena(origemEvoluida)
+      const andou = escreverCena(origemEvoluida, ordenar({ ...so, unidades: so.unidades.map((u) => (u.id === m.ids[0] ? { ...u, x: 50, z: 0 } : u)) }, [m.ids[0]], { tipo: 'mover', x: 70, z: 0 }))
+      const fim = andar(andou, 12)
+      const viz = fichaEm(fim, 1, 0)!
+      assert(viz.state.ondaNumero === 4 && viz.state.obras.some((o) => o.lado === 'inimigo' && o.tipo === 'nucleo' && o.nivel === 4), `M5.m: o mapa que NASCE para a tropa herda o estágio 4 da origem (onda ${viz.state.ondaNumero})`)
+    }
+
+    // M5.h: o herói não é afetado quando NÃO há tropa a cruzar (regressão: o caminho antigo continua igual)
+    const soHeroi = colocarHeroi(criarAtlas(), 56.1, 0)
+    assert(soHeroi.heroiI === 1 && estadoCorpo(soHeroi).heroi.x < -40, 'M5.h: o herói segue cruzando como sempre')
   }
 }

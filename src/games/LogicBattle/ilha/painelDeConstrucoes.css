@@ -1,0 +1,181 @@
+/*
+ * O PAINEL VERTICAL DE CONSTRUÇÕES (23/11). Arquivo PRÓPRIO (e não o `ilha.css`) de propósito: o `ilha.css` e o `IlhaRua.tsx` têm outra frente em andamento no mesmo working tree, e este painel só pede UMA linha no JSX.
+ * Fica no lugar da linha horizontal antiga (`.ilha-base`: left 16 px, top 108 px) e ABRE PARA BAIXO, em coluna: nunca passa por baixo do painel da obra (coluna da direita) nem das ferramentas (left 16 px, top 156 px, que
+ * ficam EMPURRADAS pela altura do painel aberto: por isso o painel aberto tem altura máxima e rola por dentro).
+ */
+.ilha-construcoes {
+  position: absolute;
+  left: 16px;
+  top: 108px;
+  z-index: 11;
+  width: min(300px, calc(100% - 32px));
+  pointer-events: auto;
+  font-size: 14px;
+  color: #fff;
+}
+
+.ilha-construcoes-botao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #14324a;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ilha-construcoes-botao:hover,
+.ilha-construcoes-botao:focus-visible {
+  background: #1d4a6b;
+  outline: 2px solid #facc15;
+  outline-offset: 1px;
+}
+
+.ilha-construcoes-contagem {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+  text-align: right;
+}
+
+/* A lista abre AO LADO da barra de ferramentas (que fica em left 16 px, top 156 px, 280 px de largura) e não POR CIMA dela: medido no jogo real (23/11), abrir para baixo cobria os ícones de construir justo quando o
+   jogador está decidindo o que evoluir. `left: 304px` = 16 + 280 + 8 de respiro; o botão fica onde estava. Em tela estreita (abaixo) volta a abrir para baixo. */
+.ilha-construcoes-lista {
+  position: absolute;
+  top: 0;
+  /* o contêiner começa em x = 16: a lista começa em x = 16 + 288 = 304 (a barra de ferramentas acaba em 16 + 280 = 296, mais 8 de respiro) */
+  left: 288px;
+  width: 300px;
+  padding: 10px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+}
+
+.ilha-construcoes-resumo {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.ilha-construcoes-vazio {
+  margin: 4px 0;
+  color: #94a3b8;
+}
+
+.ilha-construcoes-itens {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ilha-construcao {
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(30, 58, 90, 0.7);
+}
+
+.ilha-construcao.fraca {
+  box-shadow: inset 3px 0 0 #f87171;
+}
+
+.ilha-construcao-topo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ilha-construcao-topo strong {
+  flex: 1;
+  min-width: 0;
+}
+
+.ilha-construcao-nivel {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #facc15;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ilha-construcao-vida {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.ilha-construcao p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ilha-construcao-aviso {
+  color: #fcd34d;
+}
+
+.ilha-construcao-ganho {
+  color: #e2e8f0;
+}
+
+.ilha-construcao-motivo {
+  color: #fca5a5;
+}
+
+.ilha-construcao-acao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ilha-construcao-preco {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.ilha-construcao-evoluir {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #facc15;
+  color: #1e293b;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-construcao-evoluir:disabled {
+  background: #475569;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* Em tela estreita (celular) não há espaço ao lado da barra de ferramentas: a lista volta a abrir PARA BAIXO, por cima de tudo, com rolagem por dentro */
+@media (max-width: 720px) {
+  .ilha-construcoes {
+    width: calc(100% - 32px);
+  }
+  .ilha-construcoes-lista {
+    position: static;
+    width: auto;
+    margin-top: 6px;
+    max-height: 50vh;
+  }
+}

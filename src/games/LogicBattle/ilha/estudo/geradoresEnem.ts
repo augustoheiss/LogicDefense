@@ -476,9 +476,451 @@ export const gEnemFuncaoAfim: GeradorEnemParametrico = {
   reserva: () => montarFuncaoAfim(semente(4), 450, 12, 50, 100, 80, 0),
 }
 
+// ─── 5. MÉDIA PONDERADA POR SETORES (Grau 5) ──────────────────────────────────────────────────────────
+function montarMediaPonderada(
+  rng: Rng,
+  nA: number,
+  salA: number,
+  salB: number,
+  seq: number,
+): DesafioUnificado {
+  const nB = 100 - nA
+  const ans = (nA * salA + nB * salB) / 100
+  const mediaSimples = (salA + salB) / 2
+  const pesosInvertidos = (nB * salA + nA * salB) / 100
+  const somaSalarios = salA + salB
+  const fmt = (n: number) => n.toLocaleString('pt-BR')
+
+  return {
+    id: `enem_gen_media_${seq}`,
+    assinatura: `g5_enem_media:${nA}:${salA}:${salB}=${ans}`,
+    origem: 'motor_parametrico',
+    grau: 5,
+    temaId: 'enem_estatistica_medias',
+    temaTituloPt: 'Médias, Mediana e Interpretação de Dados (ENEM)',
+    arquetipoOuItemId: 'g5_enem_media_ponderada_setores',
+    enunciadoMarkdown:
+      `Uma empresa possui **100 colaboradores** distribuídos em dois setores: Operações e Engenharia. Todos os funcionários de um mesmo setor recebem o mesmo salário.\n\n` +
+      `No setor de **Operações**, há **${nA} funcionários** com salário de **R$ ${fmt(salA)},00**; na **Engenharia**, há **${nB} funcionários** com salário de **R$ ${fmt(salB)},00**.\n\n` +
+      `Qual é a média salarial dos 100 colaboradores dessa empresa, em reais?`,
+    alternativas: montar4Alternativas(
+      rng,
+      {
+        valor: ans,
+        rotulo: `R$ ${fmt(ans)},00`,
+        diag: `Correto! Folha salarial total (${fmt(nA * salA + nB * salB)}) dividida pelos 100 colaboradores.`,
+      },
+      [
+        {
+          valor: mediaSimples,
+          rotulo: `R$ ${fmt(mediaSimples)},00`,
+          diagnosticoPt: 'Você calculou a média simples entre os dois salários, ignorando que os setores têm tamanhos diferentes!',
+          tagErro: 'proporcao_invertida',
+        },
+        {
+          valor: pesosInvertidos,
+          rotulo: `R$ ${fmt(pesosInvertidos)},00`,
+          diagnosticoPt: 'Você trocou os pesos: multiplicou o salário da Engenharia pelo tamanho da Operações e vice-versa.',
+          tagErro: 'leitura_interpretacao',
+        },
+        {
+          valor: somaSalarios,
+          rotulo: `R$ ${fmt(somaSalarios)},00`,
+          diagnosticoPt: 'Você apenas somou um salário de cada setor sem ponderar nem dividir pelo total de funcionários.',
+          tagErro: 'calculo_aritmetico',
+        },
+      ],
+    ),
+    altarFisicoCompativel: true,
+    dicas: [
+      {
+        nivel: 1,
+        titulo: 'Foco & Leitura',
+        textoPt: 'Os dois setores têm a mesma quantidade de pessoas? Se os tamanhos são diferentes, a média não fica bem no meio dos dois salários.',
+      },
+      {
+        nivel: 2,
+        titulo: 'Resumo de Boteco',
+        textoPt: 'Multiplique quantidade de funcionários pelo salário dentro de cada setor para achar a folha total da empresa, some tudo e divida pelos 100 colaboradores.',
+      },
+      {
+        nivel: 3,
+        titulo: 'Primeiro Passo & Armadilha',
+        textoPt: 'Armadilha clássica: somar os dois salários e dividir por 2, ignorando os pesos de cada setor!',
+      },
+    ],
+    posAcerto: {
+      solucaoCompletaPt: `Folha total = (${nA} × ${fmt(salA)}) + (${nB} × ${fmt(salB)}) = R$ ${fmt(nA * salA + nB * salB)}. Dividindo por 100 colaboradores: R$ ${fmt(ans)},00.`,
+      metodos: [
+        { selo: '⚖️ Média Ponderada', resumo: `(${nA}/100)·${fmt(salA)} + (${nB}/100)·${fmt(salB)} = R$ ${fmt(ans)},00.` },
+      ],
+      dicaVidaRealPt: 'Médias salariais e de notas sempre precisam ser ponderadas pelo número de pessoas em cada faixa.',
+    },
+  }
+}
+
+export const gEnemMediaPonderada: GeradorEnemParametrico = {
+  archetypeId: 'g5_enem_media_ponderada_setores',
+  grau: 5,
+  temaId: 'enem_estatistica_medias',
+  temaTituloPt: 'Médias, Mediana e Interpretação de Dados (ENEM)',
+  synthesize(rng, seq = 1) {
+    return tentar(
+      rng,
+      (r) => {
+        const nA = randPick(r, [60, 70, 75, 80])
+        const salA = randPick(r, [1600, 2000, 2200, 2400, 2800, 3000])
+        const delta = randPick(r, [2000, 3000, 4000, 5000, 6000])
+        const salB = salA + delta
+        const ans = (nA * salA + (100 - nA) * salB) / 100
+        if (!Number.isInteger(ans)) return null
+        return montarMediaPonderada(r, nA, salA, salB, seq)
+      },
+      () => gEnemMediaPonderada.reserva(),
+    )
+  },
+  reserva: () => montarMediaPonderada(semente(5), 75, 2000, 6000, 0),
+}
+
+// ─── 6. REGRA DE TRÊS COMPOSTA / HOMENS-HORA (Grau 6) ─────────────────────────────────────────────────
+function montarRegra3Composta(
+  rng: Rng,
+  f1: number,
+  h1: number,
+  taxa: number,
+  f2: number,
+  h2: number,
+  seq: number,
+): DesafioUnificado {
+  const p1 = taxa * f1 * h1
+  const ans = taxa * f2 * h2
+  const soFunc = taxa * h1 * f2
+  const soHoras = taxa * f1 * h2
+  const somaAbsurda = p1 + ans
+  const fmt = (n: number) => n.toLocaleString('pt-BR')
+
+  return {
+    id: `enem_gen_r3c_${seq}`,
+    assinatura: `g6_enem_r3c:${f1}:${h1}:${taxa}:${f2}:${h2}=${ans}`,
+    origem: 'motor_parametrico',
+    grau: 6,
+    temaId: 'enem_razoes_escalas',
+    temaTituloPt: 'Razões, Escalas e Conversão de Unidades (ENEM)',
+    arquetipoOuItemId: 'g6_enem_regra3_composta_producao',
+    enunciadoMarkdown:
+      `Uma equipe de montagem com **${f1} técnicos**, trabalhando **${h1} horas por dia** no mesmo ritmo individual, monta **${fmt(p1)} placas por dia**.\n\n` +
+      `Para atender a um novo contrato, a equipe passou para **${f2} técnicos**, trabalhando **${h2} horas por dia** com a mesma produtividade por hora.\n\n` +
+      `Quantas placas essa equipe passará a montar por dia?`,
+    alternativas: montar4Alternativas(
+      rng,
+      {
+        valor: ans,
+        rotulo: `${fmt(ans)} placas`,
+        diag: `Perfeito! Produtividade de ${taxa} placas por técnico-hora multiplicada por ${f2 * h2} técnico-horas.`,
+      },
+      [
+        {
+          valor: soFunc,
+          rotulo: `${fmt(soFunc)} placas`,
+          diagnosticoPt: 'Você escalou apenas o número de técnicos e esqueceu que a carga horária diária também aumentou!',
+          tagErro: 'leitura_interpretacao',
+        },
+        {
+          valor: soHoras,
+          rotulo: `${fmt(soHoras)} placas`,
+          diagnosticoPt: 'Você escalou apenas a jornada em horas e esqueceu que entraram mais técnicos na equipe!',
+          tagErro: 'leitura_interpretacao',
+        },
+        {
+          valor: somaAbsurda,
+          rotulo: `${fmt(somaAbsurda)} placas`,
+          diagnosticoPt: 'Confira a pergunta: ela pede a produção diária da nova equipe, e não a soma com a antiga.',
+          tagErro: 'calculo_aritmetico',
+        },
+      ],
+    ),
+    altarFisicoCompativel: true,
+    dicas: [
+      {
+        nivel: 1,
+        titulo: 'Foco & Leitura',
+        textoPt: 'A produção diária cresce por dois fatores juntos: mais técnicos na bancada E mais horas trabalhadas por dia.',
+      },
+      {
+        nivel: 2,
+        titulo: 'Resumo de Boteco',
+        textoPt: 'Multiplique técnicos × horas para achar quantas "horas-técnico" existiam antes. Divida a produção inicial por esse produto para achar placas por hora-técnico e depois multiplique pelo novo total de horas-técnico.',
+      },
+      {
+        nivel: 3,
+        titulo: 'Primeiro Passo & Armadilha',
+        textoPt: `Descubra primeiro o total inicial de horas-técnico (${f1} × ${h1}) e a taxa unitária por hora. Armadilha: ajustar só os técnicos ou só as horas!`,
+      },
+    ],
+    posAcerto: {
+      solucaoCompletaPt: `Antes: ${f1} × ${h1} = ${f1 * h1} técnico-horas fazem ${fmt(p1)} placas ⇒ ${taxa} placas/técnico-hora. Depois: ${f2} × ${h2} = ${f2 * h2} técnico-horas ⇒ ${f2 * h2} × ${taxa} = ${fmt(ans)} placas/dia.`,
+      metodos: [
+        { selo: '⚙️ Produtividade por Hora-Técnico', resumo: `(${fmt(p1)} ÷ (${f1}×${h1})) × (${f2}×${h2}) = ${fmt(ans)}.` },
+      ],
+      dicaVidaRealPt: 'Medir a produção por unidade de "hora-homem" resolve qualquer regra de três composta sem decoreba de setinhas.',
+    },
+  }
+}
+
+export const gEnemRegra3Composta: GeradorEnemParametrico = {
+  archetypeId: 'g6_enem_regra3_composta_producao',
+  grau: 6,
+  temaId: 'enem_razoes_escalas',
+  temaTituloPt: 'Razões, Escalas e Conversão de Unidades (ENEM)',
+  synthesize(rng, seq = 1) {
+    return tentar(
+      rng,
+      (r) => {
+        const f1 = randPick(r, [3, 4, 5, 6])
+        const h1 = randPick(r, [4, 5, 6])
+        const taxa = randPick(r, [15, 20, 25, 30, 35, 40, 45, 50])
+        const f2 = f1 + randInt(r, 1, 3)
+        const h2 = h1 + randInt(r, 2, 4)
+        const soFunc = taxa * h1 * f2
+        const soHoras = taxa * f1 * h2
+        if (soFunc === soHoras) return null
+        return montarRegra3Composta(r, f1, h1, taxa, f2, h2, seq)
+      },
+      () => gEnemRegra3Composta.reserva(),
+    )
+  },
+  reserva: () => montarRegra3Composta(semente(6), 3, 6, 40, 5, 9, 0),
+}
+
+// ─── 7. VAZÃO, VOLUME E TEMPO COM VARIAÇÕES PERCENTUAIS (Grau 7) ───────────────────────────────────────
+function montarVazaoProporcao(
+  rng: Rng,
+  v1: number,
+  q1: number,
+  aumVolPct: number,
+  aumTempoPct: number,
+  seq: number,
+): DesafioUnificado {
+  const v2 = Math.round((v1 * (100 + aumVolPct)) / 100)
+  const ans = Math.round((q1 * (100 + aumVolPct)) / (100 + aumTempoPct))
+  const erroMultiplicaAmbos = Math.round((q1 * (100 + aumVolPct) * (100 + aumTempoPct)) / 10_000)
+  const erroSubtraiPctTempo = Math.round((q1 * (100 + aumVolPct) * (100 - aumTempoPct)) / 10_000)
+  const erroRazaoInvertida = Math.round((q1 * (100 + aumTempoPct)) / (100 + aumVolPct))
+  const fmt = (n: number) => n.toLocaleString('pt-BR')
+
+  return {
+    id: `enem_gen_vazao_${seq}`,
+    assinatura: `g7_enem_vazao:${v1}:${q1}:${aumVolPct}:${aumTempoPct}=${ans}`,
+    origem: 'motor_parametrico',
+    grau: 7,
+    temaId: 'enem_razoes_escalas',
+    temaTituloPt: 'Razões, Escalas e Conversão de Unidades (ENEM)',
+    arquetipoOuItemId: 'g7_enem_vazao_piscina_proporcao',
+    enunciadoMarkdown:
+      `Um reservatório A tem capacidade de **${fmt(v1)} litros** e é abastecido com vazão constante de **${fmt(q1)} L/min**.\n\n` +
+      `Um segundo reservatório B tem capacidade **${aumVolPct}% maior** que o primeiro (**${fmt(v2)} litros**) e será regulado para encher em um tempo **${aumTempoPct}% maior** que o tempo gasto para encher o reservatório A.\n\n` +
+      `Qual deve ser a vazão constante, em L/min, para abastecer o reservatório B?`,
+    alternativas: montar4Alternativas(
+      rng,
+      {
+        valor: ans,
+        rotulo: `${fmt(ans)} L/min`,
+        diag: `Correto! Vazão = Volume ÷ Tempo ⇒ Q_B = Q_A × (1 + ${aumVolPct}%) ÷ (1 + ${aumTempoPct}%).`,
+      },
+      [
+        {
+          valor: erroMultiplicaAmbos,
+          rotulo: `${fmt(erroMultiplicaAmbos)} L/min`,
+          diagnosticoPt: 'Se o tempo para encher é maior, a vazão diminui em relação ao fator de tempo (divide por ele, não multiplica)!',
+          tagErro: 'proporcao_invertida',
+        },
+        {
+          valor: erroSubtraiPctTempo,
+          rotulo: `${fmt(erroSubtraiPctTempo)} L/min`,
+          diagnosticoPt: `Dividir por (1 + ${aumTempoPct}%) não é o mesmo que multiplicar por (1 − ${aumTempoPct}%)!`,
+          tagErro: 'porcentagem_base',
+        },
+        {
+          valor: erroRazaoInvertida,
+          rotulo: `${fmt(erroRazaoInvertida)} L/min`,
+          diagnosticoPt: 'Você inverteu os papéis entre a variação do volume e a variação do tempo.',
+          tagErro: 'proporcao_invertida',
+        },
+      ],
+    ),
+    altarFisicoCompativel: true,
+    dicas: [
+      {
+        nivel: 1,
+        titulo: 'Foco & Leitura',
+        textoPt: 'Lembre da relação física: Vazão = Volume ÷ Tempo. Quando o tempo permitido aumenta, a bomba precisa ser proporcionalmente mais lenta.',
+      },
+      {
+        nivel: 2,
+        titulo: 'Resumo de Boteco',
+        textoPt: 'Multiplique a vazão antiga pelo fator de aumento do volume e DIVIDA pelo fator de aumento do tempo — assim os dois volumes grandes até simplificam!',
+      },
+      {
+        nivel: 3,
+        titulo: 'Primeiro Passo & Armadilha',
+        textoPt: `Monte a razão (${100 + aumVolPct}/${100 + aumTempoPct}) aplicada à vazão inicial. Armadilha clássica: trocar "dividir por 1 + t%" por "multiplicar por 1 − t%".`,
+      },
+    ],
+    posAcerto: {
+      solucaoCompletaPt: `Razão de volumes = ${100 + aumVolPct}/100. Razão de tempos = ${100 + aumTempoPct}/100. Nova vazão = ${fmt(q1)} × (${100 + aumVolPct} ÷ ${100 + aumTempoPct}) = ${fmt(ans)} L/min.`,
+      metodos: [
+        { selo: '💧 Razão de Proporções', resumo: `Q_B = Q_A × (V_B/V_A) ÷ (t_B/t_A) = ${fmt(ans)} L/min.` },
+      ],
+      dicaVidaRealPt: 'Dividir por (1 + p) nunca é igual a multiplicar por (1 − p); esse atalho errado costuma custar pontos em questões de física e matemática.',
+    },
+  }
+}
+
+export const gEnemVazaoProporcao: GeradorEnemParametrico = {
+  archetypeId: 'g7_enem_vazao_piscina_proporcao',
+  grau: 7,
+  temaId: 'enem_razoes_escalas',
+  temaTituloPt: 'Razões, Escalas e Conversão de Unidades (ENEM)',
+  synthesize(rng, seq = 1) {
+    return tentar(
+      rng,
+      (r) => {
+        const v1 = randPick(r, [1_200_000, 1_500_000, 1_800_000, 2_000_000, 2_500_000])
+        const q1 = randPick(r, [2400, 3000, 3600, 4800, 6000, 7200, 8400])
+        const aumVolPct = randPick(r, [5, 10, 15, 20, 30, 35, 40])
+        const aumTempoPct = randPick(r, [20, 25, 50])
+        if (aumVolPct === aumTempoPct) return null
+        if ((q1 * (100 + aumVolPct)) % (100 + aumTempoPct) !== 0) return null
+        const ans = (q1 * (100 + aumVolPct)) / (100 + aumTempoPct)
+        const erroSub = Math.round((q1 * (100 + aumVolPct) * (100 - aumTempoPct)) / 10_000)
+        if (ans === erroSub) return null
+        return montarVazaoProporcao(r, v1, q1, aumVolPct, aumTempoPct, seq)
+      },
+      () => gEnemVazaoProporcao.reserva(),
+    )
+  },
+  reserva: () => montarVazaoProporcao(semente(7), 2_500_000, 6000, 10, 20, 0),
+}
+
+// ─── 8. PROBABILIDADE CONJUNTA EM URNAS COM ADIÇÃO DE BOLAS (Grau 7) ──────────────────────────────────
+function montarUrnaProbabilidade(
+  rng: Rng,
+  pAPct: number,
+  premB: number,
+  pBAtualPct: number,
+  pAlvoPct: number,
+  seq: number,
+): DesafioUnificado {
+  const totalAtualB = Math.round((premB * 100) / pBAtualPct)
+  const comunsAtualB = totalAtualB - premB
+  const pBAlvoDen = Math.round(pAPct / pAlvoPct)
+  const totalFinalB = premB * pBAlvoDen
+  const ans = totalFinalB - totalAtualB
+  const erroTotalFinal = totalFinalB
+  const erroSemComuns = totalFinalB - premB
+  const erroSomaComTotal = totalFinalB + premB
+
+  return {
+    id: `enem_gen_urna_${seq}`,
+    assinatura: `g7_enem_urna:${pAPct}:${premB}:${pBAtualPct}:${pAlvoPct}=${ans}`,
+    origem: 'motor_parametrico',
+    grau: 7,
+    temaId: 'enem_probabilidade_contagem',
+    temaTituloPt: 'Probabilidade e Análise Combinatória (ENEM)',
+    arquetipoOuItemId: 'g7_enem_urna_probabilidade_ajuste',
+    enunciadoMarkdown:
+      `Em um sorteio, o participante retira ao acaso uma ficha de cada uma das urnas A e B e ganha se ambas forem premiadas.\n\n` +
+      `Na urna A, a chance de sair uma ficha premiada é **${pAPct}%**. Na urna B há **${premB} fichas premiadas**, que hoje representam **${pBAtualPct}%** do total dessa urna (as demais são fichas comuns).\n\n` +
+      `Quantas fichas comuns extras devem ser adicionadas à urna B para que a probabilidade de ganhar o sorteio caia exatamente para **${pAlvoPct}%**?`,
+    alternativas: montar4Alternativas(
+      rng,
+      {
+        valor: ans,
+        rotulo: `${ans} fichas`,
+        diag: `Exato! A urna B precisa chegar a ${totalFinalB} fichas e já continha ${totalAtualB}, faltando ${ans} fichas comuns.`,
+      },
+      [
+        {
+          valor: erroTotalFinal,
+          rotulo: `${erroTotalFinal} fichas`,
+          diagnosticoPt: 'Esse é o TOTAL final de fichas na urna B — faltou descontar as fichas que já estavam lá dentro!',
+          tagErro: 'leitura_interpretacao',
+        },
+        {
+          valor: erroSemComuns,
+          rotulo: `${erroSemComuns} fichas`,
+          diagnosticoPt: 'Você descontou só as fichas premiadas e esqueceu as fichas comuns que já estavam na urna B!',
+          tagErro: 'leitura_interpretacao',
+        },
+        {
+          valor: erroSomaComTotal,
+          rotulo: `${erroSomaComTotal} fichas`,
+          diagnosticoPt: 'Confira quantas fichas a urna B já tem hoje antes de subtrair do total desejado.',
+          tagErro: 'calculo_aritmetico',
+        },
+      ],
+    ),
+    altarFisicoCompativel: true,
+    dicas: [
+      {
+        nivel: 1,
+        titulo: 'Foco & Leitura',
+        textoPt: 'Para ganhar nas duas urnas independentes ao mesmo tempo, multiplicamos P(A) × P(B). Descubra qual nova porcentagem P(B) precisa ter.',
+      },
+      {
+        nivel: 2,
+        titulo: 'Resumo de Boteco',
+        textoPt: 'Ache primeiro quantas fichas existem HOJE na urna B usando as fichas premiadas atuais. Depois calcule o total FINAL necessário na urna B mantendo as mesmas premiadas.',
+      },
+      {
+        nivel: 3,
+        titulo: 'Primeiro Passo & Armadilha',
+        textoPt: 'Armadilha clássica: responder o total final de fichas da urna B sem subtrair todas as fichas (premiadas e comuns) que já estavam lá dentro!',
+      },
+    ],
+    posAcerto: {
+      solucaoCompletaPt: `Hoje B tem ${premB} ÷ (${pBAtualPct}/100) = ${totalAtualB} fichas (${premB} premiadas e ${comunsAtualB} comuns). Queremos (${pAPct}/100) × P(B) = ${pAlvoPct}/100 ⇒ P(B) = 1/${pBAlvoDen}. Total final = ${premB} × ${pBAlvoDen} = ${totalFinalB}. Adicionar ${totalFinalB} − ${totalAtualB} = ${ans} fichas comuns.`,
+      metodos: [
+        { selo: '🎲 Espaço Amostral Ajustado', resumo: `Total final − Total atual = ${totalFinalB} − ${totalAtualB} = ${ans} fichas.` },
+      ],
+      dicaVidaRealPt: 'Sempre confira se a pergunta pede o novo total ou apenas a quantidade a ADICIONAR ao conjunto existente.',
+    },
+  }
+}
+
+export const gEnemUrnaProbabilidade: GeradorEnemParametrico = {
+  archetypeId: 'g7_enem_urna_probabilidade_ajuste',
+  grau: 7,
+  temaId: 'enem_probabilidade_contagem',
+  temaTituloPt: 'Probabilidade e Análise Combinatória (ENEM)',
+  synthesize(rng, seq = 1) {
+    return tentar(
+      rng,
+      (r) => {
+        const pAPct = randPick(r, [20, 25, 40, 50])
+        const pAlvoPct = randPick(r, [1, 2, 4, 5])
+        if (pAPct % pAlvoPct !== 0) return null
+        const pBAlvoDen = pAPct / pAlvoPct
+        if (pBAlvoDen < 6) return null
+        const pBAtualPct = randPick(r, [20, 25])
+        const denAtual = 100 / pBAtualPct
+        if (pBAlvoDen <= denAtual + 1) return null
+        const premB = randInt(r, 2, 6)
+        return montarUrnaProbabilidade(r, pAPct, premB, pBAtualPct, pAlvoPct, seq)
+      },
+      () => gEnemUrnaProbabilidade.reserva(),
+    )
+  },
+  reserva: () => montarUrnaProbabilidade(semente(8), 20, 4, 25, 1, 0),
+}
+
 export const GERADORES_ENEM_PARAMETRICOS: readonly GeradorEnemParametrico[] = [
   gEnemEscala,
   gEnemPorcentagemSucessiva,
+  gEnemMediaPonderada,
   gEnemCombinatoria,
+  gEnemRegra3Composta,
   gEnemFuncaoAfim,
+  gEnemVazaoProporcao,
+  gEnemUrnaProbabilidade,
 ]

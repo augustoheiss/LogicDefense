@@ -31,6 +31,11 @@ export interface OrdemMover {
   tipo: 'mover'
   x: number
   z: number
+  /**
+   * O destino ORIGINAL que o jogador pediu, só quando ele fica FORA do quadrado do mapa (M5, pedido do usuário 23/11: tropas atravessam de mapa). `x`/`z` seguem PRESOS dentro do mapa (a formação e o A* só
+   * enxergam pontos de dentro), e a tropa anda até a borda; o atlas lê `alem` para saber que ela quer passar e a transfere com a ordem convertida. Ausente em toda ordem com destino interno.
+   */
+  alem?: { x: number; z: number }
 }
 
 export interface OrdemAtacar {
@@ -87,8 +92,7 @@ export const PARTIDA = {
   golpeCooldown: 0.5,
   nucleoHp: 100,
   obraMeio: 1.15,
-  torreAlcance: 12,
-  torreDano: 6,
+  // O alcance, o dano e a visão da torre vêm de `evolucaoObra.ts` (a tabela de evolução, 23/11): `torreAlcance` (12) e `torreDano` (6) saíram daqui. A recarga continua aqui.
   torreCooldown: 0.8,
   ondaPeriodo: 20,
   pedraX: -8,
@@ -100,10 +104,7 @@ export const PARTIDA = {
   reparoLingotes: 3,
   reparoCredito: 2,
   nivelMaximoObra: 5,
-  // Preço de evoluir uma obra, em qualquer nível: 1 licença, ou 2 madeiras + 2 ouros. `evoluir` e o painel leem daqui.
-  custoEvoluirCredito: 1,
-  custoEvoluirMadeira: 2,
-  custoEvoluirOuro: 2,
+  // O preço de evoluir NÃO mora mais aqui: cresce 1,5× por nível e vem de `custoDeEvoluir` (`evolucaoObra.ts`), a mesma tabela que `evoluir` cobra e que o painel mostra.
   rebroteArvoreSeg: 45,
   aguaFatorVelocidade: 0.55,
   custoAguaCaminho: 2.2,
@@ -138,7 +139,7 @@ export const PARTIDA = {
     heroi: 18,
     tropa: 12,
     obra: 10,
-    torre: 22,
+    // a visão da TORRE não é mais fixa: é o alcance dela (`alcanceDaTorre`, 22 m no nível 1, +2 m por nível), em `evolucaoObra.ts`.
   },
 } as const
 

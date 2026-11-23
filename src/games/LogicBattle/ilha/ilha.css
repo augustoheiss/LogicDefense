@@ -692,12 +692,36 @@
 }
 
 .ilha-badge-treino {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: #dbeafe;
   color: #1e3a8a;
   border-radius: 999px;
   padding: 3px 9px;
   font-size: 12px;
   font-weight: 800;
+}
+
+.ilha-badge-treino-limpar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(30, 58, 138, 0.16);
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ilha-badge-treino-limpar:hover {
+  background: rgba(30, 58, 138, 0.28);
 }
 
 .ilha-btn-topo-jogo,
@@ -1897,4 +1921,32 @@
    mais os chips (143 px) cabem em duas linhas. */
 .ilha-celular .ilha-acoes-campo {
   max-width: 190px;
+}
+
+/* Controles compactos de rotação 360° da câmera no modo Império (sem pointer-events: auto no div para manter contratoDoHud). */
+.ilha-imperio-rotacao {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ilha-imperio-rotacao button {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  background: rgba(20, 50, 74, 0.9);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-imperio-rotacao button:hover {
+  background: #1e496b;
 }

@@ -28,7 +28,7 @@ export function run(jsx: string, css: string): void {
   for (const dono of ['nosso', 'inimigo', 'selvagem']) assert(new RegExp(`\\b${dono}: '[^']+'`).test(jsx), `minimapa: falta o texto do dono \`${dono}\``)
 
   // 4) o CSS: as 3 cores, só com `background`, e ANTES dos alertas
-  const semComentarios = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const semComentarios = css.replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '')
   const posicao = (seletor: string): number => semComentarios.indexOf(seletor + ' {')
   for (const dono of ['selvagem', 'inimigo', 'nosso']) {
     const sel = `.ilha-minimapa .ilha-dono-${dono}`
@@ -52,7 +52,10 @@ export function run(jsx: string, css: string): void {
  * Prova que o leitor PEGA cada adulteração (sem isto o teste voltaria a ser frouxo sem ninguém ver): cada uma estraga UM ponto do contrato e o `run` TEM de falhar PELO MOTIVO certo; o
  * original e um comentário neutro NÃO podem falhar.
  */
-export function rodarContraAdulteracoes(jsx: string, css: string): void {
+export function rodarContraAdulteracoes(jsx: string, cssBruto: string): void {
+  // O CSS chega do disco com o fim de linha que o git ou o editor deram: LF quando escrevi o teste (22/11), CRLF depois do PR #12 (o `git` converteu). As âncoras abaixo usam `\n`: normalizar UMA vez em vez de
+  // depender do formato do arquivo (23/11: o gate quebrou com «a âncora aparece 0 vez(es)» sem nada do contrato ter mudado).
+  const css = cssBruto.replace(/\r\n/g, '\n')
   const quebra = (j: string, c: string): string | null => {
     try {
       run(j, c)

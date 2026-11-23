@@ -1,3 +1,5 @@
+import { producaoNoNivel } from './evolucaoObra'
+
 export type BiomaId = 'clareira' | 'bosque' | 'serra_ouro' | 'ribeira'
 
 export interface RecursoNatural {
@@ -227,18 +229,25 @@ export function atingirRecursoNoTiro(
   }
 }
 
+/**
+ * O passo da economia natural: rebrote de árvores/ouro e produção de serrarias e minas, a cada ciclo de 6 s. `nivel` (opcional, 1 se ausente) faz a obra render mais: a produção do ciclo é `base × 1,5^(nivel−1)`
+ * (`producaoNoNivel`, pedido do usuário 23/11: «evoluir [...] se os edificios de recursos produzem mais»). A produção por ciclo é FRACIONÁRIA no nível 2 em diante (a serraria do nível 3 com árvore rende 4,5): o que
+ * não cabe num inteiro vai para `restoMadeira`/`restoOuro` e SOMA no ciclo seguinte, então nenhuma fração se perde (arredondar para baixo todo ciclo faria o nível 2 render o mesmo que o nível 1 sem árvore).
+ */
 export function passoRecursosNaturais(
   recursos: readonly RecursoNatural[],
-  serrariasAtivas: readonly { x: number; z: number }[],
-  minasAtivas: readonly { x: number; z: number }[],
+  serrariasAtivas: readonly { x: number; z: number; nivel?: number }[],
+  minasAtivas: readonly { x: number; z: number; nivel?: number }[],
   relogioExtracao: number,
   dt: number,
+  restos: { madeira: number; ouro: number } = { madeira: 0, ouro: 0 },
 ): {
   recursos: RecursoNatural[]
   ganhoMadeira: number
   ganhoOuro: number
   relogioExtracao: number
   mudouMalha: boolean
+  restos: { madeira: number; ouro: number }
 } {
   let mudouMalha = false
   const lista = recursos.map((rec) => {
@@ -251,23 +260,34 @@ export function passoRecursosNaturais(
 
   let ganhoMadeira = 0
   let ganhoOuro = 0
+  let restoMadeira = Number.isFinite(restos.madeira) && restos.madeira > 0 ? restos.madeira : 0
+  let restoOuro = Number.isFinite(restos.ouro) && restos.ouro > 0 ? restos.ouro : 0
   let relogio = relogioExtracao + dt
   if (relogio >= 6) {
     const ciclos = Math.floor(relogio / 6)
     relogio -= ciclos * 6
+    let fracaoMadeira = 0
+    let fracaoOuro = 0
     for (const s of serrariasAtivas) {
       const pertoArvore = lista.some((r) => r.tipo === 'arvore' && r.hp > 0 && Math.hypot(r.x - s.x, r.z - s.z) <= 12)
-      ganhoMadeira += ciclos * (pertoArvore ? 2 : 1)
+      fracaoMadeira += ciclos * producaoNoNivel(pertoArvore ? 2 : 1, s.nivel ?? 1)
     }
     for (const m of minasAtivas) {
       const pertoOuro = lista.some(
         (r) => r.tipo === 'ouro' && r.hp > 0 && r.yBase > -1 && Math.hypot(r.x - m.x, r.z - m.z) <= 12,
       )
-      ganhoOuro += ciclos * (pertoOuro ? 2 : 1)
+      fracaoOuro += ciclos * producaoNoNivel(pertoOuro ? 2 : 1, m.nivel ?? 1)
     }
+    // Soma o resto que sobrou do ciclo anterior e separa a parte inteira (o que entra no estoque agora) da fração (o que fica para depois). A folga de 1e-9 evita que 2,9999999999 vire 2.
+    const totalMadeira = restoMadeira + fracaoMadeira
+    const totalOuro = restoOuro + fracaoOuro
+    ganhoMadeira = Math.floor(totalMadeira + 1e-9)
+    ganhoOuro = Math.floor(totalOuro + 1e-9)
+    restoMadeira = Math.max(0, totalMadeira - ganhoMadeira)
+    restoOuro = Math.max(0, totalOuro - ganhoOuro)
   }
 
-  return { recursos: lista, ganhoMadeira, ganhoOuro, relogioExtracao: relogio, mudouMalha }
+  return { recursos: lista, ganhoMadeira, ganhoOuro, relogioExtracao: relogio, mudouMalha, restos: { madeira: restoMadeira, ouro: restoOuro } }
 }
 
 export function indiceVoxelLocal(bx: number, by: number, bz: number): number {

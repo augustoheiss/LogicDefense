@@ -6,6 +6,7 @@ import {
   aplicarConta,
   abrirAltar,
   alcanceAteABorda,
+  alcanceDaTorre,
   alcanceDoTiro,
   alternarSubsolo,
   alvoDoBotao,
@@ -1059,6 +1060,9 @@ export function run(): void {
 
   let muro = campo
   for (let z = -55; z <= 55; z += 1) muro = fundar(muro, 'torre', -20, z)
+  // As torres do muro servem de PAREDE (o teste é do CAMINHO: «sem caminho a leva se aproxima e não entra na torre»). Com o alcance de 22 m (23/11: a torre passou a alcançar mais que o herói) as 111 torres matavam
+  // os 4 sitiantes, que nascem a 19–22 m do muro, em 0,7 s (medido por `diag-muro-torres.mjs`), e o teste deixava de ver a aproximação. `cooldown` alto as silencia: o tiro das torres é coberto em `evolucaoNaPartida.test.ts`.
+  muro = { ...muro, obras: muro.obras.map((obra) => (obra.tipo === 'torre' && obra.lado !== 'inimigo' ? { ...obra, cooldown: 1e9 } : obra)) }
   const disparoMuro = stepPartida({ ...muro, ondaRelogio: PARTIDA.ondaPeriodo - 0.05 }, INPUT_PARADO, 0.1)
   const nasceram = disparoMuro.unidades.filter((unidade) => unidade.papel === 'sitiante')
   assert(nasceram.length === 4 && nasceram.every((unidade) => unidade.hp > 0 && unidade.rota?.semCaminho === true), 'muro fecha e a leva vive')
@@ -1225,7 +1229,9 @@ export function run(): void {
   const idTorreOlho = torreOlho.obras.find((obra) => obra.tipo === 'torre')!.id
   const torreOlhoEvoluida = marcarChao(evoluir(evoluir(torreOlho, idTorreOlho), idTorreOlho))
   const nivelTorreOlho = torreOlhoEvoluida.obras.find((obra) => obra.id === idTorreOlho)?.nivel
-  assert(nivelTorreOlho === 3 && !chaoRevelado(torreOlhoEvoluida, 0, 33), 'evoluir a torre não aumenta a visão')
+  // Pedido do usuário (23/11) e escolha dele: «evoluir aumenta alcance E visão». ANTES (22/11) este caso afirmava o contrário («evoluir a torre não aumenta a visão», fixa em 22 m): com o alcance subindo 2 m por nível e a
+  // visão parada em 22 m a torre atiraria no que não enxerga. Agora a visão da torre É o alcance dela: 22 m no nível 1, 26 m no nível 3 (a torre do nível 3 acende o chão até 26 m: z = 10 + 26 = 36 sim, 37 não).
+  assert(nivelTorreOlho === 3 && chaoRevelado(torreOlhoEvoluida, 0, 36) && !chaoRevelado(torreOlhoEvoluida, 0, 37), 'evoluir a torre AUMENTA a visão junto com o alcance: nível 3 acende 26 m e não 27')
 
   const inimigoUniao = {
     id: 80,
@@ -1273,7 +1279,14 @@ export function run(): void {
   const corpoVigia = vigia.unidades.find((unidade) => unidade.id === 82)
   assert(corpoVigia !== undefined && inimigoVisivel(vigia, corpoVigia) && chaoRevelado(vigia, 0, 28), 'torre abre o olho')
   const passoVigia = stepPartida(vigia, INPUT_PARADO, 0.2)
-  assert(passoVigia.unidades.find((unidade) => unidade.id === 82)?.hp === 12, 'torre não fere fora da arma')
+  // Pedido do usuário (23/11): «o certo seria elas [as torres] atacarem mesmo sem eu ver elas, porque a visão delas é maior». ANTES (22/11) este caso afirmava que a torre NÃO feria um inimigo a 18 m dela (visto por ela, fora do
+  // alcance de 12 m): a vista da torre era só para o jogador ver. Agora o alcance da torre é a visão dela (22 m): ela FERE o que enxerga. O que continua valendo, e está nas linhas seguintes, é que o TIRO DO HERÓI não acerta o que só a
+  // torre vê (`tiroVigia`).
+  const feridoPelaTorre = passoVigia.unidades.find((unidade) => unidade.id === 82)
+  assert(feridoPelaTorre !== undefined && feridoPelaTorre.hp < 12, `a torre FERE o inimigo que só ela vê a 18 m (o alcance dela, ${alcanceDaTorre({ nivel: 1 } as Obra)} m, é a visão): hp ${feridoPelaTorre?.hp}`)
+  // e a 23 m (além do alcance de 22 m) não fere: o alcance tem limite
+  const alemDoAlcance = stepPartida({ ...vigia, unidades: vigia.unidades.map((unidade) => (unidade.id === 82 ? { ...unidade, z: 10 + 23 } : unidade)) }, INPUT_PARADO, 0.2)
+  assert(alemDoAlcance.unidades.find((unidade) => unidade.id === 82)?.hp === 12, 'torre não fere a 23 m (além dos 22 m do alcance)')
   assert(alcanceDoTiro(0, 0, 0) === 18 && alcanceAteABorda(0, 0, 0) === 56, 'tiro do herói corta em 18')
   const tiroVigia = atirar(vigia)
   assert(
@@ -1362,21 +1375,27 @@ export function run(): void {
   assert(alvoDoBotao({ ...saida, unidades: [pertoDoNucleo, pertoDoHeroi] }) === 91, 'sem núcleo o botão mede a partir do herói')
 
   const vigiaParado = { ...torreOlho, semCorpo: true, unidades: [{ ...inimigoUniao, id: 990, papel: 'isca' as const, hp: 100, x: 0, z: 28 }] }
+  // Pedido do usuário (23/11): a torre alcança mais que o herói e atira no que enxerga. O ALCANCE da torre (22 m no nível 1) é agora a própria VISÃO dela: antes (22/11) a arma chegava a 12 m e a visão a 22 m, e o anel «visto só
+  // pela torre» existia no meio (12 a 22 m). Os mesmos pontos de borda de antes seguem sendo testados (10, 12, 12,1, 18, 22, 22,1) com a regra nova: dentro de 22 m a torre vê E fere; a 22,1 m não vê e não fere.
   for (const distancia of [10, 12, 12.1, 18, 22, 22.1]) {
     const alvo = { ...vigiaParado.unidades[0], z: 10 + distancia }
     const cenario = { ...vigiaParado, unidades: [alvo] }
     assert(inimigoVisivel(cenario, alvo) === (distancia <= 22), `visão exata em ${distancia} m`)
-    assert(marcadoPelaTorre(cenario, alvo) === (distancia > 12 && distancia <= 22), `anel exato em ${distancia} m`)
+    assert(!marcadoPelaTorre(cenario, alvo), `sem anel em ${distancia} m: dentro da visão a torre alcança, e fora dela o alvo nem é visto`)
     const resultado = stepPartida(cenario, INPUT_PARADO, 0.1)
-    assert((resultado.unidades[0].hp < alvo.hp) === (distancia <= 12), `arma exata em ${distancia} m sem marcha do alvo`)
+    assert((resultado.unidades[0].hp < alvo.hp) === (distancia <= 22), `arma exata em ${distancia} m sem marcha do alvo`)
   }
+  // O NÍVEL aumenta o alcance E a visão juntos (escolha do usuário, 23/11): a torre do nível 3 alcança e enxerga 26 m. Ela fere o que VÊ (até 26 m) e nem enxerga além: o mesmo limite para o olho e para a arma.
   const torreNivelTres = { ...vigiaParado, obras: vigiaParado.obras.map((obra) => obra.tipo === 'torre' ? { ...obra, nivel: 3 } : obra) }
-  for (const distancia of [16, 16.1]) {
+  for (const distancia of [22.1, 26, 26.1]) {
     const alvo = { ...vigiaParado.unidades[0], z: 10 + distancia }
     const cenario = { ...torreNivelTres, unidades: [alvo] }
-    assert(marcadoPelaTorre(cenario, alvo) === (distancia > 16), `nível 3 separa olho e arma em ${distancia}`)
-    assert((stepPartida(cenario, INPUT_PARADO, 0.1).unidades[0].hp < 100) === (distancia <= 16), 'arma nível 3 chega a 16 m')
+    assert(inimigoVisivel(cenario, alvo) === (distancia <= 26), `nível 3: a torre vê até 26 m (${distancia} m)`)
+    assert(!marcadoPelaTorre(cenario, alvo), `nível 3: sem anel em ${distancia} m`)
+    assert((stepPartida(cenario, INPUT_PARADO, 0.1).unidades[0].hp < 100) === (distancia <= 26), `nível 3: a torre fere o que VÊ (até 26 m), não além: ${distancia} m`)
   }
+  // O ANEL «visto só pela torre» continua existindo quando uma MURALHA bloqueia o tiro mas não a vista: a torre de nível 1..4 vê por cima de 1 bloco e bloqueia em 2; o anel avisa «a torre o vê e não pode atirar».
+  assert(alcanceDaTorre({ nivel: 1 } as Obra) === 22 && alcanceDaTorre({ nivel: 3 } as Obra) === 26, 'o alcance da torre: 22 m no nível 1 e 26 m no nível 3 (+2 m por nível)')
   const torreOriginal = vigiaParado.obras.find((obra) => obra.tipo === 'torre')!
   const sobreposto = { ...vigiaParado, obras: [...vigiaParado.obras, { ...torreOriginal, id: 991, z: 22 }] }
   assert(!marcadoPelaTorre(sobreposto, sobreposto.unidades[0]), 'outra torre na arma remove a marca de fora do alcance')
@@ -1440,7 +1459,9 @@ export function run(): void {
   assert(stepPartida(ferido, INPUT_PARADO, 0.1).heroi.army === 3, 'torre respeita recarga contra herói')
   assert(stepPartida(defesaCerco, INPUT_PARADO, 1).heroi.army === 0, 'torre nunca deixa exército negativo')
   assert(stepPartida({ ...defesaCerco, semCorpo: true }, INPUT_PARADO, 0.1).heroi.army === 10, 'torre ignora herói ausente')
-  assert(stepPartida({ ...defesaCerco, obras: [{ ...torreCerco, z: 12.1 }] }, INPUT_PARADO, 0.1).heroi.army === 10, 'herói fora do alcance da torre fica intacto')
+  // Alcance da torre: 22 m no nível 1 (23/11, pedido do usuário: mais longe que o herói, que atira a 18 m). Antes o limite era 12 m (z = 12,1 deixava o herói intacto): agora 22 m fere, 22,1 m não.
+  assert(stepPartida({ ...defesaCerco, obras: [{ ...torreCerco, z: 22 }] }, INPUT_PARADO, 0.1).heroi.army === 3, 'herói a 22 m da torre (o alcance dela) é ferido')
+  assert(stepPartida({ ...defesaCerco, obras: [{ ...torreCerco, z: 22.1 }] }, INPUT_PARADO, 0.1).heroi.army === 10, 'herói fora do alcance da torre (22,1 m) fica intacto')
   assert(stepPartida({ ...defesaCerco, obras: [{ ...torreCerco, hp: 0 }] }, INPUT_PARADO, 0.1).heroi.army === 10, 'ruína da torre não atira')
   const tropaMaisPerto = stepPartida({ ...defesaCerco, unidades: [{ ...soldadoCerco, z: 9 }] }, INPUT_PARADO, 0.05)
   assert(tropaMaisPerto.heroi.army === 10 && tropaMaisPerto.unidades[0].hp === 53, 'tropa mais próxima continua candidata da torre inimiga')
@@ -1658,8 +1679,11 @@ export function run(): void {
   assert(aposTiroAndaime.obras[0].hp === 0, 'tiro único do herói destrói obra inimiga em construção')
 
   // Construção ataca construção (torre nossa x quartel inimigo e torre inimiga x quartel nosso)
+  // O herói fica FORA do duelo (`semCorpo`): com o alcance de 22 m (23/11) a torre inimiga em (20, 0) alcança o herói que nasce em (0, 0), a 20 m, e a prioridade dela é o herói (medido por `diag-duelo-obras.mjs`: a vida do herói
+  // foi de 10 para 3 e nenhuma obra nossa foi ferida; com o herói longe, o quartel nosso 914 foi de 50 para 43). O duelo é ENTRE CONSTRUÇÕES: quem observa é só o atlas.
   let dueloObras: PartidaState = {
     ...fundar(createPartida(), 'nucleo', -20, -20),
+    semCorpo: true,
     unidades: [],
     obras: [
       { id: 910, lado: 'nosso', tipo: 'nucleo', x: -20, z: -20, nivel: 1, hp: 100, maxHp: 100, gateApplied: false, cooldown: 0 },
@@ -1741,11 +1765,13 @@ export function run(): void {
   let rumoNv5: PartidaState = {
     ...fundar(createPartida(), 'nucleo', 0, -14),
     unidades: [],
-    credito: 2,
-    madeira: 10,
-    ouro: 10,
+    // O que este caso prova é «a obra chega ao nível 5 e ganha a estrutura», não a economia. A tabela de preços (23/11, 1,5× por nível) soma 10 licenças, ou 17 madeiras e 17 ouros, do nível 1 ao 5: o dinheiro dá com folga.
+    // O PREÇO tem teste próprio em `evolucaoNaPartida.test.ts`.
+    credito: 12,
+    madeira: 20,
+    ouro: 20,
   }
-  const idCastelo = rumoNv5.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!.id
+  const idCastelo =rumoNv5.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!.id
   for (let n = 0; n < 4; n++) rumoNv5 = evoluir(rumoNv5, idCastelo)
   const casteloNv5 = rumoNv5.obras.find((o) => o.id === idCastelo)!
   assert(casteloNv5.nivel === 5 && casteloNv5.blocosNv5 !== undefined, 'evoluir até nível 5 cria estrutura de bloquinhos')
@@ -2736,43 +2762,16 @@ function vigiaDeVerdade() {
   )
   assert(noImperioAtacando === baseSemOrdem, `A5: no império, atacando, os tiros seguem o ritmo da recarga (${noImperioAtacando} vs ${baseSemOrdem})`)
 
-  // A4 (plano da fase 2): o preço de evoluir sai dos literais 1/2/2 do miolo de `evoluir` e vai para PARTIDA, uma vez,
-  // e o painel lê dali. Os valores continuam os mesmos; a prova de que `evoluir` LÊ a constante e não um literal
-  // escondido é mudar o preço só pela constante e ver a função reagir.
-  assert(PARTIDA.custoEvoluirCredito === 1, 'A4: o crédito de evoluir é 1 licença')
-  assert(PARTIDA.custoEvoluirMadeira === 2, 'A4: a madeira de evoluir é 2')
-  assert(PARTIDA.custoEvoluirOuro === 2, 'A4: o ouro de evoluir é 2')
+  // A4 (plano da fase 2) REESCRITO em 23/11: o preço de evoluir NÃO é mais uma constante fixa em `PARTIDA` (era 1 licença, ou 2 madeiras e 2 ouros em qualquer nível). Pedido do usuário: «evolucoes mais caras, tipo 1,5 vezes mais
+  // caro». O preço é a TABELA `custoDeEvoluir(nivel)` (`evolucaoObra.ts`), lida por `evoluir`, `podeEvoluir` e pelo painel. A prova que o A4 original dava («`evoluir` LÊ a fonte única e não um literal escondido») está agora em
+  // `evolucaoNaPartida.test.ts` (cobra `custoDeEvoluir` em cada nível, por licença e por recursos, e recusa com 1 a menos) e na mutação do preço desse arquivo. Aqui ficam os fatos do NÍVEL 1, que não mudaram.
+  assert(!('custoEvoluirCredito' in PARTIDA) && !('custoEvoluirMadeira' in PARTIDA) && !('custoEvoluirOuro' in PARTIDA), 'A4: o preço fixo saiu de PARTIDA (a tabela por nível o substituiu)')
   const comRecursos = { ...comTorre, credito: 0, madeira: 5, ouro: 5 }
   const evoluiuPorRecurso = evoluir(comRecursos, idTorreEvo)
   assert(
     evoluiuPorRecurso.madeira === 3 && evoluiuPorRecurso.ouro === 3 && evoluiuPorRecurso.credito === 0,
-    'A4: sem licença, evoluir cobra 2 madeiras e 2 ouros',
+    'A4: do nível 1 ao 2, sem licença, evoluir cobra 2 madeiras e 2 ouros (o preço de sempre no nível 1)',
   )
-  const precoMutavel = PARTIDA as unknown as { custoEvoluirCredito: number; custoEvoluirMadeira: number; custoEvoluirOuro: number }
-  const precoOriginal = { ...precoMutavel }
-  try {
-    precoMutavel.custoEvoluirCredito = 3
-    precoMutavel.custoEvoluirMadeira = 4
-    precoMutavel.custoEvoluirOuro = 1
-    const recusouPorPreco = evoluir({ ...comTorre, credito: 2, madeira: 0, ouro: 0 }, idTorreEvo)
-    assert(
-      recusouPorPreco.obras.find((o) => o.id === idTorreEvo)?.nivel === 1,
-      'A4: com o preço da constante em 3 licenças, 2 licenças não bastam',
-    )
-    const pagouNovoPreco = evoluir({ ...comTorre, credito: 3, madeira: 0, ouro: 0 }, idTorreEvo)
-    assert(
-      pagouNovoPreco.obras.find((o) => o.id === idTorreEvo)?.nivel === 2 && pagouNovoPreco.credito === 0,
-      'A4: com o preço da constante em 3 licenças, 3 licenças evoluem e cobram 3',
-    )
-    const pagouRecursosNovo = evoluir({ ...comTorre, credito: 0, madeira: 4, ouro: 1 }, idTorreEvo)
-    assert(
-      pagouRecursosNovo.obras.find((o) => o.id === idTorreEvo)?.nivel === 2 && pagouRecursosNovo.madeira === 0 && pagouRecursosNovo.ouro === 0,
-      'A4: o preço em recursos também vem da constante (4 madeiras e 1 ouro)',
-    )
-  } finally {
-    Object.assign(precoMutavel, precoOriginal)
-  }
-  assert(PARTIDA.custoEvoluirCredito === 1 && PARTIDA.custoEvoluirMadeira === 2 && PARTIDA.custoEvoluirOuro === 2, 'A4: o teste restaurou o preço')
 
   // D-B1-CANCEL (laudo V2 do T2): zerar o pitch só quando a obra MORRE deixa de fora o jogador que CANCELA o
   // ataque antes (manda o herói andar, ou troca de olhar). No império ninguém controla o pitch, então ele fica
@@ -3007,5 +3006,63 @@ function vigiaDeVerdade() {
       pisouEmTodas.altar?.resolvido === false && pisouEmTodas.altar?.erros === 0,
       'altar com placasAtivas=false nunca resolve nem registra erro pelas 4 placas 3D',
     )
+  }
+  // ── M5.k: a ordem de mover GUARDA a intenção de ir ALÉM do mapa (pedido do usuário, 23/11: tropas atravessam de mapa). Medido antes de desenhar: `ordenar` passa o destino por `pontosFormacaoTropa`, que o PRENDE em
+  // 55,65 (`puxaLimite`), e a ordem gravada vira «mover x=55,65»: quando a tropa chega a ordem se cumpre e o atlas nunca soube que o jogador queria passar. O campo opcional `alem` guarda o destino ORIGINAL, só
+  // quando ele está FORA do quadrado; todo o resto da lógica de ordem segue lendo `x`/`z` (o destino já preso). Contrato: (1) a intenção sobrevive; (2) NADA muda para destinos dentro do mapa (a ordem é idêntica,
+  // campo a campo, e não ganha `alem`); (3) só `mover` ganha o campo; (4) a rota e o destino continuam presos no mapa (o A* não vê o ponto de fora).
+  {
+    const base = fundar(createPartida(), 'nucleo', 30, 0)
+    const nucleoK = base.obras.find((o) => o.lado === 'nosso' && o.tipo === 'nucleo')!
+    let comTropas = base
+    for (let k = 0; k < 3; k++) comTropas = criarTropa({ ...comTropas, credito: 30 }, nucleoK.id)
+    comTropas = { ...comTropas, unidades: comTropas.unidades.filter((u) => u.lado !== 'inimigo') }
+    const aliadas = comTropas.unidades.filter((u) => u.lado === 'aliado')
+    const umaTropa = [aliadas[0].id]
+
+    // M5.k.1: destino FORA do quadrado: a ordem guarda a intenção original em `alem` e o destino preso em x/z
+    const fora = ordenar(comTropas, umaTropa, { tipo: 'mover', x: 70, z: 5 })
+    const ordemFora = fora.unidades.find((u) => u.id === aliadas[0].id)!.ordem
+    assert(ordemFora?.tipo === 'mover', 'M5.k.1: a ordem de mover foi gravada')
+    assert(ordemFora.alem?.x === 70 && ordemFora.alem?.z === 5, `M5.k.1: o destino ORIGINAL (70, 5) sobrevive em \`alem\` (veio ${JSON.stringify(ordemFora.alem)})`)
+    assert(ordemFora.x <= 55.65 + 1e-9 && ordemFora.x > 50, `M5.k.1: x/z seguem PRESOS no mapa (x = ${ordemFora.x}): o A* e a formação só veem pontos dentro do quadrado`)
+    const rotaFora = fora.unidades.find((u) => u.id === aliadas[0].id)!.rota
+    assert(rotaFora != null && rotaFora.marcos.length > 0 && rotaFora.marcos.every((m) => Math.abs(m.x) <= 55.65 + 1e-9 && Math.abs(m.z) <= 55.65 + 1e-9), 'M5.k.1: a rota EXISTE, tem marcos, e nenhum deles sai do mapa (uma rota vazia passaria `every` por vacuidade)')
+    // cada um dos 4 lados, e a diagonal
+    for (const [x, z, esperado] of [[-70, 0, { x: -70, z: 0 }], [0, 70, { x: 0, z: 70 }], [0, -70, { x: 0, z: -70 }], [70, 70, { x: 70, z: 70 }], [-80, -90, { x: -80, z: -90 }]] as const) {
+      const o = ordenar(comTropas, umaTropa, { tipo: 'mover', x, z }).unidades.find((u) => u.id === aliadas[0].id)!.ordem
+      assert(o?.tipo === 'mover' && o.alem?.x === esperado.x && o.alem?.z === esperado.z, `M5.k.1: destino (${x}, ${z}) guarda \`alem\` = (${esperado.x}, ${esperado.z}) (veio ${o?.tipo === 'mover' ? JSON.stringify(o.alem) : 'sem ordem de mover'})`)
+    }
+    // 3 tropas para o mesmo ponto fora: TODAS guardam a intenção (cada uma com o MESMO destino original, apesar de cada uma ter o seu slot na formação)
+    const trio = ordenar(comTropas, aliadas.map((u) => u.id), { tipo: 'mover', x: 70, z: 0 })
+    assert(trio.unidades.filter((u) => u.lado === 'aliado').every((u) => u.ordem?.tipo === 'mover' && u.ordem.alem?.x === 70 && u.ordem.alem?.z === 0), 'M5.k.1: as 3 tropas do grupo guardam a intenção (70, 0)')
+
+    // M5.k.2: destinos DENTRO do mapa: a ordem é IDÊNTICA à de antes (campo a campo) e NÃO ganha `alem`
+    for (const [x, z] of [[20, 5], [0, 0], [-30, 12], [55, 0], [55.65, -55.65], [-55.65, 55.65], [55.9, 0]] as const) {
+      const o = ordenar(comTropas, umaTropa, { tipo: 'mover', x, z }).unidades.find((u) => u.id === aliadas[0].id)!.ordem
+      assert(o?.tipo === 'mover' && !('alem' in o), `M5.k.2: destino (${x}, ${z}) — dentro do que o mapa aceita — NÃO ganha \`alem\` (a ordem é a de sempre; veio ${JSON.stringify(o)})`)
+    }
+    // o limiar: 56 é a borda do quadrado (MEIO_MAPA): 55,99 é «dentro», 56 já é «fora» (a mesma régua do herói em `transferir`)
+    const quase = ordenar(comTropas, umaTropa, { tipo: 'mover', x: 55.99, z: 0 }).unidades.find((u) => u.id === aliadas[0].id)!.ordem
+    const exato = ordenar(comTropas, umaTropa, { tipo: 'mover', x: 56, z: 0 }).unidades.find((u) => u.id === aliadas[0].id)!.ordem
+    assert(quase?.tipo === 'mover' && !('alem' in quase), 'M5.k.2: 55,99 ainda é DENTRO do mapa (sem `alem`)')
+    assert(exato?.tipo === 'mover' && exato.alem?.x === 56, 'M5.k.2: 56 (a borda, a mesma régua do herói) já é FORA (com `alem`)')
+
+    // M5.k.3: só `mover` ganha o campo; atacar e atacarObra ficam como estavam
+    const atk = ordenar(comTropas, umaTropa, { tipo: 'atacar', alvoId: 1 }).unidades.find((u) => u.id === aliadas[0].id)!.ordem
+    assert(atk?.tipo === 'atacar' && !('alem' in atk), 'M5.k.3: `atacar` não ganha `alem`')
+    const atkObra = ordenar(comTropas, umaTropa, { tipo: 'atacarObra', obraId: nucleoK.id }).unidades.find((u) => u.id === aliadas[0].id)!.ordem
+    assert(atkObra?.tipo === 'atacarObra' && !('alem' in atkObra), 'M5.k.3: `atacarObra` não ganha `alem`')
+
+    // M5.k.4: o herói não é afetado (ordenarHeroi não passa por aqui) e as tropas que NÃO foram ordenadas não mudam
+    const outra = fora.unidades.find((u) => u.id === aliadas[1].id)!
+    assert(outra.ordem === null && outra.x === aliadas[1].x && outra.z === aliadas[1].z, 'M5.k.4: a tropa que NÃO recebeu a ordem não muda')
+    assert(JSON.stringify(ordenarHeroi({ ...fora, olhar: 'imperio' }, { tipo: 'mover', x: 70, z: 0 }).heroiOrdem).includes('alem') === false, 'M5.k.4: a ordem do HERÓI não ganha `alem` (o herói cruza pelo próprio movimento, não por ordem)')
+
+    // M5.k.5: a ordem com `alem` se comporta como antes na simulação: a tropa anda até a borda e para (o atlas é quem a transfere)
+    let andando = fora
+    for (let t = 0; t < 6; t += 0.25) andando = stepPartida(andando, INPUT_PARADO, 0.25)
+    const chegou = andando.unidades.find((u) => u.id === aliadas[0].id)!
+    assert(chegou.x > 54.9 && chegou.x <= 55.65 + 1e-9, `M5.k.5: sozinha, a simulação leva a tropa até a borda (x = ${chegou.x.toFixed(2)}) e não a deixa passar do mapa`)
   }
 }

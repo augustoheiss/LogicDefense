@@ -1,6 +1,6 @@
 import { camadaDoMapa, fatorDaCamada } from './camadaDoMapa'
 import { PARTIDA, PoliticaMinimapas } from './partidaPolicies'
-import { createPartida, evoluirInimigo, PartidaInput, PartidaState, stepPartida } from './partidaSim'
+import { createPartida, evoluirInimigo, PartidaInput, PartidaState, stepPartida, Unidade } from './partidaSim'
 
 export const MEIO_MAPA = PARTIDA.radius
 export const LADO_MAPA = PARTIDA.ladoMapa
@@ -39,6 +39,79 @@ export interface Atlas {
 }
 
 const PARADO: PartidaInput = { forward: false, back: false, strafe: 0 }
+
+/**
+ * Converte uma unidade que ATRAVESSA de um mapa para o vizinho (M5, pedido do usuário 23/11: «tropas atravessarem de mapa»). Função PURA, a mesma régua do herói (`transferir`): a coordenada local do
+ * mapa novo é a do antigo menos `LADO_MAPA · Δ`. Tudo o que guarda coordenada LOCAL é convertido junto (posição, destino de `mover`, âncora, trilha e os marcos da rota): esquecer um campo faria a tropa
+ * chegar e andar para um ponto errado do mapa novo. A unidade ganha um id NOVO do mapa de destino (cada ficha tem o seu `nextId`: um id herdado colidiria com uma unidade de lá). `atacar` e
+ * `atacarObra` são CANCELADAS: o alvo ficou no mapa antigo, e um `alvoId` igual no mapa novo seria OUTRA unidade.
+ */
+export function converterUnidadeDeMapa(unidade: Unidade, dI: number, dJ: number, novoId: number): Unidade {
+  const mx = dI * LADO_MAPA
+  const mz = dJ * LADO_MAPA
+  const ponto = (p: { x: number; z: number }) => ({ ...p, x: p.x - mx, z: p.z - mz })
+  // O destino que vale do outro lado é o ORIGINAL (`alem`, que o `ordenar` guardou antes de a formação o prender na borda), convertido: ele cabe dentro do mapa novo e a rota lá funciona. Sem `alem` (a
+  // ordem era interna) converte o x/z preso, como qualquer ponto. `alem` NÃO é levado adiante: no mapa novo o destino já é interno.
+  const origemDaOrdem = unidade.ordem?.tipo === 'mover' ? (unidade.ordem.alem ?? { x: unidade.ordem.x, z: unidade.ordem.z }) : null
+  const ordem = origemDaOrdem ? { tipo: 'mover' as const, x: origemDaOrdem.x - mx, z: origemDaOrdem.z - mz } : null
+  return {
+    ...unidade,
+    id: novoId,
+    x: unidade.x - mx,
+    z: unidade.z - mz,
+    ordem,
+    ...(unidade.ancora ? { ancora: ponto(unidade.ancora) } : {}),
+    ...(unidade.trilha ? { trilha: unidade.trilha.map(ponto) } : {}),
+    ...(unidade.rota ? { rota: { ...unidade.rota, marcos: unidade.rota.marcos.map(ponto) } } : {}),
+  }
+}
+
+/**
+ * A tropa fica presa a `radius − body` (55,65) pelo próprio mapa (`limitaAlvo`/`puxaLimite`) e a ordem de mover se CUMPRE (e some, levando o `alem`) a menos de 0,5 m do destino preso, ou seja, a partir de
+ * x = 55,15. O atlas só pode transferir uma tropa que AINDA tem a ordem, então o limiar fica ABAIXO da última posição com ordem viva. MEDIDO (`ultima-posicao-com-ordem.mjs`, 55 partidas, x de partida 20 a 55,
+ * 5 valores de z): com o passo que o JOGO usa (`IlhaRua` passa `min(dt, 0,05)` ao atlas) a última posição com a ordem viva é 54,80 a 55,00; 54,6 deixa 0,2 m de folga. Com passos maiores (0,25 s) a última
+ * posição chega a 54,0: por isso os testes andam em passos de 0,05 s, o que o jogo realmente faz. Uma tropa que JÁ partiu colada à borda (x ≥ 54,6) tem a ordem cumprida no 1º passo e não cruza: sem dado de
+ * que isso aconteça no jogo (uma tropa recrutada nasce a 1,8 m do núcleo), fica registrado como limite.
+ */
+const BORDA_DA_TROPA = 54.6
+
+/**
+ * Para que lado uma tropa quer ATRAVESSAR, ou `null`. Só cruza a tropa aliada VIVA que recebeu uma ordem de `mover` para um ponto FORA do quadrado e já chegou à borda desse lado: ninguém atravessa por
+ * acaso (uma guarda em vigia na beira do mapa, ou uma ordem para um ponto dentro do mapa, não cruza). Medido antes de desenhar: o A* prende um destino fora do mapa em 55,65 e, com qualquer obra, devolve
+ * `null` (sem caminho): a tropa CHEGA à borda e fica lá com a ordem viva, e é aí que o atlas a pega.
+ */
+export function ladoDaTravessia(unidade: Unidade): { dI: number; dJ: number } | null {
+  if (unidade.lado !== 'aliado' || !(unidade.hp > 0) || unidade.ordem?.tipo !== 'mover' || !unidade.ordem.alem) return null
+  const { x, z } = unidade.ordem.alem
+  const dI = x >= MEIO_MAPA && unidade.x >= BORDA_DA_TROPA ? 1 : x < -MEIO_MAPA && unidade.x <= -BORDA_DA_TROPA ? -1 : 0
+  const dJ = z >= MEIO_MAPA && unidade.z >= BORDA_DA_TROPA ? 1 : z < -MEIO_MAPA && unidade.z <= -BORDA_DA_TROPA ? -1 : 0
+  return dI === 0 && dJ === 0 ? null : { dI, dJ }
+}
+
+/**
+ * Passa para o mapa vizinho toda tropa que quer atravessar (M5, pedido do usuário 23/11). Cada tropa sai da ficha de origem e entra na do vizinho (que NASCE se não existe, com o mesmo estágio e a mesma
+ * camada de qualquer vizinho: `garantir`), convertida por `converterUnidadeDeMapa` com um id NOVO do `nextId` de lá. O herói não é tocado. O limite de 24 tropas vale por mapa (decisão do usuário).
+ */
+export function transferirTropas(fichas: Ficha[]): Ficha[] {
+  let lista = fichas
+  for (const origem of fichas) {
+    const saem = origem.state.unidades.map((u) => ({ u, lado: ladoDaTravessia(u) })).filter((p): p is { u: Unidade; lado: { dI: number; dJ: number } } => p.lado !== null)
+    if (saem.length === 0) continue
+    const ids = new Set(saem.map((p) => p.u.id))
+    lista = lista.map((f) => (f.i === origem.i && f.j === origem.j ? { ...f, state: { ...f.state, unidades: f.state.unidades.filter((u) => !ids.has(u.id)) } } : f))
+    for (const { u, lado } of saem) {
+      const i = origem.i + lado.dI
+      const j = origem.j + lado.dJ
+      lista = garantir(lista, i, j, origem.state.ondaNumero)
+      lista = lista.map((f) => {
+        if (f.i !== i || f.j !== j) return f
+        const chegou = converterUnidadeDeMapa(u, lado.dI, lado.dJ, f.state.nextId)
+        return { ...f, state: { ...f.state, nextId: f.state.nextId + 1, unidades: [...f.state.unidades, chegou] } }
+      })
+    }
+  }
+  return lista
+}
 
 export function transferir(x: number, z: number, i: number, j: number): { x: number; z: number; i: number; j: number } {
   let nx = x
@@ -341,11 +414,40 @@ export function escreverFicha(atlas: Atlas, i: number, j: number, state: Partida
   }
 }
 
+/** Esta ficha tem um núcleo NOSSO com vida? (a mesma régua de `nucleoNosso` da partida: qualquer núcleo nosso com `hp > 0`, andaime incluso.) */
+function temBaseViva(ficha: Ficha): boolean {
+  return ficha.state.obras.some((obra) => obra.lado !== 'inimigo' && obra.tipo === 'nucleo' && obra.hp > 0)
+}
+
+/**
+ * Escreve em cada ficha se há OUTRA base nossa viva em OUTRO mapa (`outraBaseViva`), para a queda do núcleo daqui não decretar o fim do jogo (pedido do usuário, 23/11). Calculado ANTES do passo: a base que cai neste passo
+ * ainda enxerga as outras vivas. Só devolve fichas novas quando o campo MUDA (o resto é a mesma referência: o passo roda dezenas de vezes por segundo).
+ */
+function marcarOutrasBases(fichas: Ficha[]): Ficha[] {
+  const vivas = fichas.filter(temBaseViva).length
+  return fichas.map((ficha) => {
+    // Quantas bases vivas existem FORA desta ficha: o total menos a própria, se ela tem uma.
+    const outras = vivas - (temBaseViva(ficha) ? 1 : 0)
+    const valor = outras > 0
+    return (ficha.state.outraBaseViva === true) === valor ? ficha : { ...ficha, state: { ...ficha.state, outraBaseViva: valor } }
+  })
+}
+
+/**
+ * A rede de segurança da derrota global (pedido do usuário, 23/11). Cada ficha lê `outraBaseViva` ANTES do passo: se DUAS bases caem no MESMO passo, cada uma ainda enxergava a outra viva e nenhuma decreta o fim. Aqui,
+ * depois do passo, se havia base nossa viva antes e NENHUMA sobrou em NENHUM mapa, a ficha do corpo (a que o jogador joga) é marcada como derrota: «derrota = nenhum núcleo nosso em NENHUM quadrado» (decisão de 20/11).
+ * Quem nunca teve base (o começo do jogo) não é derrotado por isto: é preciso HAVER base antes do passo.
+ */
+function decretarFimSeCaiuAUltimaBase(antes: readonly Ficha[], depois: Ficha[], heroiI: number, heroiJ: number): Ficha[] {
+  if (!antes.some(temBaseViva) || depois.some(temBaseViva)) return depois
+  return depois.map((ficha) => (ficha.i === heroiI && ficha.j === heroiJ && !ficha.state.derrota ? { ...ficha, state: { ...ficha.state, derrota: true } } : ficha))
+}
+
 export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeScale = 1, frameMs?: number): Atlas {
   const t0 = agoraMs()
   const escala = Number.isFinite(timeScale) && timeScale > 0 ? timeScale : 0
   const pedido = (Number.isFinite(dt) && dt > 0 ? dt : 0) * escala
-  let fichas = atlas.fichas.map((ficha) => ({ ...ficha }))
+  let fichas = marcarOutrasBases(atlas.fichas.map((ficha) => ({ ...ficha })))
   let heroiI = atlas.heroiI
   let heroiJ = atlas.heroiJ
   let cenaI = atlas.cenaI
@@ -421,6 +523,8 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
     if (relogio < 1) return { ...ficha, relogio }
     return { ...passoComAlerta(ficha, PARADO, 1, true), relogio: relogio - 1 }
   })
+  fichas = transferirTropas(fichas)
+  fichas = decretarFimSeCaiuAUltimaBase(atlas.fichas, fichas, heroiI, heroiJ)
 
   const stepMs = agoraMs() - t0
   const emaFrameMs =

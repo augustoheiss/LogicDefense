@@ -178,6 +178,12 @@ export function getRecentMathSignaturesSnapshot(): string[] {
   return SESSION_SIGNATURE_QUEUE.slice(-160)
 }
 
+export function resetSeenMathMemory(): void {
+  SESSION_SEEN_SIGNATURES.clear()
+  SESSION_SIGNATURE_QUEUE.length = 0
+  RECENT_ARCHETYPE_QUEUE.length = 0
+}
+
 // ── Utilitários de Geração Determinística/Paramétrica ────────────────────────
 function randInt(rng: () => number, min: number, max: number): number {
   return min + Math.floor(rng() * (max - min + 1))
@@ -1891,6 +1897,7 @@ export interface GenerateInfiniteChallengeOptions {
   seed?: number
   preferredConceptId?: ConceptId
   excludeSignatures?: readonly string[]
+  excludeArchetypes?: readonly string[]
 }
 
 export function generateInfiniteChallenge(
@@ -1913,17 +1920,40 @@ export function generateInfiniteChallenge(
   const preferredSpecs = options.preferredConceptId
     ? tierSpecs.filter((g) => g.conceptId === options.preferredConceptId)
     : []
-  const basePool = preferredSpecs.length > 0 ? preferredSpecs : tierSpecs
 
-  // Filtrar arquétipos que não estão no anel recente
-  const recentArchSet = new Set<string>(RECENT_ARCHETYPE_QUEUE)
-  const freshSpecs = basePool.filter((g) => !recentArchSet.has(g.archetypeId))
-  const pool = freshSpecs.length > 0 ? freshSpecs : basePool
+  // Filtrar arquétipos fora do anel recente (módulo + caller); se o conceito preferido já rodou
+  // recentemente (ex.: conceito com 1 só arquétipo no tier), alterna para outro arquétipo do tier.
+  const recentList = [...RECENT_ARCHETYPE_QUEUE, ...(options.excludeArchetypes ?? [])]
+  const lastArchetype = recentList[recentList.length - 1]
+  const lastIndexMap = new Map<string, number>()
+  recentList.forEach((arch, idx) => lastIndexMap.set(arch, idx))
+  const recentArchSet = new Set<string>(recentList)
+
+  const preferredFresh = preferredSpecs.filter((g) => !recentArchSet.has(g.archetypeId))
+  const tierFresh = tierSpecs.filter((g) => !recentArchSet.has(g.archetypeId))
+  const tierWithoutLast =
+    tierSpecs.length > 1 && lastArchetype ? tierSpecs.filter((g) => g.archetypeId !== lastArchetype) : tierSpecs
+
+  let primaryPool: readonly ArchetypeGeneratorSpec[]
+  if (preferredFresh.length > 0) {
+    primaryPool = preferredFresh
+  } else if (tierFresh.length > 0) {
+    primaryPool = tierFresh
+  } else {
+    const sortedLeastRecent = [...tierWithoutLast].sort(
+      (a, b) => (lastIndexMap.get(a.archetypeId) ?? -1) - (lastIndexMap.get(b.archetypeId) ?? -1),
+    )
+    primaryPool =
+      sortedLeastRecent.length > 2
+        ? sortedLeastRecent.slice(0, Math.ceil(sortedLeastRecent.length / 2))
+        : sortedLeastRecent
+  }
 
   let bestCandidate: InfiniteMathChallenge | null = null
 
   for (let attempt = 0; attempt < 36; attempt++) {
-    const spec = pool[(attempt + Math.floor(rng() * pool.length)) % pool.length]
+    const activePool = attempt < 18 ? primaryPool : tierWithoutLast
+    const spec = activePool[(attempt + Math.floor(rng() * activePool.length)) % activePool.length]
     const raw = spec.synthesize(rng)
     const signature = `${spec.archetypeId}:${raw.expressionBadge ?? raw.questionPt.slice(0, 42)}=${raw.correctValue}`
     const challenge: InfiniteMathChallenge = {
