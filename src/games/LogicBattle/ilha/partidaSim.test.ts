@@ -30,6 +30,7 @@ import {
   editarBlocoObra,
   editarBlocoObraLivre,
   evoluir,
+  evoluirInimigo,
   fundar,
   iniciarObra,
   obraEmConstrucao,
@@ -38,6 +39,7 @@ import {
   invocarDragao,
   lugarDaBaseInimiga,
   mira,
+  podeEvoluir,
   pontosDoCorpo,
   pontosFormacaoTropa,
   ordenar,
@@ -46,6 +48,7 @@ import {
   podeFundarEm,
   repararObra,
   pular,
+  Obra,
   PartidaInput,
   PartidaState,
   postura,
@@ -55,6 +58,7 @@ import {
   selecionarAoClicarUnidade,
   selecionarPorRetanguloEstado,
   stepPartida,
+  Unidade,
   yawAte,
 } from './partidaSim'
 
@@ -439,12 +443,11 @@ export function run(): void {
   assert(sobTorre.altar?.resolvido === true, 'a conta resolve mesmo com torre inimiga no alcance')
   assert(sobTorre.altar?.ganhoVida === GRAU_PARTIDA[1].bonus, 'ganho gravado = bônus da conta, ignorando o tiro da torre do mesmo passo')
   assert(sobTorre.heroi.army < inicio.heroi.army + GRAU_PARTIDA[1].bonus, 'controle: a torre de fato tirou vida no mesmo passo (senão o teste não prova nada)')
-  // O ganho gravado é a DIFERENÇA REAL (depois − antes), não o bônus da tabela copiado às cegas. Hoje os dois só divergem quando o clamp corta
-  // a soma: com a vida no teto do `clampArmy` (1e300) a conta NÃO soma nada, e gravar `spec.bonus` mentiria («+4» com a vida parada).
-  // Caso ARTIFICIAL (1e300 não é jogável) mas é o único em que a diferença real e o bônus divergem ANTES da L5.2; quando o
-  // `PARTIDA.vidaCap` de 999.999 existir, a L5.2 acrescenta o caso jogável (vida 999.997 + bônus 4 = ganho 2).
-  const noTetoDoClamp = stepPartida({ ...noPiso, heroi: { ...noPiso.heroi, army: 1e300 } }, INPUT_PARADO, 0.05)
+  // Com `PARTIDA.vidaCap` (999.999), no teto a conta não soma nada (`ganhoVida = 0`) e quase no teto (`vidaCap - 2`) soma só o que coube (`ganhoVida = 2`).
+  const noTetoDoClamp = stepPartida({ ...noPiso, heroi: { ...noPiso.heroi, army: PARTIDA.vidaCap } }, INPUT_PARADO, 0.05)
   assert(noTetoDoClamp.altar?.ganhoVida === 0, 'vida no teto: a conta não soma nada, o ganho gravado é 0 (não o bônus 4 da tabela)')
+  const quaseNoTeto = stepPartida({ ...noPiso, heroi: { ...noPiso.heroi, army: PARTIDA.vidaCap - 2 } }, INPUT_PARADO, 0.05)
+  assert(quaseNoTeto.altar?.ganhoVida === 2 && quaseNoTeto.heroi.army === PARTIDA.vidaCap, 'vida 999.997 + bônus 4 grava ganhoVida = 2 e trava em 999.999')
   const errado = abrirAltar(inicio, 1, 0)
   const noErrado = stepPartida(
     {
@@ -527,6 +530,143 @@ export function run(): void {
     assert(abrirAltar(doisErros, 2, 1).altar?.erros === 0, 'E3: a conta seguinte começa com 0 erros')
   }
 
+  // ── Torre nível 5 não sobrescreve o edifício do lado (pedido do usuário, 22/11: «dá um erro ao evoluir para o nível 5 se tiver outro edifício do lado na área que a construção vai ocupar») ──
+  // O nível 5 transforma a obra numa FORTALEZA de 7 × 7 blocos de 0,85 m (5,95 m de lado: 29 vezes a área de uma torre de 1,1 m). `evoluir` só conferia «existe, é nossa, nível < 5» e
+  // nunca perguntava se a área nova estava livre: o quartel ao lado ficava DENTRO da fortaleza. `podeEvoluir` devolve `{ ok, motivo }` (como `podeFundarEm`) e `evoluir` a respeita.
+  {
+    const MEIA_FORTALEZA = (7 * 0.85) / 2 // 2,975 m
+    const aproxima = (st: PartidaState, tipo: PecaId, x: number, z: number): PartidaState => fundar(st, tipo, x, z)
+    // monta: núcleo (longe do herói), torre em (0, 12) já no nível 4, e opcionalmente um vizinho a `dist` metros da torre no eixo x
+    const cenario = (vizinho: { tipo: PecaId; dist: number } | null): { st: PartidaState; torreId: number } => {
+      let st = fundar(createPartida(), 'nucleo', 5, 0)
+      st = aproxima(st, 'torre', 0, 12)
+      const torreId = st.obras.find((o) => o.tipo === 'torre')!.id
+      st = { ...st, credito: 20, madeira: 60, ouro: 60 }
+      for (let n = 0; n < 3; n += 1) st = evoluir(st, torreId) // Nv1 -> Nv4 (a área só muda no Nv5)
+      if (vizinho) st = aproxima(st, vizinho.tipo, vizinho.dist, 12)
+      return { st, torreId }
+    }
+    const nivelDa = (st: PartidaState, id: number): number => st.obras.find((o) => o.id === id)!.nivel
+
+    // R2 CONTROLE POSITIVO: sem vizinho a torre evolui ao Nv5 (senão o R1 podia estar recusando por outro motivo)
+    const livre = cenario(null)
+    assert(nivelDa(livre.st, livre.torreId) === 4, 'T-Nv5: a torre chegou ao nível 4 no cenário (controle do cenário)')
+    assert(podeEvoluir(livre.st, livre.torreId).ok === true, `T-Nv5 R2: sem vizinho, podeEvoluir diz OK (veio ${JSON.stringify(podeEvoluir(livre.st, livre.torreId))})`)
+    assert(nivelDa(evoluir(livre.st, livre.torreId), livre.torreId) === 5, 'T-Nv5 R2: sem vizinho a torre evolui para o nível 5')
+
+    // R1: um quartel a 3,5 m (cabe ao lado da torre PEQUENA, mas está dentro da fortaleza de 5,95 m) bloqueia o Nv5
+    const colado = cenario({ tipo: 'quartel', dist: 3.5 })
+    assert(colado.st.obras.some((o) => o.tipo === 'quartel'), 'T-Nv5: o quartel vizinho foi fundado (cabia ao lado da torre pequena): sem isso o cenário não prova nada')
+    const recusa = podeEvoluir(colado.st, colado.torreId)
+    assert(recusa.ok === false, 'T-Nv5 R1: com o quartel a 3,5 m, evoluir para o Nv5 é RECUSADO')
+    assert(/espa|bloquead|obra|edif/i.test(recusa.motivo ?? ''), `T-Nv5 R1: o motivo fala do ESPAÇO/obra vizinha, não de preço (veio «${recusa.motivo}»)`)
+    assert(!/precisa de|licen|madeira|ouro/i.test(recusa.motivo ?? ''), `T-Nv5 R1: o motivo NÃO é a mensagem de preço (veio «${recusa.motivo}»)`)
+    // o CÓDIGO da recusa é o que liga o motivo ao texto da tela (`textoDaRecusaDeEvoluir`): um código errado reintroduziria o defeito (mensagem de PREÇO para um problema de ESPAÇO)
+    assert(recusa.codigo === 'espaco', `T-Nv5 R1: o código da recusa por vizinho é «espaco» (veio «${recusa.codigo}»)`)
+    const aposTentar = evoluir(colado.st, colado.torreId)
+    assert(nivelDa(aposTentar, colado.torreId) === 4, 'T-Nv5 R1: evoluir recusado NÃO sobe o nível (continua 4)')
+    assert(aposTentar.credito === colado.st.credito && aposTentar.madeira === colado.st.madeira && aposTentar.ouro === colado.st.ouro, 'T-Nv5 R1: evoluir recusado NÃO cobra recurso nenhum')
+    assert(aposTentar.obras.find((o) => o.tipo === 'quartel')!.nivel === colado.st.obras.find((o) => o.tipo === 'quartel')!.nivel, 'T-Nv5 R1: o quartel do lado não foi tocado')
+    assert(aposTentar.obras.find((o) => o.id === colado.torreId)!.blocosNv5 === undefined, 'T-Nv5 R1: a torre NÃO ganhou a fortaleza de blocos')
+
+    // R3: a FRONTEIRA. A fortaleza (meia-largura 2,975) colide com um quartel (meia-largura 1,0) + corpo (0,35) até 4,325 m do centro no eixo; além disso cabe.
+    const limite = MEIA_FORTALEZA + 1.0 + 0.35
+    const justoFora = cenario({ tipo: 'quartel', dist: limite + 0.3 })
+    assert(justoFora.st.obras.some((o) => o.tipo === 'quartel'), 'T-Nv5 R3: o quartel a 4,6 m foi fundado')
+    assert(podeEvoluir(justoFora.st, justoFora.torreId).ok === true, `T-Nv5 R3: um quartel a ${(limite + 0.3).toFixed(2)} m está FORA da fortaleza e NÃO bloqueia (a fronteira não pode ser larga demais)`)
+    const justoDentro = cenario({ tipo: 'quartel', dist: limite - 0.3 })
+    assert(justoDentro.st.obras.some((o) => o.tipo === 'quartel'), 'T-Nv5 R3: o quartel a 4,0 m foi fundado')
+    assert(podeEvoluir(justoDentro.st, justoDentro.torreId).ok === false, `T-Nv5 R3: um quartel a ${(limite - 0.3).toFixed(2)} m está DENTRO e bloqueia (a fronteira não pode ser estreita demais)`)
+
+    // R4: o vizinho NÃO atrapalha os níveis 2, 3 e 4 (a área só muda no 5): do Nv1 ao Nv4 evolui normalmente com o quartel a 3,5 m
+    let baixo = fundar(createPartida(), 'nucleo', 5, 0)
+    baixo = fundar(baixo, 'torre', 0, 12)
+    const idBaixo = baixo.obras.find((o) => o.tipo === 'torre')!.id
+    baixo = fundar(baixo, 'quartel', 3.5, 12)
+    baixo = { ...baixo, credito: 20, madeira: 60, ouro: 60 }
+    for (let n = 1; n <= 3; n += 1) {
+      assert(podeEvoluir(baixo, idBaixo).ok === true, `T-Nv5 R4: com o quartel colado, evoluir do nível ${n} para ${n + 1} continua permitido`)
+      baixo = evoluir(baixo, idBaixo)
+    }
+    assert(nivelDa(baixo, idBaixo) === 4, 'T-Nv5 R4: chegou ao nível 4 com o quartel colado')
+    assert(podeEvoluir(baixo, idBaixo).ok === false, 'T-Nv5 R4: e SÓ o passo 4 → 5 é recusado')
+
+    // R5: outros tipos que também viram fortaleza no Nv5 obedecem à mesma regra (o quartel evoluído ao lado de uma torre colada). O limite depende do VIZINHO: uma torre (meia-largura 0,55)
+    // colide com a fortaleza até 2,975 + 0,55 + 0,35 = 3,875 m do centro; a 3,0 m está DENTRO e a 4,2 m está FORA. (A 1ª versão deste caso punha a torre a 4,2 m e o teste falhava: o erro era
+    // do TESTE, não da regra; confirmado pela conta antes de mexer no código.)
+    const montaQuartel = (distTorre: number): { st: PartidaState; id: number } => {
+      let q = fundar(createPartida(), 'nucleo', 5, 0)
+      q = fundar(q, 'quartel', 0, 12)
+      const id = q.obras.find((o) => o.tipo === 'quartel')!.id
+      q = fundar(q, 'torre', distTorre, 12)
+      q = { ...q, credito: 20, madeira: 60, ouro: 60 }
+      for (let n = 0; n < 3; n += 1) q = evoluir(q, id)
+      return { st: q, id }
+    }
+    const qDentro = montaQuartel(3.0)
+    assert(qDentro.st.obras.some((o) => o.tipo === 'torre'), 'T-Nv5 R5: a torre vizinha foi fundada a 3,0 m do quartel')
+    assert(qDentro.st.obras.find((o) => o.id === qDentro.id)!.nivel === 4, 'T-Nv5 R5: o quartel chegou ao nível 4 (controle do cenário)')
+    assert(podeEvoluir(qDentro.st, qDentro.id).ok === false, 'T-Nv5 R5: um QUARTEL no nível 4 também não vira fortaleza em cima de uma torre vizinha a 3,0 m')
+    const qFora = montaQuartel(4.2)
+    assert(qFora.st.obras.some((o) => o.tipo === 'torre'), 'T-Nv5 R5: a torre vizinha foi fundada a 4,2 m do quartel')
+    assert(podeEvoluir(qFora.st, qFora.id).ok === true, 'T-Nv5 R5: a mesma torre a 4,2 m está FORA da fortaleza (limite 3,875 m) e NÃO bloqueia o quartel')
+
+    // R6: obra INIMIGA vizinha também bloqueia (o espaço é do mundo, não só das nossas obras); e uma obra MORTA (hp 0) NÃO bloqueia
+    const comInimiga = cenario(null)
+    const inimigaPerto: PartidaState = { ...comInimiga.st, obras: [...comInimiga.st.obras, { id: 99001, lado: 'inimigo', tipo: 'quartel', x: 3.5, z: 12, nivel: 1, hp: 40, maxHp: 40, gateApplied: false, cooldown: 0 }] }
+    assert(podeEvoluir(inimigaPerto, comInimiga.torreId).ok === false, 'T-Nv5 R6: uma obra INIMIGA dentro da área também bloqueia')
+    const inimigaMorta: PartidaState = { ...inimigaPerto, obras: inimigaPerto.obras.map((o) => (o.id === 99001 ? { ...o, hp: 0 } : o)) }
+    assert(podeEvoluir(inimigaMorta, comInimiga.torreId).ok === true, 'T-Nv5 R6: uma obra MORTA (hp 0, ruína) NÃO bloqueia')
+
+    // R8: o EIXO Z (a 1ª rodada de mutação deixou sobreviver «sem a última borda em z» e «meia-largura em z dobrada»: o R1 e o R3 só moviam o vizinho em x). Um BLOCO DE PEDRA do mundo
+    // (célula inteira, passo 1 m: o centro da célula (gx, gz) é (gx, gz) metros) só no limite em z. A fortaleza em (0, 12) vai de z = 9,025 a 14,975; com corpo 0,35 o bloco colide até
+    // z ≈ 15,3: em z = 15 está DENTRO (bloqueia); em z = 17 está FORA (não bloqueia). Um controle com o mesmo bloco em x garante que o eixo x não foi o que decidiu.
+    // (Pedra consome LINGOTES e o cenário só tinha madeira e ouro: o 1º controle do cenário falhou com «o bloco não foi colocado». Medido por diagnóstico antes de mexer: com `lingotes: 0`
+    // entram 0 blocos, com `lingotes: 50` entra 1; o chão já estava revelado em todos os pontos usados.)
+    const comBloco = (gx: number, gz: number): { st: PartidaState; torreId: number } => {
+      const base = cenario(null)
+      return { st: editarBlocoMundo({ ...base.st, lingotes: 50 }, gx, 0, gz, 'adicionar', 'pedra'), torreId: base.torreId }
+    }
+    const blocoZDentro = comBloco(0, 15)
+    assert(Object.keys(blocoZDentro.st.blocosMapa).length === 1, 'T-Nv5 R8: o bloco de pedra em z = 15 foi colocado (controle do cenário)')
+    assert(podeEvoluir(blocoZDentro.st, blocoZDentro.torreId).ok === false, 'T-Nv5 R8: um BLOCO do mundo na borda +z da fortaleza (z = 15) bloqueia o Nv5')
+    const blocoZFora = comBloco(0, 17)
+    assert(Object.keys(blocoZFora.st.blocosMapa).length === 1, 'T-Nv5 R8: o bloco de pedra em z = 17 foi colocado (controle do cenário)')
+    assert(podeEvoluir(blocoZFora.st, blocoZFora.torreId).ok === true, 'T-Nv5 R8: o mesmo bloco FORA da fortaleza (z = 17) NÃO bloqueia')
+    const blocoZNegativo = comBloco(0, 9)
+    assert(podeEvoluir(blocoZNegativo.st, blocoZNegativo.torreId).ok === false, 'T-Nv5 R8: um bloco na borda −z (z = 9) também bloqueia (as DUAS bordas em z contam)')
+    const blocoXDentro = comBloco(3, 12)
+    assert(podeEvoluir(blocoXDentro.st, blocoXDentro.torreId).ok === false, 'T-Nv5 R8: um bloco na borda +x (x = 3) bloqueia (controle: o eixo x continua valendo)')
+    // um quartel só em z (mesmo x da torre): colado em z = 15,5 dentro, longe em z = 19 fora. O limite em z de um quartel é 2,975 + 1,0 + 0,35 = 4,325 m: 12 + 4,325 = 16,325.
+    const quartelZDentro = cenario(null)
+    const stQZ = fundar(quartelZDentro.st, 'quartel', 0, 12 + 4.0)
+    assert(stQZ.obras.some((o) => o.tipo === 'quartel'), 'T-Nv5 R8: o quartel a 4,0 m em z foi fundado')
+    assert(podeEvoluir(stQZ, quartelZDentro.torreId).ok === false, 'T-Nv5 R8: um quartel a 4,0 m EM Z (limite 4,325 m) bloqueia: o eixo z conta para obras também')
+    const stQZfora = fundar(cenario(null).st, 'quartel', 0, 12 + 4.7)
+    assert(stQZfora.obras.some((o) => o.tipo === 'quartel'), 'T-Nv5 R8: o quartel a 4,7 m em z foi fundado')
+    assert(podeEvoluir(stQZfora, stQZfora.obras.find((o) => o.tipo === 'torre')!.id).ok === true, 'T-Nv5 R8: um quartel a 4,7 m EM Z está fora (limite 4,325 m) e NÃO bloqueia')
+
+    // R9: a ORDEM das recusas é o que o jogador LÊ (a interface vai mostrar o `motivo`). Obra em andaime: motivo de construção. Sem recurso: motivo de recurso (e NÃO o de espaço, mesmo com
+    // vizinho). (A 1ª rodada deixou sobreviver «deixa passar a obra em construção» e «deixa passar sem recurso»: `evoluir` já checava os dois, mas `podeEvoluir` é pública e a tela a chama sozinha.)
+    let andaime = fundar(createPartida(), 'nucleo', 5, 0)
+    andaime = iniciarObra({ ...andaime, credito: 20, madeira: 60, ouro: 60 }, 'torre', 0, 12)
+    const idAndaime = andaime.obras.find((o) => o.tipo === 'torre')!.id
+    assert(obraEmConstrucao(andaime.obras.find((o) => o.id === idAndaime)!), 'T-Nv5 R9: a torre está em andaime (controle do cenário)')
+    const emObra = podeEvoluir(andaime, idAndaime)
+    assert(emObra.ok === false && /constru/i.test(emObra.motivo ?? ''), `T-Nv5 R9: obra em construção recusa com o motivo de construção (veio «${emObra.motivo}»)`)
+    assert(emObra.codigo === 'construcao', `T-Nv5 R9: o código da obra em andaime é «construcao» (veio «${emObra.codigo}»)`)
+    const semDinheiro = podeEvoluir({ ...livre.st, credito: 0, madeira: 0, ouro: 0 }, livre.torreId)
+    assert(semDinheiro.ok === false && /licen|recurso/i.test(semDinheiro.motivo ?? ''), `T-Nv5 R9: sem licença nem recursos recusa com o motivo de RECURSO (veio «${semDinheiro.motivo}»)`)
+    assert(semDinheiro.codigo === 'recurso', `T-Nv5 R9: o código da falta de dinheiro é «recurso» (veio «${semDinheiro.codigo}»)`)
+    const semDinheiroComVizinho = podeEvoluir({ ...colado.st, credito: 0, madeira: 0, ouro: 0 }, colado.torreId)
+    assert(semDinheiroComVizinho.ok === false && /licen|recurso/i.test(semDinheiroComVizinho.motivo ?? ''), `T-Nv5 R9: sem recurso E com vizinho, o motivo é o de RECURSO (a ordem das recusas: o dinheiro primeiro) (veio «${semDinheiroComVizinho.motivo}»)`)
+
+    // R7: `podeEvoluir` não aceita lixo (obra inexistente, de outro lado, em construção, nível 5): devolve ok:false com motivo, nunca lança
+    assert(podeEvoluir(livre.st, 424242).ok === false, 'T-Nv5 R7: obra inexistente não pode evoluir')
+    assert(podeEvoluir(evoluir(livre.st, livre.torreId), livre.torreId).ok === false, 'T-Nv5 R7: obra que já está no nível 5 não pode evoluir (máximo)')
+    assert((podeEvoluir(livre.st, 424242).motivo ?? '').length > 0, 'T-Nv5 R7: a recusa SEMPRE traz um motivo legível')
+  }
+
 
   let marco = inicio
   for (let i = 0; i < 80 && !marco.ruaPercorrida; i++) marco = anda(marco, 0.1)
@@ -536,11 +676,228 @@ export function run(): void {
   const voltou = continuarNaRua(marco)
   assert(voltou.heroi.z === 0 && voltou.obras.length === marco.obras.length, 'continuar na rua não apaga a base')
 
-  const semNucleo = anda(inicio, PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
-  assert(
-    semNucleo.unidades.filter((unidade) => unidade.papel === 'sitiante').length === 0,
-    'sem base não nasce leva',
-  )
+  // (O caso antigo aqui afirmava 'sem base não nasce leva': era a restrição que o usuário mandou TIRAR em 22/11. Foi trocado pelo bloco M1 abaixo, que afirma o oposto e prova a metade que fica.)
+  // ── M1: a onda inimiga NAO exige mais o SEU nucleo (pedido do usuario, 22/11: «os inimigos evoluem mesmo sem base, pode deixar»; «pode tirar essa restricao») ──────────────────────
+  // Antes `passoOnda` zerava o relogio e nao disparava nada se faltasse o nucleo seu OU o inimigo. Agora so a metade INIMIGA continua exigida (sem base inimiga nao ha de onde a onda sair):
+  // o inimigo evolui num mapa onde ninguem seu fundou base, e quando o heroi chega encontra uma base maior e um exercito. A SAIDA da base aponta para quem ha no mapa: nucleo seu → heroi →
+  // tropa → centro do mapa. COM nucleo seu o comportamento e IDENTICO ao de antes (a invariante: nada muda para quem ja tinha base).
+  {
+    const semBase = createPartida() // base inimiga viva, nenhum nucleo seu, heroi em (0, 0)
+    const nucleoInim = semBase.obras.find((o) => o.lado === 'inimigo' && o.tipo === 'nucleo')!
+    assert(nucleoInim.hp > 0 && !semBase.obras.some((o) => o.lado !== 'inimigo'), 'M1: cenario = base inimiga viva e nenhuma obra nossa (controle do cenario)')
+    const sitiantes = (s: PartidaState): number => s.unidades.filter((u) => u.papel === 'sitiante' && u.hp > 0).length
+
+    // M1.a: sem nucleo seu a 1a onda DISPARA (antes: «sem base nao nasce leva», o teste que travava a restricao)
+    const onda1 = anda(semBase, PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    assert(onda1.ondaNumero >= 1, `M1.a: sem nucleo seu a onda DISPARA (ondaNumero ${onda1.ondaNumero}, esperado >= 1)`)
+    assert(sitiantes(onda1) >= PARTIDA.levaPrimeira, `M1.a: a 1a onda sem nucleo seu gera os sitiantes (${sitiantes(onda1)} de ${PARTIDA.levaPrimeira})`)
+    assert(onda1.ondaRelogio < PARTIDA.ondaPeriodo, 'M1.a: o relogio da onda NAO fica preso em zero nem estoura o periodo')
+
+    // M1.b: o relogio AVANCA sem nucleo seu (antes ficava preso em 0)
+    const meio = anda(semBase, PARTIDA.ondaPeriodo / 2, INPUT_PARADO)
+    assert(meio.ondaRelogio > 1, `M1.b: o relogio da onda avanca sem nucleo seu (veio ${meio.ondaRelogio})`)
+
+    // M1.c: a base inimiga CRESCE sem nucleo seu (`crescerBaseInimiga` ja nao dependia dele; so a onda nao disparava). Nivel do nucleo inimigo sobe com o numero da onda.
+    const aposTres = anda(semBase, PARTIDA.ondaPeriodo * 3 + 0.5, INPUT_PARADO)
+    const nucleoDepois = aposTres.obras.find((o) => o.lado === 'inimigo' && o.tipo === 'nucleo')!
+    assert(nucleoDepois.nivel > nucleoInim.nivel, `M1.c: a base inimiga evolui sem nucleo seu (nivel ${nucleoInim.nivel} -> ${nucleoDepois.nivel} em 3 ondas)`)
+    assert(aposTres.obras.filter((o) => o.lado === 'inimigo').length > semBase.obras.filter((o) => o.lado === 'inimigo').length, 'M1.c: a base inimiga GANHA obras (cresce) sem nucleo seu')
+
+    // M1.d: a onda 3 e a do DRAGAO (`numero % 3 === 0`): tambem nasce sem nucleo seu (`nascerDragaoDaLeva` tinha a MESMA restricao, em outro ponto)
+    const dragoes = (s: PartidaState): number => s.unidades.filter((u) => u.papel === 'dragao' && u.hp > 0).length
+    const antesDragao = { ...semBase, ondaNumero: 2, ondaRelogio: PARTIDA.ondaPeriodo - 0.05 }
+    const dragaoNasce = stepPartida(antesDragao, INPUT_PARADO, 0.1)
+    assert(dragaoNasce.ondaNumero === 3 && dragoes(dragaoNasce) === 1, `M1.d: a onda 3 sem nucleo seu gera o DRAGAO (ondaNumero ${dragaoNasce.ondaNumero}, dragoes ${dragoes(dragaoNasce)})`)
+
+    // M1.e: a metade que FICA: sem base INIMIGA nao ha onda (nem com nucleo seu)
+    const semInimigaNemNossa = { ...semBase, obras: semBase.obras.filter((o) => o.lado !== 'inimigo') }
+    const nadaNasce = anda(semInimigaNemNossa, PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    assert(nadaNasce.ondaNumero === 0 && sitiantes(nadaNasce) === 0, 'M1.e: sem base inimiga nao ha onda (so a restricao do SEU nucleo saiu)')
+    assert(nadaNasce.ondaRelogio === 0, 'M1.e: sem base inimiga o relogio fica em 0 (nada para contar)')
+
+    // Mede a leva NO INSTANTE EM QUE NASCE (1o passo em que existe um sitiante), nao 20 s depois: a leva ANDA em direcao ao alvo e a posicao final nao diz de onde ela saiu. (A 1a versao
+    // deste caso media depois dos 20 s e falhou: o defeito era do TESTE; um diagnostico com o codigo ANTIGO e o NOVO lado a lado mostrou posicoes IDENTICAS ao milimetro COM nucleo seu.)
+    const nascimento = (s0: PartidaState): Array<[number, number]> => {
+      let s = s0
+      for (let t = 0; t < 40; t += 0.05) {
+        s = stepPartida(s, INPUT_PARADO, 0.05)
+        const sit = s.unidades.filter((u) => u.papel === 'sitiante')
+        if (sit.length > 0) return sit.map((u): [number, number] => [Math.round(u.x * 100) / 100, Math.round(u.z * 100) / 100])
+      }
+      return []
+    }
+    // M1.f: INVARIANTE: COM nucleo seu a onda e IDENTICA a de antes. ORACULO = as posicoes que o codigo ANTIGO produzia (medidas com o backup antes da mudanca): -43,-6 / -42,-7 / -41,-7 / -40,-7,
+    // com o heroi em qualquer lugar (a saida aponta para o NUCLEO seu, nunca para o heroi).
+    const ESPERADO_COM_NUCLEO = JSON.stringify([[-43, -6], [-42, -7], [-41, -7], [-40, -7]])
+    const comNucleo = fundar(createPartida(), 'nucleo', 12, 20)
+    assert(JSON.stringify(nascimento({ ...comNucleo, heroi: { ...comNucleo.heroi, x: -30, z: -30 } })) === ESPERADO_COM_NUCLEO, 'M1.f: COM nucleo seu a leva nasce nas MESMAS posicoes do codigo antigo (heroi em -30,-30)')
+    assert(JSON.stringify(nascimento(comNucleo)) === ESPERADO_COM_NUCLEO, 'M1.f: COM nucleo seu a leva nasce nas MESMAS posicoes do codigo antigo (heroi em 0,0): a saida NAO depende do heroi')
+
+    // M1.g: SEM nucleo seu a saida aponta para o HEROI (decisao do usuario: «o inimigo caca o heroi e as tropas»). Oraculo medido: heroi em (-30,-30) => -44,-11 / -43,-11 / -42,-11 / -41,-11
+    // (DIFERENTE das posicoes com nucleo: e o que prova que o heroi, e nao o nucleo, decide a saida).
+    const heroiNoCanto: PartidaState = { ...semBase, heroi: { ...semBase.heroi, x: -30, z: -30 } }
+    const nascHeroi = nascimento(heroiNoCanto)
+    assert(JSON.stringify(nascHeroi) === JSON.stringify([[-44, -11], [-43, -11], [-42, -11], [-41, -11]]), `M1.g: SEM nucleo seu a leva sai em direcao ao HEROI (veio ${JSON.stringify(nascHeroi)})`)
+    assert(JSON.stringify(nascHeroi) !== ESPERADO_COM_NUCLEO, 'M1.g: a saida sem nucleo e DIFERENTE da saida com nucleo (o heroi decide)')
+    // heroi do OUTRO lado: a saida muda de lado (nao e uma constante)
+    const nascOutroLado = nascimento({ ...semBase, heroi: { ...semBase.heroi, x: 30, z: 30 } })
+    assert(nascOutroLado.length > 0 && JSON.stringify(nascOutroLado) !== JSON.stringify(nascHeroi), 'M1.g: com o heroi no lado oposto a saida MUDA de lado (acompanha o heroi)')
+    // tropa no lugar do heroi (sem corpo): a saida acompanha a TROPA
+    const soTropa: PartidaState = { ...semBase, semCorpo: true, unidades: [...semBase.unidades.filter((u) => u.lado === 'inimigo'), { id: 9100, lado: 'aliado', papel: 'tropa', x: -30, z: -30, hp: 20, postura: 'vigia', ordem: null, cooldown: 0, segmentos: [], alerta: false }] }
+    const nascTropa = nascimento(soTropa)
+    assert(JSON.stringify(nascTropa) === JSON.stringify(nascHeroi), `M1.g: sem heroi e com uma tropa em (-30,-30) a saida e a MESMA de um heroi la (veio ${JSON.stringify(nascTropa)})`)
+    // DUAS tropas: a saida acompanha a MAIS PERTO da base inimiga (a 1a rodada de mutacao deixou sobreviver «escolhe a mais longe»: meu unico caso tinha UMA tropa). A base inimiga fica
+    // em (-43,-6) aprox.; uma tropa em (-30,-30) esta a ~27 m, outra em (30,30) a ~85 m: a perto e a de (-30,-30), entao a saida tem de ser a MESMA de uma so tropa la.
+    const tropa = (id: number, x: number, z: number): PartidaState['unidades'][number] => ({ id, lado: 'aliado', papel: 'tropa', x, z, hp: 20, postura: 'vigia', ordem: null, cooldown: 0, segmentos: [], alerta: false })
+    const inimigasSo = semBase.unidades.filter((u) => u.lado === 'inimigo')
+    const nascDuas = nascimento({ ...semBase, semCorpo: true, unidades: [...inimigasSo, tropa(9101, 30, 30), tropa(9102, -30, -30)] })
+    assert(JSON.stringify(nascDuas) === JSON.stringify(nascHeroi), `M1.g: com 2 tropas a saida acompanha a MAIS PERTO da base (veio ${JSON.stringify(nascDuas)})`)
+    const nascDuasInvertido = nascimento({ ...semBase, semCorpo: true, unidades: [...inimigasSo, tropa(9101, -30, -30), tropa(9102, 30, 30)] })
+    assert(JSON.stringify(nascDuasInvertido) === JSON.stringify(nascHeroi), 'M1.g: a ORDEM das tropas na lista nao importa (so a distancia)')
+    // heroi com vida INVALIDA mas «no mapa»: NAO e alvo (a leva nao sai em direcao a um heroi sem vida). ATENCAO: um heroi com vida 0, negativa ou -Infinity ENCERRA A PARTIDA no 1o passo
+    // (`checaDerrota`), entao a onda nem chega a disparar: o meu 1o caso (`army: 0`) era IMPOSSIVEL de construir e o diagnostico mostrou `derrota: true` em t = 0. Medi com 10 valores: so `NaN`
+    // passa pela derrota (`NaN <= 0` e falso) e DISPARA a onda: e o unico valor em que a guarda `army > 0` decide algo. (A 1a rodada: «heroi morto ainda e alvo» sobreviveu.)
+    const heroiInvalido: PartidaState = { ...semBase, heroi: { ...semBase.heroi, x: 30, z: 30, army: Number.NaN }, unidades: [...inimigasSo, tropa(9103, -30, -30)] }
+    assert(JSON.stringify(nascimento(heroiInvalido)) === JSON.stringify(nascHeroi), 'M1.g: heroi com vida NaN NAO e alvo: a saida segue a tropa (em -30,-30) e nao o heroi (em 30,30)')
+    const heroiInvalidoSemTropa: PartidaState = { ...semBase, heroi: { ...semBase.heroi, x: 30, z: 30, army: Number.NaN } }
+    const nascInvalidoSemTropa = nascimento(heroiInvalidoSemTropa)
+    assert(nascInvalidoSemTropa.length > 0 && nascInvalidoSemTropa.every(([x, z]) => Number.isFinite(x) && Number.isFinite(z)), 'M1.g: heroi NaN e sem tropa: a leva nasce em posicao FINITA (nunca NaN)')
+    assert(JSON.stringify(nascInvalidoSemTropa) === JSON.stringify(nascimento({ ...semBase, semCorpo: true })), 'M1.g: heroi NaN e sem tropa = mesmo que ninguem (saida no centro do mapa)')
+    // a partida com heroi de vida 0 TERMINA antes da onda: controle de que o caso impossivel continua impossivel (se um dia a derrota mudar, este caso avisa)
+    assert(stepPartida({ ...semBase, heroi: { ...semBase.heroi, army: 0 } }, INPUT_PARADO, 0.05).derrota === true, 'M1.g: (controle) heroi com vida 0 encerra a partida no 1o passo: nao ha onda para ele ser alvo')
+
+    // M1.h: sem NINGUEM seu (herói sem corpo, sem tropa, sem nucleo): a onda ainda dispara (a base evolui), a saida cai no CENTRO do mapa, e nada quebra (nada de NaN)
+    const ninguem: PartidaState = { ...semBase, semCorpo: true }
+    const ondaNinguem = anda(ninguem, PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    assert(ondaNinguem.ondaNumero >= 1, 'M1.h: sem ninguem seu a onda dispara (a base evolui)')
+    assert(ondaNinguem.unidades.every((u) => Number.isFinite(u.x) && Number.isFinite(u.z) && Number.isFinite(u.hp)), 'M1.h: nenhuma unidade com NaN/Infinity quando nao ha ninguem seu')
+    assert(sitiantes(ondaNinguem) >= 1, 'M1.h: os sitiantes nascem mesmo sem ninguem seu (evoluem parados)')
+
+    // M1.i: o teto `enemyCap` continua valendo sem nucleo seu: uma base que evolui por MUITO tempo nao enche o mapa de inimigos
+    let longo: PartidaState = semBase
+    for (let i = 0; i < 40; i += 1) longo = anda(longo, PARTIDA.ondaPeriodo, INPUT_PARADO)
+    assert(longo.unidades.filter((u) => u.lado === 'inimigo' && u.hp > 0).length <= PARTIDA.enemyCap, `M1.i: sem nucleo seu o teto de inimigos (${PARTIDA.enemyCap}) continua valendo depois de 40 ondas`)
+  }
+  // ── M2: o mapa vizinho NASCE com o inimigo já evoluído e mais forte quanto mais longe (pedido do usuário, 22/11) ──
+  // `evoluirInimigo(estado, fator, estagio)`: (a) a base inimiga é recrescida até o ESTÁGIO (nível do núcleo e peças, prontas e com vida cheia) com a mesma regra que as ondas
+  // usam; (b) a VIDA de tudo que o inimigo tem se multiplica pelo FATOR (horda, núcleo, peças) e o fator fica guardado no estado para as ondas FUTURAS nascerem iguais; (c) a QUANTIDADE
+  // não muda; (d) NADA do que é nosso, nem o bioma, entra na cópia. ORÁCULOS medidos no código real (`medir-estagio-base.mjs`, partida em (1,0) parada): onda 2 = núcleo nível 2
+  // + 1 torre hp 50; onda 3 = núcleo nível 3 + a mesma torre pronta.
+  {
+    const inimigas = (s: PartidaState) => s.obras.filter((o) => o.lado === 'inimigo')
+    const nucleoI = (s: PartidaState) => s.obras.find((o) => o.lado === 'inimigo' && o.tipo === 'nucleo')!
+    const hordaDe = (s: PartidaState) => s.unidades.filter((u) => u.lado === 'inimigo' && u.papel === 'horda')
+    const pecasDe = (s: PartidaState) => inimigas(s).filter((o) => o.tipo !== 'nucleo')
+    const novo = createPartida(2, 0, true)
+    const nucleoCru = nucleoI(novo)
+
+    // M2.a: fator 1 e estágio 0 = o mapa como nasce hoje (invariante: nada muda sem camada nem estágio)
+    const igual = evoluirInimigo(novo, 1, 0)
+    assert(JSON.stringify(igual.obras) === JSON.stringify(novo.obras) && JSON.stringify(igual.unidades) === JSON.stringify(novo.unidades), 'M2.a: fator 1 e estágio 0 não mudam a base nem a horda')
+
+    // M2.b: a VIDA se multiplica com o fator e a QUANTIDADE não (decisão de 20/11: «dobro de vida, NÃO dobra a quantidade»)
+    const dobro = evoluirInimigo(novo, 2, 0)
+    assert(hordaDe(dobro).length === 6 && hordaDe(dobro).every((u) => u.hp === 24), `M2.b: fator 2: a horda segue 6 unidades e cada uma com 24 de vida (veio ${hordaDe(dobro).map((u) => u.hp)})`)
+    assert(nucleoI(dobro).hp === 2 * nucleoCru.hp && nucleoI(dobro).maxHp === 2 * nucleoCru.maxHp, `M2.b: fator 2: o núcleo inimigo tem hp e maxHp em dobro (veio ${nucleoI(dobro).hp}/${nucleoI(dobro).maxHp})`)
+    assert(inimigas(dobro).length === inimigas(novo).length && dobro.unidades.length === novo.unidades.length, 'M2.b: fator 2 NÃO dobra a quantidade de obras nem de unidades')
+    const quadruplo = evoluirInimigo(novo, 4, 0)
+    assert(hordaDe(quadruplo).every((u) => u.hp === 48) && nucleoI(quadruplo).hp === 4 * nucleoCru.hp, 'M2.b: fator 4: 48 de vida na horda e 4× no núcleo')
+    const f64 = evoluirInimigo(novo, 64, 0)
+    assert(hordaDe(f64).every((u) => u.hp === 768) && nucleoI(f64).maxHp === 6400, 'M2.b: fator 64 (o teto): a horda tem 768 e o núcleo 6400')
+
+    // M2.c: o ESTÁGIO recresce a base pelas mesmas regras das ondas, com peças PRONTAS e vida cheia (oráculos medidos)
+    const e2 = evoluirInimigo(novo, 1, 2)
+    assert(nucleoI(e2).nivel === 2 && inimigas(e2).length === 2, `M2.c: estágio 2 = núcleo nível 2 e 1 peça além do núcleo (veio nível ${nucleoI(e2).nivel}, ${inimigas(e2).length} obras)`)
+    const torre2 = pecasDe(e2).find((o) => o.tipo === 'torre')
+    assert(torre2 !== undefined && torre2.hp === 50 && torre2.maxHp === 50, 'M2.c: a peça do estágio 2 é uma torre com 50 de vida (oráculo medido)')
+    assert(!obraEmConstrucao(torre2) && (torre2.construindoRestante ?? 0) === 0, 'M2.c: a peça clonada já vem PRONTA (uma em construção morreria no 1º golpe: o clone seria grátis de matar)')
+    const e3 = evoluirInimigo(novo, 1, 3)
+    assert(nucleoI(e3).nivel === 3 && inimigas(e3).length === 2, 'M2.c: estágio 3 = núcleo nível 3 (a onda 3 é a do dragão e não ganha peça)')
+    assert(e3.ondaNumero === 3, 'M2.c: o mapa guarda o estágio como onda atual (as ondas seguem DAÍ, não do zero)')
+    const e8 = evoluirInimigo(novo, 1, 8)
+    assert(nucleoI(e8).nivel === 8 && pecasDe(e8).length === 4, `M2.c: estágio 8 = núcleo nível 8 e 4 peças (ondas 2, 4, 6, 8; veio ${pecasDe(e8).length})`)
+    assert(pecasDe(e8).every((o) => !obraEmConstrucao(o) && o.hp > 0), 'M2.c: todas as peças do estágio 8 vêm prontas e vivas')
+    const posicoes = new Set(inimigas(e8).map((o) => `${o.x.toFixed(2)},${o.z.toFixed(2)}`))
+    assert(posicoes.size === inimigas(e8).length, 'M2.c: nenhuma peça clonada nasce em cima de outra')
+    const idsE8 = e8.obras.map((o) => o.id).concat(e8.unidades.map((u) => u.id))
+    assert(new Set(idsE8).size === idsE8.length && e8.nextId > Math.max(...idsE8), 'M2.c: ids únicos e `nextId` à frente de todos (a próxima obra não colide)')
+
+    // M2.d: estágio E fator juntos: a peça clonada tem a vida multiplicada, cheia (hp = maxHp)
+    const e4f4 = evoluirInimigo(novo, 4, 4)
+    assert(pecasDe(e4f4).length === 2 && pecasDe(e4f4).every((o) => o.hp === o.maxHp && o.hp === (o.tipo === 'torre' ? 200 : 160)), 'M2.d: estágio 4 com fator 4: torre 200 e a outra peça 160, sempre hp = maxHp')
+    assert(nucleoI(e4f4).nivel === 4 && nucleoI(e4f4).hp === 400, 'M2.d: o nível do núcleo vem do ESTÁGIO e a vida do FATOR (não se misturam)')
+
+    // M2.e: o fator fica GUARDADO e as ondas futuras nascem com a vida multiplicada (senão a dificuldade some na 1ª onda)
+    const guardado = evoluirInimigo(novo, 4, 1)
+    assert(guardado.fatorInimigo === 4, 'M2.e: o fator fica guardado no estado')
+    const sitiantesDe = (s: PartidaState) => s.unidades.filter((u) => u.papel === 'sitiante' && u.hp > 0)
+    const longeDeTudo = (s: PartidaState): PartidaState => ({ ...s, heroi: { ...s.heroi, x: 30, z: 30 } })
+    const proxima = anda(longeDeTudo(guardado), PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    assert(proxima.ondaNumero === 2 && sitiantesDe(proxima).length === PARTIDA.levaSeguinte, `M2.e: a leva seguinte tem ${PARTIDA.levaSeguinte} sitiante (a quantidade NÃO se multiplica; veio ${sitiantesDe(proxima).length})`)
+    assert(sitiantesDe(proxima).every((u) => u.hp === 4 * 18), `M2.e: a leva da onda 2 nasce com 4 × 18 = 72 de vida (veio ${sitiantesDe(proxima).map((u) => u.hp)})`)
+    const proximaNormal = anda(longeDeTudo(novo), PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    assert(sitiantesDe(proximaNormal).length > 0 && sitiantesDe(proximaNormal).every((u) => u.hp === 14), 'M2.e: (controle) sem fator a leva da onda 1 nasce com 14 de vida, como hoje')
+    // a PEÇA que a onda par cria depois também nasce multiplicada
+    const aposPar = anda(longeDeTudo(evoluirInimigo(novo, 4, 3)), PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    const pecaNova = pecasDe(aposPar).filter((o) => obraEmConstrucao(o))
+    assert(aposPar.ondaNumero === 4 && pecaNova.length === 1 && pecaNova[0].maxHp === 4 * (pecaNova[0].tipo === 'torre' ? 50 : 40), `M2.e: a peça criada pela onda 4 nasce com a vida multiplicada (maxHp ${pecaNova[0]?.maxHp})`)
+
+    // M2.f: o que NÃO entra na cópia: nada nosso, nem o bioma, nem a selva do lugar (decisão do usuário, 22/11)
+    const dentro = evoluirInimigo(novo, 8, 5)
+    assert(dentro.obras.every((o) => o.lado === 'inimigo') && dentro.unidades.every((u) => u.lado === 'inimigo'), 'M2.f: nada nosso nasce no mapa clonado')
+    assert(dentro.bioma === novo.bioma && JSON.stringify(dentro.recursos) === JSON.stringify(novo.recursos) && JSON.stringify(dentro.lagoas) === JSON.stringify(novo.lagoas), 'M2.f: o bioma, as árvores, as minas e as lagoas seguem as do LUGAR (a selva não é clonada nem escalada)')
+    assert(dentro.madeira === 0 && dentro.ouro === 0 && dentro.credito === novo.credito && dentro.semCorpo === true, 'M2.f: recursos e licenças do jogador intactos')
+    assert(JSON.stringify(dentro.heroi) === JSON.stringify(novo.heroi), 'M2.f: o herói não é tocado')
+    assert(nucleoI(dentro).x === nucleoCru.x && nucleoI(dentro).z === nucleoCru.z && nucleoI(dentro).id === nucleoCru.id, 'M2.f: o núcleo inimigo fica no lugar sorteado para ESTE mapa (a posição é do lugar, não clonada)')
+
+    // M2.g: entradas sujas: fator e estágio inválidos viram «sem efeito», nunca NaN nem vida zero. Cada um SOZINHO (juntos, um mascara o outro: o mutante «estágio NaN passa» morria pelo Infinity)
+    const semEfeito = (r: PartidaState, nome: string) => {
+      assert(r === novo, `M2.g: ${nome} devolve o MESMO estado (sem efeito, sem cópia)`)
+    }
+    for (const sujo of [Number.NaN, -1, 0, 0.5, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      semEfeito(evoluirInimigo(novo, sujo, 0), `fator ${sujo} (estágio 0)`)
+      semEfeito(evoluirInimigo(novo, 1, sujo), `estágio ${sujo} (fator 1)`)
+      const comAmbosSujos = evoluirInimigo(novo, sujo, sujo)
+      assert(inimigas(comAmbosSujos).every((o) => Number.isFinite(o.hp) && o.hp > 0 && Number.isFinite(o.maxHp)) && comAmbosSujos.unidades.every((u) => Number.isFinite(u.hp) && u.hp > 0), `M2.g: fator e estágio ${sujo} juntos não deixam vida NaN, zero ou infinita`)
+    }
+    // um dos dois limpo e o outro sujo: o limpo vale, o sujo é ignorado (o fator 4 vale mesmo com estágio NaN, e o estágio 3 vale mesmo com fator NaN)
+    assert(hordaDe(evoluirInimigo(novo, 4, Number.NaN)).every((u) => u.hp === 48) && nucleoI(evoluirInimigo(novo, 4, Number.NaN)).nivel === 1, 'M2.g: fator 4 com estágio NaN: o fator vale e o estágio é ignorado')
+    assert(nucleoI(evoluirInimigo(novo, Number.NaN, 3)).nivel === 3 && hordaDe(evoluirInimigo(novo, Number.NaN, 3)).every((u) => u.hp === 12), 'M2.g: estágio 3 com fator NaN: o estágio vale e o fator é ignorado')
+    assert(evoluirInimigo(novo, Number.NaN, 3).fatorInimigo === 1, 'M2.g: um fator inválido é guardado como 1× (nunca NaN)')
+    const semBaseInim = { ...novo, obras: [] }
+    assert(evoluirInimigo(semBaseInim, 4, 5).obras.length === 0, 'M2.g: sem base inimiga não nasce base do nada')
+
+    // M2.h: a IDENTIDADE: fator 1 e estágio 0 devolvem o MESMO objeto (nenhuma cópia à toa por mapa nascido), e o que é NOSSO nunca é tocado: nem a vida, nem a construção
+    assert(evoluirInimigo(novo, 1, 0) === novo, 'M2.h: fator 1 e estágio 0 devolvem o próprio estado')
+    const nossaTropa: Unidade = { id: 9001, lado: 'aliado', papel: 'tropa', x: 1, z: 1, hp: 16, postura: 'automatico', ordem: null, cooldown: 0, segmentos: [], alerta: false }
+    const nossaObra: Obra = { id: 9002, lado: 'nosso', tipo: 'quartel', x: -10, z: -10, nivel: 1, hp: 40, maxHp: 40, gateApplied: false, cooldown: 0, construindoRestante: 3, construindoTotal: 6 }
+    const comNossos = { ...novo, unidades: [...novo.unidades, nossaTropa], obras: [...novo.obras, nossaObra] }
+    const misto = evoluirInimigo(comNossos, 8, 5)
+    assert(misto.unidades.find((u) => u.id === 9001)!.hp === 16, 'M2.h: a tropa NOSSA fica com a mesma vida (o fator é do inimigo)')
+    const nossaDepois = misto.obras.find((o) => o.id === 9002)!
+    assert(nossaDepois.hp === 40 && nossaDepois.maxHp === 40, 'M2.h: a obra NOSSA fica com a mesma vida e o mesmo maxHp')
+    assert(nossaDepois.construindoRestante === 3 && obraEmConstrucao(nossaDepois), 'M2.h: a obra NOSSA em construção segue em construção (só as peças INIMIGAS vêm prontas)')
+
+    // M2.i: o fator GUARDADO no estado é lido com defesa: um valor sujo (0,5, 0, negativo, NaN, infinito) nunca zera, estoura nem vira NaN a vida da leva que nasce
+    const proximaSuja = (fatorGuardado: number): PartidaState => anda(longeDeTudo({ ...novo, fatorInimigo: fatorGuardado }), PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    for (const sujo of [0.5, 0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const aposSuja = proximaSuja(sujo)
+      assert(aposSuja.ondaNumero === 1 && aposSuja.unidades.filter((u) => u.papel === 'sitiante' && u.hp > 0).every((u) => u.hp === 14), `M2.i: fator guardado ${sujo} vale 1×: a leva nasce com 14 de vida (veio ${aposSuja.unidades.filter((u) => u.papel === 'sitiante').map((u) => u.hp)})`)
+    }
+    assert(proximaSuja(2).unidades.filter((u) => u.papel === 'sitiante' && u.hp > 0).every((u) => u.hp === 28), 'M2.i: (controle) fator guardado 2 dobra a leva da onda 1 (14 → 28)')
+    const pecaComFatorSujo = anda(longeDeTudo({ ...evoluirInimigo(novo, 1, 3), fatorInimigo: Number.NaN }), PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
+    assert(pecaComFatorSujo.obras.filter((o) => o.lado === 'inimigo' && o.tipo !== 'nucleo' && obraEmConstrucao(o)).every((o) => Number.isFinite(o.maxHp) && o.maxHp > 0), 'M2.i: a peça criada com fator guardado NaN tem vida finita')
+
+    // M2.j: um estágio GIGANTE termina e respeita o teto (sem teto, `Infinity` e 1e9 prenderiam o jogo num laço quase infinito ao cruzar a borda)
+    for (const gigante of [1e6, 1e9, Number.MAX_SAFE_INTEGER]) {
+      const t0 = Date.now()
+      const g = evoluirInimigo(novo, 1, gigante)
+      assert(Date.now() - t0 < 2000, `M2.j: estágio ${gigante} termina em menos de 2 s (o teto de ${40} corta o laço)`)
+      assert(g.ondaNumero === 40 && nucleoI(g).nivel === 40, `M2.j: estágio ${gigante} é cortado no teto da cópia (estágio 40; veio onda ${g.ondaNumero}, nível ${nucleoI(g).nivel})`)
+    }
+    assert(JSON.stringify(evoluirInimigo(novo, 1, 40).obras) === JSON.stringify(evoluirInimigo(novo, 1, 80).obras.filter((o) => o.id < 1e9)), 'M2.j: (medido) a base já satura no estágio 40: o 80 não traz uma peça a mais')
+  }
+
   let comBase = longeDoHeroi
   comBase = anda(comBase, PARTIDA.ondaPeriodo + 0.2, INPUT_PARADO)
   assert(comBase.unidades.some((unidade) => unidade.papel === 'sitiante'), 'leva ataca a base')
@@ -2621,4 +2978,34 @@ function vigiaDeVerdade() {
     tropaObrasFora?.z === 18 && tropaObrasFora.ancora?.z === 0,
     'D-A1 obras controle: só núcleo fora da coleira segura a tropa e conserva a âncora',
   )
+
+  // ── Graus ENEM 5..7 (base 2), PARTIDA.vidaCap = 999_999 e altar sem placas físicas ──
+  {
+    for (const g of [5, 6, 7] as const) {
+      const esperadoBonus = 2 ** (g + 1) // 64, 128, 256
+      assert(GRAU_PARTIDA[g].bonus === esperadoBonus, `Grau ${g}: esperava bonus ${esperadoBonus}, veio ${GRAU_PARTIDA[g].bonus}`)
+      const pago = aplicarConta(createPartida(), g)
+      assert(pago.heroi.army === 10 + esperadoBonus, `Grau ${g}: aplicarConta deve somar +${esperadoBonus}`)
+      assert(pago.credito === 4 + GRAU_PARTIDA[g].credito, `Grau ${g}: aplicarConta deve pagar ${GRAU_PARTIDA[g].credito} licenças`)
+    }
+
+    assert(PARTIDA.vidaCap === 999_999, `PARTIDA.vidaCap esperado 999_999, veio ${PARTIDA.vidaCap}`)
+    const quaseTeto = { ...createPartida(), heroi: { ...createPartida().heroi, army: 999_990 } }
+    const noTetoConta = aplicarConta(quaseTeto, 5)
+    assert(noTetoConta.heroi.army === PARTIDA.vidaCap, `vidaCap não limitou aplicarConta: ${noTetoConta.heroi.army}`)
+    assert(noTetoConta.altar === null || noTetoConta.altar.ganhoVida === 9, 'ganhoVida real deve ser 9 ao encostar no teto 999_999')
+
+    const altarEnem = abrirAltar(createPartida(), 5, 0, false)
+    assert(altarEnem.altar?.placasAtivas === false, 'questão ENEM de 5 opções deve abrir altar com placasAtivas = false')
+    const pisouEmTodas = [
+      { x: altarEnem.altar!.cx, z: altarEnem.altar!.cz + PARTIDA.altarPasso },
+      { x: altarEnem.altar!.cx + PARTIDA.altarPasso, z: altarEnem.altar!.cz },
+      { x: altarEnem.altar!.cx, z: altarEnem.altar!.cz - PARTIDA.altarPasso },
+      { x: altarEnem.altar!.cx - PARTIDA.altarPasso, z: altarEnem.altar!.cz },
+    ].reduce((st, pos) => stepPartida({ ...st, heroi: { ...st.heroi, x: pos.x, z: pos.z } }, INPUT_PARADO, 0.05), altarEnem)
+    assert(
+      pisouEmTodas.altar?.resolvido === false && pisouEmTodas.altar?.erros === 0,
+      'altar com placasAtivas=false nunca resolve nem registra erro pelas 4 placas 3D',
+    )
+  }
 }

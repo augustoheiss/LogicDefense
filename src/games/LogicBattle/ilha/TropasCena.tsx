@@ -4,6 +4,7 @@ import type { Group, Mesh } from 'three'
 import { PARTIDA } from './partidaPolicies'
 import type { PartidaState, Unidade } from './partidaSim'
 import { inimigoVisivel } from './partidaSim'
+import { haloDoInimigo, RAIO_DO_HALO } from './haloInimigo'
 import { raycastCondicional, semRaycast } from './raycastCena'
 
 interface TropasCenaProps {
@@ -16,6 +17,11 @@ interface TropasCenaProps {
   modoBloco: 'adicionar' | 'remover' | null
   modoBlocoRef: React.MutableRefObject<'adicionar' | 'remover' | null>
   deveIgnorarClique?: () => boolean
+  /**
+   * O jogador tem tropa ou herói selecionados E não está num modo de construção (blocos, linha, consagrar): só então as tropas inimigas ganham o halo de clique (`haloDoInimigo`). Calculado em
+   * `IlhaRua` (que conhece os 3 modos e a seleção); aqui só se aplica a regra por tropa (lado, vida, visibilidade).
+   */
+  haloAtivo?: boolean
   onUnit: (id: number, lado: 'aliado' | 'inimigo', shiftKey?: boolean) => void
 }
 
@@ -30,6 +36,7 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
   modoBloco,
   modoBlocoRef,
   deveIgnorarClique,
+  haloAtivo = false,
   onUnit,
 }) => {
   const selectedSet = new Set(selectedIds)
@@ -143,6 +150,20 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
                   <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
                     <ringGeometry args={[0.42, 0.58, 22]} />
                     <meshBasicMaterial color="#facc15" depthWrite={false} />
+                  </mesh>
+                )}
+                {haloDoInimigo({
+                  lado: unidade.lado,
+                  hp: unidade.hp,
+                  visivel: unidade.lado === 'inimigo' && inimigoVisivel(sim.current, unidade),
+                  temSelecao: haloAtivo,
+                  modoDeBlocos: bloquearClique,
+                }) && (
+                  // Halo de clique (pedido do usuário, 22/11): um cilindro INVISÍVEL maior que o corpo (raio `RAIO_DO_HALO`, altura do soldado). `opacity={0}` e NÃO `visible={false}`: o three.js não faz
+                  // raycast em malha invisível. Fica no mesmo grupo e herda `onClick`/`onPointerDown`/`onPointerUp`: nenhuma ordem nova, só um alvo maior. `data-halo` para a sonda de navegador achar.
+                  <mesh position={[0, 0.9, 0]} userData={{ halo: true }} raycast={raycastCondicional(bloquearClique)}>
+                    <cylinderGeometry args={[RAIO_DO_HALO, RAIO_DO_HALO, 1.8, 12]} />
+                    <meshBasicMaterial transparent opacity={0} depthWrite={false} />
                   </mesh>
                 )}
               </>

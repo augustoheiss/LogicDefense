@@ -101,7 +101,7 @@ function tentativaValida(x: unknown): x is Tentativa {
   const t = x as Record<string, unknown>
   return (
     ehNumero(t.q) && t.q >= 0 &&
-    ehNumero(t.g) && Number.isInteger(t.g) && t.g >= 1 && t.g <= 4 &&
+    ehNumero(t.g) && Number.isInteger(t.g) && t.g >= 1 && t.g <= 7 &&
     ehTexto(t.c) && ehTexto(t.a) && ehTexto(t.k) &&
     ehNumero(t.e) && Number.isInteger(t.e) && t.e >= 0 &&
     ehNumero(t.t) && t.t >= 0

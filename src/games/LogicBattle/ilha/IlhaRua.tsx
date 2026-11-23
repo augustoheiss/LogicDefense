@@ -3,14 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Group, InstancedMesh, Mesh } from 'three'
 import { Object3D, Vector2 } from 'three'
-import {
-  generateInfiniteChallenge,
-  getRecentMathSignaturesSnapshot,
-  hydrateSeenMathSignatures,
-  InfiniteMathChallenge,
-  MATH_CHALLENGE_TIER_POLICIES,
-  MathDifficultyTier,
-} from './infiniteMathEngine'
+import { getRecentMathSignaturesSnapshot, hydrateSeenMathSignatures } from './infiniteMathEngine'
 import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
 import {
   AlvoEdicaoUnificado,
@@ -29,7 +22,7 @@ import {
 import { meiaLarguraNv5 } from './blocosNv5Blueprints'
 import { validarAdicionarBlocoObraLivre } from './obraBlocosLivres'
 import { IndiceBlocoMundo, IndiceVoxelNv5, ObraArquiteturaMesh } from './ObrasArquiteturaCena'
-import { OBSTACULOS, Olhar, PARTIDA, PecaId } from './partidaPolicies'
+import { GrauConta, OBSTACULOS, Olhar, PARTIDA, PecaId } from './partidaPolicies'
 import {
   abrirAltar,
   alcanceDoTiro,
@@ -61,6 +54,7 @@ import {
   ordenarHeroi,
   planejarLinhaNoEstado,
   podeConsagrarEm,
+  podeEvoluir,
   podeFundarEm,
   pular,
   registrarErroNoAltar,
@@ -87,6 +81,7 @@ import {
   abrirMapa,
   criarAtlas,
   definirPoliticaMinimapas,
+  Dono,
   escreverCena,
   estadoCena,
   estadoCorpo,
@@ -97,9 +92,22 @@ import {
 } from './atlas'
 import { IconeId, IconeSvg, META_INTENCOES } from './ilhaIcones'
 import { armazenamentoDoNavegador, carregarAssinaturas, salvarAssinaturas } from './memoriaDeContas'
-import { textoDaContaComErros } from './buffPorErro'
+import { fatorDoBuff, textoDaContaComErros } from './buffPorErro'
 import { carregarCaderno, chaveCurta, registrarTentativa, salvarCaderno, type Caderno } from './cadernoDeEstudo'
+import { CadernoEstudoOverlay } from './estudo/CadernoEstudoOverlay'
+import type { DesafioUnificado } from './estudo/contratosEstudo'
+import { gerarDiagnosticoEstudo } from './estudo/diagnosticoEstudo'
+import { ModalConta } from './estudo/ModalConta'
+import { selecionarProximoDesafio } from './estudo/orquestradorQuestoes'
 import {
+  estadoEstudoVazio,
+  type EstadoEstudoLocal,
+  type EventoEstudo,
+  type RepositorioEstudo,
+} from './estudo/repositorioEstudo'
+import { criarRepositorioIndexedDb } from './estudo/repositorioIndexedDb'
+import {
+  acaoDeAtalhoEstudo,
   alvoDoTeclado,
   cliqueAbreOPainelDaObra,
   destinoDoToque,
@@ -110,7 +118,20 @@ import {
   precoDeEvoluir,
   proximaEntradaPorTeclado,
   teclaDoBotaoFocado,
+  type TelaEstudo,
 } from './atalhosIlha'
+
+interface ContaAtiva {
+  readonly desafio: DesafioUnificado
+  readonly dicasAbertas: 0 | 1 | 2 | 3
+  readonly erradasClicadas: readonly string[]
+  readonly diagnosticoAtual: string
+  readonly ultimoGanhoPt?: string
+  readonly abertaEmMs: number
+  readonly erros: number
+  readonly resolvida: boolean
+  readonly gravada: boolean
+}
 
 // O preço de evoluir, lido da mesma constante que `evoluir` cobra. Nenhum texto da tela reescreve esse número.
 const PRECO_EVOLUIR = precoDeEvoluir({
@@ -121,9 +142,21 @@ const PRECO_EVOLUIR = precoDeEvoluir({
 import { MundoSandboxCena } from './MundoSandboxCena'
 import { raycastCondicional, semRaycast } from './raycastCena'
 import { SeloDeVida } from './SeloDeVida'
-import { textoGanhoDaConta } from './textosVida'
+import { textoDaRecusaDeEvoluir, textoGanhoDaConta } from './textosVida'
 import { TropasCena } from './TropasCena'
 import './ilha.css'
+
+/** O que o jogador lê ao passar o mouse num quadrado do minimapa: quem domina aquele mapa. `Record<Dono, string>`: um dono novo sem texto não compila. */
+const TEXTO_DO_DONO: Record<Dono, string> = {
+  nosso: 'seu (ou de aliados)',
+  inimigo: 'do inimigo',
+  selvagem: 'selvagem (dominado pela natureza)',
+}
+
+/** O que o jogador lê quando «Evoluir» é recusado: o MOTIVO REAL vindo de `podeEvoluir` (uma fonte só), com o preço só quando o motivo é falta de recurso. */
+function motivoDeNaoEvoluir(estado: PartidaState, obraId: number): string {
+  return textoDaRecusaDeEvoluir(podeEvoluir(estado, obraId), PRECO_EVOLUIR)
+}
 
 function compassLetter(yaw: number): string {
   const angle = Math.atan2(Math.sin(yaw), Math.cos(yaw))
@@ -881,7 +914,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     }
     props.onQuadro(
       resumoAtlas(props.atlas.current)
-        .map((ficha) => `${ficha.i},${ficha.j},${ficha.alerta},${ficha.ritmo},${ficha.cena ? 1 : 0},${ficha.corpo ? 1 : 0}`)
+        .map((ficha) => `${ficha.i},${ficha.j},${ficha.alerta},${ficha.ritmo},${ficha.cena ? 1 : 0},${ficha.corpo ? 1 : 0},${ficha.dono}`)
         .join('|') +
         `:${props.atlas.current.politica}:${props.atlas.current.cotaDinamica}:${estadoCorpo(props.atlas.current).derrota ? 1 : 0}:${estadoCorpo(props.atlas.current).heroi.army}`,
     )
@@ -889,14 +922,15 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   })
 
   const altar = props.sim.current.altar
-  const pisos = altar
-    ? [
-        { nome: 'N', x: altar.cx, z: altar.cz + PARTIDA.altarPasso },
-        { nome: 'L', x: altar.cx + PARTIDA.altarPasso, z: altar.cz },
-        { nome: 'S', x: altar.cx, z: altar.cz - PARTIDA.altarPasso },
-        { nome: 'O', x: altar.cx - PARTIDA.altarPasso, z: altar.cz },
-      ]
-    : []
+  const pisos =
+    altar && altar.placasAtivas !== false
+      ? [
+          { nome: 'N', x: altar.cx, z: altar.cz + PARTIDA.altarPasso },
+          { nome: 'L', x: altar.cx + PARTIDA.altarPasso, z: altar.cz },
+          { nome: 'S', x: altar.cx, z: altar.cz - PARTIDA.altarPasso },
+          { nome: 'O', x: altar.cx - PARTIDA.altarPasso, z: altar.cz },
+        ]
+      : []
 
   return (
     <>
@@ -1118,6 +1152,12 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         modoBloco={props.modoBloco}
         modoBlocoRef={props.modoBlocoRef}
         deveIgnorarClique={() => props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160}
+        haloAtivo={
+          !props.modoLinhaRef.current &&
+          !props.modoConsagrarRef.current &&
+          (props.selectedIds.some((id) => props.sim.current.unidades.some((u) => u.id === id && u.lado === 'aliado' && u.hp > 0)) ||
+            (props.heroiEscolhido && !props.sim.current.semCorpo))
+        }
         onUnit={props.onUnit}
       />
       {pisos.map((piso) => (
@@ -1157,13 +1197,14 @@ export const IlhaRua: React.FC = () => {
   const [mapaTick, setMapaTick] = useState(0)
   const timeScale = useRef(1)
   const memoriaRestaurada = useRef(false)
-  // Caderno de estudo (E2): carregado UMA vez, atualizado a cada conta resolvida. `desafioAtual` e `abertaEmMs` guardam a conta ABERTA numa ref (não no estado do React): o
-  // `onHud` do canvas é um callback que pode enxergar um `challenge` velho, e a ref sempre tem o da conta de agora. `contaGravada` evita gravar a mesma conta duas vezes.
+  const assinaturasVistasRef = useRef<Set<string>>(new Set())
+  // Caderno de estudo (E2 + Fases Q2–Q4): `repoEstudoRef` persiste em IndexedDB (com fallback em memória) os 4 eventos
+  // pedagógicos e mantém compatibilidade não destrutiva com `cadernoDeEstudo` v1. `contaAtivaRef` evita closures velhos no `onHud`.
   const cadernoRef = useRef<Caderno | null>(null)
-  const desafioAtual = useRef<InfiniteMathChallenge | null>(null)
-  const abertaEmMs = useRef(0)
-  const contaGravada = useRef(true)
+  const repoEstudoRef = useRef<RepositorioEstudo | null>(null)
+  const eventoQueueRef = useRef<Promise<void>>(Promise.resolve())
   const modalOpen = useRef(false)
+  const reqContaIdRef = useRef(0)
   const keys = useRef<Controle>({ forward: false, back: false, strafe: 0 })
   const lookDrag = useRef<{ x: number; y: number } | null>(null)
   const lookPonteiro = useRef<number | null>(null)
@@ -1191,10 +1232,33 @@ export const IlhaRua: React.FC = () => {
   const modoMoverTouchRef = useRef(false)
   modoMoverTouchRef.current = modoMoverTouch
   const [hud, setHud] = useState(sim.current)
-  const [open, setOpen] = useState(false)
-  const [tier, setTier] = useState<MathDifficultyTier>(1)
-  const [challenge, setChallenge] = useState<InfiniteMathChallenge | null>(null)
-  const [note, setNote] = useState('')
+  const [telaEstudo, setTelaEstudo] = useState<TelaEstudo>('jogo')
+  const telaEstudoRef = useRef<TelaEstudo>('jogo')
+  telaEstudoRef.current = telaEstudo
+  const [tier, setTier] = useState<GrauConta>(1)
+  const tierRef = useRef<GrauConta>(1)
+  tierRef.current = tier
+  const [contaAtiva, setContaAtiva] = useState<ContaAtiva | null>(null)
+  const contaAtivaRef = useRef<ContaAtiva | null>(null)
+  contaAtivaRef.current = contaAtiva
+  const [carregandoConta, setCarregandoConta] = useState(false)
+  const [erroCarregamentoConta, setErroCarregamentoConta] = useState(false)
+  const [temaTreinoAtivo, setTemaTreinoAtivo] = useState<string | null>(null)
+  const temaTreinoRef = useRef<string | null>(null)
+  temaTreinoRef.current = temaTreinoAtivo
+  const [estadoEstudo, setEstadoEstudo] = useState<EstadoEstudoLocal>(() => estadoEstudoVazio())
+  const estadoEstudoRef = useRef(estadoEstudo)
+  estadoEstudoRef.current = estadoEstudo
+  const [statusCaderno, setStatusCaderno] = useState('')
+  const openContaRef = useRef<
+    (
+      nextTier: GrauConta,
+      opcoes?: { readonly temaPreferido?: string | null; readonly forcarNova?: boolean; readonly registrarAbandono?: boolean },
+    ) => void
+  >(() => {})
+  const ativarTelaEstudoRef = useRef<(proxima: TelaEstudo) => void>(() => {})
+  const alternarCadernoRef = useRef<() => void>(() => {})
+  const diagnostico = useMemo(() => gerarDiagnosticoEstudo(estadoEstudo), [estadoEstudo])
   const [power, setPower] = useState('')
   const [ferramenta, setFerramenta] = useState('')
   const [intencao, setIntencao] = useState<IconeId | null>(null)
@@ -1282,7 +1346,7 @@ export const IlhaRua: React.FC = () => {
     setGhostBloco(null)
     setGhostObra(null)
     setPreviewLinha(null)
-    setOpen(false)
+    ativarTelaEstudo('jogo')
   }
 
   const podeComandar = () => !estadoCorpo(atlasRef.current).derrota && (sim.current.semCorpo || sim.current.olhar === 'imperio')
@@ -1423,6 +1487,38 @@ export const IlhaRua: React.FC = () => {
     window.addEventListener('pointerdown', registrarPonteiro, true)
     const down = (event: KeyboardEvent) => {
       entradaPorTeclado.current = proximaEntradaPorTeclado({ tipo: 'tecla', code: event.code }, entradaPorTeclado.current)
+      const acaoEstudo = acaoDeAtalhoEstudo({
+        code: event.code,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        repeat: event.repeat,
+        tela: telaEstudoRef.current,
+        alvo: alvoDoTeclado(event.target),
+      })
+      if (acaoEstudo === 'alternar_conta') {
+        event.preventDefault()
+        if (telaEstudoRef.current === 'conta') {
+          ativarTelaEstudoRef.current('jogo')
+        } else if (sim.current.semCorpo || estadoCorpo(atlasRef.current).derrota) {
+          return
+        } else if (contaAtivaRef.current && !contaAtivaRef.current.resolvida) {
+          ativarTelaEstudoRef.current('conta')
+        } else {
+          openContaRef.current(tierRef.current, { forcarNova: true })
+        }
+        return
+      }
+      if (acaoEstudo === 'alternar_caderno') {
+        event.preventDefault()
+        alternarCadernoRef.current()
+        return
+      }
+      if (acaoEstudo === 'voltar_jogo') {
+        event.preventDefault()
+        ativarTelaEstudoRef.current('jogo')
+        return
+      }
       if (modalOpen.current) return
       // O Esc é do jogo, EXCETO com o foco num campo de texto ou num controle que trata o próprio Esc (selo de vida: ele fecha a PRÓPRIA legenda).
       // Este handler é de CAPTURA na window e roda antes do onKeyDown do React: sem esta consulta o card/painel fechava por baixo da legenda.
@@ -1560,11 +1656,12 @@ export const IlhaRua: React.FC = () => {
           blocoPonteiro.current.arrastou = true
         }
       }
+      if (modalOpen.current) return
       if (stickPonteiro.current === event.pointerId) {
         moverManche(event.clientX, event.clientY)
         return
       }
-      if (sim.current.semCorpo || sim.current.olhar === 'imperio' || modalOpen.current) return
+      if (sim.current.semCorpo || sim.current.olhar === 'imperio') return
       if (document.pointerLockElement && event.pointerType !== 'touch') {
         sim.current = mira(sim.current, event.movementX * 0.003, -event.movementY * 0.003)
         return
@@ -1630,6 +1727,9 @@ export const IlhaRua: React.FC = () => {
   // então o painel ficava preso no ref (OBS-F2-1b, medido pelo T2 observando outro quadrado).
   const derrotaDoCorpo = estadoCorpo(atlasRef.current).derrota
   useEffect(() => {
+    if (derrotaDoCorpo && telaEstudoRef.current === 'conta') {
+      ativarTelaEstudoRef.current('jogo')
+    }
     const id = painelObraRef.current
     if (id === null) return
     if (painelValido(id, hud.obras, derrotaDoCorpo)) return
@@ -1660,73 +1760,339 @@ export const IlhaRua: React.FC = () => {
     document.exitPointerLock?.()
   }
 
-  const openConta = (nextTier: MathDifficultyTier) => {
+  useEffect(() => {
+    let ativo = true
+    const repo = criarRepositorioIndexedDb()
+    repoEstudoRef.current = repo
+    void repo
+      .inicializar()
+      .then(() => repo.lerEstado())
+      .then((st) => {
+        if (ativo) setEstadoEstudo(st)
+      })
+      .catch(() => {})
+    return () => {
+      ativo = false
+    }
+  }, [])
+
+  const registrarEventoEstudo = (evento: EventoEstudo) => {
+    const repo = repoEstudoRef.current
+    if (!repo) return
+    eventoQueueRef.current = eventoQueueRef.current
+      .then(async () => {
+        await repo.registrarEvento(evento)
+        const atualizado = await repo.lerEstado()
+        setEstadoEstudo(atualizado)
+      })
+      .catch(() => {})
+  }
+
+  const ativarTelaEstudo = (proxima: TelaEstudo) => {
+    telaEstudoRef.current = proxima
+    setTelaEstudo(proxima)
+    if (proxima !== 'jogo') {
+      keys.current = { forward: false, back: false, strafe: 0 }
+      stickPonteiro.current = null
+      stickOrigem.current = null
+      lookDrag.current = null
+      lookPonteiro.current = null
+      segurandoTiro.current = false
+      tiroPonteiro.current = null
+      blocoPonteiro.current = null
+      stickEl.current?.classList.remove('ativo')
+      if (knobEl.current) knobEl.current.style.transform = 'translate(0px, 0px)'
+      document.exitPointerLock?.()
+    } else {
+      const ativoEl = document.activeElement as HTMLElement | null
+      if (ativoEl && ativoEl.closest('.ilha-hud, .ilha-modal, .ilha-caderno')) {
+        ativoEl.blur()
+      }
+      entradaPorTeclado.current = false
+    }
+  }
+  ativarTelaEstudoRef.current = ativarTelaEstudo
+
+  const gravarContaV1 = (desafio: DesafioUnificado, erros: number, tempoMs: number) => {
+    try {
+      const armazenamento = armazenamentoDoNavegador()
+      if (cadernoRef.current === null) cadernoRef.current = carregarCaderno(armazenamento)
+      cadernoRef.current = registrarTentativa(cadernoRef.current, {
+        q: Date.now(),
+        g: desafio.grau,
+        c: desafio.temaId,
+        a: desafio.arquetipoOuItemId,
+        e: erros,
+        t: tempoMs,
+        k: chaveCurta(desafio.assinatura),
+      })
+      salvarCaderno(armazenamento, cadernoRef.current)
+    } catch {
+      // Armazenamento indisponível ou cheio nunca interrompe o jogo
+    }
+  }
+
+  const registrarAbandonoSePendente = () => {
+    const ativa = contaAtivaRef.current
+    if (!ativa || ativa.resolvida) return
+    const tempoAbertoMs = Math.max(0, Math.round(performance.now() - ativa.abertaEmMs))
+    registrarEventoEstudo({
+      tipo: 'abandono',
+      quando: Date.now(),
+      itemId: ativa.desafio.id,
+      origem: ativa.desafio.origem,
+      temaId: ativa.desafio.temaId,
+      grau: ativa.desafio.grau,
+      errosAntesDeFechar: ativa.erros,
+      maiorDicaUsada: ativa.dicasAbertas,
+      tempoAbertoMs,
+    })
+    if (sim.current.altar && !sim.current.altar.resolvido) {
+      publicar(fecharAltar(sim.current))
+    }
+  }
+
+  const openConta = (
+    nextTier: GrauConta,
+    opcoes?: { readonly temaPreferido?: string | null; readonly forcarNova?: boolean; readonly registrarAbandono?: boolean },
+  ) => {
     if (sim.current.semCorpo || estadoCorpo(atlasRef.current).derrota) return
-    setTier(nextTier)
-    // Memória de contas (E1): na PRIMEIRA conta da carga da página, restaura as assinaturas já vistas (o anel do motor mora em memória e zera ao
-    // recarregar; sem isto, quem abre as contas nos mesmos instantes de partida reencontra as MESMAS perguntas: medido 100 % em 400 pares).
-    // `hydrateSeenMathSignatures` é idempotente (ignora o que já está no anel); `armazenamentoDoNavegador()` e `salvar` nunca lançam.
+    const grauReal: GrauConta = !PARTIDA.enemHabilitado && nextTier > 4 ? 4 : nextTier
+    const ativa = contaAtivaRef.current
+    if (ativa && !ativa.resolvida && opcoes?.registrarAbandono !== false) {
+      registrarAbandonoSePendente()
+    } else if (ativa && !ativa.resolvida && sim.current.altar && !sim.current.altar.resolvido) {
+      publicar(fecharAltar(sim.current))
+    }
+    const proximoTema =
+      opcoes && 'temaPreferido' in opcoes ? (opcoes.temaPreferido ?? null) : temaTreinoRef.current
+    setTemaTreinoAtivo(proximoTema)
+    temaTreinoRef.current = proximoTema
+    setTier(grauReal)
+    tierRef.current = grauReal
+    contaAtivaRef.current = null
+    setContaAtiva(null)
+    setErroCarregamentoConta(false)
+    setCarregandoConta(true)
+    ativarTelaEstudo('conta')
+
     if (!memoriaRestaurada.current) {
       memoriaRestaurada.current = true
-      hydrateSeenMathSignatures(carregarAssinaturas(armazenamentoDoNavegador()))
+      const antigas = carregarAssinaturas(armazenamentoDoNavegador())
+      hydrateSeenMathSignatures(antigas)
+      for (const s of antigas) assinaturasVistasRef.current.add(s)
     }
-    const proxima = generateInfiniteChallenge({ tier: nextTier, seed: 42 + nextTier + sim.current.tempo })
-    salvarAssinaturas(armazenamentoDoNavegador(), getRecentMathSignaturesSnapshot())
-    setChallenge(proxima)
-    // Caderno (E2): esta é a conta de AGORA. Guarda o desafio e o instante (para o tempo até acertar) e destrava a gravação (uma conta grava UMA vez).
-    desafioAtual.current = proxima
-    abertaEmMs.current = performance.now()
-    contaGravada.current = false
-    setNote('')
-    setOpen(true)
-    const correta = proxima.choices.findIndex((item) => item.isCorrect)
-    const indice = (correta < 0 ? 0 : correta) % 4
-    publicar(abrirAltar(sim.current, nextTier, indice as 0 | 1 | 2 | 3))
-    document.exitPointerLock?.()
-  }
 
-  /**
-   * Caderno de estudo (E2): grava a conta que ACABOU de ser resolvida (acerto), com os erros que o aluno cometeu antes e o tempo que levou. É o ÚNICO ponto de gravação, chamado
-   * pelos DOIS caminhos de acerto (clicar no modal e pisar na placa certa): a conta resolve em lugares diferentes, e gravar em cada um por conta própria arriscava gravar 0 ou 2 vezes.
-   * `contaGravada` é a trava (zerada no `openConta`). Nunca lança: o caderno é um extra, e um armazenamento quebrado não pode atrapalhar o jogo.
-   */
-  const gravarConta = (erros: number) => {
-    const desafio = desafioAtual.current
-    if (!desafio || contaGravada.current) return
-    contaGravada.current = true
-    const armazenamento = armazenamentoDoNavegador()
-    if (cadernoRef.current === null) cadernoRef.current = carregarCaderno(armazenamento)
-    cadernoRef.current = registrarTentativa(cadernoRef.current, {
-      q: Date.now(),
-      g: desafio.tier,
-      c: desafio.conceptId,
-      a: desafio.archetypeId,
-      e: erros,
-      t: Math.max(0, Math.round(performance.now() - abertaEmMs.current)),
-      k: chaveCurta(desafio.signature),
+    const reqId = ++reqContaIdRef.current
+    const seed = Math.max(1, Math.round(42 + grauReal * 17 + sim.current.tempo * 100 + reqId * 31))
+    void selecionarProximoDesafio({
+      grau: grauReal,
+      estadoEstudo: estadoEstudoRef.current,
+      temaPreferido: proximoTema,
+      assinaturasVistas: assinaturasVistasRef.current,
+      seed,
     })
-    salvarCaderno(armazenamento, cadernoRef.current)
+      .then((proxima) => {
+        if (reqId !== reqContaIdRef.current) return
+        if (sim.current.semCorpo || estadoCorpo(atlasRef.current).derrota) {
+          setCarregandoConta(false)
+          ativarTelaEstudo('jogo')
+          return
+        }
+        assinaturasVistasRef.current.add(proxima.assinatura)
+        const combinadas = [...new Set([...getRecentMathSignaturesSnapshot(), ...assinaturasVistasRef.current])].slice(-120)
+        salvarAssinaturas(armazenamentoDoNavegador(), combinadas)
+
+        const novaConta: ContaAtiva = {
+          desafio: proxima,
+          dicasAbertas: 0,
+          erradasClicadas: [],
+          diagnosticoAtual: '',
+          abertaEmMs: performance.now(),
+          erros: 0,
+          resolvida: false,
+          gravada: false,
+        }
+        contaAtivaRef.current = novaConta
+        setContaAtiva(novaConta)
+        setCarregandoConta(false)
+
+        const correta = proxima.alternativas.findIndex((item) => item.correta)
+        const indice = ((correta < 0 ? 0 : correta) % 4) as 0 | 1 | 2 | 3
+        publicar(abrirAltar(sim.current, grauReal, indice, proxima.altarFisicoCompativel))
+      })
+      .catch(() => {
+        if (reqId === reqContaIdRef.current) {
+          setCarregandoConta(false)
+          setErroCarregamentoConta(true)
+        }
+      })
+  }
+  openContaRef.current = openConta
+
+  alternarCadernoRef.current = () => {
+    setStatusCaderno('')
+    ativarTelaEstudo(telaEstudoRef.current === 'caderno' ? 'jogo' : 'caderno')
   }
 
-  const answer = (choiceId: string) => {
-    if (!challenge) return
-    const choice = challenge.choices.find((item) => item.id === choiceId)
-    if (!choice) return
-    if (!choice.isCorrect) {
-      // E3: errar custa. Cada clique errado soma 1 erro NA CONTA ABERTA (o `Altar`, estado da simulação), e `aplicarConta` divide o buff por 2 a cada erro. Pisar
-      // numa placa errada no mundo soma no MESMO contador (`altarNoPasso`), então a regra não se contorna escolhendo um caminho ou o outro.
-      publicar(registrarErroNoAltar(sim.current))
-      setNote(choice.diagnosticPt)
+  const pedirDica = (nivel: 1 | 2 | 3) => {
+    const ativa = contaAtivaRef.current
+    if (!ativa || ativa.resolvida || nivel <= ativa.dicasAbertas) return
+    const novoNivel = Math.max(ativa.dicasAbertas, nivel) as 0 | 1 | 2 | 3
+    const atualizada: ContaAtiva = { ...ativa, dicasAbertas: novoNivel }
+    contaAtivaRef.current = atualizada
+    setContaAtiva(atualizada)
+    registrarEventoEstudo({
+      tipo: 'dica_pedida',
+      quando: Date.now(),
+      itemId: ativa.desafio.id,
+      origem: ativa.desafio.origem,
+      temaId: ativa.desafio.temaId,
+      grau: ativa.desafio.grau,
+      nivelDica: nivel,
+      tempoDesdeAberturaMs: Math.max(0, Math.round(performance.now() - ativa.abertaEmMs)),
+    })
+  }
+
+  const responderAlternativa = (altId: string) => {
+    const ativa = contaAtivaRef.current
+    if (!ativa || ativa.resolvida) return
+    if (sim.current.semCorpo || sim.current.derrota || estadoCorpo(atlasRef.current).derrota) return
+    const alt = ativa.desafio.alternativas.find((item) => item.id === altId)
+    if (!alt) return
+
+    const tempoDesdeAberturaMs = Math.max(0, Math.round(performance.now() - ativa.abertaEmMs))
+    if (!alt.correta) {
+      const depoisErro = registrarErroNoAltar(sim.current)
+      publicar(depoisErro)
+      const novosErros = depoisErro.altar?.erros ?? ativa.erros + 1
+      const erradasClicadas = ativa.erradasClicadas.includes(altId)
+        ? ativa.erradasClicadas
+        : [...ativa.erradasClicadas, altId]
+      const atualizada: ContaAtiva = {
+        ...ativa,
+        erros: novosErros,
+        erradasClicadas,
+        diagnosticoAtual: alt.diagnosticoPt,
+      }
+      contaAtivaRef.current = atualizada
+      setContaAtiva(atualizada)
+      registrarEventoEstudo({
+        tipo: 'erro_alternativa',
+        quando: Date.now(),
+        itemId: ativa.desafio.id,
+        origem: ativa.desafio.origem,
+        temaId: ativa.desafio.temaId,
+        grau: ativa.desafio.grau,
+        alternativaId: alt.id,
+        tagErro: alt.tagErro,
+        tempoDesdeAberturaMs,
+      })
       return
     }
-    // O ganho é lido do estado ANTES e DEPOIS da conta, não da tabela: com a vida no teto o bônus da tabela mentiria.
+
     const antes = sim.current
-    const depois = aplicarConta(antes, tier)
+    const totalErros = Math.max(ativa.erros, antes.altar?.erros ?? 0)
+    const depois = aplicarConta(antes, ativa.desafio.grau)
     publicar(depois)
-    gravarConta(antes.altar?.erros ?? 0)
-    // O crédito mostrado é o que a conta de fato pagou (reduzido pelos erros), não o da tabela: lido do estado, como a vida. O motivo da redução vai ao lado.
-    setPower(textoDaContaComErros(textoGanhoDaConta(antes.heroi.army, depois.heroi.army, depois.credito - antes.credito), antes.altar?.erros ?? 0))
-    setOpen(false)
+
+    const ganhoBase = textoDaContaComErros(
+      textoGanhoDaConta(antes.heroi.army, depois.heroi.army, depois.credito - antes.credito),
+      totalErros,
+    )
+    const madeiraGanha = Math.max(0, depois.madeira - antes.madeira)
+    const ouroGanho = Math.max(0, depois.ouro - antes.ouro)
+    const extras: string[] = []
+    if (madeiraGanha > 0) extras.push(`+${madeiraGanha} madeira`)
+    if (ouroGanho > 0) extras.push(`+${ouroGanho} ouro`)
+    const ganhoModal = extras.length > 0 ? `${ganhoBase} · ${extras.join(' · ')}` : ganhoBase
+
+    const atualizada: ContaAtiva = {
+      ...ativa,
+      erros: totalErros,
+      resolvida: true,
+      gravada: true,
+      diagnosticoAtual: alt.diagnosticoPt,
+      ultimoGanhoPt: ganhoModal,
+    }
+    contaAtivaRef.current = atualizada
+    setContaAtiva(atualizada)
+    registrarEventoEstudo({
+      tipo: 'acerto',
+      quando: Date.now(),
+      itemId: ativa.desafio.id,
+      assinatura: ativa.desafio.assinatura,
+      origem: ativa.desafio.origem,
+      temaId: ativa.desafio.temaId,
+      grau: ativa.desafio.grau,
+      errosNaConta: totalErros,
+      maiorDicaUsada: ativa.dicasAbertas,
+      tempoTotalMs: tempoDesdeAberturaMs,
+      fatorBuff: fatorDoBuff(totalErros),
+    })
+    gravarContaV1(ativa.desafio, totalErros, tempoDesdeAberturaMs)
+    setPower(ganhoBase)
+  }
+
+  const desistirETrocar = () => {
+    openConta(tierRef.current, { forcarNova: true, registrarAbandono: true })
+  }
+
+  const treinarTemaDoCaderno = (temaId: string) => {
+    const ehTemaEnem = temaId.startsWith('enem_') || temaId === 'leitura_dados_codigo'
+    const grauAlvo: GrauConta = ehTemaEnem
+      ? PARTIDA.enemHabilitado
+        ? (Math.max(5, tierRef.current) as GrauConta)
+        : 4
+      : tierRef.current <= 4
+        ? tierRef.current
+        : 3
+    openConta(grauAlvo, { temaPreferido: temaId, forcarNova: true, registrarAbandono: true })
+  }
+
+  const exportarDadosEstudo = (): Promise<void> => {
+    const repo = repoEstudoRef.current
+    if (!repo) return Promise.resolve()
+    const prom = eventoQueueRef.current.then(async () => {
+      try {
+        const json = await repo.exportarTudoJson()
+        const blob = new Blob([json], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'logic-battle-caderno-estudo.json'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+        setStatusCaderno('Arquivo JSON exportado.')
+      } catch {
+        setStatusCaderno('Não foi possível exportar os dados neste navegador.')
+      }
+    })
+    eventoQueueRef.current = prom.catch(() => {})
+    return prom
+  }
+
+  const apagarDadosEstudo = (): Promise<void> => {
+    const repo = repoEstudoRef.current
+    if (!repo) return Promise.resolve()
+    const prom = eventoQueueRef.current.then(async () => {
+      await repo.apagarTudo()
+      try {
+        window.localStorage.removeItem('ld_ilha_caderno_v1')
+        window.localStorage.removeItem('ld_ilha_contas_vistas_v1')
+      } catch {
+        // Ignora bloqueio de storage privado
+      }
+      cadernoRef.current = null
+      assinaturasVistasRef.current.clear()
+      const limpo = await repo.lerEstado()
+      setEstadoEstudo(limpo)
+      setStatusCaderno('Dados locais de estudo apagados deste navegador.')
+    })
+    eventoQueueRef.current = prom.catch(() => {})
+    return prom
   }
 
   useEffect(() => {
@@ -1735,8 +2101,9 @@ export const IlhaRua: React.FC = () => {
     return () => window.clearTimeout(timer)
   }, [power])
 
-  timeScale.current = open ? 0.1 : 1
-  modalOpen.current = open
+  // Tempo real 100%: não desaceleramos mais o jogo ao abrir contas ou caderno (compatível com multiplayer futuro).
+  timeScale.current = 1
+  modalOpen.current = telaEstudo !== 'jogo'
 
   const nucleoQualquer = hud.obras.find((obra) => obra.tipo === 'nucleo' && obra.lado !== 'inimigo')
   const nucleo = nucleoQualquer && nucleoQualquer.hp > 0 ? nucleoQualquer : undefined
@@ -1821,13 +2188,9 @@ export const IlhaRua: React.FC = () => {
         setFerramenta(`${META_INTENCOES[depois.tipo].titulo} (Nv. ${depois.nivel})`)
         setPower(`${META_INTENCOES[depois.tipo].titulo} evoluiu para Nv. ${depois.nivel}!`)
       } else if (antes) {
-        setPower(
-          antes.nivel >= PARTIDA.nivelMaximoObra
-            ? 'Construção já está no Nível 5 (máximo)'
-            : obraEmConstrucao(antes)
-              ? 'Aguarde concluir a construção antes de evoluir'
-              : `Precisa de ${PRECO_EVOLUIR} para evoluir`,
-        )
+        // O MOTIVO REAL vem de `podeEvoluir` (uma fonte só). Antes havia aqui uma cadeia de 3 mensagens, e qualquer recusa que não fosse «máximo» ou «em construção» caía no balde «Precisa de
+        // X para evoluir»: uma recusa por FALTA DE ESPAÇO (a fortaleza do Nv5 sobre outra obra) diria ao jogador que faltava dinheiro.
+        setPower(motivoDeNaoEvoluir(sim.current, id))
       }
       return
     }
@@ -2032,13 +2395,7 @@ export const IlhaRua: React.FC = () => {
       setFerramenta(`${META_INTENCOES[depois.tipo].titulo} (Nv. ${depois.nivel})`)
       setPower(`${META_INTENCOES[depois.tipo].titulo} evoluiu para Nv. ${depois.nivel}!`)
     } else {
-      setPower(
-        antes.nivel >= PARTIDA.nivelMaximoObra
-          ? 'Construção já está no Nível 5 (máximo)'
-          : obraEmConstrucao(antes)
-            ? 'Aguarde concluir a construção antes de evoluir'
-            : `Precisa de ${PRECO_EVOLUIR} para evoluir`,
-      )
+      setPower(motivoDeNaoEvoluir(sim.current, id))
     }
   }
   evoluirPainelRef.current = evoluirDoPainel
@@ -2058,7 +2415,7 @@ export const IlhaRua: React.FC = () => {
         const target = event.target as HTMLElement
         if (
           target.closest(
-            'button, .ilha-modal, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-ferramentas, .ilha-painel-obra, .ilha-army',
+            'button, .ilha-modal, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-ferramentas, .ilha-painel-obra, .ilha-army',
           )
         )
           return
@@ -2224,17 +2581,61 @@ export const IlhaRua: React.FC = () => {
               const hz = atlasRef.current.heroiJ * PARTIDA.ladoMapa + corpo.state.heroi.z
               camada.style.transform = `translate(${84 - hx * escala}px, ${84 + hz * escala}px)`
             }
-            if (state.altar?.resolvido && modalOpen.current) {
-              setOpen(false)
-              gravarConta(state.altar.erros)
-              // O `aplicarConta` já rodou dentro do `stepPartida` e este `onHud` só vê o estado do FIM do passo, já contaminado por dano
-              // (torre, horda) e por ganho de arco/portão do mesmo passo. Por isso o ganho vem do próprio altar, gravado por `aplicarConta`
-              // onde o antes e o depois são exatos. Sem o campo (não deveria ocorrer) o texto cai em «só as licenças»: nunca inventa.
-              const ganho = state.altar.ganhoVida
-              // E3: a licença também vem do altar (reduzida pelos erros), e o motivo da redução aparece ao lado, para o jogador ver POR QUE rendeu menos.
-              setPower(textoDaContaComErros(textoGanhoDaConta(0, ganho === undefined ? Number.NaN : ganho, state.altar.ganhoCredito ?? 0), state.altar.erros))
+            const ativaHud = contaAtivaRef.current
+            if (state.altar && ativaHud && !ativaHud.resolvida && state.altar.erros > ativaHud.erros) {
+              const syncErro: ContaAtiva = {
+                ...ativaHud,
+                erros: state.altar.erros,
+                diagnosticoAtual: state.altar.aviso ?? ativaHud.diagnosticoAtual,
+              }
+              contaAtivaRef.current = syncErro
+              setContaAtiva(syncErro)
+              registrarEventoEstudo({
+                tipo: 'erro_alternativa',
+                quando: Date.now(),
+                itemId: ativaHud.desafio.id,
+                origem: ativaHud.desafio.origem,
+                temaId: ativaHud.desafio.temaId,
+                grau: ativaHud.desafio.grau,
+                alternativaId: 'piso_3d',
+                tempoDesdeAberturaMs: Math.max(0, Math.round(performance.now() - ativaHud.abertaEmMs)),
+              })
             }
-            if (state.altar?.aviso) setNote(state.altar.aviso)
+            if (state.altar?.resolvido && ativaHud && !ativaHud.gravada) {
+              const errosAltar = state.altar.erros
+              const tempoTotalMs = Math.max(0, Math.round(performance.now() - ativaHud.abertaEmMs))
+              const ganho = state.altar.ganhoVida
+              const textoGanho = textoDaContaComErros(
+                textoGanhoDaConta(0, ganho === undefined ? Number.NaN : ganho, state.altar.ganhoCredito ?? 0),
+                errosAltar,
+              )
+              const corretaAlt = ativaHud.desafio.alternativas.find((a) => a.correta)
+              const resolvidaHud: ContaAtiva = {
+                ...ativaHud,
+                erros: errosAltar,
+                resolvida: true,
+                gravada: true,
+                diagnosticoAtual: corretaAlt?.diagnosticoPt ?? 'Conta resolvida pelo piso 3D!',
+                ultimoGanhoPt: textoGanho,
+              }
+              contaAtivaRef.current = resolvidaHud
+              setContaAtiva(resolvidaHud)
+              registrarEventoEstudo({
+                tipo: 'acerto',
+                quando: Date.now(),
+                itemId: ativaHud.desafio.id,
+                assinatura: ativaHud.desafio.assinatura,
+                origem: ativaHud.desafio.origem,
+                temaId: ativaHud.desafio.temaId,
+                grau: ativaHud.desafio.grau,
+                errosNaConta: errosAltar,
+                maiorDicaUsada: ativaHud.dicasAbertas,
+                tempoTotalMs,
+                fatorBuff: fatorDoBuff(errosAltar),
+              })
+              gravarContaV1(ativaHud.desafio, errosAltar, tempoTotalMs)
+              setPower(textoGanho)
+            }
             const tiro =
               segurandoTiro.current && state.olhar !== 'imperio' && !state.semCorpo && !state.derrota && state.heroi.shootCooldown <= 0
                 ? atirar(state)
@@ -2738,7 +3139,9 @@ export const IlhaRua: React.FC = () => {
                 limparInteracao()
                 publicar(sim.current)
                 setPower('')
-                setOpen(false)
+                contaAtivaRef.current = null
+                setContaAtiva(null)
+                ativarTelaEstudo('jogo')
               }}
             >
               Tentar de novo
@@ -2784,7 +3187,6 @@ export const IlhaRua: React.FC = () => {
             </button>
           </div>
         )}
-        {power && <div className="ilha-power">{power}</div>}
         {!tatico && (
           <>
             <button
@@ -2846,9 +3248,45 @@ export const IlhaRua: React.FC = () => {
             </button>
           </>
         )}
-        <button type="button" className="ilha-conta" onClick={() => openConta(tier)}>
-          Fazer conta
-        </button>
+        <div className="ilha-conta-atalhos">
+          <button
+            type="button"
+            className="ilha-abrir-caderno"
+            data-testid="ilha-abrir-caderno"
+            onClick={() => alternarCadernoRef.current()}
+          >
+            {diagnostico.ondePrecisaAjuda.length > 0 ? (
+              <>
+                Caderno ({diagnostico.ondePrecisaAjuda.length})
+              </>
+            ) : (
+              <>
+                Caderno<span className="ilha-atalho-tecla"> (G)</span>
+              </>
+            )}
+          </button>
+          {!derrotado && !hud.semCorpo && (
+            contaAtiva && !contaAtiva.resolvida && telaEstudo === 'jogo' ? (
+              <button
+                type="button"
+                className="ilha-voltar-conta"
+                data-testid="ilha-voltar-conta"
+                onClick={() => ativarTelaEstudo('conta')}
+              >
+                Voltar à conta<span className="ilha-atalho-tecla"> (Q)</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="ilha-conta"
+                data-testid="ilha-btn-conta"
+                onClick={() => openConta(tier)}
+              >
+                Fazer conta<span className="ilha-atalho-tecla"> (Q)</span>
+              </button>
+            )
+          )}
+        </div>
         <div
           className="ilha-olhar"
           onPointerDown={(event) => {
@@ -3014,10 +3452,11 @@ export const IlhaRua: React.FC = () => {
                     key={`${i}-${j}`}
                     type="button"
                     data-testid={`ilha-mapa-${i}-${j}`}
-                    title={`${i}, ${j}`}
+                    data-dono={ficha?.dono}
+                    title={ficha ? `${i}, ${j}: ${TEXTO_DO_DONO[ficha.dono]}` : `${i}, ${j}`}
                     className={[
                       'ilha-mini-quadrado',
-                      ficha ? '' : 'ilha-mapa-vazio',
+                      ficha ? `ilha-dono-${ficha.dono}` : 'ilha-mapa-vazio',
                       ficha?.ritmo === 'cheio' ? 'ilha-mapa-cheio' : '',
                       ficha?.corpo ? 'ilha-mapa-corpo' : '',
                       ficha?.cena ? 'ilha-mapa-vendo' : '',
@@ -3074,38 +3513,56 @@ export const IlhaRua: React.FC = () => {
           }}
         />
       )}
-      {open && challenge && (
-        <div className="ilha-modal" role="dialog" aria-modal="true">
-          <div className="ilha-card">
-            <div className="ilha-tiers">
-              {([1, 2, 3, 4] as const).map((item) => (
-                <button key={item} type="button" aria-pressed={item === tier} onClick={() => openConta(item)}>
-                  {MATH_CHALLENGE_TIER_POLICIES[item].badgePt}
-                </button>
-              ))}
-            </div>
-            <p className="ilha-slow">Eles andam a 10% da velocidade. Os pisos N L S O no chão também respondem.</p>
-            <p>{challenge.questionPt}</p>
-            <div className="ilha-choices">
-              {challenge.choices.map((choice) => (
-                <button key={choice.id} type="button" onClick={() => answer(choice.id)}>
-                  {choice.label}
-                </button>
-              ))}
-            </div>
-            {note && <p>{note}</p>}
-            <button
-              type="button"
-              className="ilha-fechar"
-              onClick={() => {
-                publicar(fecharAltar(sim.current))
-                setOpen(false)
-              }}
-            >
-              Fechar
-            </button>
-          </div>
+      {power && (
+        <div className="ilha-power" data-testid="ilha-power">
+          {power}
         </div>
+      )}
+      {telaEstudo === 'conta' && (
+        <ModalConta
+          desafio={contaAtiva?.desafio ?? null}
+          grauSelecionado={tier}
+          carregando={carregandoConta}
+          erroCarregamento={erroCarregamentoConta}
+          dicasAbertas={contaAtiva?.dicasAbertas ?? 0}
+          erradasClicadas={contaAtiva?.erradasClicadas ?? []}
+          diagnosticoAtual={contaAtiva?.diagnosticoAtual ?? ''}
+          ultimoGanhoPt={contaAtiva?.ultimoGanhoPt}
+          erros={contaAtiva?.erros ?? 0}
+          resolvida={contaAtiva?.resolvida ?? false}
+          temaTreinoAtivo={temaTreinoAtivo}
+          onSelecionarGrau={(g) =>
+            openConta(g, {
+              temaPreferido: null,
+              forcarNova: true,
+              registrarAbandono: Boolean(
+                contaAtivaRef.current && (contaAtivaRef.current.erros > 0 || contaAtivaRef.current.dicasAbertas > 0),
+              ),
+            })
+          }
+          onResponder={responderAlternativa}
+          onPedirDica={pedirDica}
+          onProximaQuestao={() =>
+            openConta(tier, { temaPreferido: temaTreinoAtivo, forcarNova: true, registrarAbandono: false })
+          }
+          onTentarNovamente={() =>
+            openConta(tier, { temaPreferido: temaTreinoAtivo, forcarNova: true, registrarAbandono: false })
+          }
+          onMinimizarJogo={() => ativarTelaEstudo('jogo')}
+          onDesistirETrocar={desistirETrocar}
+          onAbrirCaderno={() => alternarCadernoRef.current()}
+        />
+      )}
+      {telaEstudo === 'caderno' && (
+        <CadernoEstudoOverlay
+          estadoEstudo={estadoEstudo}
+          diagnostico={diagnostico}
+          statusAcao={statusCaderno}
+          onFechar={() => ativarTelaEstudo('jogo')}
+          onTreinarTema={treinarTemaDoCaderno}
+          onExportarJson={exportarDadosEstudo}
+          onApagarTudo={apagarDadosEstudo}
+        />
       )}
     </div>
   )

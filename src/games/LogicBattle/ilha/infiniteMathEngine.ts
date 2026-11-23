@@ -1909,10 +1909,16 @@ export function generateInfiniteChallenge(
   const callerExclude = new Set<string>(options.excludeSignatures ?? [])
   const tierSpecs = ARCHETYPE_GENERATORS.filter((g) => g.tier === tier)
 
+  // Priorizar arquétipos do conceito solicitado quando houver correspondência no tier
+  const preferredSpecs = options.preferredConceptId
+    ? tierSpecs.filter((g) => g.conceptId === options.preferredConceptId)
+    : []
+  const basePool = preferredSpecs.length > 0 ? preferredSpecs : tierSpecs
+
   // Filtrar arquétipos que não estão no anel recente
   const recentArchSet = new Set<string>(RECENT_ARCHETYPE_QUEUE)
-  const freshSpecs = tierSpecs.filter((g) => !recentArchSet.has(g.archetypeId))
-  const pool = freshSpecs.length > 0 ? freshSpecs : tierSpecs
+  const freshSpecs = basePool.filter((g) => !recentArchSet.has(g.archetypeId))
+  const pool = freshSpecs.length > 0 ? freshSpecs : basePool
 
   let bestCandidate: InfiniteMathChallenge | null = null
 

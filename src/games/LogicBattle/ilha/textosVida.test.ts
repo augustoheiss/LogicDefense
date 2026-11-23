@@ -1,4 +1,4 @@
-import { formatarVida, legendaDaVida, nomeAcessivelDaVida, proximaLegenda, rotuloVida, textoGanhoDaConta, vidaExata } from './textosVida'
+import { formatarVida, legendaDaVida, nomeAcessivelDaVida, proximaLegenda, rotuloVida, textoDaRecusaDeEvoluir, textoGanhoDaConta, vidaExata } from './textosVida'
 
 function assert(condicao: unknown, mensagem: string): asserts condicao {
   if (!condicao) throw new Error(mensagem)
@@ -140,4 +140,25 @@ export function run() {
   assert(proximaLegenda(false, 'teclaAbrir') === true, 'Enter/Espaço com o selo focado ABRE (quem usa teclado também lê a legenda)')
   assert(proximaLegenda(true, 'teclaAbrir') === false, 'Enter/Espaço de novo FECHA (alterna, como o toque)')
   assert(proximaLegenda(true, 'desconhecido' as never) === true, 'evento desconhecido não muda o estado (não fecha nem abre por engano)')
+
+  // ── textoDaRecusaDeEvoluir: o que o jogador LÊ quando «Evoluir» é recusado (pedido do usuário, 22/11: «dá um erro ao evoluir para o nível 5 se tiver outro edifício do lado») ──
+  // Antes a interface tinha uma cadeia de 3 mensagens e qualquer recusa fora de «máximo»/«em construção» caía no balde «Precisa de X para evoluir»: uma recusa por FALTA DE ESPAÇO diria que faltava dinheiro.
+  const PRECO = '1 licença ou 2 madeiras + 2 ouros'
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'recurso', motivo: 'x' }, PRECO) === `Precisa de ${PRECO} para evoluir`, 'recurso: mantém a frase que o jogador já conhecia, COM o preço')
+  const espaco = textoDaRecusaDeEvoluir({ ok: false, codigo: 'espaco', motivo: 'Espaço bloqueado: há outra obra na área que a fortaleza do Nível 5 vai ocupar (cerca de 6 m)' }, PRECO)
+  assert(/espaço|obra/i.test(espaco), `espaço: o texto fala do ESPAÇO/obra (veio «${espaco}»)`)
+  assert(!espaco.includes(PRECO) && !/precisa de/i.test(espaco), `espaço: NÃO menciona o preço (a recusa por espaço dizendo «Precisa de 1 licença» era o defeito; veio «${espaco}»)`)
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'maximo', motivo: 'Construção já está no Nível 5 (máximo)' }, PRECO) === 'Construção já está no Nível 5 (máximo)', 'máximo: usa o motivo do próprio podeEvoluir')
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'construcao', motivo: 'Aguarde concluir a construção antes de evoluir' }, PRECO) === 'Aguarde concluir a construção antes de evoluir', 'em construção: usa o motivo do próprio podeEvoluir')
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'espaco', motivo: 'Espaço bloqueado: X' }, PRECO) === 'Espaço bloqueado: X', 'espaço: devolve o motivo exatamente como veio')
+  // entrada suja nunca vira «undefined» nem texto vazio na tela
+  for (const sujo of [{ ok: false } as never, { ok: false, codigo: 'espaco' } as never, { ok: false, codigo: 'desconhecido', motivo: '' } as never, { ok: true } as never]) {
+    const t = textoDaRecusaDeEvoluir(sujo, PRECO)
+    assert(typeof t === 'string' && t.trim().length > 0 && !/undefined|null|NaN/.test(t), `entrada suja nunca vira texto vazio/«undefined» (veio «${t}»)`)
+  }
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'recurso', motivo: 'x' }, '') === 'Precisa de recursos para evoluir', 'preço vazio: não escreve «Precisa de  para evoluir» com buraco no meio')
+  // espaços nas pontas NÃO vão para a tela, e um motivo SÓ de espaços cai no texto neutro (a 1ª rodada de mutação deixou sobreviver «o motivo não é aparado»: meus motivos já vinham limpos)
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'espaco', motivo: '  Espaço bloqueado: X  ' }, PRECO) === 'Espaço bloqueado: X', 'o motivo é APARADO: sem espaços sobrando nas pontas')
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'espaco', motivo: '   ' }, PRECO) === 'Não foi possível evoluir agora', 'um motivo só de espaços cai no texto neutro (não vira uma linha em branco na tela)')
+  assert(textoDaRecusaDeEvoluir({ ok: false, codigo: 'recurso', motivo: 'x' }, `  ${PRECO}  `) === `Precisa de ${PRECO} para evoluir`, 'o preço também é aparado: sem espaço duplo dentro da frase')
 }

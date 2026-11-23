@@ -441,7 +441,7 @@
   left: 50%;
   bottom: 20px;
   transform: translateX(-50%);
-  z-index: 11;
+  z-index: 25;
   pointer-events: none;
   width: max-content;
   max-width: min(460px, calc(100% - 340px));
@@ -508,11 +508,17 @@
   font-size: 14px;
 }
 
-.ilha-celular .ilha-conta {
-  left: 16px;
-  right: auto;
-  top: 156px;
+.ilha-celular .ilha-conta-atalhos {
+  top: 274px;
+  left: auto;
+  right: 8px;
   bottom: auto;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.ilha-celular .ilha-atalho-tecla {
+  display: none;
 }
 
 .ilha-celular .ilha-minimapa {
@@ -593,51 +599,798 @@
   font-weight: 700;
 }
 
-.ilha-modal {
+.ilha-modal,
+.ilha-caderno {
   position: absolute;
   inset: 0;
-  z-index: 8;
-  background: rgba(8, 16, 28, 0.55);
+  z-index: 20;
+  box-sizing: border-box;
+  background: rgba(8, 16, 28, 0.62);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   pointer-events: auto;
-  padding: 24px 16px 16px;
+  padding: 12px;
 }
 
 .ilha-slow {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
+  color: #334155;
 }
 
-.ilha-card {
-  width: min(640px, 100%);
-  max-height: 90dvh;
-  overflow: auto;
+.ilha-card,
+.ilha-caderno-card {
+  box-sizing: border-box;
+  width: min(740px, 100%);
+  max-height: min(100%, 780px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: #f8fafc;
   color: #14324a;
   border-radius: 16px;
-  padding: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 20px 50px rgba(2, 6, 23, 0.45);
+  outline: none;
 }
 
-.ilha-tiers, .ilha-choices {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.ilha-card-topo,
+.ilha-caderno-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin: 12px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #cbd5e1;
+  flex-shrink: 0;
 }
 
-.ilha-tiers button, .ilha-choices button, .ilha-card .ilha-fechar {
+.ilha-caderno-topo h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.ilha-caderno-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.ilha-card-badges,
+.ilha-card-acoes-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ilha-badge-tempo {
+  background: #dcfce7;
+  color: #14532d;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ilha-badge-buff {
+  background: #fef3c7;
+  color: #78350f;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ilha-badge-buff.reduzido {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.ilha-badge-treino {
+  background: #dbeafe;
+  color: #1e3a8a;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ilha-btn-topo-jogo,
+.ilha-btn-topo-caderno,
+.ilha-caderno-fechar {
+  min-height: 36px;
   border: 0;
   border-radius: 10px;
-  padding: 10px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  background: #14324a;
+  color: #fff;
+}
+
+.ilha-btn-topo-caderno {
+  background: #e2e8f0;
+  color: #14324a;
+}
+
+.ilha-tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 6px;
+  margin: 10px 0;
+  flex-shrink: 0;
+}
+
+.ilha-card-corpo,
+.ilha-caderno-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ilha-conta-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ilha-tema-tag {
+  background: #e0f2fe;
+  color: #0c4a6e;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ilha-enem-ref {
+  background: #fef9c3;
+  color: #713f12;
+  border: 1px solid #fde047;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.ilha-motor-ref {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.ilha-enunciado {
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.ilha-enunciado p {
+  margin: 0 0 8px;
+}
+
+.ilha-tabela-wrap {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.ilha-tabela-enem {
+  display: table !important;
+  width: 100% !important;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  background: #fff;
+}
+
+.ilha-tabela-enem thead {
+  display: table-header-group !important;
+}
+
+.ilha-tabela-enem tbody {
+  display: table-row-group !important;
+  width: auto !important;
+}
+
+.ilha-tabela-enem tr {
+  display: table-row !important;
+  width: auto !important;
+}
+
+.ilha-tabela-enem th,
+.ilha-tabela-enem td {
+  display: table-cell !important;
+  border: 1px solid #cbd5e1;
+  padding: 6px 8px;
+}
+
+.ilha-tabela-enem th {
+  background: #e2e8f0;
+  font-weight: 800;
+}
+
+.ilha-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.ilha-tiers button,
+.ilha-choices button,
+.ilha-card .ilha-fechar,
+.ilha-card .ilha-desistir {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
   font-weight: 700;
   background: #e2e8f0;
+  color: #14324a;
+  cursor: pointer;
+}
+
+.ilha-tiers button {
+  font-size: 12px;
+  min-height: 36px;
 }
 
 .ilha-tiers button[aria-pressed="true"] {
   background: #facc15;
+  color: #1e293b;
+}
+
+.ilha-choice-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.ilha-choice-btn.errada {
+  background: #fee2e2;
+  color: #7f1d1d;
+  opacity: 0.78;
+}
+
+.ilha-choice-btn.certa {
+  background: #bbf7d0;
+  color: #14532d;
+}
+
+.ilha-choice-letra {
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.ilha-diagnostico {
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.ilha-diagnostico.erro {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.ilha-diagnostico.acerto {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.ilha-dicas {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.ilha-dicas-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ilha-dicas-titulo {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e3a8a;
+}
+
+.ilha-dicas-sem-pena {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.ilha-dicas-botoes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ilha-dica-btn {
+  min-height: 38px;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.ilha-dica-btn[aria-pressed="true"] {
+  background: #dbeafe;
+  border-color: #3b82f6;
+}
+
+.ilha-dica-btn:disabled:not([aria-pressed="true"]) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ilha-dicas-lista {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ilha-pos-acerto {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  color: #14532d;
+}
+
+.ilha-pos-acerto-titulo {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.ilha-pos-acerto-ganho {
+  margin: 4px 0 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #dcfce7;
+  color: #14532d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ilha-dicas-recolhidas {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: #1e3a8a;
+}
+
+.ilha-dicas-recolhidas summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 4px 0;
+}
+
+.ilha-pos-acerto-texto,
+.ilha-pos-acerto-real {
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.ilha-pos-acerto-metodos {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+}
+
+.ilha-pos-acerto-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ilha-pos-acerto-proxima,
+.ilha-pos-acerto-voltar {
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-pos-acerto-proxima {
+  background: #16a34a;
+  color: #fff;
+}
+
+.ilha-pos-acerto-voltar {
+  background: #14324a;
+  color: #fff;
+}
+
+.ilha-card-rodape,
+.ilha-caderno-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px solid #cbd5e1;
+  flex-shrink: 0;
+}
+
+.ilha-card .ilha-fechar {
+  background: #14324a;
+  color: #fff;
+  margin-left: auto;
+  min-height: 40px;
+  padding: 8px 16px;
+}
+
+.ilha-card .ilha-desistir {
+  background: #fee2e2;
+  color: #991b1b;
+  min-height: 40px;
+}
+
+.ilha-caderno-resumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.ilha-caderno-colunas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (min-width: 960px) {
+  .ilha-caderno-colunas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+}
+
+.ilha-selo-prioridade {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ilha-selo-prioridade.alta {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.ilha-selo-prioridade.media {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ilha-selo-prioridade.atencao {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.ilha-caderno-kpi {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ilha-caderno-kpi strong {
+  font-size: 17px;
+  color: #0f172a;
+}
+
+.ilha-caderno-kpi span {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.ilha-caderno-secao {
+  margin-bottom: 14px;
+}
+
+.ilha-caderno-secao h3 {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  color: #0f172a;
+}
+
+.ilha-caderno-vazio {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.ilha-caderno-lista,
+.ilha-caderno-eventos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ilha-caderno-item {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ilha-caderno-item-info {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.ilha-caderno-metrica {
+  font-size: 12px;
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.ilha-caderno-item-info p {
+  margin: 0;
+  color: #334155;
+  font-size: 12.5px;
+}
+
+.ilha-caderno-treinar {
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-caderno-eventos li {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.ilha-caderno-acoes-lgpd,
+.ilha-caderno-confirmar-apagar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ilha-caderno-exportar,
+.ilha-caderno-apagar,
+.ilha-caderno-apagar-confirmar,
+.ilha-caderno-cancelar {
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-caderno-exportar {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.ilha-caderno-apagar,
+.ilha-caderno-apagar-confirmar {
+  background: #dc2626;
+  color: #fff;
+}
+
+.ilha-caderno-cancelar {
+  background: #cbd5e1;
+  color: #0f172a;
+}
+
+.ilha-caderno-status {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #166534;
+}
+
+.ilha-conta-atalhos {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 6;
+}
+
+.ilha-conta-atalhos .ilha-conta {
+  position: static;
+}
+
+.ilha-abrir-caderno,
+.ilha-voltar-conta {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.ilha-abrir-caderno {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+}
+
+.ilha-voltar-conta {
+  background: #fef08a;
+  color: #713f12;
+  border: 2px solid #ca8a04;
+}
+
+@media (max-width: 640px) {
+  .ilha-modal,
+  .ilha-caderno {
+    padding: 6px;
+  }
+
+  .ilha-card,
+  .ilha-caderno-card {
+    max-height: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .ilha-btn-topo-jogo {
+    display: none;
+  }
+
+  .ilha-tiers {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    padding-bottom: 4px;
+    margin: 6px 0;
+  }
+
+  .ilha-tiers button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 34px;
+    padding: 5px 10px;
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 600px) {
+  .ilha-power {
+    max-width: calc(100% - 24px);
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  .ilha-dicas-botoes {
+    grid-template-columns: 1fr;
+  }
+
+  .ilha-celular .ilha-conta-atalhos {
+    top: 314px;
+    left: auto;
+    right: 8px;
+    bottom: auto;
+    max-width: calc(100% - 178px);
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ilha-celular .ilha-conta-atalhos button {
+    padding: 8px 10px;
+    font-size: 12.5px;
+    min-height: 40px;
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-conta-atalhos {
+    top: 344px;
+  }
+}
+
+@media (max-width: 360px) {
+  .ilha-card,
+  .ilha-caderno-card {
+    padding: 8px 10px;
+  }
+
+  .ilha-card-topo,
+  .ilha-caderno-topo {
+    padding-bottom: 6px;
+    gap: 6px;
+  }
+
+  .ilha-badge-tempo,
+  .ilha-badge-buff,
+  .ilha-badge-treino {
+    font-size: 11px;
+    padding: 2px 7px;
+  }
+
+  .ilha-card-rodape,
+  .ilha-caderno-rodape {
+    padding-top: 6px;
+    margin-top: 6px;
+    gap: 6px;
+  }
+
+  .ilha-card .ilha-fechar,
+  .ilha-card .ilha-desistir,
+  .ilha-caderno-exportar,
+  .ilha-caderno-apagar {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
 }
 
 .ilha-numero {
@@ -706,6 +1459,21 @@
 .ilha-minimapa .ilha-mapa-vazio {
   background: #0f172a;
   border-color: rgba(71, 85, 105, 0.7);
+}
+
+/* Quem domina cada mapa (M4, pedido do usuário 22/11). Só o FUNDO muda: o anel do corpo, a borda da cena e o realce do passo cheio seguem como estavam. Vêm ANTES dos alertas verde/vermelho de
+   propósito: um alerta é urgente e, no mesmo quadrado, vence a cor do dono no fundo. Verde-musgo (selvagem) é mais escuro e dessaturado que o verde do alerta para não se confundir com ele;
+   roxo (inimigo) evita o vermelho do alerta de perda; azul-aço (seu) é da família do corpo. Escolha de cor = decisão do usuário. */
+.ilha-minimapa .ilha-dono-selvagem {
+  background: #3f5a3a;
+}
+
+.ilha-minimapa .ilha-dono-inimigo {
+  background: #5b2a6e;
+}
+
+.ilha-minimapa .ilha-dono-nosso {
+  background: #1e5a8a;
 }
 
 .ilha-minimapa .ilha-mapa-corpo {
@@ -962,12 +1730,11 @@
 
   .ilha-celular .ilha-ferramentas p { grid-column: 1 / -1; }
   .ilha-celular .ilha-ferramentas-grade { grid-column: 1 / -1; }
-  .ilha-celular .ilha-conta {
-    top: 314px;
-    left: auto;
-    right: 8px;
-    padding: 10px 12px;
-    font-size: 14px;
+  .ilha-celular .ilha-conta-atalhos .ilha-conta {
+    position: static;
+    inset: auto;
+    padding: 8px 10px;
+    font-size: 12.5px;
   }
 
   .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-barra span.ilha-obs-sem-corpo {
@@ -988,10 +1755,6 @@
   .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-ferramentas {
     top: 214px;
     max-height: calc(100% - 346px);
-  }
-
-  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-conta {
-    top: 344px;
   }
 }
 

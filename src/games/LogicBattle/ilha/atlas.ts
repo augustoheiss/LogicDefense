@@ -1,5 +1,6 @@
+import { camadaDoMapa, fatorDaCamada } from './camadaDoMapa'
 import { PARTIDA, PoliticaMinimapas } from './partidaPolicies'
-import { createPartida, PartidaInput, PartidaState, stepPartida } from './partidaSim'
+import { createPartida, evoluirInimigo, PartidaInput, PartidaState, stepPartida } from './partidaSim'
 
 export const MEIO_MAPA = PARTIDA.radius
 export const LADO_MAPA = PARTIDA.ladoMapa
@@ -113,8 +114,13 @@ function devePreservar(ficha: Ficha): boolean {
   return ficha.state.unidades.some((unidade) => unidade.lado === 'aliado' && unidade.hp > 0)
 }
 
-function nascer(i: number, j: number): Ficha {
-  const state = createPartida(i, j, true)
+/**
+ * Faz nascer o mapa vizinho (M2, pedido do usuário 22/11). O inimigo do vizinho vem no ESTÁGIO do mapa de onde o herói vem (a base recrescida, com peças prontas) e com a vida
+ * multiplicada pela CAMADA do lugar (`fatorDaCamada`: mais longe do ponto de partida, mais difícil; dobra a cada camada). Só nasce assim: um mapa que já existe nunca é reescrito.
+ * A selva, o bioma e tudo que é NOSSO continuam os do lugar (decisão do usuário: clona só a base e a horda INIMIGAS). Estágio 0 e camada ≤ 1 = o mapa como sempre nasceu.
+ */
+function nascer(i: number, j: number, estagio = 0): Ficha {
+  const state = evoluirInimigo(createPartida(i, j, true), fatorDaCamada(camadaDoMapa(i, j)), estagio)
   return {
     i,
     j,
@@ -203,9 +209,14 @@ function achar(fichas: readonly Ficha[], i: number, j: number): Ficha | undefine
   return fichas.find((ficha) => ficha.i === i && ficha.j === j)
 }
 
-function garantir(fichas: Ficha[], i: number, j: number): Ficha[] {
+/** O estagio que um mapa NOVO herda: a onda em que o mapa do heroi esta. Sem ficha do heroi (nao deveria acontecer) vale 0: nasce como sempre nasceu. */
+function estagioDoHeroi(fichas: readonly Ficha[], heroiI: number, heroiJ: number): number {
+  return achar(fichas, heroiI, heroiJ)?.state.ondaNumero ?? 0
+}
+
+function garantir(fichas: Ficha[], i: number, j: number, estagio = 0): Ficha[] {
   const achou = achar(fichas, i, j)
-  if (!achou) return [...fichas, nascer(i, j)]
+  if (!achou) return [...fichas, nascer(i, j, estagio)]
   if (achou.ritmo === 'lento') {
     return fichas.map((ficha) => (ficha.i === i && ficha.j === j ? { ...ficha, ritmo: 'cheio' } : ficha))
   }
@@ -278,7 +289,7 @@ export function escreverCena(atlas: Atlas, state: PartidaState): Atlas {
 }
 
 export function abrirMapa(atlas: Atlas, i: number, j: number): Atlas {
-  let fichas = garantir(atlas.fichas, i, j)
+  let fichas = garantir(atlas.fichas, i, j, estagioDoHeroi(atlas.fichas, atlas.heroiI, atlas.heroiJ))
   if (i !== atlas.heroiI || j !== atlas.heroiJ) {
     fichas = fichas.map((ficha) => ficha.corpo ? { ...ficha, state: { ...ficha.state, heroiOrdem: null } } : ficha)
   }
@@ -357,7 +368,7 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
   let guard = 0
   let movido = transferir(heroi.state.heroi.x, heroi.state.heroi.z, heroi.i, heroi.j)
   while ((movido.i !== heroi.i || movido.j !== heroi.j) && guard < 4) {
-    fichas = garantir(fichas, movido.i, movido.j)
+    fichas = garantir(fichas, movido.i, movido.j, heroi.state.ondaNumero)
     const destino = fichas.findIndex((ficha) => ficha.i === movido.i && ficha.j === movido.j)
     const antigo = fichas.findIndex((ficha) => ficha.i === heroi.i && ficha.j === heroi.j)
     fichas[antigo] = {
@@ -394,7 +405,7 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
   for (const vizinho of vizinhosPorVisao(heroi.state.heroi.x, heroi.state.heroi.z, heroiI, heroiJ)) {
     const achou = achar(fichas, vizinho.i, vizinho.j)
     if (!achou) {
-      const novo = nascer(vizinho.i, vizinho.j)
+      const novo = nascer(vizinho.i, vizinho.j, heroi.state.ondaNumero)
       fichas = [...fichas, atlas.politica === 'atual' ? { ...novo, ritmo: 'lento' } : novo]
     } else if (achou.ritmo === 'lento' && atlas.politica !== 'atual') {
       fichas = fichas.map((ficha) => (ficha.i === vizinho.i && ficha.j === vizinho.j ? { ...ficha, ritmo: 'cheio' } : ficha))
@@ -448,7 +459,22 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
   }
 }
 
-export function resumoAtlas(atlas: Atlas): { i: number; j: number; alerta: Alerta; corpo: boolean; cena: boolean; ritmo: Ritmo }[] {
+/** Quem domina um mapa (M4, pedido do usuário 22/11): você e aliados, o inimigo, ou ninguém («selvagem»: dominado pela natureza). */
+export type Dono = 'nosso' | 'inimigo' | 'selvagem'
+
+/**
+ * Função PURA que decide a cor do mapa no minimapa. (1) NOSSO: há obra nossa viva (em construção conta: o jogador está lá; ruína, hp 0, não) ou tropa nossa viva, mesmo com a base inimiga ali (a luta é
+ * sua). (2) INIMIGO: não é nosso e há um NÚCLEO inimigo vivo (a base; peças ou tropas soltas, sem núcleo, não fazem uma base). (3) SELVAGEM: nenhum dos dois: o mapa conquistado e abandonado, ou ruína,
+ * volta a ser da natureza. [D-minha] todas estas escolhas, para o usuário julgar jogando.
+ */
+export function donoDoMapa(ficha: Ficha): Dono {
+  const { obras, unidades } = ficha.state
+  if (obras.some((obra) => obra.lado === 'nosso' && obra.hp > 0) || unidades.some((unidade) => unidade.lado === 'aliado' && unidade.hp > 0)) return 'nosso'
+  if (obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp > 0)) return 'inimigo'
+  return 'selvagem'
+}
+
+export function resumoAtlas(atlas: Atlas): { i: number; j: number; alerta: Alerta; corpo: boolean; cena: boolean; ritmo: Ritmo; dono: Dono }[] {
   return atlas.fichas.map((ficha) => ({
     i: ficha.i,
     j: ficha.j,
@@ -456,5 +482,6 @@ export function resumoAtlas(atlas: Atlas): { i: number; j: number; alerta: Alert
     corpo: ficha.i === atlas.heroiI && ficha.j === atlas.heroiJ,
     cena: ficha.i === atlas.cenaI && ficha.j === atlas.cenaJ,
     ritmo: ficha.ritmo,
+    dono: donoDoMapa(ficha),
   }))
 }
