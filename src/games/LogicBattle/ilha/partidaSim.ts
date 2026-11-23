@@ -108,6 +108,7 @@ export interface Obra {
   blocosNv5?: Uint8Array
   blocosLivres?: BlocoMundo[]
   estornosMadeiraRestantes?: number
+  custoBaseMadeiraPago?: number
 }
 
 export function obraEmConstrucao(obra: Obra): boolean {
@@ -887,9 +888,11 @@ export function fundar(
 
   let madeira = state.madeira
   let credito = state.credito
+  let custoBaseMadeiraPago: number | undefined
   if (opcoes?.cobrarRecursos) {
     const qtdMesmo = state.obras.filter((o) => nossa(o) && o.tipo === tipo && o.hp > 0).length
     const custoMad = custoMadeiraObra(tipo, qtdMesmo)
+    custoBaseMadeiraPago = custoMad
     if (custoMad > 0) {
       if (madeira >= custoMad) madeira -= custoMad
       else if (credito >= 1) credito -= 1
@@ -922,6 +925,7 @@ export function fundar(
     cooldown: 0,
     construindoRestante: duracao,
     construindoTotal: duracao,
+    ...(custoBaseMadeiraPago !== undefined ? { custoBaseMadeiraPago } : {}),
   }
   return marcarChao({
     ...state,
@@ -1019,15 +1023,221 @@ export function aproximacaoDaObra(obra: Obra, deX: number, deZ: number): { x: nu
  * fortaleza e pergunta a `bateObra` (a MESMA régua de `podeFundarEm`, então «espaço bloqueado» quer dizer a mesma coisa nos dois lugares) se algum ponto bate em OUTRA obra
  * viva (nossa ou inimiga) ou em bloco do mapa. A própria obra é ignorada. Pontos: o centro de cada bloco E as quatro bordas externas, para a fronteira ser exata.
  */
-function fortalezaNv5Cabe(state: PartidaState, obra: Obra): boolean {
+function fortalezaNv5CabeEm(
+  state: PartidaState,
+  obraId: number,
+  cx: number,
+  cz: number,
+  exigirDentroDoMapa = false,
+): boolean {
   const { nx, nz, passo } = VOXEL_NV5
   const meioX = (nx * passo) / 2
   const meioZ = (nz * passo) / 2
   const pontos: Array<{ x: number; z: number }> = []
   for (let bz = 0; bz <= nz; bz += 1) {
-    for (let bx = 0; bx <= nx; bx += 1) pontos.push({ x: obra.x - meioX + bx * passo, z: obra.z - meioZ + bz * passo })
+    for (let bx = 0; bx <= nx; bx += 1) pontos.push({ x: cx - meioX + bx * passo, z: cz - meioZ + bz * passo })
   }
-  return !pontos.some((p) => bateObra(p.x, p.z, state.obras, obra.id, 0, state.blocosMapa))
+  return !pontos.some(
+    (p) => (exigirDentroDoMapa && !dentroDoMapa(p.x, p.z)) || bateObra(p.x, p.z, state.obras, obraId, 0, state.blocosMapa),
+  )
+}
+
+function fortalezaNv5Cabe(state: PartidaState, obra: Obra): boolean {
+  return fortalezaNv5CabeEm(state, obra.id, obra.x, obra.z, false)
+}
+
+const TAXA_REEMBOLSO_VENDA = 0.5
+
+export function calcularReembolsoVenda(state: PartidaState, obraId: number): { madeira: number; ouro: number } {
+  const obra = state.obras.find((item) => item.id === obraId)
+  if (!obra || obra.hp <= 0 || !nossa(obra) || obra.tipo === 'nucleo') {
+    return { madeira: 0, ouro: 0 }
+  }
+  let baseMadeira: number
+  if (obra.custoBaseMadeiraPago !== undefined) {
+    baseMadeira = obra.custoBaseMadeiraPago
+  } else if (obra.tipo === 'torre' || obra.tipo === 'britador') {
+    const qtdMesmo = state.obras.filter((o) => nossa(o) && o.hp > 0 && o.tipo === obra.tipo).length
+    baseMadeira = qtdMesmo <= 1 ? 0 : custoMadeiraObra(obra.tipo, 1)
+  } else {
+    baseMadeira = custoMadeiraObra(obra.tipo, 1)
+  }
+  let evolMadeira = 0
+  let evolOuro = 0
+  for (let nv = 1; nv < obra.nivel; nv += 1) {
+    const preco = custoDeEvoluir(nv)
+    if (!preco) break
+    evolMadeira += preco.madeira
+    evolOuro += preco.ouro
+  }
+  return {
+    madeira: Math.floor((baseMadeira + evolMadeira) * TAXA_REEMBOLSO_VENDA),
+    ouro: Math.floor(evolOuro * TAXA_REEMBOLSO_VENDA),
+  }
+}
+
+export function podeVenderObra(
+  state: PartidaState,
+  obraId: number,
+): { ok: boolean; motivo?: string; reembolso?: { madeira: number; ouro: number } } {
+  if (state.derrota) return { ok: false, motivo: 'Partida encerrada' }
+  const obra = state.obras.find((item) => item.id === obraId)
+  if (!obra || obra.hp <= 0 || !nossa(obra)) return { ok: false, motivo: 'Obra não encontrada' }
+  if (obra.tipo === 'nucleo') return { ok: false, motivo: 'O Núcleo não pode ser vendido' }
+  return { ok: true, reembolso: calcularReembolsoVenda(state, obraId) }
+}
+
+export function venderObra(state: PartidaState, obraId: number): PartidaState {
+  const check = podeVenderObra(state, obraId)
+  if (!check.ok || !check.reembolso) return state
+  const obras = state.obras.filter((item) => item.id !== obraId)
+  const unidades = state.unidades.map((u) =>
+    u.ordem?.tipo === 'atacarObra' && u.ordem.obraId === obraId ? { ...u, ordem: null, rota: null } : u,
+  )
+  const heroiOrdem =
+    state.heroiOrdem?.tipo === 'atacarObra' && state.heroiOrdem.obraId === obraId ? null : state.heroiOrdem
+  return marcarChao({
+    ...state,
+    madeira: state.madeira + check.reembolso.madeira,
+    ouro: state.ouro + check.reembolso.ouro,
+    obras,
+    unidades,
+    heroiOrdem,
+    versaoSolidos: state.versaoSolidos + 1,
+  })
+}
+
+export function podeMoverObraEm(
+  state: PartidaState,
+  obraId: number,
+  x: number,
+  z: number,
+  opcoes?: { exigirRevelado?: boolean },
+): { ok: boolean; motivo?: string } {
+  if (state.derrota) return { ok: false, motivo: 'Partida encerrada' }
+  const obra = state.obras.find((item) => item.id === obraId)
+  if (!obra || obra.hp <= 0 || !nossa(obra)) return { ok: false, motivo: 'Obra não encontrada' }
+  if (obra.tipo === 'nucleo') return { ok: false, motivo: 'O Núcleo não pode ser movido' }
+  if (obraEmConstrucao(obra)) return { ok: false, motivo: 'Aguarde concluir a construção antes de mover' }
+  if (!Number.isFinite(x) || !Number.isFinite(z) || !dentroDoMapa(x, z)) {
+    return { ok: false, motivo: 'Fora dos limites do mapa' }
+  }
+  const temLivres = Boolean(obra.blocosLivres && obra.blocosLivres.length > 0)
+  const dx = temLivres ? Math.round(x - obra.x) : 0
+  const dz = temLivres ? Math.round(z - obra.z) : 0
+  const destX = temLivres ? obra.x + dx : x
+  const destZ = temLivres ? obra.z + dz : z
+  if (!dentroDoMapa(destX, destZ)) {
+    return { ok: false, motivo: 'Fora dos limites do mapa' }
+  }
+  if ((state.semCorpo || opcoes?.exigirRevelado) && PARTIDA.nuvem && !chaoRevelado(state, destX, destZ)) {
+    return { ok: false, motivo: 'Explore a neblina antes de mover para cá' }
+  }
+  if (!state.semCorpo && state.heroi.y >= -0.9 && Math.hypot(destX - state.heroi.x, destZ - state.heroi.z) < 1.6) {
+    return { ok: false, motivo: 'Afaste o herói do local de destino' }
+  }
+  if (bateObstaculo(destX, destZ) || bateObra(destX, destZ, state.obras, obra.id, 0, state.blocosMapa)) {
+    return { ok: false, motivo: 'Espaço bloqueado por obra, obstáculo ou bloco' }
+  }
+  if (state.unidades.some((u) => u.hp > 0 && Math.hypot(u.x - destX, u.z - destZ) < 1.4)) {
+    return { ok: false, motivo: 'Unidade ocupando o terreno' }
+  }
+  if (obra.blocosNv5 && !fortalezaNv5CabeEm(state, obra.id, destX, destZ, true)) {
+    return { ok: false, motivo: 'Espaço bloqueado para a fortaleza do Nível 5' }
+  }
+  if (obra.blocosLivres?.length) {
+    for (const b of obra.blocosLivres) {
+      if (b.hp <= 0) continue
+      const nx = b.x + dx
+      const nz = b.z + dz
+      if (!dentroLimiteBlocoMundo(nx, b.y, nz)) {
+        return { ok: false, motivo: 'Fora dos limites do mapa' }
+      }
+      if (state.blocosMapa[chaveBlocoMundo(nx, b.y, nz)]?.hp > 0) {
+        return { ok: false, motivo: 'Espaço bloqueado por obra, obstáculo ou bloco' }
+      }
+      const centro = blocoMundoParaCentro(nx, b.y, nz)
+      if (!dentroDoMapa(centro.x, centro.z)) {
+        return { ok: false, motivo: 'Fora dos limites do mapa' }
+      }
+      if (bateObstaculo(centro.x, centro.z) || bateObra(centro.x, centro.z, state.obras, obra.id, 0, state.blocosMapa)) {
+        return { ok: false, motivo: 'Espaço bloqueado por obra, obstáculo ou bloco' }
+      }
+    }
+  }
+  return { ok: true }
+}
+
+export function moverObra(
+  state: PartidaState,
+  obraId: number,
+  x: number,
+  z: number,
+  opcoes?: { exigirRevelado?: boolean },
+): PartidaState {
+  if (!podeMoverObraEm(state, obraId, x, z, opcoes).ok) return state
+  const alvo = state.obras.find((item) => item.id === obraId)
+  if (!alvo) return state
+
+  const temLivres = Boolean(alvo.blocosLivres && alvo.blocosLivres.length > 0)
+  const dx = temLivres ? Math.round(x - alvo.x) : 0
+  const dz = temLivres ? Math.round(z - alvo.z) : 0
+  const destX = temLivres ? alvo.x + dx : x
+  const destZ = temLivres ? alvo.z + dz : z
+
+  // Limpa árvores no novo ponto sem conceder madeira extra para evitar exploit de corte ao reposicionar
+  let limpouTerreno = false
+  const recursos = state.recursos.map((rec) => {
+    if (rec.hp <= 0 || rec.yBase < -0.5 || rec.tipo !== 'arvore') return rec
+    if (Math.hypot(rec.x - destX, rec.z - destZ) > 2.2) return rec
+    limpouTerreno = true
+    return { ...rec, hp: 0, regeneraEm: PARTIDA.rebroteArvoreSeg }
+  })
+
+  const obras = state.obras.map((item) => {
+    if (item.id !== obraId) return item
+    return {
+      ...item,
+      x: destX,
+      z: destZ,
+      ...(item.blocosLivres?.length
+        ? {
+            blocosLivres: item.blocosLivres.map((b) => ({
+              ...b,
+              x: b.x + dx,
+              z: b.z + dz,
+            })),
+          }
+        : {}),
+    }
+  })
+
+  let heroi = state.heroi
+  let unidades = state.unidades.map((u) =>
+    u.ordem?.tipo === 'atacarObra' && u.ordem.obraId === obraId ? { ...u, rota: null } : u,
+  )
+  const obraMovida = obras.find((item) => item.id === obraId)!
+  if (obraMovida.blocosNv5) {
+    if (!state.semCorpo) {
+      const livre = afastarDeFortalezaNv5(heroi.x, heroi.y, heroi.z, obraMovida)
+      heroi = { ...heroi, x: livre.x, z: livre.z }
+    }
+    unidades = unidades.map((u) => {
+      if (u.hp <= 0) return u
+      const livre = afastarDeFortalezaNv5(u.x, 0, u.z, obraMovida)
+      return { ...u, x: livre.x, z: livre.z }
+    })
+  }
+
+  return marcarChao({
+    ...state,
+    recursos: limpouTerreno ? recursos : state.recursos,
+    versaoRecursos: limpouTerreno ? state.versaoRecursos + 1 : state.versaoRecursos,
+    obras,
+    heroi,
+    unidades,
+    versaoSolidos: state.versaoSolidos + 1,
+  })
 }
 
 /**

@@ -151,11 +151,16 @@
   font-size: 13px;
 }
 
-/* Wrapper dos dois botões. No desktop é uma coluna (como era); no celular vira grade de 2 colunas (bloco abaixo). */
+/* Wrapper dos botões de ação da obra em grade 2×2 compacta para caber no desktop e no celular. */
 .ilha-painel-acoes {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ilha-painel-nota {
+  font-size: 12px;
+  color: #cbd5e1;
 }
 
 /* Celular (390×844), coluna da direita, medida de cima para baixo: minimapa 201→397, «Fazer conta» 413→454, FAIXA LIVRE
@@ -213,6 +218,12 @@
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+}
+
+.ilha-painel-obra button.ilha-painel-perigo {
+  background: #991b1b;
+  border: 1px solid #fca5a5;
+  color: #fff;
 }
 
 .ilha-barra {

@@ -118,6 +118,8 @@ try {
   bordaDoMapaContrato.rodarContraAdulteracoes(bordaDoMapa, scene)
   const cameraImperio = await server.ssrLoadModule('/src/games/LogicBattle/ilha/cameraImperio.test.ts')
   cameraImperio.run()
+  const gestaoObra = await server.ssrLoadModule('/src/games/LogicBattle/ilha/gestaoObra.test.ts')
+  gestaoObra.run()
   console.log('ilha-rua: ok')
 } finally {
   await server.close()

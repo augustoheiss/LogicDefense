@@ -31,6 +31,7 @@ import {
   alvoDoBotaoObra,
   aplicarConta,
   atirar,
+  calcularReembolsoVenda,
   CELULAS_DO_DISCO,
   celulaColideObraExistente,
   chaoRevelado,
@@ -49,6 +50,7 @@ import {
   inimigoVisivel,
   marcadoPelaTorre,
   mira,
+  moverObra,
   obraEmConstrucao,
   ordenar,
   ordenarHeroi,
@@ -56,6 +58,8 @@ import {
   podeConsagrarEm,
   podeEvoluir,
   podeFundarEm,
+  podeMoverObraEm,
+  podeVenderObra,
   pular,
   registrarErroNoAltar,
   repararObra,
@@ -65,6 +69,7 @@ import {
   selecionarAoClicarUnidade,
   selecionarPorRetanguloEstado,
   folgaDoTiro,
+  venderObra,
   vetorDoOlhar,
   PartidaState,
   postura,
@@ -265,6 +270,7 @@ function Cena(props: {
   cursorBordaRef: React.MutableRefObject<CursorBordaEntrada | null>
   onBussolaImperio: (letra: string) => void
   tool: React.MutableRefObject<PecaId | null>
+  moverObraIdRef: React.MutableRefObject<number | null>
   dragou: React.MutableRefObject<boolean>
   onHud: (state: PartidaState) => void
   onGround: (x: number, z: number) => void
@@ -878,16 +884,26 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     }
 
     const pecaAtiva = props.tool.current
-    if (pecaAtiva && olharDesenho === 'imperio' && props.cursorNdcRef.current) {
+    const moverId = props.moverObraIdRef.current
+    const obraMover =
+      !pecaAtiva && moverId !== null
+        ? state.obras.find((o) => o.id === moverId && o.hp > 0 && o.lado !== 'inimigo')
+        : undefined
+    if ((pecaAtiva || obraMover) && olharDesenho === 'imperio' && props.cursorNdcRef.current) {
       const p = soloNoNdc(props.cursorNdcRef.current.x, props.cursorNdcRef.current.y, 0)
       if (p) {
         const px = Math.round(p.x * 2) / 2
         const pz = Math.round(p.z * 2) / 2
-        const check = podeFundarEm(state, pecaAtiva, px, pz, { cobrarRecursos: true, exigirRevelado: true })
-        const ass = `${pecaAtiva}:${px}:${pz}:${check.ok ? 1 : 0}`
+        const tipoGhost = pecaAtiva ?? obraMover!.tipo
+        const check = pecaAtiva
+          ? podeFundarEm(state, pecaAtiva, px, pz, { cobrarRecursos: true, exigirRevelado: true })
+          : podeMoverObraEm(state, obraMover!.id, px, pz, { exigirRevelado: true })
+        const ass = pecaAtiva
+          ? `${pecaAtiva}:${px}:${pz}:${check.ok ? 1 : 0}`
+          : `move:${obraMover!.id}:${px}:${pz}:${check.ok ? 1 : 0}`
         if (ass !== ultimaAssinaturaGhostObra.current) {
           ultimaAssinaturaGhostObra.current = ass
-          props.onGhostObra({ tipo: pecaAtiva, x: px, z: pz, valido: check.ok })
+          props.onGhostObra({ tipo: tipoGhost, x: px, z: pz, valido: check.ok })
         }
       }
     } else if (ultimaAssinaturaGhostObra.current !== '') {
@@ -1001,7 +1017,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
             props.onPreviewLinha({ plano, temRecurso: temRec })
             return
           }
-          if (props.tool.current) return
+          if (props.tool.current || props.moverObraIdRef.current !== null) return
           if (event.nativeEvent.button === 2) {
             rmbDrag.current = {
               x: event.clientX,
@@ -1024,7 +1040,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
           }
           if (event.nativeEvent.button === 2) return
           event.stopPropagation()
-          if (props.tool.current) {
+          if (props.tool.current || props.moverObraIdRef.current !== null) {
             const rect = gl.domElement.getBoundingClientRect()
             const p =
               rect.width > 0 && rect.height > 0
@@ -1275,11 +1291,13 @@ export const IlhaRua: React.FC = () => {
   const [celular, setCelular] = useState(() => window.matchMedia('(pointer: coarse)').matches)
   const cam = useRef<CameraImperioState>({ x: 0, z: 18, yaw: 0 })
   const tool = useRef<PecaId | null>(null)
+  const moverObraIdRef = useRef<number | null>(null)
   const dragou = useRef(false)
   const evoluirId = useRef<number | null>(null)
   const obraBlocoAlvoIdRef = useRef<number | null>(null)
   const ponteiroDaObraRef = useRef<number | null>(null)
   const [painelObraId, setPainelObraId] = useState<number | null>(null)
+  const [confirmarVendaId, setConfirmarVendaId] = useState<number | null>(null)
   const painelObraRef = useRef<number | null>(null)
   const evoluirPainelRef = useRef<() => void>(() => {})
   const [heroiEscolhido, setHeroiEscolhido] = useState(false)
@@ -1392,7 +1410,9 @@ export const IlhaRua: React.FC = () => {
     painelObraRef.current = null
     obraBlocoAlvoIdRef.current = null
     setPainelObraId(null)
+    setConfirmarVendaId(null)
     tool.current = null
+    moverObraIdRef.current = null
     dragou.current = false
     voxelAlvoRef.current = null
     setHeroiEscolhido(false)
@@ -1527,6 +1547,8 @@ export const IlhaRua: React.FC = () => {
       document.exitPointerLock?.()
     } else {
       tool.current = null
+      moverObraIdRef.current = null
+      setConfirmarVendaId(null)
       setGhostObra(null)
       modoLinhaRef.current = false
       setModoLinhaBlocos(false)
@@ -1602,6 +1624,7 @@ export const IlhaRua: React.FC = () => {
           painelObraRef.current = null
           obraBlocoAlvoIdRef.current = null
           setPainelObraId(null)
+          setConfirmarVendaId(null)
           return
         }
         // Card na frente de um modo de edição (bloco, linha, consagrar): o 1º Esc fecha SÓ o card. O modo fica atrás e
@@ -1622,6 +1645,13 @@ export const IlhaRua: React.FC = () => {
           setModoConsagrar(null)
           setGhostBloco(null)
           setPreviewLinha(null)
+          setFerramenta('')
+          return
+        }
+        if (moverObraIdRef.current !== null) {
+          moverObraIdRef.current = null
+          setGhostObra(null)
+          setIntencao(null)
           setFerramenta('')
           return
         }
@@ -1861,12 +1891,22 @@ export const IlhaRua: React.FC = () => {
     if (derrotaDoCorpo && telaEstudoRef.current === 'conta') {
       ativarTelaEstudoRef.current('jogo')
     }
+    const idMover = moverObraIdRef.current
+    if (idMover !== null) {
+      const obraMover = hud.obras.find((o) => o.id === idMover)
+      if (derrotaDoCorpo || !obraMover || obraMover.hp <= 0 || obraMover.lado === 'inimigo' || obraEmConstrucao(obraMover)) {
+        moverObraIdRef.current = null
+        setGhostObra(null)
+        setFerramenta('')
+      }
+    }
     const id = painelObraRef.current
     if (id === null) return
     if (painelValido(id, hud.obras, derrotaDoCorpo)) return
     painelObraRef.current = null
     obraBlocoAlvoIdRef.current = null
     setPainelObraId(null)
+    setConfirmarVendaId(null)
   }, [hud.obras, derrotaDoCorpo])
 
   // Card aberto: o foco entra no diálogo, em Confirmar. Sem isso o foco fica no ícone que o abriu e
@@ -1885,6 +1925,8 @@ export const IlhaRua: React.FC = () => {
     setModoConsagrar(null)
     setGhostBloco(null)
     setPreviewLinha(null)
+    moverObraIdRef.current = null
+    setConfirmarVendaId(null)
     tool.current = peca
     setFerramenta(nome)
     publicar(definirOlhar(sim.current, 'imperio'))
@@ -2440,6 +2482,8 @@ export const IlhaRua: React.FC = () => {
     if (acao === 'blocoAdicionar') {
       document.exitPointerLock?.()
       tool.current = null
+      moverObraIdRef.current = null
+      setConfirmarVendaId(null)
       setGhostObra(null)
       modoLinhaRef.current = false
       setModoLinhaBlocos(false)
@@ -2460,6 +2504,8 @@ export const IlhaRua: React.FC = () => {
     if (acao === 'blocoRemover') {
       document.exitPointerLock?.()
       tool.current = null
+      moverObraIdRef.current = null
+      setConfirmarVendaId(null)
       setGhostObra(null)
       modoLinhaRef.current = false
       setModoLinhaBlocos(false)
@@ -2480,6 +2526,8 @@ export const IlhaRua: React.FC = () => {
     if (acao === 'muralhaLinha') {
       document.exitPointerLock?.()
       tool.current = null
+      moverObraIdRef.current = null
+      setConfirmarVendaId(null)
       setGhostObra(null)
       setPainelBlocosAberto(false)
       modoBlocoRef.current = null
@@ -2498,6 +2546,8 @@ export const IlhaRua: React.FC = () => {
     if (acao === 'consagrar') {
       document.exitPointerLock?.()
       tool.current = null
+      moverObraIdRef.current = null
+      setConfirmarVendaId(null)
       setGhostObra(null)
       setPainelBlocosAberto(false)
       modoBlocoRef.current = null
@@ -2703,6 +2753,7 @@ export const IlhaRua: React.FC = () => {
           cursorBordaRef={cursorBordaRef}
           onBussolaImperio={setBussolaImperio}
           tool={tool}
+          moverObraIdRef={moverObraIdRef}
           dragou={dragou}
           selectedIds={selectedIds}
           modoBloco={modoBloco}
@@ -2824,6 +2875,27 @@ export const IlhaRua: React.FC = () => {
               setFerramenta('')
               return
             }
+            if (moverObraIdRef.current !== null) {
+              const idMover = moverObraIdRef.current
+              const obraAlvo = sim.current.obras.find((o) => o.id === idMover && o.hp > 0 && o.lado !== 'inimigo')
+              if (!obraAlvo) {
+                moverObraIdRef.current = null
+                setGhostObra(null)
+                setFerramenta('')
+                return
+              }
+              const check = podeMoverObraEm(sim.current, idMover, x, z, { exigirRevelado: true })
+              if (!check.ok) {
+                if (check.motivo) setPower(check.motivo)
+                return
+              }
+              publicar(moverObra(sim.current, idMover, x, z, { exigirRevelado: true }))
+              moverObraIdRef.current = null
+              setGhostObra(null)
+              setFerramenta('')
+              setPower(`${META_INTENCOES[obraAlvo.tipo].titulo} movida`)
+              return
+            }
             if (modoMoverTouchRef.current) {
               executarOrdemChao(x, z)
               setModoMoverTouch(false)
@@ -2837,11 +2909,28 @@ export const IlhaRua: React.FC = () => {
             setIntencao(null)
           }}
           onGroundOrder={(x, z) => {
-            if (!podeComandar() || modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current || tool.current) return
+            if (
+              !podeComandar() ||
+              modoBlocoRef.current ||
+              modoLinhaRef.current ||
+              modoConsagrarRef.current ||
+              tool.current ||
+              moverObraIdRef.current !== null
+            ) {
+              return
+            }
             executarOrdemChao(x, z)
           }}
           onUnit={(id, lado, shiftKey) => {
-            if (!podeComandar() || modoBlocoRef.current || modoLinhaRef.current || modoConsagrarRef.current) return
+            if (
+              !podeComandar() ||
+              modoBlocoRef.current ||
+              modoLinhaRef.current ||
+              modoConsagrarRef.current ||
+              moverObraIdRef.current !== null
+            ) {
+              return
+            }
             const unidade = sim.current.unidades.find((item) => item.id === id)
             if (!unidade || unidade.hp <= 0 || (lado === 'inimigo' && !inimigoVisivel(sim.current, unidade))) return
             if (lado === 'aliado') {
@@ -2861,6 +2950,7 @@ export const IlhaRua: React.FC = () => {
             }
           }}
           onObra={(id) => {
+            if (moverObraIdRef.current !== null) return
             const obra = sim.current.obras.find((item) => item.id === id)
             if (!obra || obra.hp <= 0) return
             if (obra.lado !== 'inimigo') {
@@ -2871,6 +2961,7 @@ export const IlhaRua: React.FC = () => {
               evoluirId.current = id
               painelObraRef.current = id
               setPainelObraId(id)
+              setConfirmarVendaId(null)
               setFerramenta(`${META_INTENCOES[obra.tipo].titulo} (Nv. ${obra.nivel})`)
               // O painel tem botões: com o mouse preso no canvas (pointer lock) o jogador não alcança nenhum (F2-D5).
               document.exitPointerLock?.()
@@ -2884,7 +2975,7 @@ export const IlhaRua: React.FC = () => {
             publicar(atual)
           }}
           onRect={(x0, z0, x1, z1, shiftKey) => {
-            if (!podeComandar() || modoBlocoRef.current) return
+            if (!podeComandar() || modoBlocoRef.current || moverObraIdRef.current !== null) return
             const proxima = selecionarPorRetanguloEstado(
               sim.current,
               { heroi: heroiEscolhido, tropas: selected.current },
@@ -2902,7 +2993,7 @@ export const IlhaRua: React.FC = () => {
           }}
           onCaixa={setCaixa}
           onHeroi={(shiftKey) => {
-            if (!podeComandar() || sim.current.semCorpo || modoBlocoRef.current) return
+            if (!podeComandar() || sim.current.semCorpo || modoBlocoRef.current || moverObraIdRef.current !== null) return
             const proxima = selecionarAoClicarHeroi({ heroi: heroiEscolhido, tropas: selected.current }, Boolean(shiftKey))
             setModoMoverTouch(false)
             evoluirId.current = null
@@ -3549,52 +3640,141 @@ export const IlhaRua: React.FC = () => {
           <span ref={knobEl} />
         </div>
       </div>
-      {obraPainel && (
-        <div className="ilha-painel-obra" data-testid="ilha-painel-obra" role="dialog" aria-label={META_INTENCOES[obraPainel.tipo].titulo}>
-          <strong data-testid="ilha-painel-titulo">
-            {META_INTENCOES[obraPainel.tipo].titulo} (Nv. {obraPainel.nivel})
-          </strong>
-          {obraPainel.nivel < PARTIDA.nivelMaximoObra ? (
-            <>
-              <p data-testid="ilha-painel-preco">Evoluir custa {precoDeEvoluirNoNivel(obraPainel.nivel)}.</p>
-              <p data-testid="ilha-painel-ganho">Ao evoluir: {descricaoDaEvolucao(obraPainel.tipo, obraPainel.nivel)}.</p>
-            </>
-          ) : (
-            <p data-testid="ilha-painel-preco">Nível máximo.</p>
-          )}
-          {/* No celular os dois botões ficam lado a lado (ilha.css): empilhados somavam 70 px de overflow e cortavam
-              «Editar blocos» e o aviso (F2-D1, medido em toque real). No desktop seguem empilhados. */}
-          <div className="ilha-painel-acoes">
-            <button type="button" data-testid="ilha-painel-evoluir" onClick={evoluirDoPainel}>
-              Evoluir
-            </button>
-            <button
-              type="button"
-              data-testid="ilha-painel-blocos"
-              onClick={() => {
-                // Entrar no editor solta a ferramenta de fundação armada, como o Esc faz: com `tool.current` vivo o próximo
-                // clique no chão tentava FUNDAR a obra em vez de editar bloco (OBS-F2-3, lido no ref: 'mina' sobrevive
-                // ao painel e a «Editar blocos»).
-                tool.current = null
-                setGhostObra(null)
-                setPreviewLinha(null)
-                setFerramenta('')
-                obraBlocoAlvoIdRef.current = obraPainel.id
-                modoLinhaRef.current = false
-                setModoLinhaBlocos(false)
-                modoConsagrarRef.current = null
-                setModoConsagrar(null)
-                modoBlocoRef.current = 'adicionar'
-                setModoBloco('adicionar')
-                setPainelBlocosAberto(true)
-              }}
+      {obraPainel &&
+        (() => {
+          const reembolsoPainel = obraPainel.tipo !== 'nucleo' ? calcularReembolsoVenda(hud, obraPainel.id) : null
+          const partesReembolso = reembolsoPainel
+            ? [
+                reembolsoPainel.madeira > 0 ? `${reembolsoPainel.madeira} mad` : '',
+                reembolsoPainel.ouro > 0 ? `${reembolsoPainel.ouro} ouro` : '',
+              ].filter(Boolean)
+            : []
+          const textoReembolso = partesReembolso.join(' + ')
+          const confirmandoVenda = confirmarVendaId === obraPainel.id
+          return (
+            <div
+              className="ilha-painel-obra"
+              data-testid="ilha-painel-obra"
+              role="dialog"
+              aria-label={META_INTENCOES[obraPainel.tipo].titulo}
             >
-              Editar blocos
-            </button>
-          </div>
-          <p>Mover e apagar não existem nesta leva.</p>
-        </div>
-      )}
+              <strong data-testid="ilha-painel-titulo">
+                {META_INTENCOES[obraPainel.tipo].titulo} (Nv. {obraPainel.nivel})
+              </strong>
+              {obraPainel.nivel < PARTIDA.nivelMaximoObra ? (
+                <>
+                  <p data-testid="ilha-painel-preco">Evoluir custa {precoDeEvoluirNoNivel(obraPainel.nivel)}.</p>
+                  <p data-testid="ilha-painel-ganho">Ao evoluir: {descricaoDaEvolucao(obraPainel.tipo, obraPainel.nivel)}.</p>
+                </>
+              ) : (
+                <p data-testid="ilha-painel-preco">Nível máximo.</p>
+              )}
+              <div className="ilha-painel-acoes">
+                <button type="button" data-testid="ilha-painel-evoluir" onClick={evoluirDoPainel}>
+                  Evoluir
+                </button>
+                <button
+                  type="button"
+                  data-testid="ilha-painel-blocos"
+                  onClick={() => {
+                    // Entrar no editor solta a ferramenta de fundação armada, como o Esc faz: com `tool.current` vivo o próximo
+                    // clique no chão tentava FUNDAR a obra em vez de editar bloco (OBS-F2-3, lido no ref: 'mina' sobrevive
+                    // ao painel e a «Editar blocos»).
+                    tool.current = null
+                    moverObraIdRef.current = null
+                    setConfirmarVendaId(null)
+                    setGhostObra(null)
+                    setPreviewLinha(null)
+                    setFerramenta('')
+                    obraBlocoAlvoIdRef.current = obraPainel.id
+                    modoLinhaRef.current = false
+                    setModoLinhaBlocos(false)
+                    modoConsagrarRef.current = null
+                    setModoConsagrar(null)
+                    modoBlocoRef.current = 'adicionar'
+                    setModoBloco('adicionar')
+                    setPainelBlocosAberto(true)
+                  }}
+                >
+                  Editar blocos
+                </button>
+                {obraPainel.tipo !== 'nucleo' && (
+                  <>
+                    <button
+                      type="button"
+                      data-testid="ilha-painel-mover"
+                      onClick={() => {
+                        if (obraEmConstrucao(obraPainel)) {
+                          setPower('Aguarde concluir a construção antes de mover')
+                          return
+                        }
+                        painelObraRef.current = null
+                        obraBlocoAlvoIdRef.current = null
+                        setPainelObraId(null)
+                        setConfirmarVendaId(null)
+                        tool.current = null
+                        modoBlocoRef.current = null
+                        setModoBloco(null)
+                        modoLinhaRef.current = false
+                        setModoLinhaBlocos(false)
+                        modoConsagrarRef.current = null
+                        setModoConsagrar(null)
+                        setGhostBloco(null)
+                        setPreviewLinha(null)
+                        moverObraIdRef.current = obraPainel.id
+                        publicar(definirOlhar(sim.current, 'imperio'))
+                        document.exitPointerLock?.()
+                        setFerramenta(`Mover ${META_INTENCOES[obraPainel.tipo].titulo} · clique no chão`)
+                        setPower('Clique em um terreno livre para mover (Esc cancela)')
+                      }}
+                    >
+                      Mover
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="ilha-painel-vender"
+                      className={confirmandoVenda ? 'ilha-painel-perigo' : undefined}
+                      onClick={() => {
+                        if (confirmarVendaId !== obraPainel.id) {
+                          setConfirmarVendaId(obraPainel.id)
+                          return
+                        }
+                        const check = podeVenderObra(sim.current, obraPainel.id)
+                        if (!check.ok) {
+                          setPower(check.motivo ?? 'Não é possível vender esta construção')
+                          setConfirmarVendaId(null)
+                          return
+                        }
+                        const prox = venderObra(sim.current, obraPainel.id)
+                        publicar(prox)
+                        painelObraRef.current = null
+                        obraBlocoAlvoIdRef.current = null
+                        setPainelObraId(null)
+                        setConfirmarVendaId(null)
+                        setFerramenta('')
+                        const ganhoPartes = [
+                          check.reembolso && check.reembolso.madeira > 0 ? `+${check.reembolso.madeira} madeira` : '',
+                          check.reembolso && check.reembolso.ouro > 0 ? `+${check.reembolso.ouro} ouro` : '',
+                        ].filter(Boolean)
+                        const titulo = META_INTENCOES[obraPainel.tipo].titulo
+                        setPower(ganhoPartes.length > 0 ? `${titulo} vendida (${ganhoPartes.join(', ')})` : `${titulo} demolida`)
+                      }}
+                    >
+                      {confirmandoVenda
+                        ? 'Confirmar venda'
+                        : textoReembolso
+                          ? `Vender (${textoReembolso})`
+                          : 'Vender (demolir)'}
+                    </button>
+                  </>
+                )}
+              </div>
+              {obraPainel.tipo === 'nucleo' && (
+                <p className="ilha-painel-nota">O Núcleo é fixo e não pode ser movido nem vendido.</p>
+              )}
+            </div>
+          )
+        })()}
       {intencao && (
         <div className="ilha-confirmar-card" data-testid="ilha-confirmar-card" role="dialog" aria-label={META_INTENCOES[intencao].titulo}>
           <div className="ilha-confirmar-topo">
