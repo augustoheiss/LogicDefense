@@ -1,6 +1,14 @@
-import { protegerCifraoMoeda } from './contratosEstudo'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import ReactMarkdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
+import remarkMath from 'remark-math'
+import { getRecentMathSignaturesSnapshot, recordSeenMathChallenge, resetSeenMathMemory } from '../infiniteMathEngine'
+import { semente } from '../geradoresBase'
+import { protegerCifraoMoeda, protegerMarkdownInline, type GrauDificuldade } from './contratosEstudo'
 import { validarDesafioZeroSpoiler } from './validadorDicas'
 import { ENEM_MATEMATICA_LOTE1 } from './bancos/enemMatematicaLote1'
+import { GERADORES_ENEM_PARAMETRICOS } from './geradoresEnem'
 import {
   limparCacheEnemLazy,
   resolverConceitoMotorParaTema,
@@ -115,4 +123,133 @@ export async function run(): Promise<void> {
   // 8. Regressão QAR1: `validadorDicas` detecta vazamento parcial de rótulo composto decimal (ENEM Q155)
   const q155 = ENEM_MATEMATICA_LOTE1.find((d) => d.id === 'enem_2019_d2_c5_q155')
   assert(q155 !== undefined && validarDesafioZeroSpoiler(q155).ok, 'ENEM 2019 Q155 devia passar no zero-spoiler após correção')
+
+  // 9. Regressão alternativa em branco: TODAS as alternativas ENEM + paramétricas + casos de borda
+  //    renderizam texto visível sem virarem lista ordenada/bloco (<ol>, <ul>, <blockquote>, <hr>, <h1>..<h6>).
+  const renderInline = (texto: string): string =>
+    renderToStaticMarkup(
+      React.createElement(
+        ReactMarkdown,
+        {
+          remarkPlugins: [remarkMath],
+          rehypePlugins: [rehypeKatex],
+          components: { p: ({ children }) => React.createElement(React.Fragment, null, children) },
+        },
+        protegerMarkdownInline(texto),
+      ),
+    )
+
+  const checarRotuloSemBloco = (contexto: string, rotulo: string): string => {
+    const html = renderInline(rotulo)
+    assert(
+      !/<(ol|ul|li|blockquote|hr|h[1-6])\b/i.test(html),
+      `${contexto}: rótulo «${rotulo}» virou bloco Markdown (${html})`,
+    )
+    const textoVisivel = html.replace(/<[^>]+>/g, '').trim()
+    assert(textoVisivel.length > 0, `${contexto}: rótulo «${rotulo}» renderizou vazio (${html})`)
+    return html
+  }
+
+  for (const desafio of ENEM_MATEMATICA_LOTE1) {
+    for (const alt of desafio.alternativas) {
+      checarRotuloSemBloco(`${desafio.id}[${alt.letra}]`, alt.rotulo)
+    }
+  }
+  for (const gen of GERADORES_ENEM_PARAMETRICOS) {
+    for (const item of [gen.reserva(), gen.synthesize(semente(99), 99)]) {
+      for (const alt of item.alternativas) {
+        checarRotuloSemBloco(`${gen.archetypeId}[${alt.letra}]`, alt.rotulo)
+      }
+    }
+  }
+  for (const borda of ['5.', '80.', '0109082.', '10.', '16.', '1) teste', '- item', '> citação', '# título', '---', '$x = 5.$']) {
+    checarRotuloSemBloco(`borda(${borda})`, borda)
+  }
+  const htmlZeroEsquerda = checarRotuloSemBloco('zero-esquerda', '0109082.')
+  assert(htmlZeroEsquerda.includes('0109082.'), `esperava preservar 0109082., veio ${htmlZeroEsquerda}`)
+
+  // 10. Regressão anti-repetição e fim do loop eterno na "oficina" (Graus 1..7 + Grau 7 esgotado + temaPreferido)
+  resetSeenMathMemory()
+  for (const grau of [1, 2, 3, 4, 5, 6, 7] as readonly GrauDificuldade[]) {
+    const vistas = new Set<string>()
+    let recentes: string[] = []
+    const arquetipos: string[] = []
+    for (let i = 0; i < 20; i++) {
+      const d = await selecionarProximoDesafio({
+        grau,
+        estadoEstudo: estadoEstudoVazio(),
+        assinaturasVistas: vistas,
+        arquetiposRecentes: recentes,
+        seed: 100 + grau * 31 + i * 17,
+        carregarBancoEnem: async () => ENEM_MATEMATICA_LOTE1,
+      })
+      vistas.add(d.assinatura)
+      recentes = [...recentes, d.arquetipoOuItemId].slice(-8)
+      arquetipos.push(d.arquetipoOuItemId)
+    }
+    for (let i = 1; i < arquetipos.length; i++) {
+      assert(
+        arquetipos[i] !== arquetipos[i - 1],
+        `Grau ${grau}: repetiu arquetipo consecutivo «${arquetipos[i]}» na posição ${i}`,
+      )
+    }
+    assert(new Set(arquetipos).size >= 4, `Grau ${grau}: variedade baixa (${new Set(arquetipos).size})`)
+  }
+
+  // Grau 7 com TODAS as 12 ENEM já vistas inicialmente: gira pelos 3 geradores paramétricos e recicla ENEM sem travar na oficina
+  const g7VistasTodas = new Set(ENEM_MATEMATICA_LOTE1.filter((d) => d.grau === 7).map((d) => d.assinatura))
+  let g7Recentes: string[] = []
+  const g7Arqs: string[] = []
+  for (let i = 0; i < 16; i++) {
+    const d = await selecionarProximoDesafio({
+      grau: 7,
+      estadoEstudo: estadoEstudoVazio(),
+      assinaturasVistas: g7VistasTodas,
+      arquetiposRecentes: g7Recentes,
+      seed: 900 + i * 23,
+      carregarBancoEnem: async () => ENEM_MATEMATICA_LOTE1,
+    })
+    g7VistasTodas.add(d.assinatura)
+    g7Recentes = [...g7Recentes, d.arquetipoOuItemId].slice(-8)
+    g7Arqs.push(d.arquetipoOuItemId)
+  }
+  for (let i = 1; i < g7Arqs.length; i++) {
+    assert(g7Arqs[i] !== g7Arqs[i - 1], `Grau 7 esgotado repetiu «${g7Arqs[i]}» em sequência (${i})`)
+  }
+  assert(
+    new Set(g7Arqs).size >= 5,
+    `Grau 7 esgotado deveria alternar geradores e reciclar ENEM, veio só: ${[...new Set(g7Arqs)].join(', ')}`,
+  )
+  assert(
+    g7Arqs.some((id) => id.startsWith('enem_')),
+    'Grau 7 após o ciclo dos geradores deveria reciclar questões oficiais do ENEM em vez de travar nos paramétricos',
+  )
+
+  // Grau 7 com temaPreferido='enem_funcoes_sequencias': nunca fica preso na oficina repetidamente
+  const g7TemaVistas = new Set<string>()
+  let g7TemaRecentes: string[] = []
+  const g7TemaArqs: string[] = []
+  for (let i = 0; i < 10; i++) {
+    const d = await selecionarProximoDesafio({
+      grau: 7,
+      estadoEstudo: estadoEstudoVazio(),
+      temaPreferido: 'enem_funcoes_sequencias',
+      assinaturasVistas: g7TemaVistas,
+      arquetiposRecentes: g7TemaRecentes,
+      seed: 1200 + i * 19,
+      carregarBancoEnem: async () => ENEM_MATEMATICA_LOTE1,
+    })
+    g7TemaVistas.add(d.assinatura)
+    g7TemaRecentes = [...g7TemaRecentes, d.arquetipoOuItemId].slice(-8)
+    g7TemaArqs.push(d.arquetipoOuItemId)
+  }
+  for (let i = 1; i < g7TemaArqs.length; i++) {
+    assert(g7TemaArqs[i] !== g7TemaArqs[i - 1], `Grau 7 temaPreferido repetiu «${g7TemaArqs[i]}» em sequência (${i})`)
+  }
+
+  // 11. Regressão reset de memória do motor infinito
+  recordSeenMathChallenge('sig_teste_reset', 'g1_massinha_soma')
+  assert(getRecentMathSignaturesSnapshot().length > 0, 'esperava assinatura registrada antes do reset')
+  resetSeenMathMemory()
+  assert(getRecentMathSignaturesSnapshot().length === 0, 'resetSeenMathMemory não limpou a memória do motor')
 }

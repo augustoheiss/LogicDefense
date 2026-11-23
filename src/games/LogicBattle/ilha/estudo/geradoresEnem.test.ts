@@ -66,11 +66,67 @@ function verificarMatematicaIndependente(archetypeId: string, enunciado: string,
     return
   }
 
+  if (archetypeId === 'g5_enem_media_ponderada_setores') {
+    const mOp = enunciado.match(/\*\*(\d+)\s+funcionários\*\*\s+com salário de \*\*R\$ ([\d.]+),00\*\*/)
+    const mEng = enunciado.match(/Engenharia\*\*,\s+há\s+\*\*(\d+)\s+funcionários\*\*\s+com salário de \*\*R\$ ([\d.]+),00\*\*/)
+    assert(mOp && mEng, `padrão média ponderada inesperado: ${enunciado}`)
+    const nA = Number(mOp[1])
+    const salA = Number(mOp[2].replace(/\./g, ''))
+    const nB = Number(mEng[1])
+    const salB = Number(mEng[2].replace(/\./g, ''))
+    const esperado = (nA * salA + nB * salB) / (nA + nB)
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `média ponderada incorreta: esperado ${esperado}, veio ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g6_enem_regra3_composta_producao') {
+    const m1 = enunciado.match(/com \*\*(\d+)\s+técnicos\*\*,\s+trabalhando \*\*(\d+)\s+horas por dia\*\* no mesmo ritmo individual,\s+monta \*\*([\d.]+)\s+placas/)
+    const m2 = enunciado.match(/para \*\*(\d+)\s+técnicos\*\*,\s+trabalhando \*\*(\d+)\s+horas por dia\*\*/)
+    assert(m1 && m2, `padrão regra de 3 composta inesperado: ${enunciado}`)
+    const f1 = Number(m1[1])
+    const h1 = Number(m1[2])
+    const p1 = Number(m1[3].replace(/\./g, ''))
+    const f2 = Number(m2[1])
+    const h2 = Number(m2[2])
+    const esperado = (p1 / (f1 * h1)) * (f2 * h2)
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `regra de 3 composta incorreta: esperado ${esperado}, veio ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g7_enem_vazao_piscina_proporcao') {
+    const mQ = enunciado.match(/vazão constante de \*\*([\d.]+)\s+L\/min\*\*/)
+    const mV = enunciado.match(/capacidade \*\*(\d+)%\s+maior\*\*/)
+    const mT = enunciado.match(/tempo \*\*(\d+)%\s+maior\*\*/)
+    assert(mQ && mV && mT, `padrão vazão inesperado: ${enunciado}`)
+    const q1 = Number(mQ[1].replace(/\./g, ''))
+    const aumV = Number(mV[1])
+    const aumT = Number(mT[1])
+    const esperado = (q1 * (100 + aumV)) / (100 + aumT)
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `vazão incorreta: esperado ${esperado}, veio ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g7_enem_urna_probabilidade_ajuste') {
+    const mA = enunciado.match(/urna A, a chance de sair uma ficha premiada é \*\*(\d+)%\*\*/)
+    const mB = enunciado.match(/urna B há \*\*(\d+)\s+fichas premiadas\*\*,\s+que hoje representam \*\*(\d+)%\*\*/)
+    const mAlvo = enunciado.match(/caia exatamente para \*\*(\d+)%\*\*/)
+    assert(mA && mB && mAlvo, `padrão urna probabilidade inesperado: ${enunciado}`)
+    const pA = Number(mA[1]) / 100
+    const premB = Number(mB[1])
+    const pBAtual = Number(mB[2]) / 100
+    const pAlvo = Number(mAlvo[1]) / 100
+    const totalAtual = premB / pBAtual
+    const totalFinal = (premB * pA) / pAlvo
+    const esperado = Math.round(totalFinal - totalAtual)
+    assert(esperado === respostaCerta, `urna probabilidade incorreta: esperado ${esperado}, veio ${respostaCerta}`)
+    return
+  }
+
   throw new Error(`Gerador desconhecido sem verificador: ${archetypeId}`)
 }
 
 export function run(): void {
-  assert(GERADORES_ENEM_PARAMETRICOS.length === 4, `esperava 4 geradores ENEM, achei ${GERADORES_ENEM_PARAMETRICOS.length}`)
+  assert(GERADORES_ENEM_PARAMETRICOS.length === 8, `esperava 8 geradores ENEM, achei ${GERADORES_ENEM_PARAMETRICOS.length}`)
 
   for (const gen of GERADORES_ENEM_PARAMETRICOS) {
     const assinaturas = new Set<string>()

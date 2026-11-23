@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
-import { protegerCifraoMoeda, type DesafioUnificado } from './contratosEstudo'
+import { protegerMarkdownInline, type DesafioUnificado } from './contratosEstudo'
 
 export interface PainelDicasProps {
   readonly desafio: DesafioUnificado
@@ -30,7 +30,7 @@ const MarkdownDicaInline: React.FC<{ readonly texto: string }> = ({ texto }) => 
     rehypePlugins={[rehypeKatex]}
     components={{ p: ({ children }) => <>{children}</> }}
   >
-    {protegerCifraoMoeda(texto)}
+    {protegerMarkdownInline(texto)}
   </ReactMarkdown>
 )
 

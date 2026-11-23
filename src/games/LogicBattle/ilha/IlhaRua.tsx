@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Group, InstancedMesh, Mesh } from 'three'
 import { Object3D, Vector2 } from 'three'
-import { getRecentMathSignaturesSnapshot, hydrateSeenMathSignatures } from './infiniteMathEngine'
+import { getRecentMathSignaturesSnapshot, hydrateSeenMathSignatures, resetSeenMathMemory } from './infiniteMathEngine'
 import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
 import {
   AlvoEdicaoUnificado,
@@ -133,13 +133,31 @@ interface ContaAtiva {
   readonly gravada: boolean
 }
 
-// O preço de evoluir, lido da mesma constante que `evoluir` cobra. Nenhum texto da tela reescreve esse número.
-const PRECO_EVOLUIR = precoDeEvoluir({
-  credito: PARTIDA.custoEvoluirCredito,
-  madeira: PARTIDA.custoEvoluirMadeira,
-  ouro: PARTIDA.custoEvoluirOuro,
-})
+// O preço de evoluir uma obra do nível `nivel` para o seguinte, lido da MESMA tabela que `evoluir` cobra (`custoDeEvoluir`, 1,5× por nível). Nenhum texto da tela reescreve esse número. No nível máximo não há preço: texto vazio.
+function precoDeEvoluirNoNivel(nivel: number): string {
+  const preco = custoDeEvoluir(nivel)
+  return preco ? precoDeEvoluir(preco) : ''
+}
 import { MundoSandboxCena } from './MundoSandboxCena'
+import { custoDeEvoluir, descricaoDaEvolucao } from './evolucaoObra'
+import { BordaDoMapa } from './BordaDoMapa'
+import {
+  CAMERA_IMPERIO,
+  combinarEntradaPan,
+  entradaBordaCameraImperio,
+  girarCameraImperioPorArrasto,
+  normalizarYaw,
+  passoCameraImperio,
+  posicaoCameraImperio,
+  yawDaBussolaNoImperio,
+  type CameraImperioState,
+  type CursorBordaEntrada,
+} from './cameraImperio'
+
+const SELETOR_HUD_SEM_BORDA =
+  '.ilha-army, button, .ilha-modal, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-construcoes, .ilha-ferramentas, .ilha-painel-obra, .ilha-compass, .ilha-conta-atalhos, .ilha-imperio-rotacao, .ilha-enemies, .ilha-selecao-barra'
+import { destinoDoClique } from './destinoDoClique'
+import { PainelDeConstrucoes } from './PainelDeConstrucoes'
 import { raycastCondicional, semRaycast } from './raycastCena'
 import { SeloDeVida } from './SeloDeVida'
 import { textoDaRecusaDeEvoluir, textoGanhoDaConta } from './textosVida'
@@ -155,7 +173,8 @@ const TEXTO_DO_DONO: Record<Dono, string> = {
 
 /** O que o jogador lê quando «Evoluir» é recusado: o MOTIVO REAL vindo de `podeEvoluir` (uma fonte só), com o preço só quando o motivo é falta de recurso. */
 function motivoDeNaoEvoluir(estado: PartidaState, obraId: number): string {
-  return textoDaRecusaDeEvoluir(podeEvoluir(estado, obraId), PRECO_EVOLUIR)
+  const obra = estado.obras.find((item) => item.id === obraId)
+  return textoDaRecusaDeEvoluir(podeEvoluir(estado, obraId), obra ? precoDeEvoluirNoNivel(obra.nivel) : '')
 }
 
 function compassLetter(yaw: number): string {
@@ -229,6 +248,8 @@ type Controle = {
   forward: boolean
   back: boolean
   strafe: -1 | 0 | 1
+  girarEsq?: boolean
+  girarDir?: boolean
   eixoX?: number
   eixoY?: number
 }
@@ -239,7 +260,10 @@ function Cena(props: {
   sim: React.MutableRefObject<PartidaState>
   timeScale: React.MutableRefObject<number>
   keys: React.MutableRefObject<Controle>
-  cam: React.MutableRefObject<{ x: number; z: number }>
+  cam: React.MutableRefObject<CameraImperioState>
+  rotacaoBotaoRef: React.MutableRefObject<-1 | 0 | 1>
+  cursorBordaRef: React.MutableRefObject<CursorBordaEntrada | null>
+  onBussolaImperio: (letra: string) => void
   tool: React.MutableRefObject<PecaId | null>
   dragou: React.MutableRefObject<boolean>
   onHud: (state: PartidaState) => void
@@ -286,6 +310,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   const ultimaAssinaturaGhost = useRef('')
   const ultimaAssinaturaGhostObra = useRef('')
   const ultimoMiraAlvo = useRef(false)
+  const ultimaBussolaImperio = useRef('')
   const nuvem = useRef<InstancedMesh>(null)
   const penumbra = useRef<InstancedMesh>(null)
   const pedra = useRef<Mesh>(null)
@@ -787,12 +812,23 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     )
     const confinado = state.heroi.y < -0.9 || dentroDeFortaleza
     if (olharDesenho === 'imperio') {
-      const anda = keys.eixoY !== undefined ? keys.eixoY : (keys.forward ? 1 : 0) - (keys.back ? 1 : 0)
-      const lado = keys.eixoX !== undefined ? keys.eixoX : keys.strafe
-      props.cam.current.x += lado * 16 * bruto
-      props.cam.current.z += anda * 16 * bruto
-      camera.position.set(props.cam.current.x, 34, props.cam.current.z + 24)
+      const frenteTeclado = keys.eixoY !== undefined ? keys.eixoY : (keys.forward ? 1 : 0) - (keys.back ? 1 : 0)
+      const ladoTeclado = keys.eixoX !== undefined ? keys.eixoX : keys.strafe
+      const borda =
+        typeof document !== 'undefined' && document.hasFocus()
+          ? entradaBordaCameraImperio(props.cursorBordaRef.current)
+          : { frente: 0, lado: 0 }
+      const pan = combinarEntradaPan({ frente: frenteTeclado, lado: ladoTeclado }, borda)
+      const girar = ((keys.girarDir ? 1 : 0) - (keys.girarEsq ? 1 : 0)) || props.rotacaoBotaoRef.current
+      props.cam.current = passoCameraImperio(props.cam.current, { frente: pan.frente, lado: pan.lado, girar }, bruto)
+      const posCam = posicaoCameraImperio(props.cam.current)
+      camera.position.set(posCam.x, posCam.y, posCam.z)
       camera.lookAt(props.cam.current.x, 0, props.cam.current.z)
+      const letraImperio = compassLetter(yawDaBussolaNoImperio(props.cam.current.yaw))
+      if (letraImperio !== ultimaBussolaImperio.current) {
+        ultimaBussolaImperio.current = letraImperio
+        props.onBussolaImperio(letraImperio)
+      }
     } else if (olharDesenho === 'primeira') {
       camera.position.set(state.heroi.x, PARTIDA.eyeY + state.heroi.y, state.heroi.z)
       camera.lookAt(state.heroi.x + olhar.x, PARTIDA.eyeY + state.heroi.y + olhar.y, state.heroi.z + olhar.z)
@@ -1009,6 +1045,15 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         <planeGeometry args={[PARTIDA.ladoMapa, PARTIDA.ladoMapa]} />
         <meshStandardMaterial color={corDoChaoBioma(props.sim.current.bioma)} />
       </mesh>
+      <BordaDoMapa
+        visivel={
+          props.sim.current.olhar === 'imperio' &&
+          !props.modoBloco &&
+          !props.modoLinhaRef.current &&
+          !props.modoConsagrarRef.current &&
+          props.selectedIds.some((id) => props.sim.current.unidades.some((u) => u.id === id && u.lado === 'aliado' && u.hp > 0))
+        }
+      />
       <MundoSandboxCena
         state={props.sim.current}
         lagoas={props.sim.current.lagoas}
@@ -1198,6 +1243,7 @@ export const IlhaRua: React.FC = () => {
   const timeScale = useRef(1)
   const memoriaRestaurada = useRef(false)
   const assinaturasVistasRef = useRef<Set<string>>(new Set())
+  const arquetiposRecentesRef = useRef<string[]>([])
   // Caderno de estudo (E2 + Fases Q2–Q4): `repoEstudoRef` persiste em IndexedDB (com fallback em memória) os 4 eventos
   // pedagógicos e mantém compatibilidade não destrutiva com `cadernoDeEstudo` v1. `contaAtivaRef` evita closures velhos no `onHud`.
   const cadernoRef = useRef<Caderno | null>(null)
@@ -1205,9 +1251,21 @@ export const IlhaRua: React.FC = () => {
   const eventoQueueRef = useRef<Promise<void>>(Promise.resolve())
   const modalOpen = useRef(false)
   const reqContaIdRef = useRef(0)
-  const keys = useRef<Controle>({ forward: false, back: false, strafe: 0 })
+  const keys = useRef<Controle>({ forward: false, back: false, strafe: 0, girarEsq: false, girarDir: false })
   const lookDrag = useRef<{ x: number; y: number } | null>(null)
   const lookPonteiro = useRef<number | null>(null)
+  const imperioOrbitDrag = useRef<{
+    pointerId: number
+    button: number
+    x0: number
+    y0: number
+    lastX: number
+    arrastou: boolean
+  } | null>(null)
+  const rotacaoBotaoRef = useRef<-1 | 0 | 1>(0)
+  const rotacaoHoldInicioRef = useRef(0)
+  const cursorBordaRef = useRef<CursorBordaEntrada | null>(null)
+  const [bussolaImperio, setBussolaImperio] = useState(() => compassLetter(yawDaBussolaNoImperio(0)))
   const stickPonteiro = useRef<number | null>(null)
   const stickOrigem = useRef<{ x: number; y: number } | null>(null)
   const stickEl = useRef<HTMLDivElement>(null)
@@ -1215,7 +1273,7 @@ export const IlhaRua: React.FC = () => {
   const segurandoTiro = useRef(false)
   const tiroPonteiro = useRef<number | null>(null)
   const [celular, setCelular] = useState(() => window.matchMedia('(pointer: coarse)').matches)
-  const cam = useRef({ x: 0, z: 18 })
+  const cam = useRef<CameraImperioState>({ x: 0, z: 18, yaw: 0 })
   const tool = useRef<PecaId | null>(null)
   const dragou = useRef(false)
   const evoluirId = useRef<number | null>(null)
@@ -1312,9 +1370,13 @@ export const IlhaRua: React.FC = () => {
 
   const limparInteracao = (preservarMovimento = false) => {
     if (!preservarMovimento) {
-      keys.current = { forward: false, back: false, strafe: 0 }
+      keys.current = { forward: false, back: false, strafe: 0, girarEsq: false, girarDir: false }
       lookDrag.current = null
       lookPonteiro.current = null
+      imperioOrbitDrag.current = null
+      rotacaoBotaoRef.current = 0
+      rotacaoHoldInicioRef.current = 0
+      cursorBordaRef.current = null
       stickPonteiro.current = null
       stickOrigem.current = null
       segurandoTiro.current = false
@@ -1354,7 +1416,11 @@ export const IlhaRua: React.FC = () => {
   const executarOrdemChao = (x: number, z: number) => {
     let atual = sim.current
     if (heroiEscolhido && !atual.semCorpo) atual = ordenarHeroi(atual, { tipo: 'mover', x, z })
-    if (selected.current.length > 0) atual = ordenar(atual, selected.current, { tipo: 'mover', x, z })
+    // As TROPAS ganham o destino da faixa da borda (M5, escolha do usuário 23/11): um clique nos 3 m da beira do chão manda atravessar para o mapa vizinho. O herói NÃO: ele atravessa andando.
+    if (selected.current.length > 0) {
+      const destino = destinoDoClique(x, z)
+      atual = ordenar(atual, selected.current, { tipo: 'mover', x: destino.x, z: destino.z })
+    }
     publicar(atual)
   }
 
@@ -1601,6 +1667,13 @@ export const IlhaRua: React.FC = () => {
       if (event.code === 'KeyS' || event.code === 'ArrowDown') keys.current.back = true
       if (event.code === 'KeyA' || event.code === 'ArrowLeft') keys.current.strafe = -1
       if (event.code === 'KeyD' || event.code === 'ArrowRight') keys.current.strafe = 1
+      if (!alvoTecla.ehCampoDeTexto && (sim.current.olhar === 'imperio' || sim.current.semCorpo)) {
+        if (event.code === 'KeyZ') keys.current.girarEsq = true
+        if (event.code === 'KeyE' || event.code === 'KeyC') keys.current.girarDir = true
+        if (event.code === 'KeyR' && !event.repeat) {
+          cam.current = { ...cam.current, yaw: 0 }
+        }
+      }
     }
     const up = (event: KeyboardEvent) => {
       if (event.code === 'KeyW' || event.code === 'ArrowUp') keys.current.forward = false
@@ -1611,6 +1684,8 @@ export const IlhaRua: React.FC = () => {
       if ((event.code === 'KeyD' || event.code === 'ArrowRight') && keys.current.strafe === 1) {
         keys.current.strafe = 0
       }
+      if (event.code === 'KeyZ') keys.current.girarEsq = false
+      if (event.code === 'KeyE' || event.code === 'KeyC') keys.current.girarDir = false
     }
     const moverManche = (clientX: number, clientY: number) => {
       const origem = stickOrigem.current
@@ -1648,6 +1723,33 @@ export const IlhaRua: React.FC = () => {
         y: -((clientY - rect.top) / rect.height) * 2 + 1,
       }
     }
+    const atualizarCursorBorda = (event: PointerEvent) => {
+      if (
+        event.pointerType !== 'mouse' ||
+        modalOpen.current ||
+        imperioOrbitDrag.current?.arrastou ||
+        (!sim.current.semCorpo && sim.current.olhar !== 'imperio')
+      ) {
+        cursorBordaRef.current = null
+        return
+      }
+      const alvo = event.target as HTMLElement | null
+      if (alvo && typeof alvo.closest === 'function' && alvo.closest(SELETOR_HUD_SEM_BORDA)) {
+        cursorBordaRef.current = null
+        return
+      }
+      const rect = shellRef.current?.getBoundingClientRect()
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        cursorBordaRef.current = null
+        return
+      }
+      cursorBordaRef.current = {
+        localX: event.clientX - rect.left,
+        localY: event.clientY - rect.top,
+        largura: rect.width,
+        altura: rect.height,
+      }
+    }
     const moveLook = (event: PointerEvent) => {
       atualizarCursorNdc(event.clientX, event.clientY)
       if (blocoPonteiro.current && blocoPonteiro.current.pointerId === event.pointerId) {
@@ -1656,6 +1758,25 @@ export const IlhaRua: React.FC = () => {
           blocoPonteiro.current.arrastou = true
         }
       }
+      const orbit = imperioOrbitDrag.current
+      if (orbit && orbit.pointerId === event.pointerId) {
+        if (!orbit.arrastou) {
+          const dist = Math.hypot(event.clientX - orbit.x0, event.clientY - orbit.y0)
+          const limiar = orbit.button === 2 ? PARTIDA.limiarArrastoRmbPx : 0
+          if (dist > limiar) {
+            orbit.arrastou = true
+            orbit.lastX = event.clientX
+            cursorBordaRef.current = null
+          }
+          if (!orbit.arrastou) atualizarCursorBorda(event)
+          return
+        }
+        cursorBordaRef.current = null
+        cam.current = girarCameraImperioPorArrasto(cam.current, event.clientX - orbit.lastX)
+        orbit.lastX = event.clientX
+        return
+      }
+      atualizarCursorBorda(event)
       if (modalOpen.current) return
       if (stickPonteiro.current === event.pointerId) {
         moverManche(event.clientX, event.clientY)
@@ -1676,6 +1797,9 @@ export const IlhaRua: React.FC = () => {
     }
     const stopLook = (event: PointerEvent) => {
       if (stickPonteiro.current === event.pointerId) soltarManche()
+      if (imperioOrbitDrag.current && imperioOrbitDrag.current.pointerId === event.pointerId) {
+        imperioOrbitDrag.current = null
+      }
       if (lookPonteiro.current === event.pointerId) {
         lookDrag.current = null
         lookPonteiro.current = null
@@ -1698,11 +1822,16 @@ export const IlhaRua: React.FC = () => {
         }
       }
     }
+    const limparCursorBorda = () => {
+      cursorBordaRef.current = null
+    }
     window.addEventListener('keydown', down, true)
     window.addEventListener('keyup', up)
     window.addEventListener('pointermove', moveLook)
     window.addEventListener('pointerup', stopLook)
     window.addEventListener('pointercancel', stopLook)
+    window.addEventListener('blur', limparCursorBorda)
+    document.documentElement.addEventListener('mouseleave', limparCursorBorda)
     return () => {
       window.removeEventListener('pointerdown', registrarPonteiro, true)
       window.removeEventListener('keydown', down, true)
@@ -1710,6 +1839,8 @@ export const IlhaRua: React.FC = () => {
       window.removeEventListener('pointermove', moveLook)
       window.removeEventListener('pointerup', stopLook)
       window.removeEventListener('pointercancel', stopLook)
+      window.removeEventListener('blur', limparCursorBorda)
+      document.documentElement.removeEventListener('mouseleave', limparCursorBorda)
     }
   }, [])
 
@@ -1792,11 +1923,15 @@ export const IlhaRua: React.FC = () => {
     telaEstudoRef.current = proxima
     setTelaEstudo(proxima)
     if (proxima !== 'jogo') {
-      keys.current = { forward: false, back: false, strafe: 0 }
+      keys.current = { forward: false, back: false, strafe: 0, girarEsq: false, girarDir: false }
       stickPonteiro.current = null
       stickOrigem.current = null
       lookDrag.current = null
       lookPonteiro.current = null
+      imperioOrbitDrag.current = null
+      rotacaoBotaoRef.current = 0
+      rotacaoHoldInicioRef.current = 0
+      cursorBordaRef.current = null
       segurandoTiro.current = false
       tiroPonteiro.current = null
       blocoPonteiro.current = null
@@ -1890,6 +2025,7 @@ export const IlhaRua: React.FC = () => {
       estadoEstudo: estadoEstudoRef.current,
       temaPreferido: proximoTema,
       assinaturasVistas: assinaturasVistasRef.current,
+      arquetiposRecentes: arquetiposRecentesRef.current,
       seed,
     })
       .then((proxima) => {
@@ -1899,6 +2035,7 @@ export const IlhaRua: React.FC = () => {
           ativarTelaEstudo('jogo')
           return
         }
+        arquetiposRecentesRef.current = [...arquetiposRecentesRef.current, proxima.arquetipoOuItemId].slice(-8)
         assinaturasVistasRef.current.add(proxima.assinatura)
         const combinadas = [...new Set([...getRecentMathSignaturesSnapshot(), ...assinaturasVistasRef.current])].slice(-120)
         salvarAssinaturas(armazenamentoDoNavegador(), combinadas)
@@ -2087,6 +2224,15 @@ export const IlhaRua: React.FC = () => {
       }
       cadernoRef.current = null
       assinaturasVistasRef.current.clear()
+      arquetiposRecentesRef.current = []
+      resetSeenMathMemory()
+      setTemaTreinoAtivo(null)
+      temaTreinoRef.current = null
+      contaAtivaRef.current = null
+      setContaAtiva(null)
+      if (sim.current.altar && !sim.current.altar.resolvido) {
+        publicar(fecharAltar(sim.current))
+      }
       const limpo = await repo.lerEstado()
       setEstadoEstudo(limpo)
       setStatusCaderno('Dados locais de estudo apagados deste navegador.')
@@ -2107,10 +2253,6 @@ export const IlhaRua: React.FC = () => {
 
   const nucleoQualquer = hud.obras.find((obra) => obra.tipo === 'nucleo' && obra.lado !== 'inimigo')
   const nucleo = nucleoQualquer && nucleoQualquer.hp > 0 ? nucleoQualquer : undefined
-  const niveisNossos = hud.obras
-    .filter((obra) => obra.lado !== 'inimigo' && obra.hp > 0)
-    .map((obra) => `${META_INTENCOES[obra.tipo].titulo} Nv. ${obra.nivel}`)
-    .join(' · ')
   const ruinaNossa =
     hud.obras.find((obra) => obra.lado !== 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0) ??
     hud.obras.find((obra) => obra.lado !== 'inimigo' && obra.hp <= 0)
@@ -2410,12 +2552,20 @@ export const IlhaRua: React.FC = () => {
     <div
       ref={shellRef}
       className={celular ? 'ilha-shell ilha-celular' : 'ilha-shell'}
+      onMouseDown={(event) => {
+        if (event.button === 1 && (sim.current.olhar === 'imperio' || sim.current.semCorpo)) {
+          event.preventDefault()
+        }
+      }}
       onContextMenu={(event) => event.preventDefault()}
+      onPointerLeave={() => {
+        cursorBordaRef.current = null
+      }}
       onPointerDown={(event) => {
         const target = event.target as HTMLElement
         if (
           target.closest(
-            'button, .ilha-modal, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-ferramentas, .ilha-painel-obra, .ilha-army',
+            'button, .ilha-modal, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-construcoes, .ilha-ferramentas, .ilha-painel-obra, .ilha-army',
           )
         )
           return
@@ -2494,6 +2644,21 @@ export const IlhaRua: React.FC = () => {
         const ponteiroDaObra = ponteiroDaObraRef.current === event.pointerId
         ponteiroDaObraRef.current = null
         if (sim.current.olhar === 'imperio' || sim.current.semCorpo) {
+          if (event.button === 1 || event.button === 2) {
+            if (event.button === 1) {
+              event.preventDefault()
+              cursorBordaRef.current = null
+            }
+            imperioOrbitDrag.current = {
+              pointerId: event.pointerId,
+              button: event.button,
+              x0: event.clientX,
+              y0: event.clientY,
+              lastX: event.clientX,
+              arrastou: event.button === 1,
+            }
+            return
+          }
           if ((modoBlocoRef.current || modoConsagrarRef.current) && event.button === 0) {
             blocoPonteiro.current = {
               pointerId: event.pointerId,
@@ -2534,6 +2699,9 @@ export const IlhaRua: React.FC = () => {
           timeScale={timeScale}
           keys={keys}
           cam={cam}
+          rotacaoBotaoRef={rotacaoBotaoRef}
+          cursorBordaRef={cursorBordaRef}
+          onBussolaImperio={setBussolaImperio}
           tool={tool}
           dragou={dragou}
           selectedIds={selectedIds}
@@ -2792,34 +2960,37 @@ export const IlhaRua: React.FC = () => {
           </span>
         </div>
         <SeloDeVida vida={corpoAtual.heroi.army} />
-        <div
-          className="ilha-base"
-          data-testid="ilha-base"
-          // Uma linha só, com reticências (ilha.css): o texto completo, com o nível de cada obra, fica no tooltip.
-          ref={(el) => {
-            if (el) el.title = el.textContent ?? ''
+        {/* O STATUS DA BASE virou uma lista VERTICAL que abre ao clicar (pedido do usuário, 23/11: «o status dos seus edifícios não é pra ficar mostrando horizontalmente [...] um filtro vertical que ao clicar aparece as suas
+            construções e o que você quer evoluir»). A linha horizontal antiga («Núcleo nível 1 · vida · tropas · ... · Torre Nv. 1 · Quartel Nv. 1 ...») cortava o que passava de ~900 px; os avisos dela (sem caminho, núcleo inimigo
+            destruído, dragão, obra frágil, «Leva em Xs») continuam, agora no topo do painel aberto. A lógica é de `listaDeConstrucoes.ts`; o preço e o ganho de cada nível, de `evolucaoObra.ts`. */}
+        <PainelDeConstrucoes
+          obras={hud.obras}
+          recursos={{ credito: hud.credito, madeira: hud.madeira, ouro: hud.ouro }}
+          resumo={{
+            tropas: tropasVivas.length,
+            emOrdens,
+            emVigia,
+            levaEm:
+              nucleoQualquer && nucleoQualquer.hp > 0 && hud.obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp > 0)
+                ? PARTIDA.ondaPeriodo - hud.ondaRelogio
+                : null,
+            dragao: Boolean(dragaoVivo),
+            semCaminho: hud.unidades.some((unidade) => unidade.rota?.semCaminho),
+            nucleoInimigoCaiu: hud.obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0),
           }}
-        >
-          {nucleoQualquer
-            ? `Núcleo nível ${nucleoQualquer.nivel} · vida ${Math.max(0, Math.ceil(nucleoQualquer.hp))} · tropas ${tropasVivas.length} · ${emOrdens} em ordens · ${emVigia} em vigia`
-            : 'Sem base'}
-          {/* Os alertas vêm ANTES da lista de obras: com 5+ obras a lista é longa e as reticências (ilha.css) comiam o que
-              vinha depois, justamente o contador «Leva em Xs» e o aviso de obra frágil (medido: início em x 2062 numa
-              caixa que acaba em 1176). A lista de níveis é a parte que pode ficar só no tooltip. */}
-          {hud.obras.some((obra) => obra.lado !== 'inimigo' && obraEmConstrucao(obra))
-            ? ` · ${hud.obras.filter((obra) => obra.lado !== 'inimigo' && obraEmConstrucao(obra)).length} em obras (frágil!)`
-            : ''}
-          {hud.unidades.some((unidade) => unidade.rota?.semCaminho) ? ' · sem caminho' : ''}
-          {nucleoQualquer && nucleoQualquer.hp > 0 && hud.obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp > 0)
-            ? ` · Leva em ${Math.max(0, Math.ceil(PARTIDA.ondaPeriodo - hud.ondaRelogio))}s`
-            : ''}
-          {dragaoVivo ? ` · Dragão ${dragaoVivo.segmentos.join(' ')}` : ''}
-          {nucleoQualquer && nucleoQualquer.hp <= 0 ? ' · Base destruída' : ''}
-          {hud.obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp <= 0)
-            ? ' · Núcleo inimigo destruído · sem novas levas'
-            : ''}
-          {nucleoQualquer ? ` · ${niveisNossos}` : ''}
-        </div>
+          aoEvoluir={(id) => {
+            const antes = sim.current.obras.find((obra) => obra.id === id)
+            const prox = evoluir(sim.current, id)
+            publicar(prox)
+            const depois = prox.obras.find((obra) => obra.id === id)
+            if (antes && depois && depois.nivel > antes.nivel) {
+              setFerramenta(`${META_INTENCOES[depois.tipo].titulo} (Nv. ${depois.nivel})`)
+              setPower(`${META_INTENCOES[depois.tipo].titulo} evoluiu para Nv. ${depois.nivel}!`)
+            } else {
+              setPower(motivoDeNaoEvoluir(sim.current, id))
+            }
+          }}
+        />
         <div className="ilha-enemies" data-testid="ilha-recursos">
           Licenças {hud.credito} · Madeira {hud.madeira} · Ouro {hud.ouro}
           {hud.lingotes > 0 ? ` · Lingotes ${hud.lingotes} resto ${hud.resto}` : ''}
@@ -2830,7 +3001,7 @@ export const IlhaRua: React.FC = () => {
           {modoConsagrar ? ` · Consagrar (${modoConsagrar})` : ''}
         </div>
         <div className="ilha-compass" data-testid="ilha-bussola">
-          {compassLetter(hud.heroi.yaw)}
+          {tatico ? bussolaImperio : compassLetter(hud.heroi.yaw)}
         </div>
         {!tatico && <div className={miraAlvo ? 'ilha-mira alvo' : 'ilha-mira'} data-testid="ilha-mira" />}
         {!tatico && !derrotado && (
@@ -3287,16 +3458,93 @@ export const IlhaRua: React.FC = () => {
             )
           )}
         </div>
-        <div
-          className="ilha-olhar"
-          onPointerDown={(event) => {
-            event.stopPropagation()
-            lookDrag.current = { x: event.clientX, y: event.clientY }
-            lookPonteiro.current = event.pointerId
-          }}
-        >
-          Olhar
-        </div>
+        {!tatico && (
+          <div
+            className="ilha-olhar"
+            onPointerDown={(event) => {
+              event.stopPropagation()
+              lookDrag.current = { x: event.clientX, y: event.clientY }
+              lookPonteiro.current = event.pointerId
+            }}
+          >
+            Olhar
+          </div>
+        )}
+        {tatico && !derrotado && (
+          <div className="ilha-imperio-rotacao" role="group" aria-label="Girar câmera do império">
+            <button
+              type="button"
+              data-testid="ilha-cam-girar-esq"
+              title="Girar câmera para a esquerda (Z)"
+              aria-label="Girar câmera para a esquerda"
+              onPointerDown={() => {
+                rotacaoBotaoRef.current = -1
+                rotacaoHoldInicioRef.current = performance.now()
+              }}
+              onPointerUp={() => {
+                rotacaoBotaoRef.current = 0
+              }}
+              onPointerLeave={() => {
+                rotacaoBotaoRef.current = 0
+              }}
+              onPointerCancel={() => {
+                rotacaoBotaoRef.current = 0
+              }}
+              onClick={(event) => {
+                if (event.detail === 0 || performance.now() - rotacaoHoldInicioRef.current < 180) {
+                  cam.current = {
+                    ...cam.current,
+                    yaw: normalizarYaw(cam.current.yaw - CAMERA_IMPERIO.passoCliqueRad),
+                  }
+                }
+                rotacaoHoldInicioRef.current = 0
+              }}
+            >
+              ↺
+            </button>
+            <button
+              type="button"
+              data-testid="ilha-cam-reset-rot"
+              title="Alinhar câmera para o Norte (R)"
+              aria-label="Alinhar câmera para o Norte"
+              onClick={() => {
+                cam.current = { ...cam.current, yaw: 0 }
+              }}
+            >
+              0°
+            </button>
+            <button
+              type="button"
+              data-testid="ilha-cam-girar-dir"
+              title="Girar câmera para a direita (C ou E)"
+              aria-label="Girar câmera para a direita"
+              onPointerDown={() => {
+                rotacaoBotaoRef.current = 1
+                rotacaoHoldInicioRef.current = performance.now()
+              }}
+              onPointerUp={() => {
+                rotacaoBotaoRef.current = 0
+              }}
+              onPointerLeave={() => {
+                rotacaoBotaoRef.current = 0
+              }}
+              onPointerCancel={() => {
+                rotacaoBotaoRef.current = 0
+              }}
+              onClick={(event) => {
+                if (event.detail === 0 || performance.now() - rotacaoHoldInicioRef.current < 180) {
+                  cam.current = {
+                    ...cam.current,
+                    yaw: normalizarYaw(cam.current.yaw + CAMERA_IMPERIO.passoCliqueRad),
+                  }
+                }
+                rotacaoHoldInicioRef.current = 0
+              }}
+            >
+              ↻
+            </button>
+          </div>
+        )}
         <div className="ilha-joystick" ref={stickEl} data-testid="ilha-joystick">
           <span ref={knobEl} />
         </div>
@@ -3306,7 +3554,14 @@ export const IlhaRua: React.FC = () => {
           <strong data-testid="ilha-painel-titulo">
             {META_INTENCOES[obraPainel.tipo].titulo} (Nv. {obraPainel.nivel})
           </strong>
-          <p>{PRECO_EVOLUIR}.</p>
+          {obraPainel.nivel < PARTIDA.nivelMaximoObra ? (
+            <>
+              <p data-testid="ilha-painel-preco">Evoluir custa {precoDeEvoluirNoNivel(obraPainel.nivel)}.</p>
+              <p data-testid="ilha-painel-ganho">Ao evoluir: {descricaoDaEvolucao(obraPainel.tipo, obraPainel.nivel)}.</p>
+            </>
+          ) : (
+            <p data-testid="ilha-painel-preco">Nível máximo.</p>
+          )}
           {/* No celular os dois botões ficam lado a lado (ilha.css): empilhados somavam 70 px de overflow e cortavam
               «Editar blocos» e o aviso (F2-D1, medido em toque real). No desktop seguem empilhados. */}
           <div className="ilha-painel-acoes">
@@ -3476,7 +3731,7 @@ export const IlhaRua: React.FC = () => {
                       limparInteracao()
                       atlasRef.current = abrirMapa(atlasRef.current, i, j)
                       sim.current = estadoCena(atlasRef.current)
-                      cam.current = { x: 0, z: 0 }
+                      cam.current = { x: 0, z: 0, yaw: cam.current.yaw }
                       publicar(sim.current)
                     }}
                   />
@@ -3494,7 +3749,7 @@ export const IlhaRua: React.FC = () => {
               limparInteracao()
               atlasRef.current = voltarAoCorpo(atlasRef.current)
               sim.current = estadoCena(atlasRef.current)
-              cam.current = { x: sim.current.heroi.x, z: sim.current.heroi.z }
+              cam.current = { x: sim.current.heroi.x, z: sim.current.heroi.z, yaw: 0 }
               publicar(sim.current)
             }}
           >
@@ -3551,6 +3806,9 @@ export const IlhaRua: React.FC = () => {
           onMinimizarJogo={() => ativarTelaEstudo('jogo')}
           onDesistirETrocar={desistirETrocar}
           onAbrirCaderno={() => alternarCadernoRef.current()}
+          onLimparTemaTreino={() =>
+            openConta(tier, { temaPreferido: null, forcarNova: true, registrarAbandono: false })
+          }
         />
       )}
       {telaEstudo === 'caderno' && (

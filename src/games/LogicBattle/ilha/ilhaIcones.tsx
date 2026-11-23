@@ -46,7 +46,7 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
   torre: {
     id: 'torre',
     titulo: 'Torre de Vigia e Cerco',
-    resumo: 'Enxerga 22m e dispara por cima de trincheiras (1 bloco). No Nv. 5 vira mirante entrável e vê acima de 3 blocos!',
+    resumo: 'Enxerga e atira a 22m (mais longe que o herói, que atira a 18m), por cima de trincheiras (1 bloco). Cada nível dá +2m de alcance e visão e mais dano. No Nv. 5 vira mirante entrável e vê acima de 3 blocos!',
     detalhe: 'A planta transparente segue o ponteiro (verde válido / vermelho bloqueado). Confirmar seleção?',
   },
   portao: {
@@ -82,8 +82,8 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
   evoluir: {
     id: 'evoluir',
     titulo: 'Evoluir Construção (Nv. 1 → 5)',
-    resumo: 'Aumenta vida, alcance e altura escalável. No Nível 5 libera interior caminhável e edição de blocos!',
-    detalhe: 'Custo: 1 licença, ou 2 madeiras e 2 ouros.',
+    resumo: 'Cada nível rende 1,5× o anterior: mais vida, e conforme a obra: torre com mais dano e alcance, serraria e mina produzindo mais, tropa recrutada mais forte. No Nível 5 libera interior caminhável e edição de blocos!',
+    detalhe: 'O preço sobe 1,5× a cada nível (licenças, ou madeiras e ouros) e aparece no painel da obra.',
   },
   tropa: {
     id: 'tropa',

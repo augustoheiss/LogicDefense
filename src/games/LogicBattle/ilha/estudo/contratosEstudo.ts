@@ -166,6 +166,67 @@ export function protegerCifraoMoeda(texto: string): string {
   return out
 }
 
+function atualizarEstadoMathNaLinha(linha: string, estadoInicial: null | '$' | '$$'): null | '$' | '$$' {
+  let inMath = estadoInicial
+  let i = 0
+  while (i < linha.length) {
+    if (linha[i] === '\\') {
+      i += 2
+      continue
+    }
+    if (inMath === '$$') {
+      if (linha.startsWith('$$', i)) {
+        inMath = null
+        i += 2
+      } else {
+        i += 1
+      }
+      continue
+    }
+    if (inMath === '$') {
+      if (linha[i] === '$') inMath = null
+      i += 1
+      continue
+    }
+    if (linha.startsWith('$$', i)) {
+      inMath = '$$'
+      i += 2
+      continue
+    }
+    if (linha[i] === '$') {
+      inMath = '$'
+      i += 1
+      continue
+    }
+    i += 1
+  }
+  return inMath
+}
+
+/**
+ * Escapa marcadores de bloco CommonMark no início de cada linha fora de `$...$` / `$$...$$`
+ * (ex.: `'5.'`, `'0109082.'`, `'10.'`, `'- item'`, `'>'`, `'#'`, `'---'`), evitando que alternativas
+ * e células de tabela virem listas ordenadas vazias `<ol start="10"><li></li></ol>`.
+ */
+export function protegerMarkdownInline(texto: string): string {
+  const comMoeda = protegerCifraoMoeda(texto)
+  const linhas = comMoeda.replace(/\r\n/g, '\n').split('\n')
+  let inMath: null | '$' | '$$' = null
+  const protegidas = linhas.map((linha) => {
+    let resultado = linha
+    const comecaEmMath = inMath !== null || /^\s*\$/.test(linha)
+    if (!comecaEmMath) {
+      resultado = resultado
+        .replace(/^(\s*\d+)([.)])(?=\s|$)/, '$1\\$2')
+        .replace(/^(\s*)([-*_])((?:\s*\2){2,}\s*)$/, '$1\\$2$3')
+        .replace(/^(\s*)([*+-]|>|#+)(?=\s|$)/, '$1\\$2')
+    }
+    inMath = atualizarEstadoMathNaLinha(linha, inMath)
+    return resultado
+  })
+  return protegidas.join('\n')
+}
+
 export const DESCRICAO_ERRO_PEDAGOGICO: Record<
   TipoErroPedagogico,
   { readonly titulo: string; readonly alertaPratico: string }

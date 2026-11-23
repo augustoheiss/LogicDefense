@@ -5,7 +5,7 @@ import remarkMath from 'remark-math'
 import 'katex/dist/katex.min.css'
 import { fatorDoBuff } from '../buffPorErro'
 import { GRAU_PARTIDA, type GrauConta, PARTIDA } from '../partidaPolicies'
-import { protegerCifraoMoeda, type DesafioUnificado } from './contratosEstudo'
+import { protegerCifraoMoeda, protegerMarkdownInline, type DesafioUnificado } from './contratosEstudo'
 import { PainelDicas } from './PainelDicas'
 
 export interface ModalContaProps {
@@ -28,6 +28,7 @@ export interface ModalContaProps {
   readonly onMinimizarJogo: () => void
   readonly onDesistirETrocar: () => void
   readonly onAbrirCaderno: () => void
+  readonly onLimparTemaTreino?: () => void
 }
 
 type AlinhamentoCelula = 'left' | 'center' | 'right'
@@ -103,7 +104,7 @@ const MarkdownInline: React.FC<{ readonly texto: string }> = ({ texto }) => (
     rehypePlugins={[rehypeKatex]}
     components={{ p: ({ children }) => <>{children}</> }}
   >
-    {protegerCifraoMoeda(texto)}
+    {protegerMarkdownInline(texto)}
   </ReactMarkdown>
 )
 
@@ -127,6 +128,7 @@ export const ModalConta: React.FC<ModalContaProps> = ({
   onMinimizarJogo,
   onDesistirETrocar,
   onAbrirCaderno,
+  onLimparTemaTreino,
 }) => {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const grausDisponiveis = PARTIDA.enemHabilitado ? GRAUS_TODOS : GRAUS_MOTOR
@@ -164,7 +166,19 @@ export const ModalConta: React.FC<ModalContaProps> = ({
             </span>
             {temaTreinoAtivo && (
               <span className="ilha-badge-treino" title="Treino direcionado do seu Caderno de Estudo">
-                Foco direcionado
+                <span>Foco direcionado</span>
+                {onLimparTemaTreino && (
+                  <button
+                    type="button"
+                    className="ilha-badge-treino-limpar"
+                    data-testid="ilha-limpar-foco"
+                    title="Sair do foco direcionado"
+                    aria-label="Sair do foco direcionado"
+                    onClick={onLimparTemaTreino}
+                  >
+                    ×
+                  </button>
+                )}
               </span>
             )}
           </div>
