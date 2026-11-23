@@ -15,6 +15,7 @@ import {
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
 import { chaoRevelado, cobertoAgora, Obra, obraEmConstrucao, PartidaState } from './partidaSim'
 import { raycastCondicional, semRaycast } from './raycastCena'
+import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 
 const MAX_BLOCOS_INST = 1024
 const MAX_VOXEIS_NV5_INST = 2048
@@ -47,7 +48,9 @@ export const BlocosMundoInstanced: React.FC<{
   versaoChao: number
   state: PartidaState
   groupRef?: React.RefObject<Group | null>
-}> = ({ blocosMapa, versaoSolidos, versaoChao, state, groupRef }) => {
+  texturasBlocos?: PacoteTexturasBlocos | null
+  sombrasAtivas?: boolean
+}> = ({ blocosMapa, versaoSolidos, versaoChao, state, groupRef, texturasBlocos = null, sombrasAtivas = false }) => {
   const refs = useRef<Record<BlocoMaterial, InstancedMesh | null>>({
     madeira: null,
     pedra: null,
@@ -100,6 +103,7 @@ export const BlocosMundoInstanced: React.FC<{
     <group ref={groupRef} name="blocos-mundo">
       {MATERIAIS_BLOCO.map((mat) => {
         const spec = SPEC_BLOCO_MATERIAL[mat]
+        const trio = texturasBlocos?.[mat]
         return (
           <instancedMesh
             key={mat}
@@ -107,13 +111,19 @@ export const BlocosMundoInstanced: React.FC<{
               refs.current[mat] = node
             }}
             args={[undefined, undefined, MAX_BLOCOS_INST]}
+            castShadow={sombrasAtivas}
+            receiveShadow={sombrasAtivas}
             frustumCulled={false}
           >
             <boxGeometry args={[PASSO_BLOCO_MUNDO * 0.98, PASSO_BLOCO_MUNDO * 0.98, PASSO_BLOCO_MUNDO * 0.98]} />
             <meshStandardMaterial
-              color={spec.cor}
+              key={`bloco-${mat}-${trio ? 'pbr' : 'solid'}-${texturasBlocos?.resolucao ?? 0}`}
+              color={trio ? '#ffffff' : spec.cor}
+              map={trio?.map ?? null}
+              normalMap={trio?.normalMap ?? null}
+              roughnessMap={trio?.roughnessMap ?? null}
               roughness={mat === 'ouro' ? 0.3 : mat === 'pedra' ? 0.85 : 0.78}
-              metalness={mat === 'ouro' ? 0.55 : 0.08}
+              metalness={mat === 'ouro' ? 0.68 : 0.08}
             />
           </instancedMesh>
         )
@@ -127,12 +137,14 @@ export const ObrasLivresInstanced: React.FC<{
   versaoSolidos: number
   versaoChao: number
   groupRef?: React.RefObject<Group | null>
+  texturasBlocos?: PacoteTexturasBlocos | null
+  sombrasAtivas?: boolean
   bloqueiaCliqueObra?: boolean
   onSelectObra?: (obraId: number, lado: 'nosso' | 'inimigo', button: number) => void
   /** O ponteiro tocou esta obra (antes do `click`): quem decide se o container deve atirar é `IlhaRua`. */
   /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
   onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
-}> = ({ state, versaoSolidos, versaoChao, groupRef, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
+}> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
   const refs = useRef<Record<BlocoMaterial, InstancedMesh | null>>({
     madeira: null,
     pedra: null,
@@ -189,6 +201,7 @@ export const ObrasLivresInstanced: React.FC<{
     <group ref={groupRef} name="obras-livres">
       {MATERIAIS_BLOCO.map((mat) => {
         const spec = SPEC_BLOCO_MATERIAL[mat]
+        const trio = texturasBlocos?.[mat]
         return (
           <instancedMesh
             key={`livre-${mat}`}
@@ -196,6 +209,8 @@ export const ObrasLivresInstanced: React.FC<{
               refs.current[mat] = node
             }}
             args={[undefined, undefined, MAX_BLOCOS_INST]}
+            castShadow={sombrasAtivas}
+            receiveShadow={sombrasAtivas}
             frustumCulled={false}
             onPointerDown={(event) => {
               if (bloqueiaCliqueObra || !onTocarObra) return
@@ -223,11 +238,15 @@ export const ObrasLivresInstanced: React.FC<{
           >
             <boxGeometry args={[PASSO_BLOCO_MUNDO * 0.98, PASSO_BLOCO_MUNDO * 0.98, PASSO_BLOCO_MUNDO * 0.98]} />
             <meshStandardMaterial
-              color={spec.cor}
+              key={`livre-${mat}-${trio ? 'pbr' : 'solid'}-${texturasBlocos?.resolucao ?? 0}`}
+              color={trio ? '#ffffff' : spec.cor}
+              map={trio?.map ?? null}
+              normalMap={trio?.normalMap ?? null}
+              roughnessMap={trio?.roughnessMap ?? null}
               emissive={mat === 'ouro' ? '#854d0e' : '#0f172a'}
               emissiveIntensity={0.12}
               roughness={mat === 'ouro' ? 0.28 : 0.75}
-              metalness={mat === 'ouro' ? 0.55 : 0.12}
+              metalness={mat === 'ouro' ? 0.65 : 0.12}
             />
           </instancedMesh>
         )
@@ -248,12 +267,14 @@ export const ObrasNv5Instanced: React.FC<{
   versaoSolidos: number
   versaoChao: number
   groupRef?: React.RefObject<Group | null>
+  texturasBlocos?: PacoteTexturasBlocos | null
+  sombrasAtivas?: boolean
   bloqueiaCliqueObra?: boolean
   onSelectObra?: (obraId: number, lado: 'nosso' | 'inimigo', button: number) => void
   /** O ponteiro tocou esta obra (antes do `click`): quem decide se o container deve atirar é `IlhaRua`. */
   /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
   onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
-}> = ({ state, versaoSolidos, versaoChao, groupRef, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
+}> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
   const refs = useRef<Record<TomNv5, InstancedMesh | null>>({
     pedra: null,
     madeira: null,
@@ -307,13 +328,17 @@ export const ObrasNv5Instanced: React.FC<{
 
   return (
     <group ref={groupRef} name="voxeis-nv5">
-      {TONS_NV5.map(({ id, cor }) => (
+      {TONS_NV5.map(({ id, cor }) => {
+        const trio = id === 'madeira' ? texturasBlocos?.madeira : id === 'coroa' ? texturasBlocos?.ouro : texturasBlocos?.pedra
+        return (
         <instancedMesh
           key={id}
           ref={(node) => {
             refs.current[id] = node
           }}
           args={[undefined, undefined, MAX_VOXEIS_NV5_INST]}
+          castShadow={sombrasAtivas}
+          receiveShadow={sombrasAtivas}
           frustumCulled={false}
           onPointerDown={(event) => {
             if (bloqueiaCliqueObra || !onTocarObra) return
@@ -343,9 +368,18 @@ export const ObrasNv5Instanced: React.FC<{
           }}
         >
           <boxGeometry args={[VOXEL_NV5.passo * 0.98, VOXEL_NV5.passo * 0.98, VOXEL_NV5.passo * 0.98]} />
-          <meshStandardMaterial color={cor} roughness={0.74} />
+          <meshStandardMaterial
+            key={`nv5-${id}-${trio ? 'pbr' : 'solid'}-${texturasBlocos?.resolucao ?? 0}`}
+            color={trio ? '#ffffff' : cor}
+            map={trio?.map ?? null}
+            normalMap={trio?.normalMap ?? null}
+            roughnessMap={trio?.roughnessMap ?? null}
+            roughness={0.74}
+            metalness={id === 'coroa' ? 0.55 : 0.08}
+          />
         </instancedMesh>
-      ))}
+        )
+      })}
     </group>
   )
 }
@@ -698,10 +732,11 @@ export const ObraArquiteturaMesh: React.FC<{
   obra: Obra
   visivel: boolean
   modoBloco: boolean
+  sombrasAtivas?: boolean
   onPointerDown: (event: ThreeEvent<PointerEvent>) => void
   onPointerUp: (event: ThreeEvent<PointerEvent>) => void
   onClick: (event: ThreeEvent<MouseEvent>) => void
-}> = ({ obra, visivel, modoBloco, onPointerDown, onPointerUp, onClick }) => {
+}> = ({ obra, visivel, modoBloco, sombrasAtivas = false, onPointerDown, onPointerUp, onClick }) => {
   const ruina = obra.hp <= 0
   const construindo = obraEmConstrucao(obra)
   const temBlocosLivres = Boolean((obra as Obra & { blocosLivres?: readonly BlocoMundo[] }).blocosLivres?.length)
@@ -745,6 +780,12 @@ export const ObraArquiteturaMesh: React.FC<{
           semColisaoRay={modoBloco}
         />
       </group>
+      {sombrasAtivas && !construindo && (
+        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow raycast={semRaycast}>
+          <circleGeometry args={[Math.max(dim[0], dim[2]) * 0.72, 16]} />
+          <meshStandardMaterial color="#0f172a" transparent opacity={0.18} depthWrite={false} />
+        </mesh>
+      )}
       {/* Andaimes visuais durante a fase frágil de construção */}
       {construindo && (
         <group>

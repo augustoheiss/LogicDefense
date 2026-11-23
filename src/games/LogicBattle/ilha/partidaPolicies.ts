@@ -5,6 +5,7 @@ export type Postura = 'ordens' | 'automatico' | 'vigia' | 'noLugar' | 'calado'
 export type PecaId = 'nucleo' | 'torre' | 'portao' | 'quartel' | 'britador' | 'serraria' | 'mina'
 export type Papel = 'horda' | 'tropa' | 'sitiante' | 'isca' | 'dragao'
 export type PoliticaMinimapas = 'atual' | 'alguns' | 'todos'
+export type QualidadeGraficaPreset = 'auto' | 'leve' | 'bonito' | 'ultra'
 
 export const OBRA_CENTRO_Y = 0.8
 export const DIMENSOES_OBRA: Record<PecaId, [number, number, number]> = {
@@ -110,6 +111,10 @@ export const PARTIDA = {
   custoAguaCaminho: 2.2,
   orcamentoFrameTodosMs: 28,
   orcamentoStepTodosMs: 9,
+  maxLentosPorFrame: 2,
+  visualPbrHabilitado: true as boolean,
+  qualidadeGraficaPadrao: 'auto' as QualidadeGraficaPreset,
+  capacidadePoolBiomasGpu: 2,
   mostrarFaixaTiroVisual: false as boolean,
   usarLoSPorAltura: true as boolean,
   alturaLinhaPadrao: 2 as 1 | 2 | 3,

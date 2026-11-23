@@ -18,6 +18,7 @@ import {
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
 import { chaoRevelado, cobertoAgora, obraEmConstrucao, PartidaState } from './partidaSim'
 import type { AlvoEdicaoVoxel } from './verticalidadeVoxel'
+import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 
 export interface MundoSandboxCenaProps {
   state: PartidaState
@@ -25,6 +26,9 @@ export interface MundoSandboxCenaProps {
   recursos: readonly RecursoNatural[]
   subsoloCentro: { x: number; z: number } | null
   modoBloco: 'adicionar' | 'remover' | null
+  visualAprimorado?: boolean
+  texturasBlocos?: PacoteTexturasBlocos | null
+  sombrasAtivas?: boolean
   voxeisGroupRef?: React.RefObject<Group | null>
   blocosMapaGroupRef?: React.RefObject<Group | null>
   obrasLivresGroupRef?: React.RefObject<Group | null>
@@ -45,6 +49,9 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
   recursos,
   subsoloCentro,
   modoBloco,
+  visualAprimorado = false,
+  texturasBlocos = null,
+  sombrasAtivas = false,
   voxeisGroupRef,
   blocosMapaGroupRef,
   obrasLivresGroupRef,
@@ -63,28 +70,30 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
 
   return (
     <group>
-      {/* 1. Água Rasa (Lagoas e Riachos Rasos) */}
-      {lagoas.map((lagoa, idx) => {
-        const visivel = !PARTIDA.nuvem || chaoRevelado(state, lagoa.x, lagoa.z)
-        if (!visivel) return null
-        return (
-          <group key={`lagoa-${idx}`} position={[lagoa.x, -0.41, lagoa.z]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[lagoa.rx + 0.55, lagoa.rz + 0.55, 1]} raycast={() => null}>
-              <circleGeometry args={[1, 24]} />
-              <meshStandardMaterial color="#d6c394" roughness={0.95} />
-            </mesh>
-            <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[lagoa.rx, lagoa.rz, 1]} raycast={() => null}>
-              <circleGeometry args={[1, 24]} />
-              <meshStandardMaterial color="#0ea5e9" transparent opacity={0.76} roughness={0.2} metalness={0.15} />
-            </mesh>
-          </group>
-        )
-      })}
+      {/* 1. Água Rasa (quando visualAprimorado ativo, renderizada via AguaBiomaShader) */}
+      {!visualAprimorado &&
+        lagoas.map((lagoa, idx) => {
+          const visivel = !PARTIDA.nuvem || chaoRevelado(state, lagoa.x, lagoa.z)
+          if (!visivel) return null
+          return (
+            <group key={`lagoa-${idx}`} position={[lagoa.x, -0.41, lagoa.z]}>
+              <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[lagoa.rx + 0.55, lagoa.rz + 0.55, 1]} raycast={() => null}>
+                <circleGeometry args={[1, 24]} />
+                <meshStandardMaterial color="#d6c394" roughness={0.95} />
+              </mesh>
+              <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[lagoa.rx, lagoa.rz, 1]} raycast={() => null}>
+                <circleGeometry args={[1, 24]} />
+                <meshStandardMaterial color="#0ea5e9" transparent opacity={0.76} roughness={0.2} metalness={0.15} />
+              </mesh>
+            </group>
+          )
+        })}
 
-      {/* 2. Recursos Naturais: Árvores (Madeira) e Veios de Ouro (Superfície + Subsolo) */}
+      {/* 2. Recursos Naturais: superfície renderizada via PropsBiomaInstanced quando visualAprimorado está ativo; subsolo sempre aqui */}
       {recursos.map((rec) => {
         const ehSubsolo = rec.yBase < -0.9
         if (ehSubsolo && !noSubsolo) return null
+        if (!ehSubsolo && visualAprimorado) return null
         if (!ehSubsolo && PARTIDA.nuvem && !chaoRevelado(state, rec.x, rec.z)) return null
 
         if (rec.tipo === 'arvore') {
@@ -235,6 +244,8 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         versaoSolidos={state.versaoSolidos}
         versaoChao={state.versaoChao}
         groupRef={voxeisGroupRef}
+        texturasBlocos={texturasBlocos}
+        sombrasAtivas={sombrasAtivas}
         bloqueiaCliqueObra={bloqueiaCliqueObra}
         onSelectObra={onSelectObraInstanced}
         onTocarObra={onTocarObraInstanced}
@@ -245,12 +256,16 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         versaoChao={state.versaoChao}
         state={state}
         groupRef={blocosMapaGroupRef}
+        texturasBlocos={texturasBlocos}
+        sombrasAtivas={sombrasAtivas}
       />
       <ObrasLivresInstanced
         state={state}
         versaoSolidos={state.versaoSolidos}
         versaoChao={state.versaoChao}
         groupRef={obrasLivresGroupRef}
+        texturasBlocos={texturasBlocos}
+        sombrasAtivas={sombrasAtivas}
         bloqueiaCliqueObra={bloqueiaCliqueObra}
         onSelectObra={onSelectObraInstanced}
         onTocarObra={onTocarObraInstanced}

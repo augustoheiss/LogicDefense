@@ -2,9 +2,23 @@ import { Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Group, InstancedMesh, Mesh } from 'three'
-import { Object3D, Vector2 } from 'three'
+import { ACESFilmicToneMapping, Object3D, Vector2 } from 'three'
 import { getRecentMathSignaturesSnapshot, hydrateSeenMathSignatures, resetSeenMathMemory } from './infiniteMathEngine'
 import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
+import { nomeDoBioma } from './visual/biomaVisualCatalog'
+import { CenaBiomaVisual } from './visual/CenaBiomaVisual'
+import {
+  aplicarContextLost,
+  carregarPresetQualidadeSalvo,
+  criarEstadoQualidade,
+  definirPresetQualidade,
+  passoAutoQualidade,
+  salvarPresetQualidade,
+  specDeQualidade,
+  type EstadoQualidadeGrafica,
+  type SpecQualidadeGrafica,
+} from './visual/qualidadeGrafica'
+import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 import {
   AlvoEdicaoUnificado,
   mensagemMotivoBloco,
@@ -22,7 +36,7 @@ import {
 import { meiaLarguraNv5 } from './blocosNv5Blueprints'
 import { validarAdicionarBlocoObraLivre } from './obraBlocosLivres'
 import { IndiceBlocoMundo, IndiceVoxelNv5, ObraArquiteturaMesh } from './ObrasArquiteturaCena'
-import { GrauConta, OBSTACULOS, Olhar, PARTIDA, PecaId } from './partidaPolicies'
+import { GrauConta, OBSTACULOS, Olhar, PARTIDA, PecaId, type QualidadeGraficaPreset } from './partidaPolicies'
 import {
   abrirAltar,
   alcanceDoTiro,
@@ -92,6 +106,7 @@ import {
   estadoCorpo,
   fichaEm,
   resumoAtlas,
+  resumoCartograficoAtlas,
   stepAtlas,
   voltarAoCorpo,
 } from './atlas'
@@ -307,6 +322,8 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   onConcluirLinha: (x0: number, z0: number, x1: number, z1: number) => void
   onMiraAlvo: (ativo: boolean) => void
   onPedirSubsolo: () => void
+  specQualidade: SpecQualidadeGrafica
+  onAutoQualidadeFrame: (emaFrameMs: number, dt: number) => void
 }) {
   const avatar = useRef<Group>(null)
   const flash = useRef<Mesh>(null)
@@ -919,7 +936,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         marcaNuvem.current.olhar !== olharDesenho ||
         marcaNuvem.current.mapa !== props.mapa
       ) {
-        const altura = olharDesenho === 'imperio' ? 4 : 24
+        const altura = olharDesenho === 'imperio' ? 4 : 3.2
         let n = 0
         for (const celula of CELULAS_DO_DISCO) {
           if (state.chaoVisto[celula.i] === 1) continue
@@ -948,7 +965,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         marca.mapa !== props.mapa ||
         marca.assinatura !== assinatura
       ) {
-        const altura = olharDesenho === 'imperio' ? 1.2 : 8
+        const altura = olharDesenho === 'imperio' ? 1.2 : 2.6
         let n = 0
         for (const celula of CELULAS_DO_DISCO) {
           if (state.chaoVisto[celula.i] !== 1 || cobertoAgora(state, celula.x, celula.z)) continue
@@ -968,10 +985,104 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
       resumoAtlas(props.atlas.current)
         .map((ficha) => `${ficha.i},${ficha.j},${ficha.alerta},${ficha.ritmo},${ficha.cena ? 1 : 0},${ficha.corpo ? 1 : 0},${ficha.dono}`)
         .join('|') +
-        `:${props.atlas.current.politica}:${props.atlas.current.cotaDinamica}:${estadoCorpo(props.atlas.current).derrota ? 1 : 0}:${estadoCorpo(props.atlas.current).heroi.army}`,
+        `:${props.atlas.current.politica}:${props.atlas.current.cotaDinamica}:${estadoCorpo(props.atlas.current).derrota ? 1 : 0}:${estadoCorpo(props.atlas.current).heroi.army}:${Object.keys(props.atlas.current.cartografia).length}`,
     )
+    props.onAutoQualidadeFrame(props.atlas.current.emaFrameMs, bruto)
     props.onHud(state)
   })
+
+  const [texturasBlocos, setTexturasBlocos] = useState<PacoteTexturasBlocos | null>(null)
+  const visualPbr = PARTIDA.visualPbrHabilitado
+
+  const chaoPointerDown = (event: {
+    nativeEvent: PointerEvent
+    pointerType: string
+    clientX: number
+    clientY: number
+    point: { x: number; z: number }
+    pointerId: number
+    stopPropagation: () => void
+  }) => {
+    if (props.modoBlocoRef.current || props.modoConsagrarRef.current) return
+    if (!props.sim.current.semCorpo && props.sim.current.olhar !== 'imperio') return
+    if (props.modoLinhaRef.current && (event.nativeEvent.button === 0 || event.pointerType === 'touch')) {
+      event.stopPropagation()
+      linhaDrag.current = { x0: event.point.x, z0: event.point.z, pointerId: event.pointerId }
+      const st = props.sim.current
+      const mat = props.materialBlocoRef.current
+      const plano = planejarLinhaNoEstado(
+        st,
+        event.point.x,
+        event.point.z,
+        event.point.x,
+        event.point.z,
+        props.alturaLinhaRef.current,
+        mat,
+      )
+      const temRec = temRecursoParaMaterial(
+        { madeira: st.madeira, lingotes: st.lingotes, ouro: st.ouro },
+        mat,
+        plano.celulas.length,
+      )
+      props.onPreviewLinha({ plano, temRecurso: temRec })
+      return
+    }
+    if (props.tool.current || props.moverObraIdRef.current !== null) return
+    if (event.nativeEvent.button === 2) {
+      rmbDrag.current = {
+        x: event.clientX,
+        y: event.clientY,
+        worldX: event.point.x,
+        worldZ: event.point.z,
+        pointerId: event.pointerId,
+      }
+      return
+    }
+    if (event.nativeEvent.button === 0 || event.pointerType === 'touch') {
+      arrasto.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+    }
+  }
+
+  const chaoClick = (event: {
+    nativeEvent: MouseEvent
+    clientX: number
+    clientY: number
+    point: { x: number; z: number }
+    stopPropagation: () => void
+  }) => {
+    if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current) return
+    if (props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160) {
+      props.dragou.current = false
+      return
+    }
+    if (event.nativeEvent.button === 2) return
+    event.stopPropagation()
+    if (props.tool.current || props.moverObraIdRef.current !== null) {
+      const rect = gl.domElement.getBoundingClientRect()
+      const p =
+        rect.width > 0 && rect.height > 0
+          ? soloNoNdc(
+              ((event.clientX - rect.left) / rect.width) * 2 - 1,
+              -((event.clientY - rect.top) / rect.height) * 2 + 1,
+              0,
+            )
+          : null
+      if (p) {
+        props.onGround(Math.round(p.x * 2) / 2, Math.round(p.z * 2) / 2)
+        return
+      }
+    }
+    props.onGround(event.point.x, event.point.z)
+  }
+
+  const focoSombraX =
+    props.sim.current.semCorpo || props.sim.current.olhar === 'imperio'
+      ? props.cam.current.x
+      : props.sim.current.heroi.x
+  const focoSombraZ =
+    props.sim.current.semCorpo || props.sim.current.olhar === 'imperio'
+      ? props.cam.current.z
+      : props.sim.current.heroi.z
 
   const altar = props.sim.current.altar
   const pisos =
@@ -986,81 +1097,36 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
 
   return (
     <>
-      <color attach="background" args={['#8ecff0']} />
-      <ambientLight intensity={0.75} />
-      <directionalLight position={[12, 18, 8]} intensity={1.15} />
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.45, 0]}
-        onPointerDown={(event) => {
-          if (props.modoBlocoRef.current || props.modoConsagrarRef.current) return
-          if (!props.sim.current.semCorpo && props.sim.current.olhar !== 'imperio') return
-          if (props.modoLinhaRef.current && (event.nativeEvent.button === 0 || event.pointerType === 'touch')) {
-            event.stopPropagation()
-            linhaDrag.current = { x0: event.point.x, z0: event.point.z, pointerId: event.pointerId }
-            const st = props.sim.current
-            const mat = props.materialBlocoRef.current
-            const plano = planejarLinhaNoEstado(
-              st,
-              event.point.x,
-              event.point.z,
-              event.point.x,
-              event.point.z,
-              props.alturaLinhaRef.current,
-              mat,
-            )
-            const temRec = temRecursoParaMaterial(
-              { madeira: st.madeira, lingotes: st.lingotes, ouro: st.ouro },
-              mat,
-              plano.celulas.length,
-            )
-            props.onPreviewLinha({ plano, temRecurso: temRec })
-            return
-          }
-          if (props.tool.current || props.moverObraIdRef.current !== null) return
-          if (event.nativeEvent.button === 2) {
-            rmbDrag.current = {
-              x: event.clientX,
-              y: event.clientY,
-              worldX: event.point.x,
-              worldZ: event.point.z,
-              pointerId: event.pointerId,
-            }
-            return
-          }
-          if (event.nativeEvent.button === 0 || event.pointerType === 'touch') {
-            arrasto.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
-          }
-        }}
-        onClick={(event) => {
-          if (props.modoBlocoRef.current || props.modoLinhaRef.current || props.modoConsagrarRef.current) return
-          if (props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160) {
-            props.dragou.current = false
-            return
-          }
-          if (event.nativeEvent.button === 2) return
-          event.stopPropagation()
-          if (props.tool.current || props.moverObraIdRef.current !== null) {
-            const rect = gl.domElement.getBoundingClientRect()
-            const p =
-              rect.width > 0 && rect.height > 0
-                ? soloNoNdc(
-                    ((event.clientX - rect.left) / rect.width) * 2 - 1,
-                    -((event.clientY - rect.top) / rect.height) * 2 + 1,
-                    0,
-                  )
-                : null
-            if (p) {
-              props.onGround(Math.round(p.x * 2) / 2, Math.round(p.z * 2) / 2)
-              return
-            }
-          }
-          props.onGround(event.point.x, event.point.z)
-        }}
-      >
-        <planeGeometry args={[PARTIDA.ladoMapa, PARTIDA.ladoMapa]} />
-        <meshStandardMaterial color={corDoChaoBioma(props.sim.current.bioma)} />
-      </mesh>
+      {visualPbr ? (
+        <CenaBiomaVisual
+          state={props.sim.current}
+          mapaI={props.atlas.current.cenaI}
+          mapaJ={props.atlas.current.cenaJ}
+          focoX={focoSombraX}
+          focoZ={focoSombraZ}
+          spec={props.specQualidade}
+          fichasVivas={props.atlas.current.fichas.length}
+          cartografiaTotal={Object.keys(props.atlas.current.cartografia).length}
+          onBlocosTexturasProntas={setTexturasBlocos}
+          onPointerDownGround={chaoPointerDown}
+          onClickGround={chaoClick}
+        />
+      ) : (
+        <>
+          <color attach="background" args={['#8ecff0']} />
+          <ambientLight intensity={0.75} />
+          <directionalLight position={[12, 18, 8]} intensity={1.15} />
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, -0.45, 0]}
+            onPointerDown={chaoPointerDown}
+            onClick={chaoClick}
+          >
+            <planeGeometry args={[PARTIDA.ladoMapa, PARTIDA.ladoMapa]} />
+            <meshStandardMaterial color={corDoChaoBioma(props.sim.current.bioma)} />
+          </mesh>
+        </>
+      )}
       <BordaDoMapa
         visivel={
           props.sim.current.olhar === 'imperio' &&
@@ -1076,6 +1142,9 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         recursos={props.sim.current.recursos}
         subsoloCentro={props.sim.current.subsoloCentro}
         modoBloco={props.modoBloco}
+        visualAprimorado={visualPbr}
+        texturasBlocos={texturasBlocos}
+        sombrasAtivas={visualPbr && props.specQualidade.sombrasAtivas}
         voxeisGroupRef={voxeisGroupRef}
         blocosMapaGroupRef={blocosMapaGroupRef}
         obrasLivresGroupRef={obrasLivresGroupRef}
@@ -1097,7 +1166,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         }}
         onPedirSubsolo={props.onPedirSubsolo}
       />
-      {(props.sim.current.semCorpo || props.sim.current.heroi.y >= -0.9) && (
+      {!visualPbr && (props.sim.current.semCorpo || props.sim.current.heroi.y >= -0.9) && (
         <mesh position={[0, -0.35, 20]} raycast={() => null}>
           <boxGeometry args={[8, 0.2, 42]} />
           <meshStandardMaterial color="#7d8ea3" />
@@ -1179,6 +1248,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
             obra={obra}
             visivel={visivel}
             modoBloco={Boolean(props.modoBloco || props.modoLinhaRef.current || props.modoConsagrarRef.current)}
+            sombrasAtivas={visualPbr && props.specQualidade.sombrasAtivas}
             onPointerDown={(event) => {
               // Esta malha roda antes do `pointerdown` do container, que atiraria (medido: R3F vem antes).
               if (pointerdownDaObra(obra.id, event.pointerId, event.nativeEvent.button)) event.stopPropagation()
@@ -1212,6 +1282,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         corposRef={corpos}
         modoBloco={props.modoBloco}
         modoBlocoRef={props.modoBlocoRef}
+        sombrasAtivas={visualPbr && props.specQualidade.sombrasAtivas}
         deveIgnorarClique={() => props.dragou.current || performance.now() - ultimoBoxSelectMs.current < 160}
         haloAtivo={
           !props.modoLinhaRef.current &&
@@ -1234,7 +1305,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         raycast={() => null}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#0b1220" transparent opacity={0.72} depthWrite={false} />
+        <meshLambertMaterial color="#0b1220" transparent opacity={0.72} depthWrite={false} />
       </instancedMesh>
       <instancedMesh
         ref={nuvem}
@@ -1243,7 +1314,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         raycast={() => null}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#d5e2ea" transparent opacity={0.92} depthWrite />
+        <meshLambertMaterial color="#d5e2ea" transparent opacity={0.92} depthWrite />
       </instancedMesh>
     </>
   )
@@ -1256,6 +1327,18 @@ export const IlhaRua: React.FC = () => {
   const miniEscala = useRef(168 / (PARTIDA.ladoMapa * 5))
   const quadro = useRef('')
   const [mapaTick, setMapaTick] = useState(0)
+  const [estadoQualidade, setEstadoQualidade] = useState<EstadoQualidadeGrafica>(() =>
+    criarEstadoQualidade(carregarPresetQualidadeSalvo()),
+  )
+  const estadoQualidadeRef = useRef<EstadoQualidadeGrafica>(estadoQualidade)
+  estadoQualidadeRef.current = estadoQualidade
+  const specQualidade = useMemo(() => specDeQualidade(estadoQualidade), [estadoQualidade])
+  const selecionarQualidade = (preset: QualidadeGraficaPreset) => {
+    salvarPresetQualidade(preset)
+    const prox = definirPresetQualidade(estadoQualidadeRef.current, preset)
+    estadoQualidadeRef.current = prox
+    setEstadoQualidade(prox)
+  }
   const timeScale = useRef(1)
   const memoriaRestaurada = useRef(false)
   const assinaturasVistasRef = useRef<Set<string>>(new Set())
@@ -2743,9 +2826,42 @@ export const IlhaRua: React.FC = () => {
         if (!ponteiroDaObra) pedirLock(event.currentTarget.querySelector('canvas'))
       }}
     >
-      <Canvas camera={{ position: [0, 6, -8], fov: 55 }}>
+      <Canvas
+        shadows={PARTIDA.visualPbrHabilitado && specQualidade.sombrasAtivas}
+        dpr={[1, specQualidade.dprMax]}
+        gl={{
+          antialias: true,
+          powerPreference: 'high-performance',
+          toneMapping: ACESFilmicToneMapping,
+          toneMappingExposure: 1.06,
+        }}
+        camera={{ position: [0, 6, -8], fov: 55 }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener(
+            'webglcontextlost',
+            (ev) => {
+              ev.preventDefault()
+              const protegido = aplicarContextLost(estadoQualidadeRef.current)
+              estadoQualidadeRef.current = protegido
+              setEstadoQualidade(protegido)
+              setPower('Qualidade reduzida para Leve para proteger a GPU')
+            },
+            false,
+          )
+        }}
+      >
         <Cena
           sim={sim}
+          specQualidade={specQualidade}
+          onAutoQualidadeFrame={(emaMs, dtSeg) => {
+            const prox = passoAutoQualidade(estadoQualidadeRef.current, emaMs, dtSeg)
+            if (prox.efetiva !== estadoQualidadeRef.current.efetiva) {
+              estadoQualidadeRef.current = prox
+              setEstadoQualidade(prox)
+            } else {
+              estadoQualidadeRef.current = prox
+            }
+          }}
           timeScale={timeScale}
           keys={keys}
           cam={cam}
@@ -3851,14 +3967,34 @@ export const IlhaRua: React.FC = () => {
               </div>
             )}
             <span className="ilha-mini-status" data-testid="ilha-minimapa-status">
-              {atlasRef.current.fichas.filter((f) => f.ritmo === 'cheio').length}/{atlasRef.current.fichas.length}
+              {atlasRef.current.fichas.filter((f) => f.ritmo === 'cheio').length}/{atlasRef.current.fichas.length} · {Object.keys(atlasRef.current.cartografia).length}
             </span>
+          </div>
+          <div className="ilha-mini-bioma" data-testid="ilha-minimapa-bioma">
+            <span>{nomeDoBioma(hud.bioma)}</span>
+            <div className="ilha-mini-qualidade" role="group" aria-label="Qualidade gráfica">
+              {(['auto', 'leve', 'bonito', 'ultra'] as const).map((qModo) => (
+                <button
+                  key={qModo}
+                  type="button"
+                  data-testid={`ilha-qualidade-${qModo}`}
+                  aria-pressed={estadoQualidade.preset === qModo}
+                  className={estadoQualidade.preset === qModo ? 'ilha-chip ativo' : 'ilha-chip'}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    selecionarQualidade(qModo)
+                  }}
+                >
+                  {qModo === 'auto' ? 'Auto' : qModo === 'leve' ? 'Leve' : qModo === 'bonito' ? 'Bonito' : 'Ultra'}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="ilha-mini-janela">
             <div className="ilha-mini-camada" ref={camadaMini}>
               {(() => {
                 const atlasAgora = atlasRef.current
-                const resumo = resumoAtlas(atlasAgora)
+                const resumo = resumoCartograficoAtlas(atlasAgora)
                 const porChave = new Map(resumo.map((ficha) => [`${ficha.i},${ficha.j}`, ficha]))
                 let minI = atlasAgora.heroiI - 2
                 let maxI = atlasAgora.heroiI + 2
@@ -3888,7 +4024,7 @@ export const IlhaRua: React.FC = () => {
                     type="button"
                     data-testid={`ilha-mapa-${i}-${j}`}
                     data-dono={ficha?.dono}
-                    title={ficha ? `${i}, ${j}: ${TEXTO_DO_DONO[ficha.dono]}` : `${i}, ${j}`}
+                    title={ficha ? `${i}, ${j} (${nomeDoBioma(ficha.bioma)}): ${TEXTO_DO_DONO[ficha.dono]}` : `${i}, ${j}`}
                     className={[
                       'ilha-mini-quadrado',
                       ficha ? `ilha-dono-${ficha.dono}` : 'ilha-mapa-vazio',

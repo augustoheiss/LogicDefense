@@ -520,7 +520,7 @@
 }
 
 .ilha-celular .ilha-conta-atalhos {
-  top: 274px;
+  top: 336px;
   left: auto;
   right: 8px;
   bottom: auto;
@@ -1960,4 +1960,25 @@
 
 .ilha-imperio-rotacao button:hover {
   background: #1e496b;
+}
+
+.ilha-mini-bioma {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.ilha-mini-qualidade {
+  display: flex;
+  gap: 3px;
+}
+
+.ilha-mini-qualidade .ilha-chip {
+  flex: 1;
+  min-height: 22px;
+  padding: 2px 4px !important;
+  font-size: 10px;
 }

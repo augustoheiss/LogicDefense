@@ -1,3 +1,4 @@
+import { BiomaId } from './biomaRecursos'
 import { camadaDoMapa, fatorDaCamada } from './camadaDoMapa'
 import { PARTIDA, PoliticaMinimapas } from './partidaPolicies'
 import { createPartida, evoluirInimigo, PartidaInput, PartidaState, stepPartida, Unidade } from './partidaSim'
@@ -27,15 +28,49 @@ export interface Ficha {
   visitado?: boolean
 }
 
+export interface RegistroCartografico {
+  i: number
+  j: number
+  bioma: BiomaId
+  dono: Dono
+}
+
 export interface Atlas {
   heroiI: number
   heroiJ: number
   cenaI: number
   cenaJ: number
   fichas: Ficha[]
+  cartografia: Record<string, RegistroCartografico>
+  cursorLento: number
   politica: PoliticaMinimapas
   cotaDinamica: number
   emaFrameMs: number
+}
+
+export function chaveMapa(i: number, j: number): string {
+  return `${i},${j}`
+}
+
+function atualizarCartografia(
+  cartografia: Record<string, RegistroCartografico>,
+  fichas: readonly Ficha[],
+): Record<string, RegistroCartografico> {
+  let mudou = false
+  let proximo = cartografia
+  for (const ficha of fichas) {
+    const chave = chaveMapa(ficha.i, ficha.j)
+    const dono = donoDoMapa(ficha)
+    const atual = proximo[chave]
+    if (!atual || atual.bioma !== ficha.state.bioma || atual.dono !== dono) {
+      if (!mudou) {
+        proximo = { ...cartografia }
+        mudou = true
+      }
+      proximo[chave] = { i: ficha.i, j: ficha.j, bioma: ficha.state.bioma, dono }
+    }
+  }
+  return proximo
 }
 
 const PARADO: PartidaInput = { forward: false, back: false, strafe: 0 }
@@ -266,7 +301,6 @@ function encolher(
     const vitima = candidatos[0]
     const manterLento =
       devePreservar(vitima) ||
-      Boolean(vitima.visitado) ||
       politica === 'todos' ||
       (politica === 'atual' && distancia(vitima, heroiI, heroiJ) <= 1.05)
     if (manterLento) {
@@ -313,6 +347,17 @@ function passoComAlerta(ficha: Ficha, input: PartidaInput, dt: number, contar: b
 
 export function criarAtlas(): Atlas {
   const state = createPartida()
+  const fichaInicial: Ficha = {
+    i: 0,
+    j: 0,
+    state,
+    ritmo: 'cheio',
+    alerta: 'nenhum',
+    relogio: 0,
+    hpNosso: medirNosso(state),
+    hpInimigo: medirInimigo(state),
+    corpo: true,
+  }
   return {
     heroiI: 0,
     heroiJ: 0,
@@ -321,27 +366,20 @@ export function criarAtlas(): Atlas {
     politica: 'alguns',
     cotaDinamica: COTA_MAX_TODOS,
     emaFrameMs: 16.6,
-    fichas: [
-      {
-        i: 0,
-        j: 0,
-        state,
-        ritmo: 'cheio',
-        alerta: 'nenhum',
-        relogio: 0,
-        hpNosso: medirNosso(state),
-        hpInimigo: medirInimigo(state),
-        corpo: true,
-      },
-    ],
+    cursorLento: 0,
+    cartografia: {
+      '0,0': { i: 0, j: 0, bioma: state.bioma, dono: donoDoMapa(fichaInicial) },
+    },
+    fichas: [fichaInicial],
   }
 }
 
 export function definirPoliticaMinimapas(atlas: Atlas, politica: PoliticaMinimapas): Atlas {
   const cotaDinamica = politica === 'todos' ? COTA_MAX_TODOS : atlas.cotaDinamica
   const emaFrameMs = politica === 'todos' ? Math.min(atlas.emaFrameMs, 18) : atlas.emaFrameMs
+  const cartografia = atualizarCartografia(atlas.cartografia, atlas.fichas)
   const fichas = encolher(atlas.fichas, atlas.heroiI, atlas.heroiJ, atlas.cenaI, atlas.cenaJ, politica, cotaDinamica)
-  return { ...atlas, politica, cotaDinamica, emaFrameMs, fichas }
+  return { ...atlas, politica, cotaDinamica, emaFrameMs, cartografia, fichas }
 }
 
 export function fichaEm(atlas: Atlas, i: number, j: number): Ficha | undefined {
@@ -369,8 +407,9 @@ export function abrirMapa(atlas: Atlas, i: number, j: number): Atlas {
   fichas = fichas.map((ficha) =>
     ficha.i === i && ficha.j === j ? { ...ficha, alerta: 'nenhum', ritmo: 'cheio', visitado: true } : ficha,
   )
+  const cartografia = atualizarCartografia(atlas.cartografia, fichas)
   fichas = encolher(fichas, atlas.heroiI, atlas.heroiJ, i, j, atlas.politica, atlas.cotaDinamica)
-  return { ...atlas, cenaI: i, cenaJ: j, fichas }
+  return { ...atlas, cenaI: i, cenaJ: j, cartografia, fichas }
 }
 
 export function olharMapa(atlas: Atlas, i: number, j: number): Atlas {
@@ -408,8 +447,10 @@ export function escreverFicha(atlas: Atlas, i: number, j: number, state: Partida
   const fichas = achar(atlas.fichas, i, j)
     ? atlas.fichas.map((item) => (item.i === i && item.j === j ? ficha : item))
     : [...atlas.fichas, ficha]
+  const cartografia = atualizarCartografia(atlas.cartografia, fichas)
   return {
     ...atlas,
+    cartografia,
     fichas: encolher(fichas, atlas.heroiI, atlas.heroiJ, atlas.cenaI, atlas.cenaJ, atlas.politica, atlas.cotaDinamica),
   }
 }
@@ -519,10 +560,27 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
     if (ficha.ritmo === 'cheio') {
       return passoComAlerta(ficha, PARADO, pedido, !(ficha.i === cenaI && ficha.j === cenaJ))
     }
-    const relogio = ficha.relogio + pedido
-    if (relogio < 1) return { ...ficha, relogio }
-    return { ...passoComAlerta(ficha, PARADO, 1, true), relogio: relogio - 1 }
+    const relogioAcumulado = Math.min(2.5, ficha.relogio + pedido)
+    return { ...ficha, relogio: relogioAcumulado }
   })
+
+  // Staggered Tick: evita thundering herd quando muitos mapas em `lento` completam 1s no mesmo frame.
+  let executadosLento = 0
+  let proximoCursor = fichas.length > 0 ? atlas.cursorLento % fichas.length : 0
+  if (fichas.length > 0 && pedido > 0) {
+    const limiteLentos = pedido >= 0.5 ? fichas.length : PARTIDA.maxLentosPorFrame
+    for (let offset = 0; offset < fichas.length; offset += 1) {
+      if (executadosLento >= limiteLentos) break
+      const idx = (atlas.cursorLento + offset) % fichas.length
+      const ficha = fichas[idx]
+      if (ficha.i === heroiI && ficha.j === heroiJ) continue
+      if (ficha.ritmo !== 'lento' || ficha.relogio < 1) continue
+      const executada = passoComAlerta(ficha, PARADO, 1, true)
+      fichas[idx] = { ...executada, relogio: Math.max(0, ficha.relogio - 1) }
+      executadosLento += 1
+      proximoCursor = (idx + 1) % fichas.length
+    }
+  }
   fichas = transferirTropas(fichas)
   fichas = decretarFimSeCaiuAUltimaBase(atlas.fichas, fichas, heroiI, heroiJ)
 
@@ -546,6 +604,7 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
     }
   }
 
+  const cartografia = atualizarCartografia(atlas.cartografia, fichas)
   fichas = encolher(fichas, heroiI, heroiJ, cenaI, cenaJ, atlas.politica, cotaDinamica)
   if (!achar(fichas, cenaI, cenaJ)) {
     cenaI = heroiI
@@ -557,6 +616,8 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
     cenaI,
     cenaJ,
     fichas,
+    cartografia,
+    cursorLento: proximoCursor,
     politica: atlas.politica,
     cotaDinamica,
     emaFrameMs,
@@ -576,6 +637,49 @@ export function donoDoMapa(ficha: Ficha): Dono {
   if (obras.some((obra) => obra.lado === 'nosso' && obra.hp > 0) || unidades.some((unidade) => unidade.lado === 'aliado' && unidade.hp > 0)) return 'nosso'
   if (obras.some((obra) => obra.lado === 'inimigo' && obra.tipo === 'nucleo' && obra.hp > 0)) return 'inimigo'
   return 'selvagem'
+}
+
+export interface EntradaResumoCartografico {
+  i: number
+  j: number
+  alerta: Alerta
+  corpo: boolean
+  cena: boolean
+  ritmo: Ritmo | 'descarregado'
+  dono: Dono
+  bioma: BiomaId
+  emMemoria: boolean
+}
+
+export function resumoCartograficoAtlas(atlas: Atlas): EntradaResumoCartografico[] {
+  const porChave = new Map<string, EntradaResumoCartografico>()
+  for (const reg of Object.values(atlas.cartografia)) {
+    porChave.set(chaveMapa(reg.i, reg.j), {
+      i: reg.i,
+      j: reg.j,
+      alerta: 'nenhum',
+      corpo: reg.i === atlas.heroiI && reg.j === atlas.heroiJ,
+      cena: reg.i === atlas.cenaI && reg.j === atlas.cenaJ,
+      ritmo: 'descarregado',
+      dono: reg.dono,
+      bioma: reg.bioma,
+      emMemoria: false,
+    })
+  }
+  for (const ficha of atlas.fichas) {
+    porChave.set(chaveMapa(ficha.i, ficha.j), {
+      i: ficha.i,
+      j: ficha.j,
+      alerta: ficha.alerta,
+      corpo: ficha.i === atlas.heroiI && ficha.j === atlas.heroiJ,
+      cena: ficha.i === atlas.cenaI && ficha.j === atlas.cenaJ,
+      ritmo: ficha.ritmo,
+      dono: donoDoMapa(ficha),
+      bioma: ficha.state.bioma,
+      emMemoria: true,
+    })
+  }
+  return Array.from(porChave.values())
 }
 
 export function resumoAtlas(atlas: Atlas): { i: number; j: number; alerta: Alerta; corpo: boolean; cena: boolean; ritmo: Ritmo; dono: Dono }[] {
