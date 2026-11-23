@@ -30,6 +30,9 @@ export interface PacoteTexturasBlocos extends RecursoDescartavel {
   readonly madeira: TrioPbrTextura
   readonly pedra: TrioPbrTextura
   readonly ouro: TrioPbrTextura
+  readonly canteiro: TrioPbrTextura
+  readonly fundacaoPedra: TrioPbrTextura
+  readonly madeiraPier: TrioPbrTextura
 }
 
 export interface BiomaTextureProvider {
@@ -454,15 +457,77 @@ export class ProceduralBiomaTextureProvider implements BiomaTextureProvider {
       return null
     }
 
+    const resFund = Math.min(256, resolucao)
+    const canteiro = construirTrioPbr(resFund, 2, 2, 2.6, (u, v) => {
+      const borda = Math.min(u, 1 - u, v, 1 - v) < 0.08
+      const terra = fbmTileable(u, v, 8, 3, 1811)
+      const brita = fbmTileable(u, v, 24, 2, 1877)
+      const sulco = Math.abs(Math.sin((u + v * 0.25) * Math.PI * 6)) < 0.14
+      if (borda) {
+        return pedraLavradaSample(u, v, [120, 113, 108], [68, 64, 60], 4, 4, 1901)
+      }
+      const rgb = sulco
+        ? mixCor([92, 68, 44], [128, 96, 64], terra)
+        : mixCor([114, 88, 58], [166, 144, 112], terra * 0.65 + brita * 0.35)
+      return {
+        rgb,
+        h: 0.35 + (sulco ? 0.1 : terra * 0.38 + brita * 0.22),
+        rough: 0.86 + brita * 0.11,
+      }
+    })
+    if (!canteiro) {
+      madeira.dispose()
+      pedra.dispose()
+      ouro.dispose()
+      return null
+    }
+
+    const fundacaoPedra = construirTrioPbr(resFund, 2, 1, 3.0, (u, v) =>
+      pedraLavradaSample(u, v, [116, 126, 138], [52, 58, 68], 3, 2, 2029),
+    )
+    if (!fundacaoPedra) {
+      madeira.dispose()
+      pedra.dispose()
+      ouro.dispose()
+      canteiro.dispose()
+      return null
+    }
+
+    const madeiraPier = construirTrioPbr(resFund, 2, 2, 2.5, (u, v) => {
+      const tabua = Math.floor(v * 6)
+      const fresta = Math.abs(v * 6 - Math.round(v * 6)) < 0.06
+      const umidade = fbmTileable(u * 0.6, v * 2.5, 8, 3, 2113 + tabua * 23)
+      if (fresta) return { rgb: [38, 24, 14], h: 0.1, rough: 0.88 }
+      return {
+        rgb: mixCor([76, 48, 26], [122, 82, 46], umidade),
+        h: 0.45 + umidade * 0.55,
+        rough: 0.46 + umidade * 0.26,
+      }
+    })
+    if (!madeiraPier) {
+      madeira.dispose()
+      pedra.dispose()
+      ouro.dispose()
+      canteiro.dispose()
+      fundacaoPedra.dispose()
+      return null
+    }
+
     return {
       resolucao,
       madeira,
       pedra,
       ouro,
+      canteiro,
+      fundacaoPedra,
+      madeiraPier,
       dispose() {
         madeira.dispose()
         pedra.dispose()
         ouro.dispose()
+        canteiro.dispose()
+        fundacaoPedra.dispose()
+        madeiraPier.dispose()
       },
     }
   }

@@ -14,27 +14,31 @@ import type { InfiniteMathChallenge } from '../infiniteMathEngine'
 
 export type GrauDificuldade = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
-export type OrigemQuestao = 'motor_parametrico' | 'enem_oficial'
+export type OrigemQuestao = 'motor_parametrico' | 'enem_oficial' | 'senai_oficial' | 'etec_oficial'
 
 export type TipoErroPedagogico =
   | 'leitura_interpretacao'
   | 'unidade_escala'
+  | 'conversao_unidades'
+  | 'geometria_escala'
   | 'proporcao_invertida'
   | 'sinal_precedencia'
+  | 'algebra_manipulacao'
   | 'porcentagem_base'
   | 'formula_geometria'
+  | 'estatistica_mediana'
   | 'combinatoria_probabilidade'
   | 'calculo_aritmetico'
   | 'chute_rapido'
 
 export interface ReferenciaOficial {
-  readonly exame: 'ENEM'
+  readonly exame: 'ENEM' | 'SENAI' | 'ETEC'
   readonly ano: number
-  readonly aplicacao: 'regular' | 'ppl_reaplicacao'
-  readonly dia: 2
-  readonly caderno: '5_amarelo'
   readonly questao: number
-  readonly licenca: 'CC-BY-ND-3.0'
+  readonly aplicacao?: 'regular' | 'ppl_reaplicacao'
+  readonly dia?: 2
+  readonly caderno?: string
+  readonly licenca: string
   readonly citacaoCurta: string
 }
 
@@ -54,6 +58,16 @@ export interface AlternativaUnificada {
   readonly tagErro?: TipoErroPedagogico
 }
 
+export interface FiguraOficial {
+  readonly src: string
+  readonly alt: string
+  readonly largura: number
+  readonly altura: number
+  readonly papel?: 'enunciado' | 'alternativa'
+  readonly letra?: 'A' | 'B' | 'C' | 'D' | 'E'
+  readonly tipoVisual?: 'grafico' | 'tabela' | 'geometria' | 'ilustracao'
+}
+
 export interface DesafioUnificado {
   readonly id: string
   readonly assinatura: string
@@ -64,6 +78,9 @@ export interface DesafioUnificado {
   readonly arquetipoOuItemId: string
   readonly referenciaOficial?: ReferenciaOficial
   readonly enunciadoMarkdown: string
+  readonly figuras?: readonly FiguraOficial[]
+  /** Chave do acervo visual: `senai:2018:2143:30` ou `etec:2019:1:12`. O ENEM usa ano e número. */
+  readonly chaveFigura?: string
   readonly alternativas: readonly AlternativaUnificada[]
   readonly altarFisicoCompativel: boolean
   readonly dicas: readonly [DicaProgressiva, DicaProgressiva, DicaProgressiva]
@@ -241,6 +258,16 @@ export const DESCRICAO_ERRO_PEDAGOGICO: Record<
     alertaPratico:
       'Confira sempre se área muda pelo quadrado do fator (k²) e volume pelo cubo (k³), e se 1 m³ = 1.000 L ou 1 L = 1.000 cm³.',
   },
+  conversao_unidades: {
+    titulo: 'Conversão entre unidades de medida',
+    alertaPratico:
+      'Antes de dividir ou multiplicar grandezas, padronize tudo para a mesma unidade (cm para m, m³ para L, segundos para minutos).',
+  },
+  geometria_escala: {
+    titulo: 'Relações geométricas e escala',
+    alertaPratico:
+      'Verifique proporções entre lados, catetos e ângulos antes de aplicar fórmulas de área, perímetro ou Pitágoras.',
+  },
   proporcao_invertida: {
     titulo: 'Proporção direta vs. inversa',
     alertaPratico:
@@ -251,6 +278,11 @@ export const DESCRICAO_ERRO_PEDAGOGICO: Record<
     alertaPratico:
       'Resolva de dentro para fora (parênteses → colchetes), multiplique/divida antes de somar e vigie sinais negativos antes de blocos.',
   },
+  algebra_manipulacao: {
+    titulo: 'Manipulação algébrica e equações',
+    alertaPratico:
+      'Ao isolar incógnitas ou resolver funções, mantenha a equivalência dos dois lados da igualdade e revise sinais ao trocar de termo.',
+  },
   porcentagem_base: {
     titulo: 'Base da porcentagem e variações sucessivas',
     alertaPratico:
@@ -260,6 +292,11 @@ export const DESCRICAO_ERRO_PEDAGOGICO: Record<
     titulo: 'Áreas, volumes e relações geométricas',
     alertaPratico:
       'Verifique se o dado é raio ou diâmetro (d = 2r) e se a questão pede área lateral/fundo (sem tampa) ou volume.',
+  },
+  estatistica_mediana: {
+    titulo: 'Mediana, moda e ordenação de dados',
+    alertaPratico:
+      'Para achar a mediana, ordene SEMPRE o conjunto em ordem crescente antes de olhar os valores do centro.',
   },
   combinatoria_probabilidade: {
     titulo: 'Contagem, restrições e espaço amostral',

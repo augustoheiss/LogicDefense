@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
-import rehypeKatex from 'rehype-katex'
-import remarkMath from 'remark-math'
 import 'katex/dist/katex.min.css'
 import { fatorDoBuff } from '../buffPorErro'
 import { GRAU_PARTIDA, type GrauConta, PARTIDA } from '../partidaPolicies'
-import { protegerCifraoMoeda, protegerMarkdownInline, type DesafioUnificado } from './contratosEstudo'
+import { AberturaQuestao, dividirBlocosEnunciado, MarkdownInline } from './AberturaQuestao'
+import type { DesafioUnificado } from './contratosEstudo'
+import { classificarFigurasParaApresentacao, figurasEfetivas } from './figurasEnem'
 import { PainelDicas } from './PainelDicas'
+
+export { dividirBlocosEnunciado }
 
 export interface ModalContaProps {
   readonly desafio: DesafioUnificado | null
@@ -31,82 +32,8 @@ export interface ModalContaProps {
   readonly onLimparTemaTreino?: () => void
 }
 
-type AlinhamentoCelula = 'left' | 'center' | 'right'
-
-type BlocoEnunciado =
-  | { readonly tipo: 'markdown'; readonly texto: string }
-  | {
-      readonly tipo: 'tabela'
-      readonly cabecalho: readonly string[]
-      readonly alinhamentos: readonly AlinhamentoCelula[]
-      readonly linhas: readonly (readonly string[])[]
-    }
-
-const RE_SEPARADOR_TABELA = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/
-
-function quebrarLinhaTabela(linha: string): string[] {
-  const aparada = linha.trim().replace(/^\|/, '').replace(/\|$/, '')
-  return aparada.split('|').map((c) => c.trim())
-}
-
-function extrairAlinhamento(celulaSep: string): AlinhamentoCelula {
-  const s = celulaSep.trim()
-  const esq = s.startsWith(':')
-  const dir = s.endsWith(':')
-  if (esq && dir) return 'center'
-  if (dir) return 'right'
-  return 'left'
-}
-
-export function dividirBlocosEnunciado(texto: string): BlocoEnunciado[] {
-  const linhas = texto.replace(/\r\n/g, '\n').split('\n')
-  const blocos: BlocoEnunciado[] = []
-  let bufferMd: string[] = []
-
-  const flushMd = () => {
-    const joined = bufferMd.join('\n').trim()
-    if (joined) blocos.push({ tipo: 'markdown', texto: joined })
-    bufferMd = []
-  }
-
-  let i = 0
-  while (i < linhas.length) {
-    const atual = linhas[i].trim()
-    const prox = i + 1 < linhas.length ? linhas[i + 1].trim() : ''
-    if (atual.includes('|') && RE_SEPARADOR_TABELA.test(prox)) {
-      flushMd()
-      const cabecalho = quebrarLinhaTabela(atual)
-      const alinhamentos = quebrarLinhaTabela(prox).map(extrairAlinhamento)
-      const corpo: string[][] = []
-      i += 2
-      while (i < linhas.length) {
-        const l = linhas[i].trim()
-        if (!l || !l.includes('|')) break
-        corpo.push(quebrarLinhaTabela(l))
-        i++
-      }
-      blocos.push({ tipo: 'tabela', cabecalho, alinhamentos, linhas: corpo })
-      continue
-    }
-    bufferMd.push(linhas[i])
-    i++
-  }
-  flushMd()
-  return blocos
-}
-
 const GRAUS_TODOS: readonly GrauConta[] = [1, 2, 3, 4, 5, 6, 7]
 const GRAUS_MOTOR: readonly GrauConta[] = [1, 2, 3, 4]
-
-const MarkdownInline: React.FC<{ readonly texto: string }> = ({ texto }) => (
-  <ReactMarkdown
-    remarkPlugins={[remarkMath]}
-    rehypePlugins={[rehypeKatex]}
-    components={{ p: ({ children }) => <>{children}</> }}
-  >
-    {protegerMarkdownInline(texto)}
-  </ReactMarkdown>
-)
 
 export const ModalConta: React.FC<ModalContaProps> = ({
   desafio,
@@ -139,6 +66,16 @@ export const ModalConta: React.FC<ModalContaProps> = ({
     () => (desafio ? dividirBlocosEnunciado(desafio.enunciadoMarkdown) : []),
     [desafio],
   )
+  const figuras = useMemo(() => (desafio ? figurasEfetivas(desafio) : []), [desafio])
+  const enunciadoTemTabela = useMemo(
+    () => blocos.some((bloco) => bloco.tipo === 'tabela'),
+    [blocos],
+  )
+  const figurasClassificadas = useMemo(
+    () => classificarFigurasParaApresentacao(figuras, { enunciadoTemTabela }),
+    [figuras, enunciadoTemTabela],
+  )
+  const modoPalco = Boolean(desafio && figurasClassificadas.enunciado.length > 0)
 
   useEffect(() => {
     cardRef.current?.focus({ preventScroll: true })
@@ -152,7 +89,7 @@ export const ModalConta: React.FC<ModalContaProps> = ({
       aria-label="Desafio Matemático"
       data-testid="ilha-modal-conta"
     >
-      <div ref={cardRef} className="ilha-card" tabIndex={-1}>
+      <div ref={cardRef} className={`ilha-card${modoPalco ? ' ilha-card-palco' : ''}`} tabIndex={-1}>
         <header className="ilha-card-topo">
           <div className="ilha-card-badges">
             <span className="ilha-badge-tempo" data-testid="ilha-badge-tempo-real">
@@ -234,100 +171,21 @@ export const ModalConta: React.FC<ModalContaProps> = ({
             <p className="ilha-conta-carregando">Carregando questão...</p>
           ) : (
             <>
-              <div className="ilha-conta-meta">
-                <span className="ilha-tema-tag">{desafio.temaTituloPt}</span>
-                {desafio.referenciaOficial ? (
-                  <span className="ilha-enem-ref" data-testid="ilha-enem-ref">
-                    {desafio.referenciaOficial.citacaoCurta} · {desafio.referenciaOficial.licenca}
-                  </span>
-                ) : (
-                  <span className="ilha-motor-ref">
-                    {desafio.altarFisicoCompativel
-                      ? 'Os pisos N L S O no chão também respondem'
-                      : 'Responda diretamente no card'}
-                  </span>
-                )}
-              </div>
-
-              {!desafio.altarFisicoCompativel && (
-                <p className="ilha-slow">
-                  Questão oficial com 5 alternativas (A–E) · o mundo segue em tempo real.
-                </p>
-              )}
-
-              <div className="ilha-enunciado" data-testid="ilha-conta-enunciado">
-                {blocos.map((bloco, idx) =>
-                  bloco.tipo === 'markdown' ? (
-                    <ReactMarkdown
-                      key={idx}
-                      remarkPlugins={[remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                    >
-                      {protegerCifraoMoeda(bloco.texto)}
-                    </ReactMarkdown>
-                  ) : (
-                    <div key={idx} className="ilha-tabela-wrap">
-                      <table className="ilha-tabela-enem">
-                        <thead>
-                          <tr>
-                            {bloco.cabecalho.map((cel, cIdx) => (
-                              <th
-                                key={cIdx}
-                                style={{ textAlign: bloco.alinhamentos[cIdx] ?? 'left' }}
-                              >
-                                <MarkdownInline texto={cel} />
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {bloco.linhas.map((linha, rIdx) => (
-                            <tr key={rIdx}>
-                              {linha.map((cel, cIdx) => (
-                                <td
-                                  key={cIdx}
-                                  style={{ textAlign: bloco.alinhamentos[cIdx] ?? 'left' }}
-                                >
-                                  <MarkdownInline texto={cel} />
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ),
-                )}
-              </div>
-
-              <div className="ilha-choices">
-                {desafio.alternativas.map((alt) => {
-                  const foiErrada = erradasSet.has(alt.id)
-                  const marcadaCerta = resolvida && alt.correta
-                  return (
-                    <button
-                      key={alt.id}
-                      type="button"
-                      data-testid={`ilha-alt-${alt.letra}`}
-                      className={`ilha-choice-btn${foiErrada ? ' errada' : ''}${marcadaCerta ? ' certa' : ''}`}
-                      disabled={resolvida || foiErrada}
-                      onClick={() => onResponder(alt.id)}
-                    >
-                      <span className="ilha-choice-letra">{alt.letra})</span>
-                      <span className="ilha-choice-texto">
-                        <MarkdownInline texto={alt.rotulo} />
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+              <AberturaQuestao
+                desafio={desafio}
+                blocos={blocos}
+                figurasClassificadas={figurasClassificadas}
+                erradasSet={erradasSet}
+                resolvida={resolvida}
+                onResponder={onResponder}
+              />
 
               {diagnosticoAtual && (
                 <p
                   className={`ilha-diagnostico${resolvida ? ' acerto' : ' erro'}`}
                   data-testid="ilha-conta-diagnostico"
                 >
-                  {diagnosticoAtual}
+                  <MarkdownInline texto={diagnosticoAtual} />
                   {!resolvida && erros > 0 ? ` · Buff reduzido para ${buffTexto}` : ''}
                 </p>
               )}

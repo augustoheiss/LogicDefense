@@ -808,7 +808,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
       const anel = aneis.current.get(unidade.id)
       if (anel) {
         anel.visible = marcadoPelaTorre(state, unidade)
-        anel.position.set(unidade.x, 0.06, unidade.z)
+        anel.position.set(unidade.x, -0.42, unidade.z)
       }
       if (unidade.papel === 'dragao') {
         const pontos = pontosDoCorpo(unidade)
@@ -818,7 +818,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
           if (!segmento || !ponto) return
           const esticado = Math.hypot(ponto.x - unidade.x, ponto.z - unidade.z) > 0.6
           segmento.visible = mostra
-          segmento.position.set(ponto.x, esticado ? 0.55 : 1.35 + indice * 0.38, ponto.z)
+          segmento.position.set(ponto.x, esticado ? 0.25 : 0.95 + indice * 0.36, ponto.z)
         })
       }
     })

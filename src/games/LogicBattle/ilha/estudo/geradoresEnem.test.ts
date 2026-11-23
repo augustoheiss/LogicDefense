@@ -122,11 +122,99 @@ function verificarMatematicaIndependente(archetypeId: string, enunciado: string,
     return
   }
 
+  if (archetypeId === 'g5_geometria_area_perimetro') {
+    const m = enunciado.match(/\*\*(\d+) m × (\d+) m\*\*[\s\S]*?\*\*(\d+) m × (\d+) m\*\*[\s\S]*?\*\*(\d+) m²\*\*/)
+    assert(!!m, `Padrão não reconhecido (geometria área): ${enunciado}`)
+    const areaTotal = Number(m[1]) * Number(m[2]) - Number(m[3]) * Number(m[4])
+    const esperado = areaTotal / Number(m[5])
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `Geometria área: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g5_estatistica_mediana_moda') {
+    const m = enunciado.match(/\*\*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)\*\*/)
+    assert(!!m, `Padrão não reconhecido (mediana): ${enunciado}`)
+    const nums = [m[1], m[2], m[3], m[4], m[5], m[6]].map(Number).sort((a, b) => a - b)
+    const esperado = (nums[2] + nums[3]) / 2
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `Mediana: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g5_juros_simples_parcelamento') {
+    const m = enunciado.match(/\*\*R\$ ([\d.]+),00\*\*[\s\S]*?desconto de \*\*(\d+)%\*\*[\s\S]*?\*\*(\d+)% ao mês\*\* durante \*\*(\d+) meses\*\*/)
+    assert(!!m, `Padrão não reconhecido (juros simples): ${enunciado}`)
+    const preco = Number(m[1].replace(/\./g, ''))
+    const descPct = Number(m[2])
+    const taxaPct = Number(m[3])
+    const meses = Number(m[4])
+    const esperado = (preco * (descPct + taxaPct * meses)) / 100
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `Juros simples: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g6_geometria_espacial_volume') {
+    const m = enunciado.match(/medindo \*\*(\d+) m × (\d+) m\*\* de base e \*\*(\d+) m\*\* de altura[\s\S]*?preenchido com \*\*(\d+)%\*\*[\s\S]*?\*\*(\d+) L\/min\*\*/)
+    assert(!!m, `Padrão não reconhecido (volume espacial): ${enunciado}`)
+    const a = Number(m[1])
+    const b = Number(m[2])
+    const h = Number(m[3])
+    const pct = Number(m[4])
+    const vazao = Number(m[5])
+    const esperado = (a * b * h * 1000 * ((100 - pct) / 100)) / vazao
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `Volume espacial: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g6_funcao_quadratica_vertice') {
+    const m = enunciado.match(/\$\$[LPh]\(x\) = -(\d+)x\^2 \+ (\d+)x ([+-]) (\d+)\$\$/)
+    assert(!!m, `Padrão não reconhecido (vértice quadrática): ${enunciado}`)
+    const a = Number(m[1])
+    const b = Number(m[2])
+    const c = (m[3] === '-' ? -1 : 1) * Number(m[4])
+    const xv = b / (2 * a)
+    const esperado = -a * xv * xv + b * xv + c
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `Vértice quadrática: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g6_pitagoras_trigonometria') {
+    const m = enunciado.match(/a \*\*(\d+) m\*\* de altura[\s\S]*?a \*\*(\d+) m\*\* de altura[\s\S]*?mede \*\*(\d+) m\*\*/)
+    assert(!!m, `Padrão não reconhecido (Pitágoras): ${enunciado}`)
+    const hBase = Number(m[1])
+    const hTopo = Number(m[2])
+    const horiz = Number(m[3])
+    const esperado = Math.hypot(horiz, hTopo - hBase)
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `Pitágoras: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g7_juros_compostos_montante') {
+    const m = enunciado.match(/\*\*R\$ ([\d.]+),00\*\*[\s\S]*?taxa de \*\*(\d+)% ao mês\*\*[\s\S]*?final de \*\*(\d+) meses\*\*/)
+    assert(!!m, `Padrão não reconhecido (juros compostos): ${enunciado}`)
+    const capital = Number(m[1].replace(/\./g, ''))
+    const taxaPct = Number(m[2])
+    const periodos = Number(m[3])
+    const esperado = Math.round(capital * Math.pow(1 + taxaPct / 100, periodos))
+    assert(Math.abs(esperado - respostaCerta) < 1, `Juros compostos: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
+  if (archetypeId === 'g7_pa_pg_sequencias') {
+    const m = enunciado.match(/\*\*(\d+) [^*]+\*\*[\s\S]*?\*\*(\d+) [^*]+\*\*[\s\S]*?primeiros \*\*(\d+) (?:semanas|meses)\*\*/)
+    assert(!!m, `Padrão não reconhecido (PA): ${enunciado}`)
+    const a1 = Number(m[1])
+    const r = Number(m[2])
+    const n = Number(m[3])
+    const esperado = (n * (2 * a1 + (n - 1) * r)) / 2
+    assert(Math.abs(esperado - respostaCerta) < 1e-6, `PA: esperava ${esperado}, achei ${respostaCerta}`)
+    return
+  }
+
   throw new Error(`Gerador desconhecido sem verificador: ${archetypeId}`)
 }
 
 export function run(): void {
-  assert(GERADORES_ENEM_PARAMETRICOS.length === 8, `esperava 8 geradores ENEM, achei ${GERADORES_ENEM_PARAMETRICOS.length}`)
+  assert(GERADORES_ENEM_PARAMETRICOS.length === 16, `esperava 16 geradores ENEM, achei ${GERADORES_ENEM_PARAMETRICOS.length}`)
 
   for (const gen of GERADORES_ENEM_PARAMETRICOS) {
     const assinaturas = new Set<string>()
