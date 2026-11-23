@@ -1,4 +1,5 @@
 import {
+  acaoDeAtalhoEstudo,
   alvoDoTeclado,
   cliqueAbreOPainelDaObra,
   destinoDoToque,
@@ -220,4 +221,19 @@ export function run(): void {
   assert(!alvoDoTeclado({ tagName: 'div', dataset: { tecladoProprio: '' } }).tratouEscape, 'sem data-esc-proprio o Esc nao e do controle (so Enter/Espaco)')
   assert(!alvoDoTeclado({ tagName: 'div' }).tratouEscape && !alvoDoTeclado(null).tratouEscape, 'sem dataset nao quebra')
   assert(alvoDoTeclado({ tagName: 'div', dataset: { escProprio: '' } }).tratouEscape, 'data-esc-proprio vale sozinho (independe de data-teclado-proprio)')
+
+  // ── Q2/Q3: atalhos de estudo (Q alterna conta, G alterna caderno, Esc minimiza/fecha sem perder foco em input/Ctrl) ─────────────────────
+  assert(acaoDeAtalhoEstudo({ code: 'KeyQ', tela: 'jogo', alvo: corpo }) === 'alternar_conta', 'Q no jogo abre/volta para a conta')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyQ', tela: 'conta', alvo: corpo }) === 'alternar_conta', 'Q na conta minimiza de volta para o jogo')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyQ', tela: 'caderno', alvo: corpo }) === 'alternar_conta', 'Q no caderno pula para a conta')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyG', tela: 'jogo', alvo: corpo }) === 'alternar_caderno', 'G no jogo abre o caderno')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyG', tela: 'conta', alvo: corpo }) === 'alternar_caderno', 'G na conta abre o caderno')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyG', tela: 'caderno', alvo: corpo }) === 'alternar_caderno', 'G no caderno volta para o jogo')
+  assert(acaoDeAtalhoEstudo({ code: 'Escape', tela: 'conta', alvo: corpo }) === 'voltar_jogo', 'Esc na conta volta para o jogo')
+  assert(acaoDeAtalhoEstudo({ code: 'Escape', tela: 'caderno', alvo: corpo }) === 'voltar_jogo', 'Esc no caderno fecha de volta para o jogo')
+  assert(acaoDeAtalhoEstudo({ code: 'Escape', tela: 'jogo', alvo: corpo }) === null, 'Esc no jogo nao e tratado por acaoDeAtalhoEstudo')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyQ', ctrlKey: true, tela: 'jogo', alvo: corpo }) === null, 'Ctrl+Q nao rouba atalho do navegador')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyG', metaKey: true, tela: 'jogo', alvo: corpo }) === null, 'Meta+G nao rouba atalho')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyQ', repeat: true, tela: 'jogo', alvo: corpo }) === null, 'tecla segurada (repeat) e ignorada')
+  assert(acaoDeAtalhoEstudo({ code: 'KeyQ', tela: 'conta', alvo: campo }) === null, 'digitacao em campo de texto preserva Q/G')
 }

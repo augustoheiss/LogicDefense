@@ -94,3 +94,18 @@ export function textoGanhoDaConta(vidaAntes: number, vidaDepois: number, licenca
   }
   return `+${lic}`
 }
+
+/**
+ * O que o jogador LÊ quando «Evoluir» é recusado. `resultado` vem de `podeEvoluir` (partidaSim); `preco` é o texto já formatado do preço («1 licença ou 2 madeiras + 2 ouros»).
+ * Só o caso de RECURSO fala de preço (é a frase que o jogador já conhecia): os demais usam o MOTIVO do próprio `podeEvoluir`, e por isso uma recusa por ESPAÇO nunca diz «Precisa de 1
+ * licença» (o defeito de uma cadeia de mensagens com um balde no fim: qualquer recusa desconhecida virava «Precisa de X»). Entrada suja (sem motivo, código desconhecido) cai num texto
+ * neutro e legível, nunca em `undefined` nem em vazio.
+ */
+export function textoDaRecusaDeEvoluir(resultado: { ok: boolean; codigo?: string; motivo?: string }, preco: string): string {
+  if (resultado.codigo === 'recurso') {
+    const p = typeof preco === 'string' ? preco.trim() : ''
+    return p === '' ? 'Precisa de recursos para evoluir' : `Precisa de ${p} para evoluir`
+  }
+  const motivo = typeof resultado.motivo === 'string' ? resultado.motivo.trim() : ''
+  return motivo === '' ? 'Não foi possível evoluir agora' : motivo
+}

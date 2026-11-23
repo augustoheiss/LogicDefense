@@ -210,3 +210,30 @@ export function jogoTomaConfirmar(
   if (!aberto.cardAberto && !aberto.painelAberto) return false
   return !teclaDoBotaoFocado(alvo, entradaPorTeclado)
 }
+
+export type TelaEstudo = 'jogo' | 'conta' | 'caderno'
+export type AcaoAtalhoEstudo = 'alternar_conta' | 'alternar_caderno' | 'voltar_jogo' | null
+
+export interface EntradaAtalhoEstudo {
+  readonly code: string
+  readonly ctrlKey?: boolean
+  readonly metaKey?: boolean
+  readonly altKey?: boolean
+  readonly repeat?: boolean
+  readonly tela: TelaEstudo
+  readonly alvo: AlvoDoTeclado
+}
+
+/**
+ * Alternância instantânea entre jogo (tempo real 100%), conta aberta e caderno (Q2/Q3).
+ * Roda ANTES do retorno antecipado do modal no `keydown`, sem roubar atalhos do navegador (Ctrl/Meta/Alt)
+ * nem letras digitadas em campos de texto.
+ */
+export function acaoDeAtalhoEstudo(entrada: EntradaAtalhoEstudo): AcaoAtalhoEstudo {
+  if (entrada.ctrlKey || entrada.metaKey || entrada.altKey || entrada.repeat) return null
+  if (entrada.alvo.ehCampoDeTexto) return null
+  if (entrada.code === 'KeyQ') return 'alternar_conta'
+  if (entrada.code === 'KeyG') return 'alternar_caderno'
+  if (entrada.code === 'Escape' && entrada.tela !== 'jogo' && jogoTomaEscape(entrada.alvo)) return 'voltar_jogo'
+  return null
+}

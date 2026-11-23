@@ -1,10 +1,12 @@
 import { PARTIDA } from './partidaPolicies'
-import { atirar, createPartida, criarTropa, editarBlocoMundo, fundar, INPUT_PARADO, ordenar, ordenarHeroi } from './partidaSim'
+import { atirar, createPartida, criarTropa, editarBlocoMundo, evoluirInimigo, fundar, INPUT_PARADO, Obra, obraEmConstrucao, ordenar, ordenarHeroi, PartidaState, Unidade } from './partidaSim'
 import {
+  Atlas,
   atualizarAlerta,
   colocarHeroi,
   criarAtlas,
   definirPoliticaMinimapas,
+  donoDoMapa,
   escreverCena,
   escreverFicha,
   estadoCena,
@@ -14,6 +16,7 @@ import {
   MEIO_MAPA,
   olharMapa,
   abrirMapa,
+  resumoAtlas,
   stepAtlas,
   transferir,
   vizinhosPorVisao,
@@ -328,4 +331,157 @@ export function run(): void {
       fichaEm(persistBlocos, 3, 3) === undefined,
     'atlas preserva mapa com blocosMapa sob pressão de residentes',
   )
+  // ── M2 no atlas: o vizinho que NASCE (por cruzamento ou por visão) já vem evoluído e mais forte quanto mais longe (pedido do usuário, 22/11) ──
+  // Regra: `nascer(i, j, estagio)` = o mapa do lugar + `evoluirInimigo(…, fatorDaCamada(camadaDoMapa(i, j)), estagio)`. O ESTÁGIO é o `ondaNumero` do mapa onde o herói está. Só NASCE assim:
+  // um mapa que já existe não é reescrito (nada roda oculto e nada é copiado por cima do que o jogador mudou). Decisões do usuário (22/11): clona SÓ a base e a horda INIMIGAS; a selva é a do lugar.
+  {
+    const inimigo = (f: { state: PartidaState } | PartidaState) => ('state' in f ? f.state : f).obras.find((o) => o.lado === 'inimigo' && o.tipo === 'nucleo')
+    const hordaDe = (f: { state: PartidaState }) => f.state.unidades.filter((u) => u.lado === 'inimigo' && u.papel === 'horda')
+    const pecasDe = (f: { state: PartidaState }) => f.state.obras.filter((o) => o.lado === 'inimigo' && o.tipo !== 'nucleo')
+    // o mapa onde o herói está, já no estágio 4 (núcleo nível 4 + 2 peças), para os vizinhos herdarem
+    const comEstagio = (estagio: number): Atlas => {
+      const a = criarAtlas()
+      const origemEvoluida = { ...evoluirInimigo(a.fichas[0].state, 1, estagio), heroi: { ...a.fichas[0].state.heroi } }
+      return escreverCena(a, origemEvoluida)
+    }
+    const origem4 = comEstagio(4)
+    assert(origem4.fichas[0].state.ondaNumero === 4 && inimigo(origem4.fichas[0])!.nivel === 4, 'M2.h: (arranjo) o mapa de origem está no estágio 4')
+
+    // M2.h: o herói CRUZA a borda para um vizinho que não existia: ele nasce com a base e a horda inimigas no estágio da origem, e na camada 1 a vida é igual à da origem (1×)
+    const cruzou = colocarHeroi(origem4, 56.1, 0)
+    const leste = fichaEm(cruzou, 1, 0)!
+    assert(cruzou.heroiI === 1 && leste !== undefined, 'M2.h: o herói chegou ao vizinho')
+    assert(inimigo(leste)!.nivel === 4 && pecasDe(leste).length === 2 && leste.state.ondaNumero === 4, `M2.h: o vizinho nasce no estágio 4 da origem (núcleo nível ${inimigo(leste)?.nivel}, ${pecasDe(leste).length} peças)`)
+    assert(pecasDe(leste).every((o) => !obraEmConstrucao(o) && o.hp === o.maxHp), 'M2.h: as peças do vizinho já vêm prontas e com vida cheia')
+    assert(hordaDe(leste).length === 6 && hordaDe(leste).every((u) => u.hp === 12), 'M2.h: camada 1 = fator 1×: a horda segue com 6 e 12 de vida')
+    assert(leste.state.fatorInimigo === undefined || leste.state.fatorInimigo === 1, 'M2.h: camada 1 não guarda fator maior que 1')
+
+    // M2.i: a selva é a do LUGAR (decisão do usuário): bioma, árvores e minas do vizinho, não os da origem
+    const lugarLeste = createPartida(1, 0, true)
+    assert(lugarLeste.bioma !== origem4.fichas[0].state.bioma, 'M2.i: (arranjo) (1,0) tem um bioma diferente de (0,0), então o teste não é vazio')
+    assert(leste.state.bioma === lugarLeste.bioma && JSON.stringify(leste.state.recursos) === JSON.stringify(lugarLeste.recursos), 'M2.i: o vizinho mantém o bioma, as árvores e as minas do seu lugar')
+    assert(inimigo(leste)!.x === inimigo(lugarLeste)!.x && inimigo(leste)!.z === inimigo(lugarLeste)!.z, 'M2.i: a base inimiga do vizinho fica no lugar sorteado para ESTE mapa')
+
+    // M2.j: nada NOSSO é copiado (decisão do usuário: «a SUA base não é copiada»)
+    const casa = fundar({ ...estadoCena(origem4) }, 'nucleo', 5, 0)
+    const comNossa = escreverCena(origem4, casa)
+    assert(estadoCena(comNossa).obras.some((o) => o.lado === 'nosso'), 'M2.j: (arranjo) a origem TEM uma base nossa')
+    const lesteComNossa = fichaEm(colocarHeroi(comNossa, 56.1, 0), 1, 0)!
+    assert(lesteComNossa.state.obras.every((o) => o.lado === 'inimigo') && lesteComNossa.state.unidades.every((u) => u.lado === 'inimigo'), 'M2.j: a nossa base e as nossas tropas NÃO são copiadas para o vizinho')
+    assert(JSON.stringify(lesteComNossa.state.blocosMapa) === '{}' && lesteComNossa.state.madeira === 0, 'M2.j: nem blocos nem recursos do jogador')
+
+    // M2.k: a dificuldade cresce com a DISTÂNCIA ao (0,0) e dobra a vida, não a quantidade: camada 2 = 2×, camada 3 = 4×
+    const nasce = (i: number, j: number) => fichaEm(abrirMapa(origem4, i, j), i, j)!
+    const c2 = nasce(2, 0)
+    assert(hordaDe(c2).length === 6 && hordaDe(c2).every((u) => u.hp === 24) && inimigo(c2)!.maxHp === 200, `M2.k: camada 2: a horda tem 24 de vida e o núcleo 200 (veio ${hordaDe(c2).map((u) => u.hp)}, ${inimigo(c2)?.maxHp})`)
+    assert(pecasDe(c2).length === 2 && pecasDe(c2).every((o) => o.hp === o.maxHp && o.hp === (o.tipo === 'torre' ? 100 : 80)), 'M2.k: camada 2: as peças têm o dobro de vida (e a MESMA quantidade)')
+    assert(c2.state.fatorInimigo === 2, 'M2.k: camada 2 guarda o fator 2')
+    const c3 = nasce(3, -3)
+    assert(hordaDe(c3).every((u) => u.hp === 48) && inimigo(c3)!.maxHp === 400 && c3.state.fatorInimigo === 4, 'M2.k: camada 3 (canto 3,-3): 4× (a camada é Chebyshev, não a soma)')
+    const c9 = nasce(9, 0)
+    assert(hordaDe(c9).every((u) => u.hp === 768) && c9.state.fatorInimigo === 64, 'M2.k: a camada 9 trava no teto de 64×')
+    assert(JSON.stringify(nasce(0, 2).state.unidades.map((u) => u.hp)) === JSON.stringify(c2.state.unidades.map((u) => u.hp)), 'M2.k: (2,0) e (0,2) têm a MESMA dificuldade: nenhuma direção é mais difícil')
+
+    // os 4 quadrantes: a camada usa o valor ABSOLUTO (um `max(i, j)` sem `abs` dava 1× em (−2,−1): vizinhos «para trás» ficariam fáceis)
+    for (const [i, j, fator] of [[-2, -1, 2], [-3, 2, 4], [-2, -2, 2], [1, -2, 2], [-4, -4, 8], [0, -3, 4], [-3, 0, 4]] as const) {
+      const f = nasce(i, j)
+      assert(f.state.fatorInimigo === fator && hordaDe(f).every((u) => u.hp === 12 * fator), `M2.k: o mapa (${i},${j}) é camada ${Math.max(Math.abs(i), Math.abs(j))} = ${fator}× (veio ${f.state.fatorInimigo}×)`)
+    }
+
+    // M2.p: o estágio herdado é o do mapa ONDE O HERÓI ESTÁ, não o do (0,0): o herói em (1,0) no estágio 6 abre um mapa novo e ele vem no estágio 6, mesmo com o (0,0) no estágio 2
+    {
+      const base = criarAtlas()
+      const zero = escreverFicha(base, 0, 0, evoluirInimigo(base.fichas[0].state, 1, 2), 'cheio')
+      const noLeste = fichaEm(colocarHeroi(zero, 56.1, 0), 1, 0)!
+      const heroiLeste = colocarHeroi(zero, 56.1, 0)
+      const comLesteNo6 = escreverFicha(heroiLeste, 1, 0, { ...evoluirInimigo(noLeste.state, 1, 6), semCorpo: false }, 'cheio')
+      assert(comLesteNo6.heroiI === 1 && fichaEm(comLesteNo6, 0, 0)!.state.ondaNumero === 2 && fichaEm(comLesteNo6, 1, 0)!.state.ondaNumero === 6, 'M2.p: (arranjo) o herói está em (1,0) no estágio 6 e o (0,0) está no 2')
+      const aberto = fichaEm(abrirMapa(comLesteNo6, 5, 5), 5, 5)!
+      assert(aberto.state.ondaNumero === 6 && inimigo(aberto)!.nivel === 6, `M2.p: o mapa novo herda o estágio do mapa do HERÓI (6), não o do (0,0) (2) (veio onda ${aberto.state.ondaNumero})`)
+    }
+
+    // M2.l: nascer por VISÃO (a 18 m da borda, sem cruzar) herda do mapa do herói do mesmo jeito
+    const porVisao = colocarHeroi(origem4, 40, 0)
+    const lesteVisto = fichaEm(porVisao, 1, 0)!
+    assert(porVisao.heroiI === 0 && lesteVisto !== undefined, 'M2.l: o vizinho nasceu por visão, sem o herói cruzar')
+    assert(inimigo(lesteVisto)!.nivel === 4 && pecasDe(lesteVisto).length === 2 && lesteVisto.state.ondaNumero === 4, 'M2.l: o vizinho nascido por visão também vem no estágio da origem')
+    assert(JSON.stringify(inimigo(lesteVisto)) === JSON.stringify(inimigo(leste)) && JSON.stringify(hordaDe(lesteVisto)) === JSON.stringify(hordaDe(leste)), 'M2.l: por visão ou por cruzamento o vizinho nasce IGUAL')
+
+    // M2.m: o mapa de origem NÃO muda (o clone é do vizinho; nada é tirado da origem)
+    assert(inimigo(cruzou.fichas.find((f) => f.i === 0 && f.j === 0)!)!.nivel === 4, 'M2.m: a origem segue no estágio 4')
+
+    // M2.n: um mapa que JÁ existe não é reescrito pelo clone (nada copiado por cima do que o jogador mudou)
+    const jaExistia = escreverFicha(origem4, 1, 0, createPartida(1, 0, true), 'cheio')
+    const velho = fichaEm(jaExistia, 1, 0)!
+    const atravessou = fichaEm(colocarHeroi(jaExistia, 56.1, 0), 1, 0)!
+    assert(inimigo(velho)!.nivel === 1 && inimigo(atravessou)!.nivel === 1 && pecasDe(atravessou).length === 0, 'M2.n: um vizinho que já existia segue como estava (o clone só vale no NASCIMENTO)')
+    assert(atravessou.state.ondaNumero === 0 && atravessou.state.fatorInimigo === undefined && JSON.stringify(atravessou.state.obras) === JSON.stringify(velho.state.obras), 'M2.n: o vizinho que já existia mantém onda, fator e obras IDÊNTICOS depois de o herói cruzar para ele')
+
+    // M2.q: a linha de base de vida da ficha (`hpInimigo`, que o alerta verde/vermelho do minimapa compara) nasce do estado JÁ evoluído: medida antes de evoluir, o 1º passo «ganharia» vida e o
+    // minimapa avisaria de um combate que ninguém travou. Oráculo MEDIDO: 172 (estágio 0), 262 (estágio 4), 524 (estágio 4 em camada 2), 1368 (estágio 8 em camada 3).
+    const somaInimiga = (s: PartidaState) => s.obras.filter((o) => o.lado === 'inimigo').reduce((t, o) => t + Math.max(0, o.hp), 0) + s.unidades.filter((u) => u.lado === 'inimigo').reduce((t, u) => t + Math.max(0, u.hp), 0)
+    for (const [estagio, i, j, esperado] of [[0, 1, 0, 172], [4, 1, 0, 262], [4, 2, 0, 524], [8, 3, 3, 1368]] as const) {
+      const base = criarAtlas()
+      const origem = estagio > 0 ? escreverCena(base, evoluirInimigo(base.fichas[0].state, 1, estagio)) : base
+      const aberto = abrirMapa(origem, i, j)
+      const fq = fichaEm(aberto, i, j)!
+      assert(fq.hpInimigo === somaInimiga(fq.state) && fq.hpInimigo === esperado, `M2.q: o mapa (${i},${j}) nasce com hpInimigo = ${esperado} = a soma real (veio ${fq.hpInimigo})`)
+      let passado = aberto
+      for (let k = 0; k < 3; k++) passado = stepAtlas(passado, INPUT_PARADO, 0.25)
+      assert(fichaEm(passado, i, j)!.alerta === 'nenhum', `M2.q: o mapa clonado (${i},${j}) não dispara alerta sem combate`)
+    }
+
+    // M2.o: sem estágio na origem (partida nova), o vizinho nasce como sempre nasceu
+    const nova = colocarHeroi(criarAtlas(), 56.1, 0)
+    const lesteNovo = fichaEm(nova, 1, 0)!
+    assert(inimigo(lesteNovo)!.nivel === 1 && pecasDe(lesteNovo).length === 0 && lesteNovo.state.ondaNumero === 0 && hordaDe(lesteNovo).every((u) => u.hp === 12), 'M2.o: com a origem no estágio 0 o vizinho nasce como sempre: nível 1, sem peças, onda 0')
+  }
+  // ── M4: quem DOMINA cada mapa do minimapa (pedido do usuário, 22/11): «uma cor para mapas Selvagens, dominados pela natureza e nem por você nem por aliados nem por inimigos; outra para
+  // inimigos; outra para você e aliados». `donoDoMapa(ficha)` é função PURA e o `resumoAtlas` o entrega para o minimapa pintar. Decisões [D-minha]: ruína nossa (hp 0) NÃO é domínio; obra nossa EM
+  // CONSTRUÇÃO é; núcleo inimigo MORTO não é base viva (mapa conquistado e abandonado volta a ser selvagem); peças inimigas soltas SEM núcleo não são base; se há obra/tropa NOSSA e núcleo inimigo vivo
+  // no mesmo mapa, o mapa é NOSSO (a luta é sua).
+  {
+    const cru = createPartida(1, 0, true)
+    const nucleoInimigoVivo = (s: PartidaState) => s.obras.some((o) => o.lado === 'inimigo' && o.tipo === 'nucleo' && o.hp > 0)
+    const semInimigo = (s: PartidaState): PartidaState => ({ ...s, obras: s.obras.filter((o) => o.lado !== 'inimigo'), unidades: s.unidades.filter((u) => u.lado !== 'inimigo') })
+    const nossaObra = (id: number, hp: number, extra: Partial<Obra> = {}): Obra => ({ id, lado: 'nosso', tipo: 'quartel', x: -10, z: -10, nivel: 1, hp, maxHp: 40, gateApplied: false, cooldown: 0, ...extra })
+    const nossaTropa = (id: number, hp: number): Unidade => ({ id, lado: 'aliado', papel: 'tropa', x: 1, z: 1, hp, postura: 'automatico', ordem: null, cooldown: 0, segmentos: [], alerta: false })
+    const fichaCom = (s: PartidaState) => ({ ...fichaEm(abrirMapa(criarAtlas(), 1, 0), 1, 0)!, state: s })
+    assert(nucleoInimigoVivo(cru), 'M4: (arranjo) o mapa cru tem uma base inimiga viva')
+
+    // M4.a: só inimigo = inimigo; nada de ninguém = selvagem; você = nosso
+    assert(donoDoMapa(fichaCom(cru)) === 'inimigo', 'M4.a: um mapa com base inimiga viva e nada nosso é do INIMIGO')
+    assert(donoDoMapa(fichaCom(semInimigo(cru))) === 'selvagem', 'M4.a: um mapa sem ninguém (nem obra nossa, nem tropa nossa, nem base inimiga) é SELVAGEM')
+    assert(donoDoMapa(fichaCom({ ...cru, obras: [...cru.obras, nossaObra(9001, 40)] })) === 'nosso', 'M4.a: obra nossa viva = NOSSO (mesmo com a base inimiga ali)')
+    assert(donoDoMapa(fichaCom({ ...semInimigo(cru), obras: [nossaObra(9001, 40)] })) === 'nosso', 'M4.a: obra nossa viva e nenhuma base inimiga = NOSSO')
+    assert(donoDoMapa(fichaCom({ ...cru, unidades: [...cru.unidades, nossaTropa(9002, 16)] })) === 'nosso', 'M4.a: tropa nossa viva = NOSSO (mesmo com a base inimiga ali)')
+    assert(donoDoMapa(fichaCom({ ...semInimigo(cru), unidades: [nossaTropa(9002, 16)] })) === 'nosso', 'M4.a: tropa nossa viva e nenhuma base inimiga = NOSSO')
+
+    // M4.b: ruína não é domínio; construção é
+    assert(donoDoMapa(fichaCom({ ...semInimigo(cru), obras: [nossaObra(9001, 0)] })) === 'selvagem', 'M4.b: ruína nossa (hp 0) sem mais ninguém = SELVAGEM (a natureza retoma o que caiu)')
+    assert(donoDoMapa(fichaCom({ ...cru, obras: [...cru.obras, nossaObra(9001, 0)] })) === 'inimigo', 'M4.b: ruína nossa e base inimiga viva = INIMIGO (você já perdeu o mapa)')
+    assert(donoDoMapa(fichaCom({ ...semInimigo(cru), unidades: [nossaTropa(9002, 0)] })) === 'selvagem', 'M4.b: tropa nossa morta (hp 0) não domina')
+    assert(donoDoMapa(fichaCom({ ...semInimigo(cru), obras: [nossaObra(9001, 40, { construindoRestante: 5, construindoTotal: 6 })] })) === 'nosso', 'M4.b: obra nossa EM CONSTRUÇÃO já domina (o jogador está lá)')
+
+    // M4.c: a conquista: o núcleo inimigo caiu (hp 0) e você não fundou nada: o mapa volta a ser selvagem
+    const conquistado: PartidaState = { ...cru, obras: cru.obras.map((o) => (o.lado === 'inimigo' ? { ...o, hp: 0 } : o)), unidades: cru.unidades.filter((u) => u.lado !== 'inimigo') }
+    assert(donoDoMapa(fichaCom(conquistado)) === 'selvagem', 'M4.c: núcleo inimigo destruído e nada nosso = SELVAGEM (decisão do usuário: «nem por você nem por aliados nem por inimigos»)')
+    const pecaSolta: PartidaState = { ...conquistado, obras: [...conquistado.obras, { id: 9100, lado: 'inimigo', tipo: 'torre', x: 5, z: 5, nivel: 1, hp: 50, maxHp: 50, gateApplied: false, cooldown: 0 }] }
+    assert(donoDoMapa(fichaCom(pecaSolta)) === 'selvagem', 'M4.c: uma torre inimiga SOLTA, sem núcleo vivo, não faz do mapa uma base inimiga')
+    assert(donoDoMapa(fichaCom({ ...conquistado, obras: [...conquistado.obras, nossaObra(9001, 40)] })) === 'nosso', 'M4.c: conquistado e depois fundado: NOSSO')
+
+    // M4.d: só tropas inimigas soltas (sem núcleo) não fazem uma base: o inimigo evoluir NÃO é o que pinta o mapa, é a base viva
+    const soTropaInimiga: PartidaState = { ...conquistado, unidades: cru.unidades }
+    assert(donoDoMapa(fichaCom(soTropaInimiga)) === 'selvagem', 'M4.d: só tropas inimigas, sem núcleo vivo: SELVAGEM (a cor do inimigo é a da BASE)')
+
+    // M4.e: a cor chega ao minimapa pelo `resumoAtlas`, com o mesmo dono, e muda quando o mapa muda de mãos
+    let a = abrirMapa(criarAtlas(), 1, 0)
+    const dono = (atlas: Atlas, i: number, j: number) => resumoAtlas(atlas).find((r) => r.i === i && r.j === j)?.dono
+    assert(dono(a, 1, 0) === 'inimigo' && dono(a, 0, 0) === 'inimigo', 'M4.e: o resumo entrega o dono: os dois mapas recém-nascidos são do INIMIGO')
+    a = escreverFicha(a, 1, 0, conquistado, 'cheio')
+    assert(dono(a, 1, 0) === 'selvagem' && dono(a, 0, 0) === 'inimigo', 'M4.e: conquistar o (1,0) o torna SELVAGEM no resumo e não mexe no (0,0)')
+    a = escreverFicha(a, 1, 0, { ...conquistado, obras: [...conquistado.obras, nossaObra(9001, 40)] }, 'cheio')
+    assert(dono(a, 1, 0) === 'nosso', 'M4.e: fundar no (1,0) o torna NOSSO no resumo')
+    assert(resumoAtlas(a).every((r) => r.dono === 'nosso' || r.dono === 'inimigo' || r.dono === 'selvagem'), 'M4.e: todo mapa do resumo tem um dono válido')
+  }
 }

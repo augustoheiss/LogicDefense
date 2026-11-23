@@ -9,6 +9,7 @@ import {
   passoRecursosNaturais,
   RecursoNatural,
   SUBSOLO_CFG,
+  VOXEL_NV5,
 } from './biomaRecursos'
 import {
   BlocoMaterial,
@@ -42,7 +43,7 @@ import {
   meiaLarguraObraLivre,
 } from './obraBlocosLivres'
 import { Bloqueio, encaixarLivre, encontrarCaminho, Marco } from './caminho'
-import { applyGateWithRemainder, clampArmy } from './armyMath'
+import { applyGateWithRemainder } from './armyMath'
 import { aplicarFatorAoBuff, fatorDoBuff } from './buffPorErro'
 import {
   GRAU_PARTIDA,
@@ -57,6 +58,7 @@ import {
   PLUS_TEN,
   Postura,
   TEMPO_CONSTRUCAO,
+  type GrauConta,
 } from './partidaPolicies'
 import {
   afastarDeFortalezaNv5,
@@ -139,8 +141,10 @@ export interface Rota {
 }
 
 export interface Altar {
-  tier: 1 | 2 | 3 | 4
+  tier: GrauConta
   correta: 0 | 1 | 2 | 3
+  /** Quando false (questões ENEM de 5 opções), as placas físicas N/L/S/O do chão não recebem resposta. */
+  placasAtivas?: boolean
   cx: number
   cz: number
   resolvido: boolean
@@ -206,7 +210,39 @@ export interface PartidaState {
   versaoRecursos: number
   subsoloCentro: { x: number; z: number } | null
   blocosMapa: Record<string, BlocoMundo>
+  /**
+   * Quanto a VIDA do inimigo deste mapa é multiplicada (M2, pedido do usuário 22/11: «mais longe, mais difícil»; decisão de 20/11: a vida dobra, a QUANTIDADE não).
+   * Guardado no estado para as ondas FUTURAS nascerem iguais (senão a dificuldade sumiria na 1ª onda). Ausente = 1×: o jogo é o de sempre.
+   */
+  fatorInimigo?: number
 }
+
+/**
+ * Faz o inimigo de um mapa NASCER evoluído e mais forte (M2, pedido do usuário 22/11). `fator` multiplica a VIDA de tudo que o inimigo tem (horda, núcleo, peças) e fica guardado
+ * em `fatorInimigo`; `estagio` recresce a base pelas MESMAS regras e posições das ondas (`crescerBaseInimiga`), com as peças PRONTAS e a vida cheia (uma peça em construção morreria
+ * no primeiro golpe), e deixa `ondaNumero = estagio` para as ondas seguirem DAÍ. A QUANTIDADE de obras e unidades não muda além do que o estágio traz; nada nosso, nem o bioma, entra
+ * na cópia. Entrada inválida (NaN, ≤ 0, infinita) não tem efeito: a vida do inimigo nunca vira NaN, zero ou infinita por um número sujo.
+ */
+export function evoluirInimigo(state: PartidaState, fator: number, estagio: number): PartidaState {
+  const f = Number.isFinite(fator) && fator >= 1 ? fator : 1
+  const alvo = Number.isFinite(estagio) && estagio >= 1 ? Math.min(Math.floor(estagio), ESTAGIO_MAXIMO_DA_COPIA) : 0
+  if (f === 1 && alvo === 0) return state
+  let atual: PartidaState = {
+    ...state,
+    fatorInimigo: f,
+    unidades: state.unidades.map((u) => (u.lado === 'inimigo' ? { ...u, hp: u.hp * f } : u)),
+    obras: state.obras.map((o) => (o.lado === 'inimigo' ? { ...o, hp: o.hp * f, maxHp: o.maxHp * f } : o)),
+  }
+  for (let numero = 1; numero <= alvo; numero += 1) atual = crescerBaseInimiga(atual, numero)
+  return {
+    ...atual,
+    ondaNumero: Math.max(atual.ondaNumero, alvo),
+    obras: atual.obras.map((o) => (o.lado === 'inimigo' && obraEmConstrucao(o) ? { ...o, construindoRestante: 0 } : o)),
+  }
+}
+
+/** Até que estágio uma cópia recresce a base: a base inimiga de um mapa que passou por 40 ondas já é do tamanho que cabe no mapa (as peças que não cabem simplesmente não nascem). */
+const ESTAGIO_MAXIMO_DA_COPIA = 40
 
 export type HeroiOrdem =
   | { tipo: 'mover'; x: number; z: number; rota: Rota }
@@ -954,10 +990,50 @@ export function aproximacaoDaObra(obra: Obra, deX: number, deZ: number): { x: nu
   return { x: obra.x + dx * fator, z: obra.z + dz * fator }
 }
 
+/**
+ * A fortaleza do nível 5 (grade `VOXEL_NV5`, 7 × 7 blocos de 0,85 m = 5,95 m de lado, 29 vezes a área de uma torre de 1,1 m) cabe onde a obra está? Varre a grade da
+ * fortaleza e pergunta a `bateObra` (a MESMA régua de `podeFundarEm`, então «espaço bloqueado» quer dizer a mesma coisa nos dois lugares) se algum ponto bate em OUTRA obra
+ * viva (nossa ou inimiga) ou em bloco do mapa. A própria obra é ignorada. Pontos: o centro de cada bloco E as quatro bordas externas, para a fronteira ser exata.
+ */
+function fortalezaNv5Cabe(state: PartidaState, obra: Obra): boolean {
+  const { nx, nz, passo } = VOXEL_NV5
+  const meioX = (nx * passo) / 2
+  const meioZ = (nz * passo) / 2
+  const pontos: Array<{ x: number; z: number }> = []
+  for (let bz = 0; bz <= nz; bz += 1) {
+    for (let bx = 0; bx <= nx; bx += 1) pontos.push({ x: obra.x - meioX + bx * passo, z: obra.z - meioZ + bz * passo })
+  }
+  return !pontos.some((p) => bateObra(p.x, p.z, state.obras, obra.id, 0, state.blocosMapa))
+}
+
+/**
+ * `evoluir` pode subir esta obra um nível? Devolve `{ ok, motivo }` como `podeFundarEm`: a interface mostra o MOTIVO REAL. (Antes a recusa caía num balde: qualquer falha que não
+ * fosse «já no máximo» ou «em construção» virava «Precisa de X para evoluir», e uma recusa por espaço diria ao jogador que faltava dinheiro.) O NÍVEL 5 exige espaço livre para a
+ * fortaleza: só nele a área da obra muda. Do 1 ao 4 a obra mantém a pegada e NADA do entorno atrapalha.
+ */
+export type CodigoRecusaEvoluir = 'derrota' | 'inexistente' | 'construcao' | 'maximo' | 'recurso' | 'espaco'
+
+export function podeEvoluir(state: PartidaState, obraId: number): { ok: boolean; codigo?: CodigoRecusaEvoluir; motivo?: string } {
+  if (state.derrota) return { ok: false, codigo: 'derrota', motivo: 'Partida encerrada' }
+  const obra = state.obras.find((item) => item.id === obraId)
+  if (!obra || obra.hp <= 0 || !nossa(obra)) return { ok: false, codigo: 'inexistente', motivo: 'Obra não encontrada' }
+  if (obraEmConstrucao(obra)) return { ok: false, codigo: 'construcao', motivo: 'Aguarde concluir a construção antes de evoluir' }
+  if (obra.nivel >= PARTIDA.nivelMaximoObra) return { ok: false, codigo: 'maximo', motivo: 'Construção já está no Nível 5 (máximo)' }
+  const usaCredito = state.credito >= PARTIDA.custoEvoluirCredito
+  const usaRecursos = state.madeira >= PARTIDA.custoEvoluirMadeira && state.ouro >= PARTIDA.custoEvoluirOuro
+  if (!usaCredito && !usaRecursos) return { ok: false, codigo: 'recurso', motivo: 'Falta licença ou recursos para evoluir' }
+  const viraFortaleza = obra.nivel + 1 >= 5 && !obra.blocosLivres?.length && !obra.blocosNv5
+  if (viraFortaleza && !fortalezaNv5Cabe(state, obra)) {
+    return { ok: false, codigo: 'espaco', motivo: 'Espaço bloqueado: há outra obra na área que a fortaleza do Nível 5 vai ocupar (cerca de 6 m)' }
+  }
+  return { ok: true }
+}
+
 export function evoluir(state: PartidaState, obraId: number): PartidaState {
   if (state.derrota) return state
   const obra = state.obras.find((item) => item.id === obraId && item.hp > 0 && nossa(item) && !obraEmConstrucao(item))
   if (!obra || obra.nivel >= PARTIDA.nivelMaximoObra) return state
+  if (!podeEvoluir(state, obraId).ok) return state
   const usaCredito = state.credito >= PARTIDA.custoEvoluirCredito
   const usaRecursos = state.madeira >= PARTIDA.custoEvoluirMadeira && state.ouro >= PARTIDA.custoEvoluirOuro
   if (!usaCredito && !usaRecursos) return state
@@ -1605,7 +1681,12 @@ export function postura(state: PartidaState, ids: readonly number[], valor: Post
   return { ...state, unidades }
 }
 
-export function aplicarConta(state: PartidaState, tier: 1 | 2 | 3 | 4): PartidaState {
+export function clampVidaPartida(vida: number): number {
+  if (!Number.isFinite(vida) || vida <= 0) return 0
+  return Math.min(PARTIDA.vidaCap, Math.floor(vida))
+}
+
+export function aplicarConta(state: PartidaState, tier: GrauConta): PartidaState {
   if (state.derrota) return state
   const spec = GRAU_PARTIDA[tier]
   const inimigos = vivosInimigos(state)
@@ -1622,7 +1703,7 @@ export function aplicarConta(state: PartidaState, tier: 1 | 2 | 3 | 4): PartidaS
     return da - db
   })
   const mata = new Set(perto.slice(0, buff.abates).map((unidade) => unidade.id))
-  const armyDepois = clampArmy(state.heroi.army + buff.vida)
+  const armyDepois = clampVidaPartida(state.heroi.army + buff.vida)
   return {
     ...state,
     credito: state.credito + buff.credito,
@@ -1632,7 +1713,7 @@ export function aplicarConta(state: PartidaState, tier: 1 | 2 | 3 | 4): PartidaS
     unidades: state.unidades.map((unidade) =>
       mata.has(unidade.id) ? { ...unidade, hp: 0, segmentos: [] } : unidade,
     ),
-    altar: state.altar ? { ...state.altar, resolvido: true, aviso: '', ganhoVida: armyDepois - state.heroi.army, ganhoCredito: buff.credito } : null,
+    altar: state.altar ? { ...state.altar, resolvido: true, aviso: '', ganhoVida: Math.max(0, armyDepois - state.heroi.army), ganhoCredito: buff.credito } : null,
   }
 }
 
@@ -1641,13 +1722,14 @@ export function fecharAltar(state: PartidaState): PartidaState {
   return { ...state, altar: null }
 }
 
-export function abrirAltar(state: PartidaState, tier: 1 | 2 | 3 | 4, correta: 0 | 1 | 2 | 3): PartidaState {
+export function abrirAltar(state: PartidaState, tier: GrauConta, correta: 0 | 1 | 2 | 3, placasAtivas = true): PartidaState {
   if (state.derrota) return state
   return {
     ...state,
     altar: {
       tier,
       correta,
+      placasAtivas,
       cx: state.heroi.x,
       cz: state.heroi.z,
       resolvido: false,
@@ -1678,12 +1760,28 @@ export function invocarDragao(state: PartidaState): PartidaState {
   }
 }
 
+/**
+ * Para ONDE a saída da base inimiga aponta (usada pela leva e pelo dragão: uma fonte só). Em ordem: (1) o NÚCLEO seu vivo, como sempre foi (COM núcleo seu nada muda); senão (2) o HERÓI, se há
+ * corpo no mapa; senão (3) a tropa aliada viva mais perto da base; senão (4) o CENTRO do mapa (ninguém seu: o inimigo evolui parado). Pedido do usuário (22/11): «os inimigos evoluem mesmo sem
+ * base, pode deixar»; num mapa onde ninguém fundou base «o inimigo caça o herói e as tropas que estiverem lá». Antes a onda nem disparava sem o núcleo seu.
+ */
+function alvoDaSaida(state: PartidaState, origem: { x: number; z: number }): { x: number; z: number } {
+  const nucleo = nucleoNosso(state.obras)
+  if (nucleo) return nucleo
+  if (!state.semCorpo && state.heroi.army > 0) return { x: state.heroi.x, z: state.heroi.z }
+  const tropas = aliadosVivos(state)
+  if (tropas.length > 0) {
+    const maisPerto = tropas.reduce((a, b) => (Math.hypot(a.x - origem.x, a.z - origem.z) <= Math.hypot(b.x - origem.x, b.z - origem.z) ? a : b))
+    return { x: maisPerto.x, z: maisPerto.z }
+  }
+  return { x: 0, z: 0 }
+}
+
 function nascerDragaoDaLeva(state: PartidaState): PartidaState {
   if (state.derrota || vivosInimigos(state).length >= PARTIDA.enemyCap) return state
   const origem = nucleoInimigo(state.obras)
-  const alvo = nucleoNosso(state.obras)
-  if (!origem || !alvo) return state
-  const saida = saidaDaBase(origem, alvo)
+  if (!origem) return state
+  const saida = saidaDaBase(origem, alvoDaSaida(state, origem))
   const celula = encaixarLivre(Math.round(saida.x / PARTIDA.celula), Math.round(saida.z / PARTIDA.celula), bloqueiosDe(state))
   if (!celula) return state
   return {
@@ -1703,8 +1801,14 @@ function saidaDaBase(base: { x: number; z: number }, alvo: { x: number; z: numbe
   return { x: base.x + (dx / mag) * 3, z: base.z + (dz / mag) * 3 }
 }
 
-function vidaDaLeva(numero: number): number {
-  return 14 + (numero - 1) * 4
+function vidaDaLeva(numero: number, fator = 1): number {
+  return (14 + (numero - 1) * 4) * fator
+}
+
+/** O fator de vida do inimigo DESTE mapa (guardado em `fatorInimigo`). Ausente ou inválido vale 1×: sem o campo o jogo é o de sempre. */
+function fatorDoEstado(state: PartidaState): number {
+  const fator = state.fatorInimigo
+  return typeof fator === 'number' && Number.isFinite(fator) && fator >= 1 ? fator : 1
 }
 
 function crescerBaseInimiga(state: PartidaState, numero: number): PartidaState {
@@ -1720,7 +1824,7 @@ function crescerBaseInimiga(state: PartidaState, numero: number): PartidaState {
   const x = nucleo.x + Math.cos(angulo) * distancia
   const z = nucleo.z + Math.sin(angulo) * distancia
   if (!dentroDoMapa(x, z) || bateObstaculo(x, z) || bateObra(x, z, obras)) return { ...state, obras }
-  const hp = tipo === 'torre' ? 50 : 40
+  const hp = (tipo === 'torre' ? 50 : 40) * fatorDoEstado(state)
   const duracao = TEMPO_CONSTRUCAO[tipo]
   const peca: Obra = {
     id: state.nextId,
@@ -2421,7 +2525,7 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
       PARTIDA.arch.maxZ,
     )
   ) {
-    army = applyGateWithRemainder(army, PLUS_TEN).nextArmy
+    army = clampVidaPartida(applyGateWithRemainder(army, PLUS_TEN).nextArmy)
     gateArchApplied = true
   }
   let carregandoKg = state.heroi.carregandoKg
@@ -2494,7 +2598,7 @@ function portoesConstruidos(state: PartidaState): PartidaState {
       return obra
     }
     mudou = true
-    army = applyGateWithRemainder(army, { ...PLUS_TEN, id: `portao-${obra.id}` }).nextArmy
+    army = clampVidaPartida(applyGateWithRemainder(army, { ...PLUS_TEN, id: `portao-${obra.id}` }).nextArmy)
     return { ...obra, gateApplied: true }
   })
   if (!mudou) return state
@@ -2503,7 +2607,7 @@ function portoesConstruidos(state: PartidaState): PartidaState {
 
 function altarNoPasso(state: PartidaState): PartidaState {
   const altar = state.altar
-  if (!altar || altar.resolvido) return state
+  if (!altar || altar.resolvido || altar.placasAtivas === false) return state
   const pontos = [
     { x: altar.cx, z: altar.cz + PARTIDA.altarPasso },
     { x: altar.cx + PARTIDA.altarPasso, z: altar.cz },
@@ -2535,7 +2639,7 @@ function danoHordaNoHeroi(state: PartidaState): PartidaState {
     const dist = Math.hypot(unidade.x - state.heroi.x, unidade.z - state.heroi.z)
     if (dist > PARTIDA.hitRadius) return unidade
     mudou = true
-    army = clampArmy(army - PARTIDA.hitDamage)
+    army = clampVidaPartida(army - PARTIDA.hitDamage)
     return { ...unidade, hp: 0 }
   })
   if (!mudou) return state
@@ -3085,7 +3189,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     }
     if (id !== null) {
       jaAlvo.add(id)
-      if (id === -1) army = Math.max(0, army - danoTorre)
+      if (id === -1) army = clampVidaPartida(army - danoTorre)
       else fere(id, danoTorre)
       obras = obras.map((item) => (item.id === torre.id ? { ...item, cooldown: PARTIDA.torreCooldown } : item))
       continue
@@ -3153,19 +3257,20 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
 }
 
 function passoOnda(state: PartidaState, dt: number): PartidaState {
-  const nosso = nucleoNosso(state.obras)
   const inimigo = nucleoInimigo(state.obras)
-  if (!nosso || !inimigo) return state.ondaRelogio === 0 ? state : { ...state, ondaRelogio: 0 }
+  // Só a metade INIMIGA da condição continua: sem base inimiga não há de onde a onda sair. A metade «sem núcleo seu» SAIU (22/11, pedido do usuário): o inimigo evolui mesmo num mapa onde
+  // ninguém fundou base, e quando alguém chega encontra uma base maior e um exército (a dificuldade cresce com o tempo). Para onde a leva sai: `alvoDaSaida`.
+  if (!inimigo) return state.ondaRelogio === 0 ? state : { ...state, ondaRelogio: 0 }
   const relogio = state.ondaRelogio + dt
   if (relogio < PARTIDA.ondaPeriodo) return { ...state, ondaRelogio: relogio }
   if (vivosInimigos(state).length >= PARTIDA.enemyCap) return { ...state, ondaRelogio: 0 }
   const numero = state.ondaNumero + 1
   const dragao = numero % 3 === 0 && numero !== 1
   if (dragao) return crescerBaseInimiga(nascerDragaoDaLeva({ ...state, ondaRelogio: 0, ondaNumero: numero }), numero)
-  const saida = saidaDaBase(inimigo, nosso)
+  const saida = saidaDaBase(inimigo, alvoDaSaida(state, inimigo))
   const quantidade = numero === 1 ? PARTIDA.levaPrimeira : PARTIDA.levaSeguinte
   const bloqueios = bloqueiosDe(state)
-  const hp = vidaDaLeva(numero)
+  const hp = vidaDaLeva(numero, fatorDoEstado(state))
   const novos: Unidade[] = []
   let nextId = state.nextId
   let vivos = vivosInimigos(state).length

@@ -46,6 +46,8 @@ export interface OrdemAtacarObra {
 export type Ordem = OrdemMover | OrdemAtacar | OrdemAtacarObra
 
 export const PARTIDA = {
+  vidaCap: 999_999,
+  enemHabilitado: true as boolean,
   radius: 56,
   body: 0.35,
   eyeY: 1.6,
@@ -141,17 +143,20 @@ export const PARTIDA = {
 } as const
 
 /**
- * O que uma conta CERTA paga, por grau. `bonus` (vida do herói) é BASE 2, decisão do usuário (20/11/2026): `bonus = 2^(grau + 1)` = +4, +8, +16, +32: cada grau
- * DOBRA o anterior, e quem faz as contas difíceis cresce bem mais que quem faz as fáceis. Antes era 4/6/8/12 (sem regra). É UMA constante só, reajustável com
- * mais jogadores. `wipe` (fração dos inimigos abatida) e `credito` (licenças) NÃO mudaram. Cada ERRO divide o buff por 2 (`buffPorErro`, E3), então o grau 4
- * rende +32, +16, +8, +4… conforme os erros. Os 3 graus seguintes do plano (+64, +128, +256: Hardcore, Super hardcore, Especialista) NÃO entram aqui: precisam
- * de uma fonte de questões que ainda não existe (ENEM, E6/E7), e um modo vazio não se vende.
+ * O que uma conta CERTA paga, por grau (base 2: `bonus = 2^(grau + 1)` → +4 .. +256).
+ * Graus 1..4 vêm dos motores paramétricos; graus 5..7 (Hardcore, Super Hardcore, Especialista)
+ * são alimentados pelo acervo ENEM + motores ENEM-like. Cada erro divide o buff por 2 (`buffPorErro`).
  */
-export const GRAU_PARTIDA: Record<1 | 2 | 3 | 4, { wipe: number; bonus: number; credito: number }> = {
-  1: { wipe: 0.35, bonus: 4, credito: 1 },
-  2: { wipe: 0.6, bonus: 8, credito: 1 },
-  3: { wipe: 0.85, bonus: 16, credito: 2 },
-  4: { wipe: 1, bonus: 32, credito: 2 },
+export type GrauConta = 1 | 2 | 3 | 4 | 5 | 6 | 7
+
+export const GRAU_PARTIDA: Record<GrauConta, { wipe: number; bonus: number; credito: number; rotulo: string; sub: string }> = {
+  1: { wipe: 0.35, bonus: 4, credito: 1, rotulo: '🟢 Fácil (+4)', sub: 'Cálculo ágil' },
+  2: { wipe: 0.6, bonus: 8, credito: 1, rotulo: '🔵 Médio (+8)', sub: 'Aritmética elegante' },
+  3: { wipe: 0.85, bonus: 16, credito: 2, rotulo: '🟣 Difícil (+16)', sub: 'Problemas & álgebra' },
+  4: { wipe: 1, bonus: 32, credito: 2, rotulo: '👑 Muito Difícil (+32)', sub: 'Desafios contextuais' },
+  5: { wipe: 1, bonus: 64, credito: 3, rotulo: '🔥 Hardcore · ENEM (+64)', sub: 'ENEM · 1º nível' },
+  6: { wipe: 1, bonus: 128, credito: 4, rotulo: '⚡ S. Hardcore · ENEM (+128)', sub: 'ENEM · Multi-passo' },
+  7: { wipe: 1, bonus: 256, credito: 5, rotulo: '🏆 Especialista · ENEM (+256)', sub: 'ENEM · Alta complexidade' },
 }
 
 export const PLUS_TEN: Gate = {
