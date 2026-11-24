@@ -209,6 +209,7 @@ export const ModalConta: React.FC<ModalContaProps> = ({
               type="button"
               className="ilha-desistir"
               data-testid="ilha-conta-desistir"
+              disabled={carregando || !desafio}
               onClick={onDesistirETrocar}
             >
               Desistir e trocar

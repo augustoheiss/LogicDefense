@@ -422,7 +422,10 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
     lensTitlePt: '⚡ O Dobro do Dobro (Multiplicar por 4 e por 8)',
     synthesize: (rng) => {
       const mult = randPick(rng, [4, 8])
-      const base = randPick(rng, [15, 25, 35, 45, 55, 65, 75, 120, 140])
+      const base = randPick(rng, [
+        13, 14, 15, 16, 17, 18, 19, 23, 24, 25, 26, 27, 28, 32, 34, 35, 36, 38, 42, 44, 45, 46, 48, 52, 54, 55, 56,
+        62, 64, 65, 68, 72, 75, 78, 84, 85, 92, 95, 115, 120, 125, 135, 140, 145, 160,
+      ])
       const d1 = base * 2
       const d2 = d1 * 2
       const ans = base * mult
@@ -485,7 +488,7 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
     codexSlug: 'magia-calculo-mental-multiplicacao',
     lensTitlePt: '🖐️ O Relógio do 5 (Vezes 10 e Corta ao Meio)',
     synthesize: (rng) => {
-      const half = randInt(rng, 12, 48)
+      const half = randInt(rng, 11, 89)
       const evenN = half * 2
       const tenN = evenN * 10
       const ans = evenN * 5
@@ -704,9 +707,9 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
     codexSlug: 'aritmetica-elegante-01',
     lensTitlePt: '🔄 Dobrar e Meiar (Conservação da Área)',
     synthesize: (rng) => {
-      const bOptions = [15, 25, 35, 45, 50]
+      const bOptions = [15, 25, 35, 45, 50, 55, 65, 75, 85, 125]
       const B = randPick(rng, bOptions)
-      const halfA = randInt(rng, 3, B >= 35 ? 9 : 14)
+      const halfA = randInt(rng, 3, B >= 65 ? 9 : 16)
       const A = halfA * 2
       const doubleB = B * 2
       const ans = A * B
@@ -879,10 +882,10 @@ const ARCHETYPE_GENERATORS: readonly ArchetypeGeneratorSpec[] = [
         const base = randPick(rng, [20, 25, 50, 200])
         const pct =
           base === 50
-            ? randPick(rng, [18, 24, 36, 44, 64, 120, 140, 160])
+            ? randPick(rng, [14, 16, 18, 22, 24, 28, 32, 34, 36, 38, 42, 44, 48, 54, 62, 64, 68, 74, 82, 86, 120, 140, 160])
             : base === 25
-              ? randPick(rng, [16, 24, 32, 44, 60, 80, 120])
-              : randPick(rng, [15, 25, 35, 45, 75, 150])
+              ? randPick(rng, [12, 16, 24, 28, 32, 36, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 96, 120, 140])
+              : randPick(rng, [15, 25, 35, 45, 55, 65, 75, 85, 95, 115, 125, 150])
         const ans = Math.round((pct * base) / 100)
         const methods: MentalSolutionMethod[] = [
           {

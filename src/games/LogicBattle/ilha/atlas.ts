@@ -2,6 +2,12 @@ import { BiomaId } from './biomaRecursos'
 import { camadaDoMapa, fatorDaCamada } from './camadaDoMapa'
 import { PARTIDA, PoliticaMinimapas } from './partidaPolicies'
 import { createPartida, evoluirInimigo, PartidaInput, PartidaState, stepPartida, Unidade } from './partidaSim'
+import {
+  iniciarRessurreicao,
+  nucleosVivosEmTodoAtlas,
+  ressuscitarHeroiNoNucleo,
+  type EstadoRessurreicao,
+} from './ressurreicaoHeroi'
 
 export const MEIO_MAPA = PARTIDA.radius
 export const LADO_MAPA = PARTIDA.ladoMapa
@@ -46,6 +52,7 @@ export interface Atlas {
   politica: PoliticaMinimapas
   cotaDinamica: number
   emaFrameMs: number
+  ressurreicao?: EstadoRessurreicao | null
 }
 
 export function chaveMapa(i: number, j: number): string {
@@ -371,6 +378,7 @@ export function criarAtlas(): Atlas {
       '0,0': { i: 0, j: 0, bioma: state.bioma, dono: donoDoMapa(fichaInicial) },
     },
     fichas: [fichaInicial],
+    ressurreicao: null,
   }
 }
 
@@ -482,6 +490,10 @@ function marcarOutrasBases(fichas: Ficha[]): Ficha[] {
 function decretarFimSeCaiuAUltimaBase(antes: readonly Ficha[], depois: Ficha[], heroiI: number, heroiJ: number): Ficha[] {
   if (!antes.some(temBaseViva) || depois.some(temBaseViva)) return depois
   return depois.map((ficha) => (ficha.i === heroiI && ficha.j === heroiJ && !ficha.state.derrota ? { ...ficha, state: { ...ficha.state, derrota: true } } : ficha))
+}
+
+export function nucleosVivosNoAtlas(atlas: Atlas) {
+  return nucleosVivosEmTodoAtlas(atlas)
 }
 
 export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeScale = 1, frameMs?: number): Atlas {
@@ -610,7 +622,7 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
     cenaI = heroiI
     cenaJ = heroiJ
   }
-  return {
+  let proximoAtlas: Atlas = {
     heroiI,
     heroiJ,
     cenaI,
@@ -621,7 +633,55 @@ export function stepAtlas(atlas: Atlas, input: PartidaInput, dt: number, timeSca
     politica: atlas.politica,
     cotaDinamica,
     emaFrameMs,
+    ressurreicao: atlas.ressurreicao ?? null,
   }
+
+  const fichaCorpoAtual = achar(proximoAtlas.fichas, proximoAtlas.heroiI, proximoAtlas.heroiJ)
+  if (fichaCorpoAtual && !fichaCorpoAtual.state.derrota && fichaCorpoAtual.state.heroi.army <= 0) {
+    const nucleosVivos = nucleosVivosEmTodoAtlas(proximoAtlas)
+    if (nucleosVivos.length === 0) {
+      proximoAtlas = {
+        ...proximoAtlas,
+        ressurreicao: null,
+        fichas: proximoAtlas.fichas.map((f) =>
+          f.i === proximoAtlas.heroiI && f.j === proximoAtlas.heroiJ
+            ? { ...f, state: { ...f.state, derrota: true } }
+            : f,
+        ),
+      }
+    } else {
+      if (!proximoAtlas.ressurreicao?.aguardando) {
+        proximoAtlas = iniciarRessurreicao(proximoAtlas, fichaCorpoAtual.state.heroi.classe ?? 'ataque')
+      }
+      if (proximoAtlas.ressurreicao?.aguardando) {
+        const destAtual = proximoAtlas.ressurreicao.nucleoDestino
+        const destValido =
+          destAtual &&
+          nucleosVivos.some(
+            (n) => n.mapaI === destAtual.mapaI && n.mapaJ === destAtual.mapaJ && n.obraId === destAtual.obraId,
+          )
+        const destino = destValido
+          ? destAtual
+          : { mapaI: nucleosVivos[0].mapaI, mapaJ: nucleosVivos[0].mapaJ, obraId: nucleosVivos[0].obraId }
+        const restante = Math.max(0, proximoAtlas.ressurreicao.cooldownRestanteSeg - pedido)
+        proximoAtlas = {
+          ...proximoAtlas,
+          ressurreicao: {
+            ...proximoAtlas.ressurreicao,
+            nucleoDestino: destino,
+            cooldownRestanteSeg: restante,
+          },
+        }
+        if (restante <= 0) {
+          proximoAtlas = ressuscitarHeroiNoNucleo(proximoAtlas, {})
+        }
+      }
+    }
+  } else if (proximoAtlas.ressurreicao?.aguardando && fichaCorpoAtual && fichaCorpoAtual.state.heroi.army > 0) {
+    proximoAtlas = { ...proximoAtlas, ressurreicao: null }
+  }
+
+  return proximoAtlas
 }
 
 /** Quem domina um mapa (M4, pedido do usuário 22/11): você e aliados, o inimigo, ou ninguém («selvagem»: dominado pela natureza). */

@@ -1,9 +1,9 @@
-.portal-root:has(.lb-page-fullscreen) > .navbar,
-.portal-root:has(.lb-page-fullscreen) > .footer {
+.portal-root:has(.lb-page-fullscreen)>.navbar,
+.portal-root:has(.lb-page-fullscreen)>.footer {
   display: none !important;
 }
 
-.portal-root:has(.lb-page-fullscreen) > .page-content {
+.portal-root:has(.lb-page-fullscreen)>.page-content {
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
@@ -127,13 +127,15 @@
 .ilha-painel-obra {
   position: absolute;
   top: 64px;
-  right: 12px;
+  right: 222px;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: min(240px, calc(100% - 24px));
-  padding: 12px;
+  gap: 5px;
+  width: min(276px, calc(100% - 238px));
+  max-height: max(220px, calc(100% - 210px));
+  overflow-y: auto;
+  padding: 10px;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.94);
   color: #f8fafc;
@@ -327,7 +329,9 @@
   background: #facc15;
 }
 
-.ilha-army { left: 16px; }
+.ilha-army {
+  left: 16px;
+}
 
 /* O selo de vida é um CORAÇÃO e o número, sem o texto «Vida do herói» à mostra (decisão do usuário, 20/11). A legenda aparece com o
    mouse em cima (:hover, desktop) e pelo ESTADO `.aberta` (toque, Enter/Espaço), que o `Escape`, o toque fora e a perda de foco fecham.
@@ -342,8 +346,17 @@
   cursor: help;
   outline-offset: 2px;
 }
-.ilha-army-icone { flex: none; color: #ff6b6b; }
-.ilha-army-valor { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.ilha-army-icone {
+  flex: none;
+  color: #ff6b6b;
+}
+
+.ilha-army-valor {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .ilha-army-legenda {
   position: absolute;
   top: calc(100% + 6px);
@@ -363,10 +376,12 @@
   transition: opacity 0.12s ease, transform 0.12s ease;
   z-index: 13;
 }
+
 .ilha-army.aberta .ilha-army-legenda {
   opacity: 1;
   transform: translateY(0);
 }
+
 /* O mouse mostra a legenda pela classe `.mouse-em-cima`, que o componente liga SÓ com `pointerType === 'mouse'` (onPointerEnter/Leave), e NÃO pelo
    `:hover`: o toque (num 2-em-1, Chromebook, iPad com trackpad, onde `(hover:hover) and (pointer:fine)` casa) deixa o `:hover` verdadeiro e a legenda
    ficava PRESA depois de o 2º toque fechar o estado (reproduzido no jogo real; com o `:hover` neutralizado a mesma sequência fecha). */
@@ -374,6 +389,7 @@
   opacity: 1;
   transform: translateY(0);
 }
+
 /* Desktop e tablet: a legenda abre à DIREITA do selo. Abaixo dele ficam os recursos («Licenças 4 · Madeira…»), e cobri-los (2.568 px²,
    medido) esconde justamente o que se lê junto da vida. A faixa à direita do selo está livre. No celular (<= 600 px) fica abaixo. */
 @media (min-width: 601px) {
@@ -382,14 +398,25 @@
     left: calc(100% + 8px);
     transform: translateY(-50%);
   }
-  .ilha-army.aberta .ilha-army-legenda { transform: translateY(-50%); }
+
+  .ilha-army.aberta .ilha-army-legenda {
+    transform: translateY(-50%);
+  }
 }
+
 @media (min-width: 601px) {
-  .ilha-army.mouse-em-cima .ilha-army-legenda { transform: translateY(-50%); }
+  .ilha-army.mouse-em-cima .ilha-army-legenda {
+    transform: translateY(-50%);
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .ilha-army-legenda { transition: none; transform: none; }
+  .ilha-army-legenda {
+    transition: none;
+    transform: none;
+  }
 }
+
 .ilha-compass {
   right: 16px;
   width: 48px;
@@ -400,6 +427,7 @@
   justify-content: center;
   border: 2px solid #fff;
 }
+
 .ilha-base {
   position: absolute;
   left: 16px;
@@ -418,7 +446,10 @@
   font-size: 14px;
 }
 
-.ilha-enemies { left: 16px; top: 64px; }
+.ilha-enemies {
+  left: 16px;
+  top: 64px;
+}
 
 .ilha-fim {
   position: absolute;
@@ -450,7 +481,7 @@
 .ilha-power {
   position: absolute;
   left: 50%;
-  bottom: 20px;
+  bottom: 146px;
   transform: translateX(-50%);
   z-index: 25;
   pointer-events: none;
@@ -465,14 +496,29 @@
   box-shadow: 0 8px 20px rgba(2, 6, 23, 0.35);
 }
 
+.ilha-shell:not(.ilha-celular):has(.ilha-barra-contextual) .ilha-power,
+.ilha-shell:not(.ilha-celular):has(.ilha-selecao-barra) .ilha-power {
+  bottom: 158px;
+}
+
+.ilha-shell:not(.ilha-celular):has(.ilha-barra-contextual):has(.ilha-selecao-barra) .ilha-power {
+  bottom: 218px;
+}
+
 .ilha-celular .ilha-power {
   left: 12px;
   right: 118px;
-  bottom: 16px;
+  bottom: 64px;
   transform: none;
   width: auto;
   max-width: none;
   text-align: left;
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+
+.ilha-celular:has(.ilha-selecao-barra) .ilha-power {
+  bottom: 130px;
 }
 
 .ilha-conta,
@@ -614,7 +660,7 @@
 .ilha-caderno {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: 30;
   box-sizing: border-box;
   background: rgba(8, 16, 28, 0.62);
   display: flex;
@@ -1348,6 +1394,7 @@
 }
 
 @media (max-width: 640px) {
+
   .ilha-modal,
   .ilha-caderno {
     padding: 6px;
@@ -1395,7 +1442,7 @@
   }
 
   .ilha-celular .ilha-conta-atalhos {
-    top: 314px;
+    top: 342px;
     left: auto;
     right: 8px;
     bottom: auto;
@@ -1414,11 +1461,12 @@
   }
 
   .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-conta-atalhos {
-    top: 344px;
+    top: 372px;
   }
 }
 
 @media (max-width: 360px) {
+
   .ilha-card,
   .ilha-caderno-card {
     padding: 8px 10px;
@@ -1753,7 +1801,10 @@
     font-size: 12.5px;
   }
 
-  .ilha-celular .ilha-army { left: 8px; }
+  .ilha-celular .ilha-army {
+    left: 8px;
+  }
+
   .ilha-celular .ilha-enemies {
     left: 100px;
     right: 8px;
@@ -1761,7 +1812,11 @@
     font-size: 11.5px;
     line-height: 1.25;
   }
-  .ilha-celular .ilha-compass { top: 8px; right: 8px; }
+
+  .ilha-celular .ilha-compass {
+    top: 8px;
+    right: 8px;
+  }
 
   .ilha-celular .ilha-base {
     top: 102px;
@@ -1774,7 +1829,9 @@
     font-size: 11.5px;
   }
 
-  .ilha-celular .ilha-minimapa { top: 102px; }
+  .ilha-celular .ilha-minimapa {
+    top: 102px;
+  }
 
   .ilha-celular .ilha-ferramentas {
     top: 184px;
@@ -1789,8 +1846,14 @@
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .ilha-celular .ilha-ferramentas p { grid-column: 1 / -1; }
-  .ilha-celular .ilha-ferramentas-grade { grid-column: 1 / -1; }
+  .ilha-celular .ilha-ferramentas p {
+    grid-column: 1 / -1;
+  }
+
+  .ilha-celular .ilha-ferramentas-grade {
+    grid-column: 1 / -1;
+  }
+
   .ilha-celular .ilha-conta-atalhos .ilha-conta {
     position: static;
     inset: auto;
@@ -1822,7 +1885,7 @@
 .ilha-selecao-barra {
   position: absolute;
   left: 50%;
-  bottom: 74px;
+  bottom: 94px;
   transform: translateX(-50%);
   z-index: 9;
   pointer-events: auto;
@@ -1838,6 +1901,10 @@
   box-shadow: 0 8px 20px rgba(2, 6, 23, 0.4);
   font-size: 13px;
   font-weight: 700;
+}
+
+.ilha-shell:not(.ilha-celular):has(.ilha-barra-contextual) .ilha-selecao-barra {
+  bottom: 158px;
 }
 
 .ilha-selecao-barra span {
@@ -2357,6 +2424,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .ilha-btn-rascunho,
   .ilha-passe-partout-btn,
   .ilha-choice-btn {
@@ -2366,5 +2434,599 @@
   .ilha-passe-partout-btn:hover,
   .ilha-choice-btn:not(:disabled):hover {
     transform: none;
+  }
+}
+
+/* ─── Ressurreição no Núcleo (Leva 1) ─────────────────────────────────────────────────────────────────── */
+.ilha-escudo-badge {
+  position: absolute;
+  top: 16px;
+  left: 112px;
+  background: rgba(14, 165, 233, 0.92);
+  color: #ffffff;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+}
+
+.ilha-modal-ressurreicao {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(8, 16, 28, 0.56);
+  pointer-events: auto;
+}
+
+.ilha-ressurreicao-card {
+  width: min(560px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 2px solid #facc15;
+  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.6);
+}
+
+.ilha-ressurreicao-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ilha-ressurreicao-topo h2 {
+  margin: 0;
+  font-size: 19px;
+  color: #fde047;
+}
+
+.ilha-ressurreicao-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: #cbd5e1;
+}
+
+.ilha-ressurreicao-timer {
+  background: #1e293b;
+  border: 1px solid #38bdf8;
+  color: #7dd3fc;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ilha-ressurreicao-secao {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ilha-ressurreicao-rotulo {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.ilha-ressurreicao-nucleos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 8px;
+}
+
+.ilha-ressurreicao-nucleo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: #1e293b;
+  color: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+
+.ilha-ressurreicao-nucleo.ativo {
+  border-color: #facc15;
+  background: #1e3a5f;
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.3);
+}
+
+.ilha-ressurreicao-graus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ilha-ressurreicao-barra {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: #1e293b;
+  overflow: hidden;
+}
+
+.ilha-ressurreicao-progresso {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #facc15);
+  transition: width 0.2s linear;
+}
+
+.ilha-ressurreicao-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ilha-ressurreicao-btn-conta {
+  flex: 1 1 230px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #facc15;
+  color: #1e293b;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-ressurreicao-btn-aguardar {
+  flex: 1 1 180px;
+  min-height: 44px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ilha-banner-ressurreicao {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 14;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(460px, calc(100% - 24px));
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  border: 1px solid #facc15;
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.45);
+}
+
+.ilha-banner-ressurreicao-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.ilha-banner-ressurreicao .ilha-ressurreicao-btn-conta {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .ilha-celular .ilha-escudo-badge {
+    top: auto;
+    left: 154px;
+    bottom: 18px;
+    z-index: 12;
+    padding: 5px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .ilha-celular .ilha-banner-ressurreicao {
+    top: auto;
+    bottom: 120px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    max-width: none;
+    justify-content: space-between;
+  }
+}
+
+/* ─── Heróis & Fila de Produção (Leva 2) ─────────────────────────────────────────────────────────────── */
+.ilha-herois-barra {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: min(560px, calc(100% - 32px));
+}
+
+.ilha-painel-producao,
+.ilha-painel-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.ilha-painel-subtitulo {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fde047;
+}
+
+.ilha-fila-itens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ilha-painel-producao[data-testid="ilha-painel-upgrades"] .ilha-painel-acoes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ilha-painel-producao[data-testid="ilha-painel-upgrades"] button {
+  padding: 5px 3px;
+  font-size: 10.5px;
+  line-height: 1.15;
+}
+
+/* ─── Barra Contextual AoE (Leva 3) ────────────────────────────────────────────────────────────────────── */
+.ilha-barra-contextual {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 7;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: max-content;
+  max-width: min(710px, calc(100% - 570px));
+  max-height: 132px;
+  overflow-y: auto;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.45);
+}
+
+.ilha-ctx-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.ilha-ctx-titulo {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fde047;
+  padding-right: 4px;
+}
+
+.ilha-ctx-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.ilha-barra-contextual button {
+  border: 0;
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: #14324a;
+  color: #fff;
+  cursor: pointer;
+}
+
+.ilha-barra-contextual button.ativo {
+  background: #facc15;
+  color: #1e293b;
+}
+
+.ilha-ctx-nota {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+@media (max-width: 600px) {
+  .ilha-celular .ilha-barra-contextual {
+    top: 178px;
+    left: 8px;
+    bottom: auto;
+    transform: none;
+    width: 188px;
+    max-width: none;
+    max-height: calc(100% - 362px);
+    overflow-y: auto;
+    touch-action: pan-y;
+    padding: 5px 6px;
+    gap: 3px;
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-barra-contextual {
+    top: 208px;
+    max-height: calc(100% - 392px);
+  }
+
+  .ilha-celular .ilha-barra-contextual .ilha-ctx-cabecalho,
+  .ilha-celular .ilha-barra-contextual .ilha-ctx-acoes,
+  .ilha-celular .ilha-barra-contextual .ilha-ctx-grupo-compacto {
+    gap: 3px;
+  }
+
+  .ilha-celular .ilha-barra-contextual .ilha-ctx-titulo {
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .ilha-celular .ilha-barra-contextual button {
+    padding: 3px 6px;
+    font-size: 10.5px;
+    line-height: 1.15;
+  }
+}
+
+/* ─── Banner de Posse de Tropa (Leva 4) ─────────────────────────────────────────────────────────────────── */
+.ilha-posse-banner {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  border: 1px solid #38bdf8;
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.45);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.ilha-posse-banner button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #0284c7;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ilha-posse-banner button:hover {
+  background: #0369a1;
+}
+
+@media (max-width: 600px) {
+  .ilha-celular .ilha-posse-banner {
+    top: auto;
+    bottom: 16px;
+    left: 8px;
+    right: auto;
+    transform: none;
+    max-width: calc(100% - 126px);
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    gap: 5px;
+    font-size: 11.5px;
+  }
+
+  .ilha-celular:has(.ilha-posse-banner) .ilha-power {
+    bottom: 94px;
+  }
+
+  .ilha-celular:has(.ilha-posse-banner):has(.ilha-acoes-campo) .ilha-power {
+    bottom: 176px;
+  }
+
+  .ilha-celular:has(.ilha-posse-banner):has(.ilha-acoes-campo .ilha-subbarra, .ilha-acoes-campo .ilha-subbarra-inline) .ilha-power {
+    bottom: 230px;
+  }
+
+  .ilha-celular .ilha-posse-banner button {
+    min-height: 34px;
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+}
+
+/* ─── Gráfico do Caderno, Ping no Minimapa & Badges de Bioma (Leva 5) ──────────────────────────────────── */
+.ilha-caderno-grafico {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  margin-bottom: 10px;
+}
+
+.ilha-caderno-barra-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(80px, 1.4fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.ilha-caderno-barra-nome {
+  color: #1e293b;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ilha-caderno-barra-trilha {
+  height: 9px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.ilha-caderno-barra-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #ef4444;
+  transition: width 0.2s ease;
+}
+
+.ilha-caderno-barra-fill.media {
+  background: #f59e0b;
+}
+
+.ilha-caderno-barra-fill.atencao {
+  background: #0284c7;
+}
+
+.ilha-caderno-barra-val {
+  font-weight: 800;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+
+.ilha-mini-quadrado-bioma {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: rgba(248, 250, 252, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+}
+
+.ilha-mini-rodape {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+}
+
+.ilha-mini-rodape .ilha-voltar {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes ilhaPingPulso {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px #ef4444, 0 0 8px rgba(239, 68, 68, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.35), 0 0 14px rgba(248, 113, 113, 1);
+  }
+}
+
+.ilha-minimapa .ilha-ping-ataque {
+  border-color: #fecaca;
+  animation: ilhaPingPulso 0.85s ease-in-out infinite;
+}
+
+.ilha-minimapa .ilha-ping-ir {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 8px;
+  padding: 5px 7px;
+  font-weight: 800;
+  font-size: 11px;
+  white-space: nowrap;
+  background: #b91c1c;
+  color: #fff;
+  cursor: pointer;
+}
+
+.ilha-minimapa .ilha-ping-ir:hover {
+  background: #991b1b;
+}
+
+.ilha-ctx-grupo-compacto {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 600px) {
+  .ilha-celular .ilha-construcoes {
+    top: 102px;
+    left: 8px;
+    width: min(200px, calc(100% - 190px));
+  }
+
+  .ilha-celular .ilha-construcoes-botao {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .ilha-celular:has(.ilha-obs-sem-corpo) .ilha-construcoes {
+    top: 132px;
+  }
+
+  .ilha-celular .ilha-painel-obra {
+    padding: 7px 8px;
+    gap: 4px;
+  }
+
+  .ilha-celular .ilha-painel-obra button {
+    min-height: 32px;
+    padding: 4px 5px;
+    font-size: 11px;
   }
 }

@@ -117,7 +117,29 @@ export const CadernoEstudoOverlay: React.FC<CadernoEstudoOverlayProps> = ({
                   temas prioritários aparecem aqui com um botão direto de treino.
                 </p>
               ) : (
-                <ul className="ilha-caderno-lista">
+                <>
+                  <div className="ilha-caderno-grafico" data-testid="ilha-caderno-grafico-fracos" aria-label="Gráfico de risco por tema">
+                    {(() => {
+                      const maxRisco = Math.max(1, ...ondePrecisaAjuda.map((i) => i.pontuacaoRisco))
+                      return ondePrecisaAjuda.slice(0, 5).map((item) => {
+                        const selo = seloPrioridade(item.pontuacaoRisco)
+                        const pct = Math.min(100, Math.max(12, Math.round((item.pontuacaoRisco / maxRisco) * 100)))
+                        return (
+                          <div key={`bar-${item.temaId}`} className="ilha-caderno-barra-row">
+                            <span className="ilha-caderno-barra-nome">{item.tituloPt}</span>
+                            <div className="ilha-caderno-barra-trilha">
+                              <div
+                                className={`ilha-caderno-barra-fill ${selo.classe}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="ilha-caderno-barra-val">{item.pontuacaoRisco.toFixed(1)}</span>
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                  <ul className="ilha-caderno-lista">
                   {ondePrecisaAjuda.map((item) => {
                     const selo = seloPrioridade(item.pontuacaoRisco)
                     return (
@@ -140,7 +162,8 @@ export const CadernoEstudoOverlay: React.FC<CadernoEstudoOverlayProps> = ({
                       </li>
                     )
                   })}
-                </ul>
+                  </ul>
+                </>
               )}
             </section>
 

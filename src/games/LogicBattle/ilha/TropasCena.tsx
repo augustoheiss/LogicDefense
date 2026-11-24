@@ -4,11 +4,13 @@ import React, { useEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
   CircleGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   type Group,
+  type InstancedMesh,
   type Mesh,
-  OctahedronGeometry,
+  Object3D,
   RingGeometry,
   SphereGeometry,
 } from 'three'
@@ -20,32 +22,34 @@ import { raycastCondicional, semRaycast } from './raycastCena'
 import { perfilVisualDaUnidade, type PerfilVisualUnidade } from './visual/perfilUnidadeVisual'
 import { Y_SOLO_VISUAL } from './visual/suporteFundacao'
 
+const MAX_TROPAS_INSTANCIADAS = 64
+
 interface TropasCenaProps {
   sim: React.MutableRefObject<PartidaState>
   unidades: readonly Unidade[]
   selectedIds: readonly number[]
   unidadesRef: React.MutableRefObject<Map<number, Group>>
-  aneisRef: React.MutableRefObject<Map<number, Mesh>>
   corposRef: React.MutableRefObject<Map<string, Mesh>>
   modoBloco: 'adicionar' | 'remover' | null
   modoBlocoRef: React.MutableRefObject<'adicionar' | 'remover' | null>
   sombrasAtivas?: boolean
   deveIgnorarClique?: () => boolean
   /**
-   * O jogador tem tropa ou herói selecionados E não está num modo de construção (blocos, linha, consagrar): só então as tropas inimigas ganham o halo de clique (`haloDoInimigo`). Calculado em
-   * `IlhaRua` (que conhece os 3 modos e a seleção); aqui só se aplica a regra por tropa (lado, vida, visibilidade).
+   * O jogador tem tropa ou herói selecionados E não está num modo de construção (blocos, linha, consagrar): só então as tropas inimigas ganham o halo de clique (`haloDoInimigo`).
    */
   haloAtivo?: boolean
   onUnit: (id: number, lado: 'aliado' | 'inimigo', shiftKey?: boolean) => void
 }
 
-/** Renderiza tropas aliadas e inimigos com silhuetas distintas, aterradas ao solo e animadas. */
+/**
+ * Renderiza tropas aliadas e inimigas normais via GPU Instancing (~9 draw calls fixos mesmo com 24+ tropas)
+ * mantendo os Dragões em malhas articuladas dedicadas.
+ */
 export const TropasCena: React.FC<TropasCenaProps> = ({
   sim,
   unidades,
   selectedIds,
   unidadesRef,
-  aneisRef,
   corposRef,
   modoBloco,
   modoBlocoRef,
@@ -56,35 +60,22 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
 }) => {
   const geos = useMemo(
     () => ({
-      sombraContato: new CircleGeometry(0.46, 16),
+      sombraContato: new CircleGeometry(0.46, 14),
       botas: new BoxGeometry(0.34, 0.28, 0.28),
       torso: new BoxGeometry(0.44, 0.54, 0.3),
-      peitoralLargo: new BoxGeometry(0.62, 0.64, 0.42),
-      nucleoFornalha: new OctahedronGeometry(0.14, 0),
-      manto: new BoxGeometry(0.38, 0.52, 0.07),
-      ombreiraCone: new ConeGeometry(0.16, 0.26, 5),
-      cabeca: new SphereGeometry(0.17, 10, 10),
-      elmo: new BoxGeometry(0.37, 0.16, 0.37),
-      capuz: new ConeGeometry(0.24, 0.34, 6),
+      cabeca: new SphereGeometry(0.17, 10, 8),
+      elmo: new BoxGeometry(0.37, 0.18, 0.37),
+      escudo: new BoxGeometry(0.09, 0.44, 0.32),
+      arma: new BoxGeometry(0.08, 0.68, 0.08),
+      anelSel: new RingGeometry(0.44, 0.62, 18),
+      hitbox: new CylinderGeometry(0.48, 0.48, 1.8, 10),
       chifre: new ConeGeometry(0.055, 0.24, 5),
       visorOlhos: new BoxGeometry(0.24, 0.06, 0.08),
-      penacho: new BoxGeometry(0.08, 0.18, 0.24),
-      escudoCavaleiro: new BoxGeometry(0.09, 0.42, 0.3),
-      escudoBoss: new SphereGeometry(0.07, 8, 8),
-      broquel: new CylinderGeometry(0.22, 0.22, 0.06, 8),
-      escudoTorre: new BoxGeometry(0.12, 0.72, 0.46),
-      espada: new BoxGeometry(0.07, 0.64, 0.07),
-      caboArma: new CylinderGeometry(0.032, 0.032, 0.78, 6),
-      laminaMachado: new BoxGeometry(0.06, 0.28, 0.26),
-      cabecaMartelo: new BoxGeometry(0.28, 0.24, 0.38),
-      anelSel: new RingGeometry(0.44, 0.62, 22),
-      anelInimigo: new RingGeometry(0.65, 0.83, 24),
       dragaoCorpo: new BoxGeometry(1.1, 0.72, 1.35),
       dragaoFocinho: new BoxGeometry(0.62, 0.42, 0.7),
       dragaoCrista: new ConeGeometry(0.14, 0.36, 4),
       dragaoAsa: new BoxGeometry(1.15, 0.05, 0.68),
       dragaoGarraAsa: new BoxGeometry(1.22, 0.08, 0.1),
-      segDragao: new BoxGeometry(0.85, 0.7, 1.05),
     }),
     [],
   )
@@ -95,7 +86,11 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
     }
   }, [geos])
 
-  const selectedSet = new Set(selectedIds)
+  const selectedRef = useRef(new Set(selectedIds))
+  selectedRef.current = new Set(selectedIds)
+  const haloAtivoRef = useRef(haloAtivo)
+  haloAtivoRef.current = haloAtivo
+
   const bloquearClique = Boolean(modoBloco)
   const rmbInimigoRef = useRef<{ id: number; x: number; y: number; pointerId: number } | null>(null)
   const corposAnimRef = useRef<Map<number, Group>>(new Map())
@@ -103,8 +98,211 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
   const asasDirRef = useRef<Map<number, Group>>(new Map())
   const perfisRef = useRef<Map<number, PerfilVisualUnidade>>(new Map())
 
+  const instBotasRef = useRef<InstancedMesh | null>(null)
+  const instTorsoRef = useRef<InstancedMesh | null>(null)
+  const instCabecaRef = useRef<InstancedMesh | null>(null)
+  const instElmoRef = useRef<InstancedMesh | null>(null)
+  const instEscudoRef = useRef<InstancedMesh | null>(null)
+  const instArmaRef = useRef<InstancedMesh | null>(null)
+  const instAnelRef = useRef<InstancedMesh | null>(null)
+  const instSombraRef = useRef<InstancedMesh | null>(null)
+  const instHitboxRef = useRef<InstancedMesh | null>(null)
+
+  const instanciaUnidadesRef = useRef<Unidade[]>([])
+  const dummyRef = useRef(new Object3D())
+  const corTempRef = useRef(new Color('#ffffff'))
+
+  useEffect(() => {
+    const meshes = [
+      instBotasRef.current,
+      instTorsoRef.current,
+      instCabecaRef.current,
+      instElmoRef.current,
+      instEscudoRef.current,
+      instArmaRef.current,
+    ]
+    const branca = new Color('#ffffff')
+    meshes.forEach((m) => {
+      if (!m) return
+      for (let i = 0; i < MAX_TROPAS_INSTANCIADAS; i += 1) {
+        m.setColorAt(i, branca)
+      }
+      if (m.instanceColor) m.instanceColor.needsUpdate = true
+      m.count = 0
+    })
+  }, [])
+
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
+    const state = sim.current
+    const olharDesenho = state.posse ? state.posse.modo : state.semCorpo ? 'imperio' : state.olhar
+    const dummy = dummyRef.current
+    const cor = corTempRef.current
+    const selSet = selectedRef.current
+    const haloLigado = haloAtivoRef.current
+    const bloqueio = Boolean(modoBlocoRef.current)
+
+    // Atualiza instâncias para todas as unidades não-dragão
+    let n = 0
+    const listaMapeada = instanciaUnidadesRef.current
+    for (const unidade of state.unidades) {
+      if (unidade.papel === 'dragao' || unidade.hp <= 0) continue
+      const possuidaAgora = Boolean(state.posse && state.posse.unidadeId === unidade.id)
+      const ocultaPosse = possuidaAgora && olharDesenho === 'primeira'
+      if (ocultaPosse) continue
+      if (unidade.lado === 'inimigo' && !inimigoVisivel(state, unidade)) continue
+      if (n >= MAX_TROPAS_INSTANCIADAS) break
+
+      const selecionada = unidade.lado === 'aliado' && selSet.has(unidade.id)
+      const perfil = perfilVisualDaUnidade(unidade.lado, unidade.papel, selecionada)
+      const fase = t * perfil.frequenciaMarcha + unidade.id * 1.13
+      const marchY = Math.abs(Math.sin(fase)) * perfil.amplitudeMarcha
+      const baseY = Y_SOLO_VISUAL + (possuidaAgora && state.posse ? state.posse.y : 0)
+
+      let yaw = 0
+      if (possuidaAgora && state.posse) {
+        yaw = -state.posse.yaw
+      } else if (unidade.ordem?.tipo === 'mover') {
+        const dx = unidade.ordem.x - unidade.x
+        const dz = unidade.ordem.z - unidade.z
+        if (Math.hypot(dx, dz) > 0.1) yaw = Math.atan2(dx, dz)
+      } else if (unidade.ordem?.tipo === 'attackMove') {
+        const dx = unidade.ordem.x - unidade.x
+        const dz = unidade.ordem.z - unidade.z
+        if (Math.hypot(dx, dz) > 0.1) yaw = Math.atan2(dx, dz)
+      }
+
+      const sx = perfil.escala[0]
+      const sy = perfil.escala[1]
+      const sz = perfil.escala[2]
+      const cosY = Math.cos(yaw)
+      const sinY = Math.sin(yaw)
+
+      const porLocal = (lx: number, ly: number, lz: number, rx = 0, ry = 0, rz = 0, ex = 1, ey = 1, ez = 1) => {
+        const wx = unidade.x + (lx * cosY + lz * sinY) * sx
+        const wz = unidade.z + (-lx * sinY + lz * cosY) * sz
+        const wy = baseY + (ly + marchY) * sy
+        dummy.position.set(wx, wy, wz)
+        dummy.rotation.set(rx, yaw + ry, rz)
+        dummy.scale.set(sx * ex, sy * ey, sz * ez)
+        dummy.updateMatrix()
+      }
+
+      // 1. Sombra de contato (sem marchY)
+      dummy.position.set(unidade.x, baseY + 0.015, unidade.z)
+      dummy.rotation.set(-Math.PI / 2, 0, 0)
+      dummy.scale.set(sx * 1.05, sz * 1.05, 1)
+      dummy.updateMatrix()
+      instSombraRef.current?.setMatrixAt(n, dummy.matrix)
+
+      // 2. Anel de seleção
+      dummy.position.set(unidade.x, baseY + 0.025, unidade.z)
+      dummy.rotation.set(-Math.PI / 2, 0, 0)
+      if (selecionada) dummy.scale.set(1, 1, 1)
+      else dummy.scale.set(0, 0, 0)
+      dummy.updateMatrix()
+      instAnelRef.current?.setMatrixAt(n, dummy.matrix)
+
+      // 3. Botas
+      porLocal(0, 0.14, 0)
+      instBotasRef.current?.setMatrixAt(n, dummy.matrix)
+      cor.set(unidade.lado === 'aliado' ? '#0f172a' : '#090d16')
+      instBotasRef.current?.setColorAt(n, cor)
+
+      // 4. Torso (diferencia Soldado/Arqueiro/Lanceiro por cor sutil)
+      porLocal(0, 0.5, 0, 0, 0, Math.sin(fase * 0.5) * 0.045, unidade.papel === 'sitiante' ? 1.25 : 1, 1, 1)
+      instTorsoRef.current?.setMatrixAt(n, dummy.matrix)
+      if (unidade.lado === 'aliado') {
+        if (unidade.tipoTropa === 'arqueiro') cor.set(selecionada ? '#38bdf8' : '#0284c7')
+        else if (unidade.tipoTropa === 'lanceiro') cor.set(selecionada ? '#c084fc' : '#7e22ce')
+        else cor.set(perfil.corArmadura)
+      } else {
+        cor.set(perfil.corArmadura)
+      }
+      instTorsoRef.current?.setColorAt(n, cor)
+
+      // 5. Cabeça
+      porLocal(0, 0.9, 0)
+      instCabecaRef.current?.setMatrixAt(n, dummy.matrix)
+      cor.set(unidade.lado === 'aliado' ? '#fde68a' : '#18181b')
+      instCabecaRef.current?.setColorAt(n, cor)
+
+      // 6. Elmo / Capuz
+      porLocal(0, 1.02, 0, 0, 0, 0, 1, unidade.papel === 'isca' ? 1.3 : 1, 1)
+      instElmoRef.current?.setMatrixAt(n, dummy.matrix)
+      cor.set(perfil.corArmaduraSecundaria)
+      instElmoRef.current?.setColorAt(n, cor)
+
+      // 7. Escudo (Soldado e Sitiante têm escudo visível; demais escala 0)
+      const usaEscudo = unidade.lado === 'aliado' ? (unidade.tipoTropa ?? 'soldado') === 'soldado' : unidade.papel === 'sitiante'
+      if (usaEscudo) {
+        porLocal(-0.27, 0.5, 0.06, 0, 0, 0, 1, unidade.papel === 'sitiante' ? 1.35 : 1, unidade.papel === 'sitiante' ? 1.2 : 1)
+      } else {
+        dummy.position.set(unidade.x, baseY, unidade.z)
+        dummy.scale.set(0, 0, 0)
+        dummy.updateMatrix()
+      }
+      instEscudoRef.current?.setMatrixAt(n, dummy.matrix)
+      cor.set(perfil.corEscudo)
+      instEscudoRef.current?.setColorAt(n, cor)
+
+      // 8. Arma (Lança maior para Lanceiro, Arco curvo/vertical para Arqueiro, Espada para Soldado)
+      const ehLanceiro = unidade.lado === 'aliado' && unidade.tipoTropa === 'lanceiro'
+      const ehArqueiro = unidade.lado === 'aliado' && unidade.tipoTropa === 'arqueiro'
+      porLocal(
+        0.27,
+        ehLanceiro ? 0.78 : 0.58,
+        ehLanceiro ? 0.16 : 0.09,
+        ehLanceiro ? 0.45 : 0.18,
+        0,
+        0,
+        ehArqueiro ? 0.85 : 1,
+        ehLanceiro ? 1.9 : ehArqueiro ? 1.35 : 1,
+        ehArqueiro ? 1.5 : 1,
+      )
+      instArmaRef.current?.setMatrixAt(n, dummy.matrix)
+      cor.set(ehArqueiro ? '#d97706' : ehLanceiro ? '#cbd5e1' : perfil.corArma)
+      instArmaRef.current?.setColorAt(n, cor)
+
+      // 9. Hitbox de clique (inclui Halo ampliado do inimigo quando haloAtivo)
+      const usarHalo = haloDoInimigo({
+        lado: unidade.lado,
+        hp: unidade.hp,
+        visivel: unidade.lado === 'inimigo',
+        temSelecao: haloLigado,
+        modoDeBlocos: bloqueio,
+      })
+      const escalaHalo = usarHalo ? RAIO_DO_HALO / 0.48 : 1
+      dummy.position.set(unidade.x, baseY + 0.9, unidade.z)
+      dummy.rotation.set(0, 0, 0)
+      dummy.scale.set(escalaHalo, 1, escalaHalo)
+      dummy.updateMatrix()
+      instHitboxRef.current?.setMatrixAt(n, dummy.matrix)
+
+      listaMapeada[n] = unidade
+      n += 1
+    }
+    listaMapeada.length = n
+
+    const allInstanced = [
+      instSombraRef.current,
+      instAnelRef.current,
+      instBotasRef.current,
+      instTorsoRef.current,
+      instCabecaRef.current,
+      instElmoRef.current,
+      instEscudoRef.current,
+      instArmaRef.current,
+      instHitboxRef.current,
+    ]
+    allInstanced.forEach((m) => {
+      if (!m) return
+      m.count = n
+      m.instanceMatrix.needsUpdate = true
+      if (m.instanceColor) m.instanceColor.needsUpdate = true
+    })
+
+    // Animação dedicada de Dragões
     corposAnimRef.current.forEach((grupo, id) => {
       const perfil = perfisRef.current.get(id)
       if (!perfil) return
@@ -142,7 +340,6 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
     const atual = sim.current
     const item = atual.unidades.find((u) => u.id === unidade.id)
     if (!item || item.hp <= 0 || !inimigoVisivel(atual, item)) return
-    // Impede que o chão abaixo capture rmbDrag e sobrescreva a ordem de ataque com mover.
     event.stopPropagation()
     rmbInimigoRef.current = { id: unidade.id, x: event.clientX, y: event.clientY, pointerId: event.pointerId }
   }
@@ -164,14 +361,61 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
   }
 
   const rayUnidade = raycastCondicional(bloquearClique)
+  const dragoes = unidades.filter((u) => u.papel === 'dragao')
 
   return (
     <>
-      {unidades.map((unidade) => {
-        const selecionada = unidade.lado === 'aliado' && selectedSet.has(unidade.id)
-        const perfil = perfilVisualDaUnidade(unidade.lado, unidade.papel, selecionada)
-        perfisRef.current.set(unidade.id, perfil)
+      <instancedMesh ref={instSombraRef} args={[geos.sombraContato, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} raycast={semRaycast}>
+        <meshBasicMaterial color="#090d16" transparent opacity={0.28} depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={instAnelRef} args={[geos.anelSel, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} raycast={semRaycast}>
+        <meshBasicMaterial color="#facc15" depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={instBotasRef} args={[geos.botas, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} castShadow={sombrasAtivas} raycast={semRaycast}>
+        <meshStandardMaterial color="#ffffff" roughness={0.68} />
+      </instancedMesh>
+      <instancedMesh ref={instTorsoRef} args={[geos.torso, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} castShadow={sombrasAtivas} raycast={semRaycast}>
+        <meshStandardMaterial color="#ffffff" metalness={0.45} roughness={0.42} />
+      </instancedMesh>
+      <instancedMesh ref={instCabecaRef} args={[geos.cabeca, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} castShadow={sombrasAtivas} raycast={semRaycast}>
+        <meshStandardMaterial color="#ffffff" roughness={0.58} />
+      </instancedMesh>
+      <instancedMesh ref={instElmoRef} args={[geos.elmo, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} castShadow={sombrasAtivas} raycast={semRaycast}>
+        <meshStandardMaterial color="#ffffff" metalness={0.6} roughness={0.35} />
+      </instancedMesh>
+      <instancedMesh ref={instEscudoRef} args={[geos.escudo, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} raycast={semRaycast}>
+        <meshStandardMaterial color="#ffffff" metalness={0.45} roughness={0.42} />
+      </instancedMesh>
+      <instancedMesh ref={instArmaRef} args={[geos.arma, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} raycast={semRaycast}>
+        <meshStandardMaterial color="#ffffff" metalness={0.78} roughness={0.25} />
+      </instancedMesh>
+      <instancedMesh
+        ref={instHitboxRef}
+        args={[geos.hitbox, undefined, MAX_TROPAS_INSTANCIADAS]}
+        frustumCulled={false}
+        raycast={rayUnidade}
+        onClick={(event) => {
+          const idx = event.instanceId
+          const unidade = idx !== undefined ? instanciaUnidadesRef.current[idx] : undefined
+          if (unidade) lidarCliqueUnidade(event, unidade)
+        }}
+        onPointerDown={(event) => {
+          const idx = event.instanceId
+          const unidade = idx !== undefined ? instanciaUnidadesRef.current[idx] : undefined
+          if (unidade) iniciarRmbInimigo(event, unidade)
+        }}
+        onPointerUp={(event) => {
+          const idx = event.instanceId
+          const unidade = idx !== undefined ? instanciaUnidadesRef.current[idx] : undefined
+          if (unidade) concluirRmbInimigo(event, unidade)
+        }}
+      >
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </instancedMesh>
 
+      {dragoes.map((unidade) => {
+        const perfil = perfilVisualDaUnidade(unidade.lado, unidade.papel, false)
+        perfisRef.current.set(unidade.id, perfil)
         return (
           <group
             key={unidade.id}
@@ -186,24 +430,7 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
             onPointerDown={(event) => iniciarRmbInimigo(event, unidade)}
             onPointerUp={(event) => concluirRmbInimigo(event, unidade)}
           >
-            {/* Visual aterrado exatamente sobre y = -0.45 mantendo a posição lógica em unidadesRef */}
             <group position={[0, Y_SOLO_VISUAL, 0]}>
-              <mesh
-                position={[0, 0.015, 0]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                scale={[perfil.escala[0] * 1.05, perfil.escala[2] * 1.05, 1]}
-                geometry={geos.sombraContato}
-                raycast={semRaycast}
-              >
-                <meshBasicMaterial color="#090d16" transparent opacity={0.28} depthWrite={false} />
-              </mesh>
-
-              {selecionada && (
-                <mesh position={[0, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={geos.anelSel} raycast={semRaycast}>
-                  <meshBasicMaterial color="#facc15" depthWrite={false} />
-                </mesh>
-              )}
-
               <group
                 ref={(node) => {
                   if (node) corposAnimRef.current.set(unidade.id, node)
@@ -211,287 +438,65 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
                 }}
                 scale={[perfil.escala[0], perfil.escala[1], perfil.escala[2]]}
               >
-                {perfil.arquetipo === 'inimigo_dragao' && (
-                  <group position={[0, 0.72, 0]}>
-                    {/* Corpo principal da serpe */}
-                    <mesh geometry={geos.dragaoCorpo} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial
-                        color={perfil.corArmadura}
-                        metalness={perfil.metalness}
-                        roughness={perfil.roughness}
-                      />
-                    </mesh>
-                    {/* Focinho blindado */}
-                    <mesh position={[0, 0.08, 0.85]} geometry={geos.dragaoFocinho} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corDetalhes} roughness={0.45} metalness={0.5} />
-                    </mesh>
-                    {/* Olhos brilhantes */}
-                    <mesh position={[0, 0.2, 1.05]} geometry={geos.visorOlhos} raycast={semRaycast}>
-                      <meshStandardMaterial
-                        color={perfil.corOlhosEmissive}
-                        emissive={perfil.corOlhosEmissive}
-                        emissiveIntensity={perfil.intensidadeOlhos}
-                      />
-                    </mesh>
-                    {/* Chifres e crista dorsal */}
-                    <mesh position={[-0.26, 0.48, 0.35]} rotation={[-0.55, 0, 0.25]} geometry={geos.chifre} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArma} metalness={0.6} roughness={0.3} />
-                    </mesh>
-                    <mesh position={[0.26, 0.48, 0.35]} rotation={[-0.55, 0, -0.25]} geometry={geos.chifre} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArma} metalness={0.6} roughness={0.3} />
-                    </mesh>
-                    <mesh position={[0, 0.48, -0.22]} rotation={[-0.35, 0, 0]} geometry={geos.dragaoCrista} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} roughness={0.35} />
-                    </mesh>
-                    {/* Asas articuladas */}
-                    <group
-                      position={[-0.52, 0.22, 0]}
-                      ref={(node) => {
-                        if (node) asasEsqRef.current.set(unidade.id, node)
-                        else asasEsqRef.current.delete(unidade.id)
-                      }}
-                    >
-                      <mesh position={[-0.55, 0, -0.06]} geometry={geos.dragaoAsa} raycast={semRaycast}>
-                        <meshStandardMaterial color={perfil.corEscudo} roughness={0.6} />
-                      </mesh>
-                      <mesh position={[-0.55, 0.04, 0.26]} geometry={geos.dragaoGarraAsa} raycast={semRaycast}>
-                        <meshStandardMaterial color={perfil.corDetalhes} metalness={0.5} roughness={0.4} />
-                      </mesh>
-                    </group>
-                    <group
-                      position={[0.52, 0.22, 0]}
-                      ref={(node) => {
-                        if (node) asasDirRef.current.set(unidade.id, node)
-                        else asasDirRef.current.delete(unidade.id)
-                      }}
-                    >
-                      <mesh position={[0.55, 0, -0.06]} geometry={geos.dragaoAsa} raycast={semRaycast}>
-                        <meshStandardMaterial color={perfil.corEscudo} roughness={0.6} />
-                      </mesh>
-                      <mesh position={[0.55, 0.04, 0.26]} geometry={geos.dragaoGarraAsa} raycast={semRaycast}>
-                        <meshStandardMaterial color={perfil.corDetalhes} metalness={0.5} roughness={0.4} />
-                      </mesh>
-                    </group>
-                  </group>
-                )}
-
-                {perfil.arquetipo === 'inimigo_saqueador' && (
-                  <>
-                    <mesh position={[0, 0.14, 0]} geometry={geos.botas} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#090d16" roughness={0.7} />
-                    </mesh>
-                    <mesh position={[0, 0.52, 0]} geometry={geos.torso} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmadura} metalness={perfil.metalness} roughness={perfil.roughness} />
-                    </mesh>
-                    {/* Manto carmesim nas costas */}
-                    <mesh position={[0, 0.5, -0.18]} rotation={[0.12, 0, 0]} geometry={geos.manto} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} roughness={0.85} />
-                    </mesh>
-                    {/* Ombreiras pontudas */}
-                    <mesh position={[-0.27, 0.74, 0]} rotation={[0, 0, 0.55]} geometry={geos.ombreiraCone} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} metalness={0.55} roughness={0.38} />
-                    </mesh>
-                    <mesh position={[0.27, 0.74, 0]} rotation={[0, 0, -0.55]} geometry={geos.ombreiraCone} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} metalness={0.55} roughness={0.38} />
-                    </mesh>
-                    <mesh position={[0, 0.92, 0]} geometry={geos.cabeca} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#27272a" roughness={0.7} />
-                    </mesh>
-                    <mesh position={[0, 1.03, 0]} geometry={geos.elmo} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmadura} metalness={0.75} roughness={0.3} />
-                    </mesh>
-                    {/* Visor com olhos incandescentes + par de chifres */}
-                    <mesh position={[0, 0.93, 0.16]} geometry={geos.visorOlhos} raycast={semRaycast}>
-                      <meshStandardMaterial
-                        color={perfil.corOlhosEmissive}
-                        emissive={perfil.corOlhosEmissive}
-                        emissiveIntensity={perfil.intensidadeOlhos}
-                      />
-                    </mesh>
-                    <mesh position={[-0.14, 1.16, 0.02]} rotation={[0.15, 0, 0.35]} geometry={geos.chifre} raycast={semRaycast}>
-                      <meshStandardMaterial color="#cbd5e1" roughness={0.35} />
-                    </mesh>
-                    <mesh position={[0.14, 1.16, 0.02]} rotation={[0.15, 0, -0.35]} geometry={geos.chifre} raycast={semRaycast}>
-                      <meshStandardMaterial color="#cbd5e1" roughness={0.35} />
-                    </mesh>
-                    {/* Broquel cravado na mão esquerda */}
-                    <group position={[-0.31, 0.52, 0.09]} rotation={[0, 0, Math.PI / 2]}>
-                      <mesh geometry={geos.broquel} raycast={rayUnidade}>
-                        <meshStandardMaterial color={perfil.corEscudo} metalness={0.5} roughness={0.45} />
-                      </mesh>
-                      <mesh position={[0, 0.05, 0]} geometry={geos.escudoBoss} raycast={semRaycast}>
-                        <meshStandardMaterial color={perfil.corDetalhes} metalness={0.75} roughness={0.3} />
-                      </mesh>
-                    </group>
-                    {/* Machado de combate largo na mão direita */}
-                    <group position={[0.31, 0.58, 0.14]} rotation={[0.32, 0, -0.15]}>
-                      <mesh geometry={geos.caboArma} raycast={rayUnidade}>
-                        <meshStandardMaterial color="#451a03" roughness={0.85} />
-                      </mesh>
-                      <mesh position={[0, 0.28, 0.1]} geometry={geos.laminaMachado} raycast={rayUnidade}>
-                        <meshStandardMaterial color={perfil.corArma} metalness={0.85} roughness={0.22} />
-                      </mesh>
-                    </group>
-                  </>
-                )}
-
-                {perfil.arquetipo === 'inimigo_ariete' && (
-                  <>
-                    <mesh position={[0, 0.15, 0]} geometry={geos.botas} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#090d16" roughness={0.6} />
-                    </mesh>
-                    <mesh position={[0, 0.56, 0]} geometry={geos.peitoralLargo} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmadura} metalness={perfil.metalness} roughness={perfil.roughness} />
-                    </mesh>
-                    {/* Núcleo de fornalha incandescente no peito */}
-                    <mesh position={[0, 0.58, 0.22]} geometry={geos.nucleoFornalha} raycast={semRaycast}>
-                      <meshStandardMaterial
-                        color="#fb923c"
-                        emissive={perfil.corOlhosEmissive}
-                        emissiveIntensity={perfil.intensidadeOlhos}
-                      />
-                    </mesh>
-                    <mesh position={[-0.36, 0.84, 0]} rotation={[0, 0, 0.45]} geometry={geos.ombreiraCone} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} metalness={0.7} roughness={0.35} />
-                    </mesh>
-                    <mesh position={[0.36, 0.84, 0]} rotation={[0, 0, -0.45]} geometry={geos.ombreiraCone} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} metalness={0.7} roughness={0.35} />
-                    </mesh>
-                    <mesh position={[0, 0.99, 0]} geometry={geos.cabeca} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#18181b" roughness={0.6} />
-                    </mesh>
-                    <mesh position={[0, 1.09, 0]} geometry={geos.elmo} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} metalness={0.75} roughness={0.28} />
-                    </mesh>
-                    <mesh position={[0, 1.0, 0.17]} geometry={geos.visorOlhos} raycast={semRaycast}>
-                      <meshStandardMaterial
-                        color={perfil.corOlhosEmissive}
-                        emissive={perfil.corOlhosEmissive}
-                        emissiveIntensity={perfil.intensidadeOlhos}
-                      />
-                    </mesh>
-                    <mesh position={[-0.17, 1.24, 0]} rotation={[0, 0, 0.45]} geometry={geos.chifre} raycast={semRaycast}>
-                      <meshStandardMaterial color="#f59e0b" metalness={0.5} roughness={0.35} />
-                    </mesh>
-                    <mesh position={[0.17, 1.24, 0]} rotation={[0, 0, -0.45]} geometry={geos.chifre} raycast={semRaycast}>
-                      <meshStandardMaterial color="#f59e0b" metalness={0.5} roughness={0.35} />
-                    </mesh>
-                    {/* Escudo-torre maciço */}
-                    <mesh position={[-0.4, 0.56, 0.12]} geometry={geos.escudoTorre} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corEscudo} metalness={0.65} roughness={0.38} />
-                    </mesh>
-                    {/* Martelo de cerco */}
-                    <group position={[0.4, 0.64, 0.15]} rotation={[0.25, 0, -0.1]}>
-                      <mesh geometry={geos.caboArma} raycast={rayUnidade}>
-                        <meshStandardMaterial color="#27272a" metalness={0.6} roughness={0.4} />
-                      </mesh>
-                      <mesh position={[0, 0.34, 0]} geometry={geos.cabecaMartelo} raycast={rayUnidade}>
-                        <meshStandardMaterial color={perfil.corArma} metalness={0.8} roughness={0.28} />
-                      </mesh>
-                    </group>
-                  </>
-                )}
-
-                {perfil.arquetipo === 'inimigo_batedor' && (
-                  <>
-                    <mesh position={[0, 0.14, 0]} geometry={geos.botas} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#090d16" roughness={0.7} />
-                    </mesh>
-                    <mesh position={[0, 0.5, 0]} geometry={geos.torso} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmadura} roughness={perfil.roughness} />
-                    </mesh>
-                    <mesh position={[0, 0.5, -0.17]} rotation={[0.18, 0, 0]} geometry={geos.manto} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} roughness={0.85} />
-                    </mesh>
-                    <mesh position={[0, 0.9, 0]} geometry={geos.cabeca} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#18181b" roughness={0.75} />
-                    </mesh>
-                    <mesh position={[0, 1.04, -0.02]} rotation={[-0.18, 0, 0]} geometry={geos.capuz} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} roughness={0.8} />
-                    </mesh>
-                    <mesh position={[0, 0.9, 0.16]} geometry={geos.visorOlhos} raycast={semRaycast}>
-                      <meshStandardMaterial
-                        color={perfil.corOlhosEmissive}
-                        emissive={perfil.corOlhosEmissive}
-                        emissiveIntensity={perfil.intensidadeOlhos}
-                      />
-                    </mesh>
-                    <mesh position={[0.28, 0.56, 0.12]} rotation={[0.45, 0, 0]} geometry={geos.espada} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArma} metalness={0.7} roughness={0.3} />
-                    </mesh>
-                  </>
-                )}
-
-                {perfil.arquetipo === 'aliado_cavaleiro' && (
-                  <>
-                    <mesh position={[0, 0.14, 0]} geometry={geos.botas} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#0f172a" roughness={0.65} />
-                    </mesh>
-                    <mesh position={[0, 0.5, 0]} geometry={geos.torso} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmadura} metalness={perfil.metalness} roughness={perfil.roughness} />
-                    </mesh>
-                    <mesh position={[0, 0.9, 0]} geometry={geos.cabeca} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color="#fde68a" roughness={0.55} />
-                    </mesh>
-                    <mesh position={[0, 1.01, 0]} geometry={geos.elmo} castShadow={sombrasAtivas} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArmaduraSecundaria} metalness={0.65} roughness={0.32} />
-                    </mesh>
-                    <mesh position={[0, 1.15, -0.02]} geometry={geos.penacho} raycast={semRaycast}>
-                      <meshStandardMaterial color={perfil.corDetalhes} roughness={0.45} />
-                    </mesh>
-                    <group position={[-0.27, 0.5, 0.06]}>
-                      <mesh geometry={geos.escudoCavaleiro} raycast={rayUnidade}>
-                        <meshStandardMaterial color={perfil.corEscudo} metalness={0.4} roughness={0.45} />
-                      </mesh>
-                      <mesh position={[-0.04, 0, 0]} geometry={geos.escudoBoss} raycast={semRaycast}>
-                        <meshStandardMaterial color="#facc15" metalness={0.7} roughness={0.25} />
-                      </mesh>
-                    </group>
-                    <mesh position={[0.27, 0.58, 0.09]} rotation={[0.18, 0, 0]} geometry={geos.espada} raycast={rayUnidade}>
-                      <meshStandardMaterial color={perfil.corArma} metalness={0.82} roughness={0.22} />
-                    </mesh>
-                  </>
-                )}
-              </group>
-
-              {perfil.arquetipo !== 'inimigo_dragao' &&
-                haloDoInimigo({
-                  lado: unidade.lado,
-                  hp: unidade.hp,
-                  visivel: unidade.lado === 'inimigo' && inimigoVisivel(sim.current, unidade),
-                  temSelecao: haloAtivo,
-                  modoDeBlocos: bloquearClique,
-                }) && (
-                  // Halo de clique (pedido do usuário, 22/11): um cilindro INVISÍVEL maior que o corpo (raio `RAIO_DO_HALO`, altura do soldado). `opacity={0}` e NÃO `visible={false}`: o three.js não faz
-                  // raycast em malha invisível. Fica no mesmo grupo e herda `onClick`/`onPointerDown`/`onPointerUp`: nenhuma ordem nova, só um alvo maior.
-                  <mesh position={[0, 0.9, 0]} userData={{ halo: true }} raycast={rayUnidade}>
-                    <cylinderGeometry args={[RAIO_DO_HALO, RAIO_DO_HALO, 1.8, 12]} />
-                    <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+                <group position={[0, 0.72, 0]}>
+                  <mesh geometry={geos.dragaoCorpo} castShadow={sombrasAtivas} raycast={rayUnidade}>
+                    <meshStandardMaterial color={perfil.corArmadura} metalness={perfil.metalness} roughness={perfil.roughness} />
                   </mesh>
-                )}
+                  <mesh position={[0, 0.08, 0.85]} geometry={geos.dragaoFocinho} castShadow={sombrasAtivas} raycast={rayUnidade}>
+                    <meshStandardMaterial color={perfil.corDetalhes} roughness={0.45} metalness={0.5} />
+                  </mesh>
+                  <mesh position={[0, 0.2, 1.05]} geometry={geos.visorOlhos} raycast={semRaycast}>
+                    <meshStandardMaterial
+                      color={perfil.corOlhosEmissive}
+                      emissive={perfil.corOlhosEmissive}
+                      emissiveIntensity={perfil.intensidadeOlhos}
+                    />
+                  </mesh>
+                  <mesh position={[-0.26, 0.48, 0.35]} rotation={[-0.55, 0, 0.25]} geometry={geos.chifre} raycast={semRaycast}>
+                    <meshStandardMaterial color={perfil.corArma} metalness={0.6} roughness={0.3} />
+                  </mesh>
+                  <mesh position={[0.26, 0.48, 0.35]} rotation={[-0.55, 0, -0.25]} geometry={geos.chifre} raycast={semRaycast}>
+                    <meshStandardMaterial color={perfil.corArma} metalness={0.6} roughness={0.3} />
+                  </mesh>
+                  <mesh position={[0, 0.48, -0.22]} rotation={[-0.35, 0, 0]} geometry={geos.dragaoCrista} raycast={semRaycast}>
+                    <meshStandardMaterial color={perfil.corArmaduraSecundaria} roughness={0.35} />
+                  </mesh>
+                  <group
+                    position={[-0.52, 0.22, 0]}
+                    ref={(node) => {
+                      if (node) asasEsqRef.current.set(unidade.id, node)
+                      else asasEsqRef.current.delete(unidade.id)
+                    }}
+                  >
+                    <mesh position={[-0.55, 0, -0.06]} geometry={geos.dragaoAsa} raycast={semRaycast}>
+                      <meshStandardMaterial color={perfil.corEscudo} roughness={0.6} />
+                    </mesh>
+                    <mesh position={[-0.55, 0.04, 0.26]} geometry={geos.dragaoGarraAsa} raycast={semRaycast}>
+                      <meshStandardMaterial color={perfil.corDetalhes} metalness={0.5} roughness={0.4} />
+                    </mesh>
+                  </group>
+                  <group
+                    position={[0.52, 0.22, 0]}
+                    ref={(node) => {
+                      if (node) asasDirRef.current.set(unidade.id, node)
+                      else asasDirRef.current.delete(unidade.id)
+                    }}
+                  >
+                    <mesh position={[0.55, 0, -0.06]} geometry={geos.dragaoAsa} raycast={semRaycast}>
+                      <meshStandardMaterial color={perfil.corEscudo} roughness={0.6} />
+                    </mesh>
+                    <mesh position={[0.55, 0.04, 0.26]} geometry={geos.dragaoGarraAsa} raycast={semRaycast}>
+                      <meshStandardMaterial color={perfil.corDetalhes} metalness={0.5} roughness={0.4} />
+                    </mesh>
+                  </group>
+                </group>
+              </group>
             </group>
           </group>
         )
       })}
-      {unidades
-        .filter((unidade) => unidade.lado === 'inimigo')
-        .map((unidade) => (
-          <mesh
-            key={`anel-${unidade.id}`}
-            ref={(node) => {
-              if (node) aneisRef.current.set(unidade.id, node)
-              else aneisRef.current.delete(unidade.id)
-            }}
-            visible={false}
-            rotation={[-Math.PI / 2, 0, 0]}
-            raycast={semRaycast}
-          >
-            <ringGeometry args={[0.65, 0.83, 24]} />
-            <meshBasicMaterial color="#facc15" depthWrite={false} />
-          </mesh>
-        ))}
-      {unidades
-        .filter((unidade) => unidade.papel === 'dragao' && inimigoVisivel(sim.current, unidade))
+      {dragoes
+        .filter((unidade) => inimigoVisivel(sim.current, unidade))
         .flatMap((unidade) =>
           unidade.segmentos.map((numero, indice) => (
             <mesh

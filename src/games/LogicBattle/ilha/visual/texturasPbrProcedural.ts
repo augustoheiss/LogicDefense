@@ -1,5 +1,15 @@
-import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace } from 'three'
+import {
+  CanvasTexture,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  NoColorSpace,
+  RepeatWrapping,
+  SRGBColorSpace,
+  Texture,
+} from 'three'
 import type { BiomaId } from '../biomaRecursos'
+import { SPEC_QUALIDADE, type QualidadeEfetiva } from './qualidadeGrafica'
+import type { QualidadeGraficaPreset } from '../partidaPolicies'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
 import type { RecursoDescartavel } from './recursoGpuPool'
 
@@ -534,3 +544,98 @@ export class ProceduralBiomaTextureProvider implements BiomaTextureProvider {
 }
 
 export const defaultBiomaTextureProvider: BiomaTextureProvider = new ProceduralBiomaTextureProvider()
+
+export interface OpcoesPackExternoUltra {
+  readonly baseUrl?: string
+  readonly timeoutMs?: number
+}
+
+export interface PackExternoUltraSolo extends RecursoDescartavel {
+  readonly bioma: BiomaId
+  readonly resolucao: 1024
+  readonly map: Texture
+  readonly normalMap: Texture
+  readonly roughnessMap: Texture
+}
+
+/**
+ * Loader opcional sob demanda para texturas 1024px (.webp) externas em modo Ultra.
+ * Retorna null com fallback silencioso quando o preset não suporta Ultra, em ambiente headless/Node
+ * ou quando os arquivos opcionais não estiverem hospedados.
+ */
+export async function carregarPackExternoUltra(
+  bioma: BiomaId,
+  preset: QualidadeGraficaPreset | QualidadeEfetiva,
+  opcoes?: OpcoesPackExternoUltra,
+): Promise<PackExternoUltraSolo | null> {
+  if (preset === 'auto' || !SPEC_QUALIDADE[preset].suportaPackExternoUltra) return null
+  if (typeof window === 'undefined' || typeof fetch !== 'function' || typeof Image === 'undefined') {
+    return null
+  }
+  const baseUrl = (opcoes?.baseUrl ?? '/textures/ultra').replace(/\/+$/, '')
+  const timeoutMs = opcoes?.timeoutMs ?? 2500
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+  try {
+    const urls = {
+      albedo: `${baseUrl}/${bioma}/albedo.webp`,
+      normal: `${baseUrl}/${bioma}/normal.webp`,
+      roughness: `${baseUrl}/${bioma}/roughness.webp`,
+    }
+    const resp = await fetch(urls.albedo, {
+      method: 'HEAD',
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+    if (!resp.ok) return null
+    const carregadas = await Promise.all([
+      carregarTexturaWeb(urls.albedo, true),
+      carregarTexturaWeb(urls.normal, false),
+      carregarTexturaWeb(urls.roughness, false),
+    ])
+    const [albedo, normalMap, roughnessMap] = carregadas
+    if (!albedo || !normalMap || !roughnessMap) {
+      albedo?.dispose()
+      normalMap?.dispose()
+      roughnessMap?.dispose()
+      return null
+    }
+    return {
+      bioma,
+      resolucao: 1024,
+      map: albedo,
+      normalMap,
+      roughnessMap,
+      dispose: () => {
+        albedo.dispose()
+        normalMap.dispose()
+        roughnessMap.dispose()
+      },
+    }
+  } catch {
+    return null
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+function carregarTexturaWeb(url: string, srgb: boolean): Promise<Texture | null> {
+  return new Promise((resolve) => {
+    try {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const tex = new Texture(img)
+        tex.wrapS = RepeatWrapping
+        tex.wrapT = RepeatWrapping
+        tex.colorSpace = srgb ? SRGBColorSpace : NoColorSpace
+        tex.anisotropy = 4
+        tex.needsUpdate = true
+        resolve(tex)
+      }
+      img.onerror = () => resolve(null)
+      img.src = url
+    } catch {
+      resolve(null)
+    }
+  })
+}

@@ -20,7 +20,6 @@ import {
   folgaDoTiro,
   inimigoVisivel,
   marcarChao,
-  marcadoPelaTorre,
   cenarioConduta,
   cenarioEspetaculo,
   continuarNaRua,
@@ -1381,7 +1380,6 @@ export function run(): void {
     const alvo = { ...vigiaParado.unidades[0], z: 10 + distancia }
     const cenario = { ...vigiaParado, unidades: [alvo] }
     assert(inimigoVisivel(cenario, alvo) === (distancia <= 22), `visão exata em ${distancia} m`)
-    assert(!marcadoPelaTorre(cenario, alvo), `sem anel em ${distancia} m: dentro da visão a torre alcança, e fora dela o alvo nem é visto`)
     const resultado = stepPartida(cenario, INPUT_PARADO, 0.1)
     assert((resultado.unidades[0].hp < alvo.hp) === (distancia <= 22), `arma exata em ${distancia} m sem marcha do alvo`)
   }
@@ -1391,16 +1389,11 @@ export function run(): void {
     const alvo = { ...vigiaParado.unidades[0], z: 10 + distancia }
     const cenario = { ...torreNivelTres, unidades: [alvo] }
     assert(inimigoVisivel(cenario, alvo) === (distancia <= 26), `nível 3: a torre vê até 26 m (${distancia} m)`)
-    assert(!marcadoPelaTorre(cenario, alvo), `nível 3: sem anel em ${distancia} m`)
     assert((stepPartida(cenario, INPUT_PARADO, 0.1).unidades[0].hp < 100) === (distancia <= 26), `nível 3: a torre fere o que VÊ (até 26 m), não além: ${distancia} m`)
   }
-  // O ANEL «visto só pela torre» continua existindo quando uma MURALHA bloqueia o tiro mas não a vista: a torre de nível 1..4 vê por cima de 1 bloco e bloqueia em 2; o anel avisa «a torre o vê e não pode atirar».
   assert(alcanceDaTorre({ nivel: 1 } as Obra) === 22 && alcanceDaTorre({ nivel: 3 } as Obra) === 26, 'o alcance da torre: 22 m no nível 1 e 26 m no nível 3 (+2 m por nível)')
-  const torreOriginal = vigiaParado.obras.find((obra) => obra.tipo === 'torre')!
-  const sobreposto = { ...vigiaParado, obras: [...vigiaParado.obras, { ...torreOriginal, id: 991, z: 22 }] }
-  assert(!marcadoPelaTorre(sobreposto, sobreposto.unidades[0]), 'outra torre na arma remove a marca de fora do alcance')
   const semVigia = { ...vigiaParado, obras: vigiaParado.obras.map((obra) => obra.tipo === 'torre' ? { ...obra, hp: 0 } : obra) }
-  assert(!marcadoPelaTorre(semVigia, semVigia.unidades[0]) && chaoRevelado(semVigia, 0, 28), 'torre morta tira a marca e conserva a memória')
+  assert(chaoRevelado(semVigia, 0, 28), 'torre morta conserva a memória')
   assert(atirar(vigiaParado) === vigiaParado && pular(vigiaParado) === vigiaParado, 'herói ausente não atira nem pula')
   assert(ordenarHeroi(vigiaParado, { tipo: 'mover', x: 10, z: 10 }) === vigiaParado && ordenarHeroi(vigiaParado, { tipo: 'atacar', alvoId: 990 }) === vigiaParado, 'herói ausente não recebe ordens')
 

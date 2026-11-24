@@ -12,6 +12,13 @@ export interface CameraImperioState {
   readonly x: number
   readonly z: number
   readonly yaw: number
+  readonly zoom?: number
+}
+
+export interface RegistroCliqueDireitoImperio {
+  readonly tempoMs: number
+  readonly clientX: number
+  readonly clientY: number
 }
 
 export interface EntradaCameraImperio {
@@ -37,7 +44,17 @@ export const CAMERA_IMPERIO = {
   passoCliqueRad: Math.PI / 4,
   margemBordaPx: 28,
   limiteMapa: 56,
+  zoomMin: 0.55,
+  zoomMax: 1.8,
+  zoomPassoWheel: 0.1,
+  duploCliqueRmbMs: 280,
+  duploCliqueRmbPx: 8,
 } as const
+
+export function limitarZoomCameraImperio(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1
+  return Math.max(CAMERA_IMPERIO.zoomMin, Math.min(CAMERA_IMPERIO.zoomMax, zoom))
+}
 
 export function normalizarYaw(yaw: number): number {
   return Math.atan2(Math.sin(yaw), Math.cos(yaw))
@@ -52,10 +69,11 @@ export function posicaoCameraImperio(cam: CameraImperioState): {
   readonly y: number
   readonly z: number
 } {
+  const z = limitarZoomCameraImperio(cam.zoom ?? 1)
   return {
-    x: cam.x + Math.sin(cam.yaw) * CAMERA_IMPERIO.distancia,
-    y: CAMERA_IMPERIO.altura,
-    z: cam.z + Math.cos(cam.yaw) * CAMERA_IMPERIO.distancia,
+    x: cam.x + Math.sin(cam.yaw) * CAMERA_IMPERIO.distancia * z,
+    y: CAMERA_IMPERIO.altura * z,
+    z: cam.z + Math.cos(cam.yaw) * CAMERA_IMPERIO.distancia * z,
   }
 }
 
@@ -74,6 +92,7 @@ export function passoCameraImperio(
     x: limitarCoordMapa(cam.x + (frenteX * entrada.frente + direitaX * entrada.lado) * passo),
     z: limitarCoordMapa(cam.z + (frenteZ * entrada.frente + direitaZ * entrada.lado) * passo),
     yaw,
+    ...(cam.zoom !== undefined ? { zoom: cam.zoom } : {}),
   }
 }
 
@@ -118,6 +137,42 @@ export function girarCameraImperioPorArrasto(cam: CameraImperioState, deltaX: nu
     ...cam,
     yaw: normalizarYaw(cam.yaw - deltaX * CAMERA_IMPERIO.sensibilidadeDragRadPorPx),
   }
+}
+
+export function aplicarZoomCameraImperio(cam: CameraImperioState, deltaY: number): CameraImperioState {
+  if (!Number.isFinite(deltaY) || deltaY === 0) return cam
+  const direcao = deltaY > 0 ? 1 : -1
+  const atual = limitarZoomCameraImperio(cam.zoom ?? 1)
+  const proximo = limitarZoomCameraImperio(Math.round((atual + direcao * CAMERA_IMPERIO.zoomPassoWheel) * 100) / 100)
+  if (proximo === atual && cam.zoom === proximo) return cam
+  return { ...cam, zoom: proximo }
+}
+
+export function resetarCameraImperio(cam: CameraImperioState): CameraImperioState {
+  return {
+    x: cam.x,
+    z: cam.z,
+    yaw: 0,
+    zoom: 1,
+  }
+}
+
+/**
+ * Resolve duplo clique com botão direito no modo Império (< 280ms e <= 8px):
+ * o 2º clique reseta a câmera e suprime ordem de movimento espúria.
+ */
+export function avaliarCliqueDireitoImperio(
+  anterior: RegistroCliqueDireitoImperio | null,
+  atual: RegistroCliqueDireitoImperio,
+): { readonly acao: 'resetar_camera' | 'ordenar'; readonly proximoRegistro: RegistroCliqueDireitoImperio | null } {
+  if (
+    anterior &&
+    atual.tempoMs - anterior.tempoMs <= CAMERA_IMPERIO.duploCliqueRmbMs &&
+    Math.hypot(atual.clientX - anterior.clientX, atual.clientY - anterior.clientY) <= CAMERA_IMPERIO.duploCliqueRmbPx
+  ) {
+    return { acao: 'resetar_camera', proximoRegistro: null }
+  }
+  return { acao: 'ordenar', proximoRegistro: atual }
 }
 
 /**
