@@ -1,4 +1,7 @@
 import React from 'react'
+import { FATOR_POR_NIVEL } from './evolucaoObra'
+
+const FATOR_EVOLUCAO_TXT = `${FATOR_POR_NIVEL.toString().replace('.', ',')}×`
 
 export type IconeId =
   | 'nucleo'
@@ -82,8 +85,8 @@ export const META_INTENCOES: Readonly<Record<IconeId, MetaIntencao>> = {
   evoluir: {
     id: 'evoluir',
     titulo: 'Evoluir Construção (Nv. 1 → 5)',
-    resumo: 'Cada nível rende 1,5× o anterior: mais vida, e conforme a obra: torre com mais dano e alcance, serraria e mina produzindo mais, tropa recrutada mais forte. No Nível 5 libera interior caminhável e edição de blocos!',
-    detalhe: 'O preço sobe 1,5× a cada nível (licenças, ou madeiras e ouros) e aparece no painel da obra.',
+    resumo: `Cada nível rende ${FATOR_EVOLUCAO_TXT} o anterior: mais vida, e conforme a obra: torre com mais dano e alcance, serraria e mina produzindo mais, tropa recrutada mais forte. No Nível 5 libera interior caminhável e edição de blocos!`,
+    detalhe: `O preço sobe ${FATOR_EVOLUCAO_TXT} a cada nível (licenças, ou madeiras e ouros) e aparece no painel da obra.`,
   },
   tropa: {
     id: 'tropa',

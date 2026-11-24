@@ -2,7 +2,7 @@ import { Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Group, InstancedMesh, Mesh, MeshLambertMaterial } from 'three'
-import { ACESFilmicToneMapping, Object3D, Vector2 } from 'three'
+import { ACESFilmicToneMapping, Object3D, Vector2, Vector3 } from 'three'
 import { getRecentMathSignaturesSnapshot, hydrateSeenMathSignatures, resetSeenMathMemory } from './infiniteMathEngine'
 import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
 import { nomeDoBioma } from './visual/biomaVisualCatalog'
@@ -37,7 +37,23 @@ import {
 import { meiaLarguraNv5 } from './blocosNv5Blueprints'
 import { validarAdicionarBlocoObraLivre } from './obraBlocosLivres'
 import { IndiceBlocoMundo, IndiceVoxelNv5, ObraArquiteturaMesh } from './ObrasArquiteturaCena'
-import { GrauConta, OBSTACULOS, Olhar, PARTIDA, PecaId, type QualidadeGraficaPreset } from './partidaPolicies'
+import {
+  type ClasseHeroi,
+  GrauConta,
+  limiteHeroisPorNivelNucleo,
+  OBSTACULOS,
+  custoUpgradeEra,
+  Olhar,
+  PARTIDA,
+  PecaId,
+  SPEC_HEROI,
+  SPEC_TROPA_ALIADA,
+  SPEC_UPGRADE_ERA,
+  type QualidadeGraficaPreset,
+  type TipoFormacao,
+  type TipoTropaAliada,
+  type TipoUpgradeEra,
+} from './partidaPolicies'
 import {
   abrirAltar,
   alcanceDoTiro,
@@ -47,28 +63,38 @@ import {
   aplicarConta,
   atirar,
   calcularReembolsoVenda,
+  cancelarItemFila,
   CELULAS_DO_DISCO,
   celulaColideObraExistente,
   chaoRevelado,
   cobertoAgora,
+  comprarUpgradeEra,
   consagrarEstruturaManual,
   construirLinhaBlocos,
   continuarNaRua,
-  criarTropa,
+  definirFormacao,
   definirOlhar,
+  definirRallyPoint,
   editarBlocoMundo,
   editarBlocoObra,
   editarBlocoObraLivre,
+  encontrarConstrutorOcioso,
+  enfileirarHeroi,
+  enfileirarTropa,
   evoluir,
   fecharAltar,
   iniciarObra,
   inimigoVisivel,
-  marcadoPelaTorre,
+  listarHerois,
+  maiorNivelNucleoNosso,
   mira,
   moverObra,
   obraEmConstrucao,
   ordenar,
+  ordenarConstrutorColetar,
+  ordenarConstrutorReparar,
   ordenarHeroi,
+  pararUnidades,
   planejarLinhaNoEstado,
   podeConsagrarEm,
   podeEvoluir,
@@ -82,6 +108,7 @@ import {
   selecionarAoClicarChaoVazio,
   selecionarAoClicarHeroi,
   selecionarAoClicarUnidade,
+  selecionarHeroiAtivo,
   selecionarPorRetanguloEstado,
   folgaDoTiro,
   venderObra,
@@ -106,11 +133,14 @@ import {
   estadoCena,
   estadoCorpo,
   fichaEm,
+  nucleosVivosNoAtlas,
   resumoAtlas,
   resumoCartograficoAtlas,
   stepAtlas,
   voltarAoCorpo,
 } from './atlas'
+import { ModalRessurreicao } from './ModalRessurreicao'
+import { escolherNucleoRessurreicao, ressuscitarHeroiNoNucleo } from './ressurreicaoHeroi'
 import { IconeId, IconeSvg, META_INTENCOES } from './ilhaIcones'
 import { armazenamentoDoNavegador, carregarAssinaturas, salvarAssinaturas } from './memoriaDeContas'
 import { fatorDoBuff, textoDaContaComErros } from './buffPorErro'
@@ -163,6 +193,8 @@ import { MundoSandboxCena } from './MundoSandboxCena'
 import { custoDeEvoluir, descricaoDaEvolucao } from './evolucaoObra'
 import { BordaDoMapa } from './BordaDoMapa'
 import {
+  aplicarZoomCameraImperio,
+  avaliarCliqueDireitoImperio,
   CAMERA_IMPERIO,
   combinarEntradaPan,
   entradaBordaCameraImperio,
@@ -170,13 +202,28 @@ import {
   normalizarYaw,
   passoCameraImperio,
   posicaoCameraImperio,
+  resetarCameraImperio,
   yawDaBussolaNoImperio,
   type CameraImperioState,
   type CursorBordaEntrada,
+  type RegistroCliqueDireitoImperio,
 } from './cameraImperio'
+import {
+  derivarContextoHud,
+  recuperarGrupoControle,
+  salvarGrupoControle,
+  selecionarMesmoTipoNoViewport,
+  type GruposDeControle,
+} from './hudContextual'
+import {
+  alvoPossuidoVivo,
+  entrarEmPosseTropa,
+  sairDaPosse,
+  tituloUnidadePossuida,
+} from './posseDaTropa'
 
 const SELETOR_HUD_SEM_BORDA =
-  '.ilha-army, button, .ilha-modal, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-construcoes, .ilha-ferramentas, .ilha-painel-obra, .ilha-compass, .ilha-conta-atalhos, .ilha-imperio-rotacao, .ilha-enemies, .ilha-selecao-barra'
+  '.ilha-army, button, .ilha-modal, .ilha-modal-ressurreicao, .ilha-banner-ressurreicao, .ilha-herois-barra, .ilha-posse-banner, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-construcoes, .ilha-ferramentas, .ilha-barra-contextual, .ilha-painel-obra, .ilha-compass, .ilha-conta-atalhos, .ilha-imperio-rotacao, .ilha-enemies, .ilha-selecao-barra'
 import { destinoDoClique } from './destinoDoClique'
 import { PainelDeConstrucoes } from './PainelDeConstrucoes'
 import { raycastCondicional, semRaycast } from './raycastCena'
@@ -265,6 +312,46 @@ function olharNome(olhar: PartidaState['olhar']): string {
   return 'Terceira'
 }
 
+const SIGLA_BIOMA: Record<string, string> = {
+  clareira: 'CL',
+  bosque: 'BQ',
+  serra_ouro: 'SO',
+  basalto_brasa: 'BB',
+  tundra_cristal: 'TC',
+}
+
+function siglaDoBioma(bioma: string): string {
+  return SIGLA_BIOMA[bioma] ?? bioma.slice(0, 2).toUpperCase()
+}
+
+function tocarBipAlertaAtaque() {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    if (ctx.state === 'suspended') {
+      void ctx.close()
+      return
+    }
+    const osc = ctx.createOscillator()
+    const ganho = ctx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(520, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(780, ctx.currentTime + 0.09)
+    ganho.gain.setValueAtTime(0.05, ctx.currentTime)
+    ganho.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14)
+    osc.connect(ganho)
+    ganho.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.15)
+    osc.onended = () => {
+      void ctx.close()
+    }
+  } catch {
+    // Áudio bloqueado em headless ou sem suporte: ignora silenciosamente.
+  }
+}
+
 type Controle = {
   forward: boolean
   back: boolean
@@ -287,6 +374,8 @@ function Cena(props: {
   onBussolaImperio: (letra: string) => void
   tool: React.MutableRefObject<PecaId | null>
   moverObraIdRef: React.MutableRefObject<number | null>
+  rallyObraIdRef: React.MutableRefObject<number | null>
+  painelObraId: number | null
   dragou: React.MutableRefObject<boolean>
   onHud: (state: PartidaState) => void
   onGround: (x: number, z: number) => void
@@ -296,6 +385,7 @@ function Cena(props: {
   onRect: (x0: number, z0: number, x1: number, z1: number, shiftKey?: boolean) => void
   onCaixa: (caixa: { x: number; y: number; x2: number; y2: number } | null) => void
   onHeroi: (shiftKey?: boolean) => void
+  onSelecionarHeroiSecundario: (heroiId: number) => void
   heroiEscolhido: boolean
   selectedIds: readonly number[]
   atlas: React.MutableRefObject<ReturnType<typeof criarAtlas>>
@@ -306,7 +396,7 @@ function Cena(props: {
   obraBlocoAlvoIdRef: React.MutableRefObject<number | null>
   /** `pointerId` do clique que caiu numa obra nossa: o container consome e não atira (A2b). */
   ponteiroDaObraRef: React.MutableRefObject<number | null>
-materialBlocoRef: React.MutableRefObject<BlocoMaterial>
+  materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   modoLinhaRef: React.MutableRefObject<boolean>
   alturaLinhaRef: React.MutableRefObject<1 | 2 | 3>
   modoConsagrarRef: React.MutableRefObject<PecaId | null>
@@ -325,6 +415,8 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   onPedirSubsolo: () => void
   specQualidade: SpecQualidadeGrafica
   onAutoQualidadeFrame: (emaFrameMs: number, dt: number) => void
+  projetarNdcRef: React.MutableRefObject<(x: number, z: number) => { x: number; y: number; z: number } | null>
+  onResetCameraImperio: () => void
 }) {
   const avatar = useRef<Group>(null)
   const flash = useRef<Mesh>(null)
@@ -347,11 +439,11 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     if (nuvem.current) nuvem.current.count = 0
   }, [])
   const unidades = useRef(new Map<number, Group>())
-  const aneis = useRef(new Map<number, Mesh>())
   const corpos = useRef(new Map<string, Mesh>())
   const arrasto = useRef<{ x: number; y: number; pointerId: number } | null>(null)
   const linhaDrag = useRef<{ x0: number; z0: number; pointerId: number } | null>(null)
   const rmbDrag = useRef<{ x: number; y: number; worldX: number; worldZ: number; pointerId: number } | null>(null)
+  const rmbCliqueReg = useRef<RegistroCliqueDireitoImperio | null>(null)
   const ultimoBoxSelectMs = useRef(0)
 
   // O ponteiro tocou a obra `obraId`. Se o clique vai abrir o painel dela, marca o ponteiro como «da obra»: o container
@@ -381,6 +473,11 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     )
   }
   const { camera, gl, raycaster } = useThree()
+  props.projetarNdcRef.current = (x: number, z: number) => {
+    camera.updateMatrixWorld()
+    const v = new Vector3(x, 0.8, z).project(camera)
+    return { x: v.x, y: v.y, z: v.z }
+  }
 
   const soloNoNdc = (ndcX: number, ndcY: number, planoY = 0) => {
     camera.updateMatrixWorld()
@@ -600,8 +697,8 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         const tPlanoHeroi = Math.max(
           0,
           (heroiEye.x - camera.position.x) * raycaster.ray.direction.x +
-            (heroiEye.y - camera.position.y) * raycaster.ray.direction.y +
-            (heroiEye.z - camera.position.z) * raycaster.ray.direction.z,
+          (heroiEye.y - camera.position.y) * raycaster.ray.direction.y +
+          (heroiEye.z - camera.position.z) * raycaster.ray.direction.z,
         )
         if (chao.t < tPlanoHeroi - 0.15) return null
         if (Math.hypot(chao.x - heroiEye.x, 0 - heroiEye.y, chao.z - heroiEye.z) > PARTIDA.alcanceEdicaoBlocos) {
@@ -671,6 +768,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     onGroundOrder: props.onGroundOrder,
     onPreviewLinha: props.onPreviewLinha,
     onConcluirLinha: props.onConcluirLinha,
+    onResetCameraImperio: props.onResetCameraImperio,
     soloNoChao,
   })
   callbacksCenaRef.current = {
@@ -679,6 +777,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     onGroundOrder: props.onGroundOrder,
     onPreviewLinha: props.onPreviewLinha,
     onConcluirLinha: props.onConcluirLinha,
+    onResetCameraImperio: props.onResetCameraImperio,
     soloNoChao,
   }
   useEffect(() => {
@@ -732,6 +831,17 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         ) {
           const dist = Math.hypot(event.clientX - infoRmb.x, event.clientY - infoRmb.y)
           if (dist <= PARTIDA.limiarArrastoRmbPx) {
+            const resRmb = avaliarCliqueDireitoImperio(rmbCliqueReg.current, {
+              tempoMs: performance.now(),
+              clientX: event.clientX,
+              clientY: event.clientY,
+            })
+            rmbCliqueReg.current = resRmb.proximoRegistro
+            if (resRmb.acao === 'resetar_camera') {
+              props.cam.current = resetarCameraImperio(props.cam.current)
+              callbacksCenaRef.current.onResetCameraImperio()
+              return
+            }
             const p =
               callbacksCenaRef.current.soloNoChao(event.clientX, event.clientY) ?? {
                 x: infoRmb.worldX,
@@ -784,33 +894,35 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
     )
     props.sim.current = estadoCena(props.atlas.current)
     const state = props.sim.current
-    const olharDesenho = state.semCorpo ? 'imperio' : state.olhar
+    const olharDesenho = state.posse ? state.posse.modo : state.semCorpo ? 'imperio' : state.olhar
     if (avatar.current) {
       avatar.current.position.set(state.heroi.x, 0.9 + state.heroi.y, state.heroi.z)
       yawDoHeroi(avatar.current, { yaw: state.heroi.yaw })
       avatar.current.visible =
         !state.semCorpo &&
-        (olharDesenho === 'imperio' || (olharDesenho === 'terceira' && distanciaTerceira(state.heroi.pitch) > 2.2))
+        state.heroi.army > 0 &&
+        (Boolean(state.posse) ||
+          olharDesenho === 'imperio' ||
+          (olharDesenho === 'terceira' && distanciaTerceira(state.heroi.pitch) > 2.2))
     }
     if (flash.current) {
-      flash.current.visible = state.heroi.shootCooldown > PARTIDA.shootCooldown * 0.55
+      flash.current.visible = !state.posse && state.heroi.army > 0 && state.heroi.shootCooldown > PARTIDA.shootCooldown * 0.55
     }
     state.unidades.forEach((unidade) => {
       const group = unidades.current.get(unidade.id)
       if (!group) return
-      const mostra = unidade.lado === 'inimigo' ? inimigoVisivel(state, unidade) : unidade.hp > 0
+      const possuidaAgora = Boolean(state.posse && state.posse.unidadeId === unidade.id)
+      const ocultaPosse = possuidaAgora && olharDesenho === 'primeira'
+      const mostra = !ocultaPosse && (unidade.lado === 'inimigo' ? inimigoVisivel(state, unidade) : unidade.hp > 0)
       group.visible = mostra
-      group.position.set(unidade.x, 0, unidade.z)
+      group.position.set(unidade.x, possuidaAgora && state.posse ? state.posse.y : 0, unidade.z)
       group.scale.set(1, 1, 1)
-      if (unidade.ordem?.tipo === 'mover') {
+      if (possuidaAgora && state.posse) {
+        group.rotation.y = -state.posse.yaw
+      } else if (unidade.ordem?.tipo === 'mover') {
         const dx = unidade.ordem.x - unidade.x
         const dz = unidade.ordem.z - unidade.z
         if (Math.hypot(dx, dz) > 0.1) group.rotation.y = Math.atan2(dx, dz)
-      }
-      const anel = aneis.current.get(unidade.id)
-      if (anel) {
-        anel.visible = marcadoPelaTorre(state, unidade)
-        anel.position.set(unidade.x, -0.42, unidade.z)
       }
       if (unidade.papel === 'dragao') {
         const pontos = pontosDoCorpo(unidade)
@@ -824,18 +936,24 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         })
       }
     })
-    const yaw = state.heroi.yaw
-    const pitch = state.heroi.pitch
+    const unidadePossuida = state.posse
+      ? state.unidades.find((u) => u.id === state.posse!.unidadeId && u.lado === 'aliado' && u.hp > 0)
+      : undefined
+    const atorX = unidadePossuida && state.posse ? unidadePossuida.x : state.heroi.x
+    const atorY = unidadePossuida && state.posse ? state.posse.y : state.heroi.y
+    const atorZ = unidadePossuida && state.posse ? unidadePossuida.z : state.heroi.z
+    const yaw = unidadePossuida && state.posse ? state.posse.yaw : state.heroi.yaw
+    const pitch = unidadePossuida && state.posse ? state.posse.pitch : state.heroi.pitch
     const olhar = vetorDoOlhar(yaw, pitch)
     const raioNv5 = meiaLarguraNv5() + 0.15
     const dentroDeFortaleza = state.obras.some(
       (o) =>
         o.hp > 0 &&
-        state.heroi.y < 2.5 &&
-        ((Boolean(o.blocosNv5) && Math.abs(state.heroi.x - o.x) < raioNv5 && Math.abs(state.heroi.z - o.z) < raioNv5) ||
-          (Boolean(o.blocosLivres?.length) && Math.hypot(state.heroi.x - o.x, state.heroi.z - o.z) < 4.5)),
+        atorY < 2.5 &&
+        ((Boolean(o.blocosNv5) && Math.abs(atorX - o.x) < raioNv5 && Math.abs(atorZ - o.z) < raioNv5) ||
+          (Boolean(o.blocosLivres?.length) && Math.hypot(atorX - o.x, atorZ - o.z) < 4.5)),
     )
-    const confinado = state.heroi.y < -0.9 || dentroDeFortaleza
+    const confinado = atorY < -0.9 || dentroDeFortaleza
     if (olharDesenho === 'imperio') {
       const frenteTeclado = keys.eixoY !== undefined ? keys.eixoY : (keys.forward ? 1 : 0) - (keys.back ? 1 : 0)
       const ladoTeclado = keys.eixoX !== undefined ? keys.eixoX : keys.strafe
@@ -855,29 +973,31 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         props.onBussolaImperio(letraImperio)
       }
     } else if (olharDesenho === 'primeira') {
-      camera.position.set(state.heroi.x, PARTIDA.eyeY + state.heroi.y, state.heroi.z)
-      camera.lookAt(state.heroi.x + olhar.x, PARTIDA.eyeY + state.heroi.y + olhar.y, state.heroi.z + olhar.z)
+      camera.position.set(atorX, PARTIDA.eyeY + atorY, atorZ)
+      camera.lookAt(atorX + olhar.x, PARTIDA.eyeY + atorY + olhar.y, atorZ + olhar.z)
     } else {
       const dist = distanciaTerceira(pitch, confinado)
       const ombro = Math.min(0.8, dist * 0.14)
       const direitaX = -Math.cos(yaw)
       const direitaZ = -Math.sin(yaw)
-      const camX = state.heroi.x - olhar.x * dist + direitaX * ombro
-      const camY = PARTIDA.eyeY + state.heroi.y - olhar.y * dist
-      const camZ = state.heroi.z - olhar.z * dist + direitaZ * ombro
+      const camX = atorX - olhar.x * dist + direitaX * ombro
+      const camY = PARTIDA.eyeY + atorY - olhar.y * dist
+      const camZ = atorZ - olhar.z * dist + direitaZ * ombro
       camera.position.set(camX, camY, camZ)
       camera.lookAt(camX + olhar.x, camY + olhar.y, camZ + olhar.z)
     }
-    if (olharDesenho !== 'imperio' && !state.semCorpo) {
-      const alcance = alcanceDoTiro(state.heroi.x, state.heroi.z, yaw)
+    if (olharDesenho !== 'imperio' && (!state.semCorpo || Boolean(unidadePossuida))) {
+      const alcance = unidadePossuida
+        ? Math.max(SPEC_TROPA_ALIADA[unidadePossuida.tipoTropa ?? 'soldado'].alcance, 3.2)
+        : alcanceDoTiro(atorX, atorZ, yaw, state.heroi.classe)
       const fx = -Math.sin(yaw)
       const fz = Math.cos(yaw)
       const temAlvo = state.unidades.some((u) => {
         if (u.lado !== 'inimigo' || !inimigoVisivel(state, u)) return false
         return pontosDoCorpo(u).some((p) => {
-          const along = (p.x - state.heroi.x) * fx + (p.z - state.heroi.z) * fz
+          const along = (p.x - atorX) * fx + (p.z - atorZ) * fz
           if (along < 0.35 || along > alcance + 0.05) return false
-          const perp = Math.abs((p.x - state.heroi.x) * fz - (p.z - state.heroi.z) * fx)
+          const perp = Math.abs((p.x - atorX) * fz - (p.z - atorZ) * fx)
           return perp <= folgaDoTiro(along)
         })
       })
@@ -994,9 +1114,34 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
       resumoAtlas(props.atlas.current)
         .map((ficha) => `${ficha.i},${ficha.j},${ficha.alerta},${ficha.ritmo},${ficha.cena ? 1 : 0},${ficha.corpo ? 1 : 0},${ficha.dono}`)
         .join('|') +
-        `:${props.atlas.current.politica}:${props.atlas.current.cotaDinamica}:${estadoCorpo(props.atlas.current).derrota ? 1 : 0}:${estadoCorpo(props.atlas.current).heroi.army}:${Object.keys(props.atlas.current.cartografia).length}`,
+      `:${props.atlas.current.politica}:${props.atlas.current.cotaDinamica}:${estadoCorpo(props.atlas.current).derrota ? 1 : 0}:${estadoCorpo(props.atlas.current).heroi.army}:${Object.keys(props.atlas.current.cartografia).length}:${props.atlas.current.ressurreicao?.aguardando ? Math.ceil(props.atlas.current.ressurreicao.cooldownRestanteSeg) : 0}`,
     )
     props.onAutoQualidadeFrame(props.atlas.current.emaFrameMs, bruto)
+    if (typeof window !== 'undefined') {
+      const agoraMs = performance.now()
+      const w = window as unknown as {
+        __ILHA_PERF__?: {
+          drawCalls: number
+          triangles: number
+          geometries: number
+          textures: number
+          tropasVivas: number
+          tropasInstanciadas: number
+          atualizadoEmMs: number
+        }
+      }
+      if (!w.__ILHA_PERF__ || agoraMs - w.__ILHA_PERF__.atualizadoEmMs >= 180) {
+        w.__ILHA_PERF__ = {
+          drawCalls: gl.info.render.calls,
+          triangles: gl.info.render.triangles,
+          geometries: gl.info.memory.geometries,
+          textures: gl.info.memory.textures,
+          tropasVivas: state.unidades.filter((u) => u.hp > 0).length,
+          tropasInstanciadas: state.unidades.filter((u) => u.hp > 0 && u.papel !== 'dragao').length,
+          atualizadoEmMs: agoraMs,
+        }
+      }
+    }
     props.onHud(state)
   })
 
@@ -1071,10 +1216,10 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
       const p =
         rect.width > 0 && rect.height > 0
           ? soloNoNdc(
-              ((event.clientX - rect.left) / rect.width) * 2 - 1,
-              -((event.clientY - rect.top) / rect.height) * 2 + 1,
-              0,
-            )
+            ((event.clientX - rect.left) / rect.width) * 2 - 1,
+            -((event.clientY - rect.top) / rect.height) * 2 + 1,
+            0,
+          )
           : null
       if (p) {
         props.onGround(Math.round(p.x * 2) / 2, Math.round(p.z * 2) / 2)
@@ -1097,12 +1242,24 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   const pisos =
     altar && altar.placasAtivas !== false
       ? [
-          { nome: 'N', x: altar.cx, z: altar.cz + PARTIDA.altarPasso },
-          { nome: 'L', x: altar.cx + PARTIDA.altarPasso, z: altar.cz },
-          { nome: 'S', x: altar.cx, z: altar.cz - PARTIDA.altarPasso },
-          { nome: 'O', x: altar.cx - PARTIDA.altarPasso, z: altar.cz },
-        ]
+        { nome: 'N', x: altar.cx, z: altar.cz + PARTIDA.altarPasso },
+        { nome: 'L', x: altar.cx + PARTIDA.altarPasso, z: altar.cz },
+        { nome: 'S', x: altar.cx, z: altar.cz - PARTIDA.altarPasso },
+        { nome: 'O', x: altar.cx - PARTIDA.altarPasso, z: altar.cz },
+      ]
       : []
+
+  const corpoHeroiCor = (classe?: ClasseHeroi) =>
+    classe === 'tanque' ? '#64748b' : classe === 'construtor' ? '#d97706' : '#2563eb'
+  const detalheHeroiCor = (classe?: ClasseHeroi) =>
+    classe === 'tanque' ? '#cbd5e1' : classe === 'construtor' ? '#fde047' : '#f2b544'
+  const heroiAtivoClasse = props.sim.current.heroi.classe ?? 'ataque'
+  const heroisSecundarios = listarHerois(props.sim.current).filter(
+    (h) => h.id !== (props.sim.current.heroiAtivoId ?? 0) && h.vivo && h.army > 0,
+  )
+  const obraRallyVisivel = props.painelObraId
+    ? props.sim.current.obras.find((o) => o.id === props.painelObraId && o.rallyPoint)
+    : undefined
 
   return (
     <>
@@ -1210,12 +1367,24 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         </mesh>
         <mesh position={[0, -0.58, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
           <boxGeometry args={[0.7, 0.82, 0.48]} />
-          <meshStandardMaterial color="#2563eb" roughness={0.65} />
+          <meshStandardMaterial color={corpoHeroiCor(heroiAtivoClasse)} roughness={0.65} />
         </mesh>
         <mesh position={[0, 0.06, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
           <sphereGeometry args={[0.26, 12, 12]} />
-          <meshStandardMaterial color="#f2b544" roughness={0.5} />
+          <meshStandardMaterial color={detalheHeroiCor(heroiAtivoClasse)} roughness={0.5} />
         </mesh>
+        {heroiAtivoClasse === 'tanque' && (
+          <mesh position={[-0.45, -0.55, 0.14]} raycast={semRaycast}>
+            <boxGeometry args={[0.14, 0.9, 0.56]} />
+            <meshStandardMaterial color="#cbd5e1" metalness={0.65} roughness={0.35} />
+          </mesh>
+        )}
+        {heroiAtivoClasse === 'construtor' && (
+          <mesh position={[0.42, -0.45, 0.16]} raycast={semRaycast}>
+            <boxGeometry args={[0.22, 0.24, 0.34]} />
+            <meshStandardMaterial color="#fbbf24" metalness={0.5} roughness={0.35} />
+          </mesh>
+        )}
         <mesh ref={flash} position={[0, -0.45, 0.95]} visible={false}>
           <boxGeometry args={[0.12, 0.12, 0.45]} />
           <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={1.4} />
@@ -1227,6 +1396,86 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
           </mesh>
         )}
       </group>
+      {heroisSecundarios.map((hSec) => (
+        <group
+          key={`heroi-sec-${hSec.id}`}
+          position={[hSec.x, 0.9 + hSec.y, hSec.z]}
+          rotation={[0, -hSec.yaw, 0]}
+          onClick={(event) => {
+            if (props.modoBlocoRef.current) return
+            event.stopPropagation()
+            props.onSelecionarHeroiSecundario(hSec.id)
+          }}
+        >
+          <mesh position={[0, -1.16, 0]}>
+            <boxGeometry args={[0.52, 0.38, 0.34]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.85} />
+          </mesh>
+          <mesh position={[0, -0.58, 0]}>
+            <boxGeometry args={[0.7, 0.82, 0.48]} />
+            <meshStandardMaterial color={corpoHeroiCor(hSec.classe)} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 0.06, 0]}>
+            <sphereGeometry args={[0.26, 12, 12]} />
+            <meshStandardMaterial color={detalheHeroiCor(hSec.classe)} roughness={0.45} />
+          </mesh>
+          {hSec.classe === 'tanque' && (
+            <mesh position={[-0.45, -0.55, 0.14]} raycast={semRaycast}>
+              <boxGeometry args={[0.14, 0.9, 0.56]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.65} roughness={0.35} />
+            </mesh>
+          )}
+          {hSec.classe === 'construtor' && (
+            <mesh position={[0.42, -0.45, 0.16]} raycast={semRaycast}>
+              <boxGeometry args={[0.22, 0.24, 0.34]} />
+              <meshStandardMaterial color="#fbbf24" metalness={0.5} roughness={0.35} />
+            </mesh>
+          )}
+        </group>
+      ))}
+      {obraRallyVisivel?.rallyPoint && (
+        <group position={[obraRallyVisivel.rallyPoint.x, -0.42, obraRallyVisivel.rallyPoint.z]}>
+          <mesh position={[0, 0.7, 0]} raycast={semRaycast}>
+            <cylinderGeometry args={[0.05, 0.05, 1.4, 8]} />
+            <meshStandardMaterial color="#f8fafc" />
+          </mesh>
+          <mesh position={[0.22, 1.25, 0]} raycast={semRaycast}>
+            <boxGeometry args={[0.45, 0.28, 0.06]} />
+            <meshStandardMaterial color="#22c55e" emissive="#22c55e" emissiveIntensity={0.4} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+            <ringGeometry args={[0.4, 0.56, 20]} />
+            <meshBasicMaterial color="#22c55e" depthWrite={false} />
+          </mesh>
+        </group>
+      )}
+      {props.sim.current.unidades
+        .filter((u) => u.lado === 'aliado' && u.hp > 0 && props.selectedIds.includes(u.id) && u.ordem?.tipo === 'patrulhar')
+        .slice(0, 4)
+        .map((u) => {
+          if (u.ordem?.tipo !== 'patrulhar') return null
+          const { ax, az, bx, bz } = u.ordem
+          const mx = (ax + bx) / 2
+          const mz = (az + bz) / 2
+          const comp = Math.max(0.2, Math.hypot(bx - ax, bz - az))
+          const ang = Math.atan2(bx - ax, bz - az)
+          return (
+            <group key={`patrulha-${u.id}`}>
+              <mesh position={[ax, -0.42, az]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+                <ringGeometry args={[0.3, 0.44, 16]} />
+                <meshBasicMaterial color="#38bdf8" depthWrite={false} />
+              </mesh>
+              <mesh position={[bx, -0.42, bz]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+                <ringGeometry args={[0.3, 0.44, 16]} />
+                <meshBasicMaterial color="#facc15" depthWrite={false} />
+              </mesh>
+              <mesh position={[mx, -0.41, mz]} rotation={[0, ang, 0]} raycast={semRaycast}>
+                <boxGeometry args={[0.09, 0.03, comp]} />
+                <meshBasicMaterial color="#38bdf8" transparent opacity={0.6} depthWrite={false} />
+              </mesh>
+            </group>
+          )
+        })}
       {OBSTACULOS.map((caixa) => (
         <mesh
           key={`${caixa.x}-${caixa.z}`}
@@ -1304,7 +1553,6 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         unidades={props.sim.current.unidades}
         selectedIds={props.selectedIds}
         unidadesRef={unidades}
-        aneisRef={aneis}
         corposRef={corpos}
         modoBloco={props.modoBloco}
         modoBlocoRef={props.modoBlocoRef}
@@ -1337,7 +1585,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         raycast={() => null}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial color="#0b1220" transparent opacity={0.72} depthWrite={false} />
+        <meshLambertMaterial color="#0b1220" transparent opacity={0.48} depthWrite={false} />
       </instancedMesh>
       <instancedMesh
         ref={nuvem}
@@ -1346,7 +1594,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         raycast={() => null}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial ref={nuvemMatRef} color="#d5e2ea" transparent opacity={0.92} depthWrite />
+        <meshLambertMaterial ref={nuvemMatRef} color="#d5e2ea" transparent opacity={0.86} depthWrite />
       </instancedMesh>
     </>
   )
@@ -1407,6 +1655,7 @@ export const IlhaRua: React.FC = () => {
   const cam = useRef<CameraImperioState>({ x: 0, z: 18, yaw: 0 })
   const tool = useRef<PecaId | null>(null)
   const moverObraIdRef = useRef<number | null>(null)
+  const rallyObraIdRef = useRef<number | null>(null)
   const dragou = useRef(false)
   const evoluirId = useRef<number | null>(null)
   const obraBlocoAlvoIdRef = useRef<number | null>(null)
@@ -1414,8 +1663,19 @@ export const IlhaRua: React.FC = () => {
   const [painelObraId, setPainelObraId] = useState<number | null>(null)
   const [confirmarVendaId, setConfirmarVendaId] = useState<number | null>(null)
   const painelObraRef = useRef<number | null>(null)
-  const evoluirPainelRef = useRef<() => void>(() => {})
+  const evoluirPainelRef = useRef<() => void>(() => { })
   const [heroiEscolhido, setHeroiEscolhido] = useState(false)
+  const heroiEscolhidoRef = useRef(false)
+  heroiEscolhidoRef.current = heroiEscolhido
+  const [modoConstruirAberto, setModoConstruirAberto] = useState(false)
+  const [modoOrdemCursor, setModoOrdemCursor] = useState<'attackMove' | 'patrulhar_b' | null>(null)
+  const modoOrdemCursorRef = useRef<'attackMove' | 'patrulhar_b' | null>(null)
+  modoOrdemCursorRef.current = modoOrdemCursor
+  const [gruposControle, setGruposControle] = useState<GruposDeControle>({})
+  const gruposControleRef = useRef<GruposDeControle>({})
+  gruposControleRef.current = gruposControle
+  const projetarNdcRef = useRef<(x: number, z: number) => { x: number; y: number; z: number } | null>(() => null)
+  const ultimoCliqueUnidadeRef = useRef<{ id: number; tempoMs: number } | null>(null)
   const [caixa, setCaixa] = useState<{ x: number; y: number; x2: number; y2: number } | null>(null)
   const selected = useRef<number[]>([])
   const [selectedIds, setSelectedIds] = useState<number[]>([])
@@ -1446,16 +1706,16 @@ export const IlhaRua: React.FC = () => {
       nextTier: GrauConta,
       opcoes?: { readonly temaPreferido?: string | null; readonly forcarNova?: boolean; readonly registrarAbandono?: boolean },
     ) => void
-  >(() => {})
-  const ativarTelaEstudoRef = useRef<(proxima: TelaEstudo) => void>(() => {})
-  const alternarCadernoRef = useRef<() => void>(() => {})
+  >(() => { })
+  const ativarTelaEstudoRef = useRef<(proxima: TelaEstudo) => void>(() => { })
+  const alternarCadernoRef = useRef<() => void>(() => { })
   const diagnostico = useMemo(() => gerarDiagnosticoEstudo(estadoEstudo), [estadoEstudo])
   const [power, setPower] = useState('')
   const [ferramenta, setFerramenta] = useState('')
   const [intencao, setIntencao] = useState<IconeId | null>(null)
   const intencaoRef = useRef<IconeId | null>(null)
   intencaoRef.current = intencao
-  const confirmarRef = useRef<(acao: IconeId) => void>(() => {})
+  const confirmarRef = useRef<(acao: IconeId) => void>(() => { })
   const entradaPorTeclado = useRef(false)
   const confirmarSimRef = useRef<HTMLButtonElement | null>(null)
   const [menuMiniAberto, setMenuMiniAberto] = useState(true)
@@ -1485,7 +1745,132 @@ export const IlhaRua: React.FC = () => {
   const [ghostObra, setGhostObra] = useState<{ tipo: PecaId; x: number; z: number; valido: boolean } | null>(null)
   const [previewLinha, setPreviewLinha] = useState<{ plano: PlanoLinhaBlocos; temRecurso: boolean } | null>(null)
   const [miraAlvo, setMiraAlvo] = useState(false)
+  const [ressurreicaoMinimizada, setRessurreicaoMinimizada] = useState(false)
+  const [modoRessurreicaoConta, setModoRessurreicaoConta] = useState(false)
+  const modoRessurreicaoContaRef = useRef(false)
+  modoRessurreicaoContaRef.current = modoRessurreicaoConta
   const mapaInteracao = useRef('0,0')
+  const [pingAtaque, setPingAtaque] = useState<{
+    mapaI: number
+    mapaJ: number
+    x: number
+    z: number
+    expiraEm: number
+  } | null>(null)
+  const pingAtaqueRef = useRef(pingAtaque)
+  pingAtaqueRef.current = pingAtaque
+  const hpFichaAnteriorRef = useRef<Map<string, number>>(new Map())
+  const ultimoPingSomMsRef = useRef(0)
+
+  const irParaPingAtaque = () => {
+    const p = pingAtaqueRef.current
+    if (!p || Date.now() >= p.expiraEm) {
+      setPower('Nenhum alerta de ataque ativo no momento')
+      return
+    }
+    if (sim.current.posse) {
+      sim.current = sairDaPosse(sim.current, 'imperio')
+      atlasRef.current = escreverCena(atlasRef.current, sim.current)
+    }
+    limparInteracao(true)
+    atlasRef.current = abrirMapa(atlasRef.current, p.mapaI, p.mapaJ)
+    sim.current = definirOlhar(estadoCena(atlasRef.current), 'imperio')
+    atlasRef.current = escreverCena(atlasRef.current, sim.current)
+    cam.current = { ...cam.current, x: p.x, z: p.z }
+    setHud(sim.current)
+    setPower(`Focado no ataque em (${p.mapaI}, ${p.mapaJ})!`)
+  }
+  const irParaPingAtaqueRef = useRef(irParaPingAtaque)
+  irParaPingAtaqueRef.current = irParaPingAtaque
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const agora = Date.now()
+      const fichas = atlasRef.current.fichas
+      let atacado: { i: number; j: number; x: number; z: number } | null = null
+      for (const ficha of fichas) {
+        const chave = `${ficha.i},${ficha.j}`
+        const anterior = hpFichaAnteriorRef.current.get(chave)
+        hpFichaAnteriorRef.current.set(chave, ficha.hpNosso)
+        if (anterior !== undefined && ficha.hpNosso < anterior - 0.1) {
+          const obraFerida = ficha.state.obras.find((o) => o.lado === 'nosso' && o.hp > 0 && o.hp < o.maxHp)
+          const tropaAliada = ficha.state.unidades.find((u) => u.lado === 'aliado' && u.hp > 0)
+          atacado = {
+            i: ficha.i,
+            j: ficha.j,
+            x: obraFerida?.x ?? tropaAliada?.x ?? 0,
+            z: obraFerida?.z ?? tropaAliada?.z ?? 0,
+          }
+        }
+      }
+      if (atacado) {
+        setPingAtaque({ mapaI: atacado.i, mapaJ: atacado.j, x: atacado.x, z: atacado.z, expiraEm: agora + 6500 })
+        if (agora - ultimoPingSomMsRef.current >= 2500) {
+          ultimoPingSomMsRef.current = agora
+          tocarBipAlertaAtaque()
+        }
+      } else if (pingAtaqueRef.current && agora >= pingAtaqueRef.current.expiraEm) {
+        setPingAtaque(null)
+      }
+    }, 350)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return
+    const w = window as unknown as {
+      __ILHA_BENCH__?: {
+        spawnarTropas: (qtd: number, tipo?: TipoTropaAliada) => number
+        simularPing: (mapaI?: number, mapaJ?: number) => void
+        abrirCaderno: () => void
+      }
+    }
+    w.__ILHA_BENCH__ = {
+      spawnarTropas: (qtd: number, tipo: TipoTropaAliada = 'soldado') => {
+        const atual = sim.current
+        const novos = []
+        let nextId = atual.nextId
+        for (let k = 0; k < qtd; k += 1) {
+          const ang = (k / Math.max(1, qtd)) * Math.PI * 2
+          const r = 4 + (k % 3) * 1.5
+          novos.push({
+            id: nextId,
+            lado: 'aliado' as const,
+            papel: 'tropa' as const,
+            tipoTropa: tipo,
+            x: Math.cos(ang) * r,
+            z: Math.sin(ang) * r,
+            hp: 12,
+            postura: 'vigia' as const,
+            ordem: null,
+            cooldown: 0,
+            segmentos: [],
+            alerta: false,
+          })
+          nextId += 1
+        }
+        const prox: PartidaState = {
+          ...atual,
+          nextId,
+          unidades: [...atual.unidades, ...novos],
+        }
+        sim.current = prox
+        atlasRef.current = escreverCena(atlasRef.current, prox)
+        setHud(prox)
+        return prox.unidades.filter((u) => u.hp > 0).length
+      },
+      simularPing: (mapaI = atlasRef.current.cenaI, mapaJ = atlasRef.current.cenaJ) => {
+        setPingAtaque({ mapaI, mapaJ, x: 0, z: 0, expiraEm: Date.now() + 8000 })
+        tocarBipAlertaAtaque()
+      },
+      abrirCaderno: () => {
+        alternarCadernoRef.current()
+      },
+    }
+    return () => {
+      delete w.__ILHA_BENCH__
+    }
+  }, [])
 
   const definirSelecao = (ids: number[]) => {
     const unicos = Array.from(new Set(ids))
@@ -1528,6 +1913,10 @@ export const IlhaRua: React.FC = () => {
     setConfirmarVendaId(null)
     tool.current = null
     moverObraIdRef.current = null
+    rallyObraIdRef.current = null
+    modoOrdemCursorRef.current = null
+    setModoOrdemCursor(null)
+    setModoConstruirAberto(false)
     dragou.current = false
     voxelAlvoRef.current = null
     setHeroiEscolhido(false)
@@ -1548,7 +1937,47 @@ export const IlhaRua: React.FC = () => {
 
   const podeComandar = () => !estadoCorpo(atlasRef.current).derrota && (sim.current.semCorpo || sim.current.olhar === 'imperio')
 
+  const executarModoOrdemCursor = (x: number, z: number) => {
+    const modo = modoOrdemCursorRef.current
+    if (!modo) return false
+    modoOrdemCursorRef.current = null
+    setModoOrdemCursor(null)
+    setFerramenta('')
+    let atual = sim.current
+    if (modo === 'attackMove') {
+      const destino = destinoDoClique(x, z)
+      if (selected.current.length > 0) {
+        atual = ordenar(atual, selected.current, { tipo: 'attackMove', x: destino.x, z: destino.z })
+      }
+      if (heroiEscolhidoRef.current && !atual.semCorpo) {
+        atual = ordenarHeroi(atual, { tipo: 'attackMove', x, z })
+      }
+      publicar(atual)
+      setPower('Marcha de ataque (Attack-Move) enviada!')
+      return true
+    }
+    const primeiraSel = selected.current
+      .map((id) => atual.unidades.find((u) => u.id === id && u.lado === 'aliado' && u.hp > 0))
+      .find((u) => Boolean(u))
+    let ax = primeiraSel ? primeiraSel.x : atual.heroi.x
+    let az = primeiraSel ? primeiraSel.z : atual.heroi.z
+    if (Math.hypot(x - ax, z - az) < 1.2) {
+      ax = x - 6
+      az = z
+    }
+    if (selected.current.length > 0) {
+      atual = ordenar(atual, selected.current, { tipo: 'patrulhar', ax, az, bx: x, bz: z, indoPara: 'b' })
+    }
+    if (heroiEscolhidoRef.current && !atual.semCorpo) {
+      atual = ordenarHeroi(atual, { tipo: 'patrulhar', ax, az, bx: x, bz: z, indoPara: 'b' })
+    }
+    publicar(atual)
+    setPower('Patrulha A ↔ B iniciada!')
+    return true
+  }
+
   const executarOrdemChao = (x: number, z: number) => {
+    if (executarModoOrdemCursor(x, z)) return
     let atual = sim.current
     if (heroiEscolhido && !atual.semCorpo) atual = ordenarHeroi(atual, { tipo: 'mover', x, z })
     // As TROPAS ganham o destino da faixa da borda (M5, escolha do usuário 23/11): um clique nos 3 m da beira do chão manda atravessar para o mapa vizinho. O herói NÃO: ele atravessa andando.
@@ -1559,14 +1988,19 @@ export const IlhaRua: React.FC = () => {
     publicar(atual)
   }
 
-  const publicar = (next: PartidaState) => {
-    sim.current = next
-    atlasRef.current = escreverCena(atlasRef.current, next)
+  const sincronizarHud = (next: PartidaState) => {
     setHud((previous) => {
       const mudou =
         previous.olhar !== next.olhar ||
         previous.semCorpo !== next.semCorpo ||
+        (previous.posse?.unidadeId ?? null) !== (next.posse?.unidadeId ?? null) ||
+        (previous.posse?.modo ?? null) !== (next.posse?.modo ?? null) ||
         previous.heroi.army !== next.heroi.army ||
+        previous.heroi.classe !== next.heroi.classe ||
+        previous.heroiAtivoId !== next.heroiAtivoId ||
+        (previous.herois?.length ?? 1) !== (next.herois?.length ?? 1) ||
+        Math.ceil(previous.heroi.invulneravelRestante ?? 0) !== Math.ceil(next.heroi.invulneravelRestante ?? 0) ||
+        Boolean(previous.heroiCaido) !== Boolean(next.heroiCaido) ||
         previous.credito !== next.credito ||
         previous.derrota !== next.derrota ||
         previous.ruaPercorrida !== next.ruaPercorrida ||
@@ -1575,27 +2009,30 @@ export const IlhaRua: React.FC = () => {
         previous.obras
           .map(
             (obra) =>
-              `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}:${obra.lado === 'inimigo' ? (cobertoAgora(previous, obra.x, obra.z) ? 1 : 0) : 1}`,
+              `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}:${obra.filaProducao?.length ?? 0}:${Math.ceil((obra.filaProducao?.[0]?.tempoRestanteSeg ?? 0) * 2)}:${obra.rallyPoint ? `${Math.round(obra.rallyPoint.x)},${Math.round(obra.rallyPoint.z)}` : ''}:${obra.lado === 'inimigo' ? (cobertoAgora(previous, obra.x, obra.z) ? 1 : 0) : 1}`,
           )
           .join() !==
-          next.obras
-            .map(
-              (obra) =>
-                `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}:${obra.lado === 'inimigo' ? (cobertoAgora(next, obra.x, obra.z) ? 1 : 0) : 1}`,
-            )
-            .join() ||
+        next.obras
+          .map(
+            (obra) =>
+              `${obra.id}:${obra.lado}:${obra.hp}:${obra.nivel}:${Math.ceil((obra.construindoRestante ?? 0) * 2)}:${obra.filaProducao?.length ?? 0}:${Math.ceil((obra.filaProducao?.[0]?.tempoRestanteSeg ?? 0) * 2)}:${obra.rallyPoint ? `${Math.round(obra.rallyPoint.x)},${Math.round(obra.rallyPoint.z)}` : ''}:${obra.lado === 'inimigo' ? (cobertoAgora(next, obra.x, obra.z) ? 1 : 0) : 1}`,
+          )
+          .join() ||
         previous.unidades.length !== next.unidades.length ||
         previous.unidades
-            .map((unidade) => `${unidade.id}:${unidade.postura}:${unidade.ordem?.tipo ?? ''}:${unidade.hp}:${unidade.segmentos.join('.')}:${inimigoVisivel(previous, unidade) ? 1 : 0}:${unidade.rota?.semCaminho ? 1 : 0}`)
-            .join() !==
-          next.unidades
-            .map((unidade) => `${unidade.id}:${unidade.postura}:${unidade.ordem?.tipo ?? ''}:${unidade.hp}:${unidade.segmentos.join('.')}:${inimigoVisivel(next, unidade) ? 1 : 0}:${unidade.rota?.semCaminho ? 1 : 0}`)
-            .join() ||
+          .map((unidade) => `${unidade.id}:${unidade.postura}:${unidade.ordem?.tipo ?? ''}:${unidade.hp}:${unidade.segmentos.join('.')}:${inimigoVisivel(previous, unidade) ? 1 : 0}:${unidade.rota?.semCaminho ? 1 : 0}`)
+          .join() !==
+        next.unidades
+          .map((unidade) => `${unidade.id}:${unidade.postura}:${unidade.ordem?.tipo ?? ''}:${unidade.hp}:${unidade.segmentos.join('.')}:${inimigoVisivel(next, unidade) ? 1 : 0}:${unidade.rota?.semCaminho ? 1 : 0}`)
+          .join() ||
         previous.lingotes !== next.lingotes ||
         previous.resto !== next.resto ||
         previous.madeira !== next.madeira ||
         previous.ouro !== next.ouro ||
         previous.bioma !== next.bioma ||
+        previous.formacao !== next.formacao ||
+        `${previous.upgradesEra?.forja ?? 0}:${previous.upgradesEra?.alvenaria ?? 0}:${previous.upgradesEra?.botas ?? 0}` !==
+          `${next.upgradesEra?.forja ?? 0}:${next.upgradesEra?.alvenaria ?? 0}:${next.upgradesEra?.botas ?? 0}` ||
         previous.versaoRecursos !== next.versaoRecursos ||
         Math.round(previous.heroi.y * 10) !== Math.round(next.heroi.y * 10) ||
         previous.heroi.carregandoKg !== next.heroi.carregandoKg ||
@@ -1603,10 +2040,16 @@ export const IlhaRua: React.FC = () => {
         previous.altar?.aviso !== next.altar?.aviso ||
         compassLetter(previous.heroi.yaw) !== compassLetter(next.heroi.yaw) ||
         Math.ceil(PARTIDA.ondaPeriodo - previous.ondaRelogio) !==
-          Math.ceil(PARTIDA.ondaPeriodo - next.ondaRelogio) ||
+        Math.ceil(PARTIDA.ondaPeriodo - next.ondaRelogio) ||
         previous.versaoChao !== next.versaoChao
       return mudou ? next : previous
     })
+  }
+
+  const publicar = (next: PartidaState) => {
+    sim.current = next
+    atlasRef.current = escreverCena(atlasRef.current, next)
+    sincronizarHud(next)
   }
 
   const aplicarEdicaoVoxel = () => {
@@ -1658,20 +2101,44 @@ export const IlhaRua: React.FC = () => {
   }
 
   const irParaOlhar = (olhar: Olhar) => {
+    if (olhar !== 'imperio' && atlasRef.current.ressurreicao?.aguardando) {
+      setPower('Herói tombado: escolha um Núcleo para renascer')
+      return
+    }
     if (olhar === 'imperio') {
       document.exitPointerLock?.()
-    } else {
-      tool.current = null
-      moverObraIdRef.current = null
-      setConfirmarVendaId(null)
-      setGhostObra(null)
-      modoLinhaRef.current = false
-      setModoLinhaBlocos(false)
-      setPreviewLinha(null)
-      modoConsagrarRef.current = null
-      setModoConsagrar(null)
-      setModoMoverTouch(false)
-      if (!modoBlocoRef.current) setFerramenta('')
+      publicar(sim.current.posse ? sairDaPosse(sim.current, 'imperio') : definirOlhar(sim.current, 'imperio'))
+      return
+    }
+    tool.current = null
+    moverObraIdRef.current = null
+    setConfirmarVendaId(null)
+    setGhostObra(null)
+    modoLinhaRef.current = false
+    setModoLinhaBlocos(false)
+    setPreviewLinha(null)
+    modoConsagrarRef.current = null
+    setModoConsagrar(null)
+    setModoMoverTouch(false)
+    if (!modoBlocoRef.current) setFerramenta('')
+    const idTropaUnica =
+      selected.current.length === 1
+        ? selected.current[0]
+        : sim.current.posse
+          ? sim.current.posse.unidadeId
+          : null
+    if (idTropaUnica !== null) {
+      const possuida = entrarEmPosseTropa(sim.current, idTropaUnica, olhar)
+      if (possuida !== sim.current) {
+        publicar(possuida)
+        const un = possuida.unidades.find((u) => u.id === idTropaUnica)
+        if (un) setPower(`Possuindo ${tituloUnidadePossuida(un)} (H retorna ao Herói)`)
+        return
+      }
+    }
+    if (sim.current.semCorpo) {
+      setPower('Selecione uma tropa aliada para possuir ou retorne ao mapa do Herói (H)')
+      return
     }
     publicar(definirOlhar(sim.current, olhar))
   }
@@ -1701,10 +2168,13 @@ export const IlhaRua: React.FC = () => {
       })
       if (acaoEstudo === 'alternar_conta') {
         event.preventDefault()
+        const emRess = Boolean(atlasRef.current.ressurreicao?.aguardando)
         if (telaEstudoRef.current === 'conta') {
           ativarTelaEstudoRef.current('jogo')
-        } else if (sim.current.semCorpo || estadoCorpo(atlasRef.current).derrota) {
+        } else if ((!emRess && sim.current.semCorpo) || estadoCorpo(atlasRef.current).derrota) {
           return
+        } else if (emRess) {
+          openContaRef.current(tierRef.current, { forcarNova: true, registrarAbandono: false })
         } else if (contaAtivaRef.current && !contaAtivaRef.current.resolvida) {
           ativarTelaEstudoRef.current('conta')
         } else {
@@ -1770,6 +2240,17 @@ export const IlhaRua: React.FC = () => {
           setFerramenta('')
           return
         }
+        if (rallyObraIdRef.current !== null) {
+          rallyObraIdRef.current = null
+          setFerramenta('')
+          return
+        }
+        if (modoOrdemCursorRef.current !== null) {
+          modoOrdemCursorRef.current = null
+          setModoOrdemCursor(null)
+          setFerramenta('')
+          return
+        }
         if (modoMoverTouchRef.current || tool.current) {
           tool.current = null
           setGhostObra(null)
@@ -1780,10 +2261,109 @@ export const IlhaRua: React.FC = () => {
         }
         setIntencao(null)
       }
-      if (event.code === 'Digit1') irParaOlharRef.current('primeira')
-      if (event.code === 'Digit2') irParaOlharRef.current('terceira')
-      if (event.code === 'Digit3') irParaOlharRef.current('imperio')
       const alvoTecla = alvoDoTeclado(event.target)
+      const digitoMatch = /^Digit([1-9])$/.exec(event.code)
+      if (digitoMatch && !alvoTecla.ehCampoDeTexto && !event.repeat) {
+        const slot = Number(digitoMatch[1])
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault()
+          const nextG = salvarGrupoControle(gruposControleRef.current, slot, selected.current)
+          gruposControleRef.current = nextG
+          setGruposControle(nextG)
+          setPower(
+            selected.current.length > 0 ? `Grupo ${slot} salvo (${selected.current.length})` : `Grupo ${slot} limpo`,
+          )
+          return
+        }
+        if (slot >= 4 || event.altKey) {
+          const vivas = new Set(sim.current.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).map((u) => u.id))
+          const rec = recuperarGrupoControle(gruposControleRef.current, slot, vivas)
+          if (rec.length > 0) {
+            selected.current = rec
+            setSelectedIds(rec)
+            setHeroiEscolhido(false)
+            setFerramenta(`Grupo ${slot} (${rec.length})`)
+          }
+          return
+        }
+      }
+      if (event.code === 'Digit1' && !event.ctrlKey && !event.altKey) irParaOlharRef.current('primeira')
+      if (event.code === 'Digit2' && !event.ctrlKey && !event.altKey) irParaOlharRef.current('terceira')
+      if (event.code === 'Digit3' && !event.ctrlKey && !event.altKey) irParaOlharRef.current('imperio')
+      if (!alvoTecla.ehCampoDeTexto && !event.repeat && !event.ctrlKey && !event.altKey) {
+        if (event.code === 'KeyH') {
+          if (sim.current.posse) {
+            if (sim.current.semCorpo) {
+              irParaOlharRef.current('imperio')
+              setPower('Retornou ao modo Império (herói indisponível neste mapa)')
+            } else {
+              const saido = sairDaPosse(sim.current, 'terceira')
+              publicar(saido)
+              setHeroiEscolhido(true)
+              definirSelecao([])
+              setPower('Retornou ao controle do Herói')
+            }
+            return
+          }
+          if (!sim.current.semCorpo && sim.current.heroi.army > 0) {
+            cam.current = { ...cam.current, x: sim.current.heroi.x, z: sim.current.heroi.z }
+            setHeroiEscolhido(true)
+            selected.current = []
+            setSelectedIds([])
+            setFerramenta('Herói')
+            setPower('Foco no Herói ativo')
+          }
+          return
+        }
+        if (event.code === 'Period') {
+          const ocioso = encontrarConstrutorOcioso(sim.current)
+          if (!ocioso) {
+            setPower('Nenhum Construtor ocioso no momento')
+            return
+          }
+          const prox = selecionarHeroiAtivo(sim.current, ocioso.id)
+          atlasRef.current = escreverCena(atlasRef.current, prox)
+          sim.current = prox
+          setHud(prox)
+          cam.current = { ...cam.current, x: ocioso.x, z: ocioso.z }
+          setHeroiEscolhido(true)
+          selected.current = []
+          setSelectedIds([])
+          setFerramenta('Construtor ocioso')
+          setPower('Construtor ocioso focado!')
+          return
+        }
+        const taticoAtual = sim.current.semCorpo || sim.current.olhar === 'imperio'
+        const temAlvoRts = selected.current.length > 0 || (heroiEscolhidoRef.current && !sim.current.semCorpo)
+        if (taticoAtual && temAlvoRts) {
+          if (event.code === 'KeyP') {
+            modoOrdemCursorRef.current = 'patrulhar_b'
+            setModoOrdemCursor('patrulhar_b')
+            setFerramenta('Patrulha: clique no ponto B no chão')
+            setPower('Patrulha A ↔ B: clique no ponto B no chão (Esc cancela)')
+            return
+          }
+          if (event.code === 'KeyA') {
+            modoOrdemCursorRef.current = 'attackMove'
+            setModoOrdemCursor('attackMove')
+            setFerramenta('Attack-Move: clique no destino no chão')
+            setPower('Attack-Move: clique no chão para avançar atacando (Esc cancela)')
+            return
+          }
+          if (event.code === 'KeyS') {
+            const prox = pararUnidades(sim.current, selected.current, heroiEscolhidoRef.current)
+            atlasRef.current = escreverCena(atlasRef.current, prox)
+            sim.current = prox
+            setHud(prox)
+            setPower('Unidades paradas (S)')
+            return
+          }
+        }
+        if (event.code === 'KeyF') {
+          irParaPingAtaqueRef.current()
+          return
+        }
+      }
       if (
         jogoTomaConfirmar(
           event.code,
@@ -1791,7 +2371,10 @@ export const IlhaRua: React.FC = () => {
           {
             cardAberto: intencaoRef.current !== null,
             // O painel só conta aberto enquanto a obra dele existe, é nossa e está viva (A3b: painel fantasma).
-            painelAberto: painelValido(painelObraRef.current, sim.current.obras, estadoCorpo(atlasRef.current).derrota),
+            painelAberto:
+              !sim.current.posse &&
+              sim.current.olhar === 'imperio' &&
+              painelValido(painelObraRef.current, sim.current.obras, estadoCorpo(atlasRef.current).derrota),
           },
           entradaPorTeclado.current,
         )
@@ -1804,7 +2387,7 @@ export const IlhaRua: React.FC = () => {
       }
       if (event.code === 'Space' && !teclaDoBotaoFocado(alvoTecla, entradaPorTeclado.current)) {
         event.preventDefault()
-        if (event.repeat || sim.current.olhar === 'imperio' || sim.current.derrota || sim.current.semCorpo) return
+        if (event.repeat || sim.current.olhar === 'imperio' || sim.current.derrota || (sim.current.semCorpo && !sim.current.posse)) return
         publicar(pular(sim.current))
         return
       }
@@ -1927,7 +2510,7 @@ export const IlhaRua: React.FC = () => {
         moverManche(event.clientX, event.clientY)
         return
       }
-      if (sim.current.semCorpo || sim.current.olhar === 'imperio') return
+      if ((sim.current.semCorpo && !sim.current.posse) || sim.current.olhar === 'imperio') return
       if (document.pointerLockElement && event.pointerType !== 'touch') {
         sim.current = mira(sim.current, event.movementX * 0.003, -event.movementY * 0.003)
         return
@@ -2058,7 +2641,7 @@ export const IlhaRua: React.FC = () => {
       .then((st) => {
         if (ativo) setEstadoEstudo(st)
       })
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       ativo = false
     }
@@ -2073,7 +2656,7 @@ export const IlhaRua: React.FC = () => {
         const atualizado = await repo.lerEstado()
         setEstadoEstudo(atualizado)
       })
-      .catch(() => {})
+      .catch(() => { })
   }
 
   const ativarTelaEstudo = (proxima: TelaEstudo) => {
@@ -2148,7 +2731,10 @@ export const IlhaRua: React.FC = () => {
     nextTier: GrauConta,
     opcoes?: { readonly temaPreferido?: string | null; readonly forcarNova?: boolean; readonly registrarAbandono?: boolean },
   ) => {
-    if (sim.current.semCorpo || estadoCorpo(atlasRef.current).derrota) return
+    const emRessurreicao = Boolean(atlasRef.current.ressurreicao?.aguardando)
+    if ((!emRessurreicao && sim.current.semCorpo) || estadoCorpo(atlasRef.current).derrota) return
+    setModoRessurreicaoConta(emRessurreicao)
+    modoRessurreicaoContaRef.current = emRessurreicao
     const grauReal: GrauConta = !PARTIDA.enemHabilitado && nextTier > 4 ? 4 : nextTier
     const ativa = contaAtivaRef.current
     if (ativa && !ativa.resolvida && opcoes?.registrarAbandono !== false) {
@@ -2187,7 +2773,8 @@ export const IlhaRua: React.FC = () => {
     })
       .then((proxima) => {
         if (reqId !== reqContaIdRef.current) return
-        if (sim.current.semCorpo || estadoCorpo(atlasRef.current).derrota) {
+        const emRessAgora = Boolean(atlasRef.current.ressurreicao?.aguardando)
+        if ((!emRessAgora && sim.current.semCorpo) || estadoCorpo(atlasRef.current).derrota) {
           setCarregandoConta(false)
           ativarTelaEstudo('jogo')
           return
@@ -2213,7 +2800,9 @@ export const IlhaRua: React.FC = () => {
 
         const correta = proxima.alternativas.findIndex((item) => item.correta)
         const indice = ((correta < 0 ? 0 : correta) % 4) as 0 | 1 | 2 | 3
-        publicar(abrirAltar(sim.current, grauReal, indice, proxima.altarFisicoCompativel))
+        if (!sim.current.semCorpo) {
+          publicar(abrirAltar(sim.current, grauReal, indice, proxima.altarFisicoCompativel))
+        }
       })
       .catch(() => {
         if (reqId === reqContaIdRef.current) {
@@ -2251,7 +2840,8 @@ export const IlhaRua: React.FC = () => {
   const responderAlternativa = (altId: string) => {
     const ativa = contaAtivaRef.current
     if (!ativa || ativa.resolvida) return
-    if (sim.current.semCorpo || sim.current.derrota || estadoCorpo(atlasRef.current).derrota) return
+    const emRessAntes = modoRessurreicaoContaRef.current && Boolean(atlasRef.current.ressurreicao?.aguardando)
+    if ((!emRessAntes && sim.current.semCorpo) || sim.current.derrota || estadoCorpo(atlasRef.current).derrota) return
     const alt = ativa.desafio.alternativas.find((item) => item.id === altId)
     if (!alt) return
 
@@ -2287,15 +2877,35 @@ export const IlhaRua: React.FC = () => {
 
     const antes = sim.current
     const totalErros = Math.max(ativa.erros, antes.altar?.erros ?? 0)
-    const depois = aplicarConta(antes, ativa.desafio.grau)
-    publicar(depois)
+    const emRessurreicao = modoRessurreicaoContaRef.current && Boolean(atlasRef.current.ressurreicao?.aguardando)
+    let depois = antes
+    if (emRessurreicao) {
+      atlasRef.current = ressuscitarHeroiNoNucleo(atlasRef.current, {
+        viaConta: { grau: ativa.desafio.grau, erros: totalErros },
+      })
+      const cenaNova = estadoCena(atlasRef.current)
+      depois = cenaNova.altar ? { ...cenaNova, altar: { ...cenaNova.altar, resolvido: true, aviso: '' } } : cenaNova
+      atlasRef.current = escreverCena(atlasRef.current, depois)
+      sim.current = depois
+      setModoRessurreicaoConta(false)
+      modoRessurreicaoContaRef.current = false
+      setRessurreicaoMinimizada(false)
+      cam.current = { x: depois.heroi.x, z: depois.heroi.z, yaw: cam.current.yaw }
+      publicar(depois)
+      setMapaTick((valor) => valor + 1)
+    } else {
+      depois = aplicarConta(antes, ativa.desafio.grau)
+      publicar(depois)
+    }
 
-    const ganhoBase = textoDaContaComErros(
-      textoGanhoDaConta(antes.heroi.army, depois.heroi.army, depois.credito - antes.credito),
-      totalErros,
-    )
-    const madeiraGanha = Math.max(0, depois.madeira - antes.madeira)
-    const ouroGanho = Math.max(0, depois.ouro - antes.ouro)
+    const ganhoBase = emRessurreicao
+      ? `Herói renasceu com ${depois.heroi.army} de vida (3s de escudo)!`
+      : textoDaContaComErros(
+        textoGanhoDaConta(antes.heroi.army, depois.heroi.army, depois.credito - antes.credito),
+        totalErros,
+      )
+    const madeiraGanha = emRessurreicao ? 0 : Math.max(0, depois.madeira - antes.madeira)
+    const ouroGanho = emRessurreicao ? 0 : Math.max(0, depois.ouro - antes.ouro)
     const extras: string[] = []
     if (madeiraGanha > 0) extras.push(`+${madeiraGanha} madeira`)
     if (ouroGanho > 0) extras.push(`+${ouroGanho} ouro`)
@@ -2364,7 +2974,7 @@ export const IlhaRua: React.FC = () => {
         setStatusCaderno('Não foi possível exportar os dados neste navegador.')
       }
     })
-    eventoQueueRef.current = prom.catch(() => {})
+    eventoQueueRef.current = prom.catch(() => { })
     return prom
   }
 
@@ -2394,7 +3004,7 @@ export const IlhaRua: React.FC = () => {
       setEstadoEstudo(limpo)
       setStatusCaderno('Dados locais de estudo apagados deste navegador.')
     })
-    eventoQueueRef.current = prom.catch(() => {})
+    eventoQueueRef.current = prom.catch(() => { })
     return prom
   }
 
@@ -2433,12 +3043,18 @@ export const IlhaRua: React.FC = () => {
   const dragaoVivo = hud.unidades.find((unidade) => unidade.papel === 'dragao' && inimigoVisivel(hud, unidade))
   const corpoAtual = estadoCorpo(atlasRef.current)
   const derrotado = corpoAtual.derrota
+  const ressurreicaoAtiva = !derrotado && atlasRef.current.ressurreicao?.aguardando ? atlasRef.current.ressurreicao : null
+  const ressurreicaoAguardando = Boolean(ressurreicaoAtiva)
+  useEffect(() => {
+    if (!ressurreicaoAguardando) setRessurreicaoMinimizada(false)
+  }, [ressurreicaoAguardando])
+  const nucleosVivosRess = ressurreicaoAtiva ? nucleosVivosNoAtlas(atlasRef.current) : []
   // A mesma regra de `painelValido` decide aqui, no efeito que fecha o painel e no Enter: obra nossa e viva, e a
   // partida em andamento (OBS-F2-1: na derrota a tela de derrota manda). `derrotado` vem do corpo.
   const obraPainel = painelValido(painelObraId, hud.obras, derrotado)
     ? hud.obras.find((obra) => obra.id === painelObraId)
     : undefined
-  const tatico = hud.semCorpo || hud.olhar === 'imperio'
+  const tatico = (hud.semCorpo && !hud.posse) || hud.olhar === 'imperio' || Boolean(ressurreicaoAtiva)
   const heroiSelecionavel = heroiEscolhido && !hud.semCorpo
   const temSelecaoAtiva = tatico && !derrotado && (heroiSelecionavel || selectedVivas.length > 0)
   const textoSelecao =
@@ -2496,13 +3112,13 @@ export const IlhaRua: React.FC = () => {
     if (acao === 'tropa') {
       const selecionada = evoluirId.current
         ? sim.current.obras.find(
-            (obra) =>
-              obra.id === evoluirId.current &&
-              obra.lado !== 'inimigo' &&
-              (obra.tipo === 'quartel' || obra.tipo === 'nucleo') &&
-              obra.hp > 0 &&
-              !obraEmConstrucao(obra),
-          )
+          (obra) =>
+            obra.id === evoluirId.current &&
+            obra.lado !== 'inimigo' &&
+            (obra.tipo === 'quartel' || obra.tipo === 'nucleo') &&
+            obra.hp > 0 &&
+            !obraEmConstrucao(obra),
+        )
         : undefined
       const casa =
         selecionada ??
@@ -2511,19 +3127,22 @@ export const IlhaRua: React.FC = () => {
         ) ??
         nucleo
       if (!casa) return
-      const prox = criarTropa(sim.current, casa.id)
+      const prox = enfileirarTropa(sim.current, casa.id, 'soldado')
       if (prox === sim.current) {
         const vivasCount = sim.current.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).length
         setPower(
-          vivasCount >= PARTIDA.allyCap
-            ? `Limite máximo de ${PARTIDA.allyCap} tropas atingido`
-            : obraEmConstrucao(casa)
-              ? 'Aguarde concluir a construção'
-              : 'Precisa 1 licença ou 2 ouros para recrutar tropa',
+          (casa.filaProducao?.length ?? 0) >= PARTIDA.maxFilaProducao
+            ? 'Fila de treinamento cheia'
+            : vivasCount >= PARTIDA.allyCap
+              ? `Limite máximo de ${PARTIDA.allyCap} tropas atingido`
+              : obraEmConstrucao(casa)
+                ? 'Aguarde concluir a construção'
+                : 'Precisa 1 licença ou 2 ouros para recrutar tropa',
         )
         return
       }
       publicar(prox)
+      setPower('Soldado adicionado à fila de treino!')
       return
     }
     if (acao === 'todas') {
@@ -2726,11 +3345,17 @@ export const IlhaRua: React.FC = () => {
       onPointerLeave={() => {
         cursorBordaRef.current = null
       }}
+      onWheel={(event) => {
+        if (!(sim.current.olhar === 'imperio' && !sim.current.posse) || modalOpen.current) return
+        const target = event.target as HTMLElement | null
+        if (target?.closest('.ilha-painel-obra, .ilha-modal, .ilha-modal-ressurreicao, .ilha-caderno')) return
+        cam.current = aplicarZoomCameraImperio(cam.current, event.deltaY)
+      }}
       onPointerDown={(event) => {
         const target = event.target as HTMLElement
         if (
           target.closest(
-            'button, .ilha-modal, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-construcoes, .ilha-ferramentas, .ilha-painel-obra, .ilha-army',
+            'button, .ilha-modal, .ilha-modal-ressurreicao, .ilha-banner-ressurreicao, .ilha-herois-barra, .ilha-posse-banner, .ilha-caderno, .ilha-confirmar-card, .ilha-acoes-campo, .ilha-olhar, .ilha-barra, .ilha-minimapa, .ilha-base, .ilha-construcoes, .ilha-ferramentas, .ilha-barra-contextual, .ilha-painel-obra, .ilha-army',
           )
         )
           return
@@ -2758,8 +3383,8 @@ export const IlhaRua: React.FC = () => {
             pointerId: event.pointerId,
             x: localX,
             largura: retangulo.width,
-            olhar: sim.current.olhar,
-            semCorpo: sim.current.semCorpo,
+            olhar: sim.current.posse ? sim.current.posse.modo : sim.current.olhar,
+            semCorpo: sim.current.semCorpo && !sim.current.posse,
           })
           ponteiroDaObraRef.current = null
           if (destino === 'obra') return
@@ -2808,7 +3433,7 @@ export const IlhaRua: React.FC = () => {
         // «Observando» ou de um modo de edição) engolia o 1º tiro depois (OBS-F2-4, medido: 0 tiros contra 1).
         const ponteiroDaObra = ponteiroDaObraRef.current === event.pointerId
         ponteiroDaObraRef.current = null
-        if (sim.current.olhar === 'imperio' || sim.current.semCorpo) {
+        if (sim.current.olhar === 'imperio' || (sim.current.semCorpo && !sim.current.posse)) {
           if (event.button === 1 || event.button === 2) {
             if (event.button === 1) {
               event.preventDefault()
@@ -2885,6 +3510,8 @@ export const IlhaRua: React.FC = () => {
         <Cena
           sim={sim}
           specQualidade={specQualidade}
+          projetarNdcRef={projetarNdcRef}
+          onResetCameraImperio={() => setPower('Câmera do Império reiniciada')}
           onAutoQualidadeFrame={(emaMs, dtSeg) => {
             const prox = passoAutoQualidade(estadoQualidadeRef.current, emaMs, dtSeg)
             if (prox.efetiva !== estadoQualidadeRef.current.efetiva) {
@@ -2902,6 +3529,8 @@ export const IlhaRua: React.FC = () => {
           onBussolaImperio={setBussolaImperio}
           tool={tool}
           moverObraIdRef={moverObraIdRef}
+          rallyObraIdRef={rallyObraIdRef}
+          painelObraId={painelObraId}
           dragou={dragou}
           selectedIds={selectedIds}
           modoBloco={modoBloco}
@@ -3007,7 +3636,11 @@ export const IlhaRua: React.FC = () => {
               segurandoTiro.current && state.olhar !== 'imperio' && !state.semCorpo && !state.derrota && state.heroi.shootCooldown <= 0
                 ? atirar(state)
                 : state
-            publicar(tiro)
+            if (tiro !== state) {
+              publicar(tiro)
+            } else {
+              sincronizarHud(state)
+            }
           }}
           onGround={(x, z) => {
             if (!podeComandar()) return
@@ -3042,6 +3675,17 @@ export const IlhaRua: React.FC = () => {
               setGhostObra(null)
               setFerramenta('')
               setPower(`${META_INTENCOES[obraAlvo.tipo].titulo} movida`)
+              return
+            }
+            if (rallyObraIdRef.current !== null) {
+              const idRally = rallyObraIdRef.current
+              rallyObraIdRef.current = null
+              publicar(definirRallyPoint(sim.current, idRally, x, z))
+              setFerramenta('')
+              setPower('Ponto de encontro definido!')
+              return
+            }
+            if (executarModoOrdemCursor(x, z)) {
               return
             }
             if (modoMoverTouchRef.current) {
@@ -3081,7 +3725,32 @@ export const IlhaRua: React.FC = () => {
             }
             const unidade = sim.current.unidades.find((item) => item.id === id)
             if (!unidade || unidade.hp <= 0 || (lado === 'inimigo' && !inimigoVisivel(sim.current, unidade))) return
+            if (rallyObraIdRef.current !== null) {
+              setPower('Clique no chão para definir o Ponto de Encontro do Quartel (Esc cancela)')
+              return
+            }
             if (lado === 'aliado') {
+              const agora = performance.now()
+              const anterior = ultimoCliqueUnidadeRef.current
+              const ehDuploClique = anterior !== null && anterior.id === id && agora - anterior.tempoMs <= 320
+              if (ehDuploClique) {
+                ultimoCliqueUnidadeRef.current = null
+                const noViewport = selecionarMesmoTipoNoViewport(
+                  sim.current.unidades,
+                  id,
+                  projetarNdcRef.current,
+                )
+                const proximas = shiftKey
+                  ? Array.from(new Set([...selected.current, ...noViewport]))
+                  : noViewport
+                setHeroiEscolhido(shiftKey ? heroiEscolhido : false)
+                setModoMoverTouch(false)
+                evoluirId.current = null
+                definirSelecao(proximas)
+                setFerramenta(`${proximas.length} do mesmo tipo`)
+                return
+              }
+              ultimoCliqueUnidadeRef.current = { id, tempoMs: agora }
               const proxima = selecionarAoClicarUnidade({ heroi: heroiEscolhido, tropas: selected.current }, id, Boolean(shiftKey))
               setHeroiEscolhido(proxima.heroi)
               setModoMoverTouch(false)
@@ -3149,6 +3818,13 @@ export const IlhaRua: React.FC = () => {
             setHeroiEscolhido(proxima.heroi)
             setFerramenta(proxima.heroi ? 'Herói' : '')
           }}
+          onSelecionarHeroiSecundario={(heroiId) => {
+            const prox = selecionarHeroiAtivo(sim.current, heroiId)
+            if (prox === sim.current) return
+            publicar(prox)
+            setHeroiEscolhido(true)
+            setPower(`${SPEC_HEROI[prox.heroi.classe ?? 'ataque'].tituloPt} ativo`)
+          }}
           heroiEscolhido={heroiEscolhido}
           atlas={atlasRef}
           mapa={`${atlasRef.current.cenaI},${atlasRef.current.cenaJ}`}
@@ -3169,8 +3845,8 @@ export const IlhaRua: React.FC = () => {
         <div className="ilha-barra">
           <button
             type="button"
-            className={!hud.semCorpo && hud.olhar === 'primeira' ? 'ativo' : undefined}
-            aria-pressed={!hud.semCorpo && hud.olhar === 'primeira'}
+            className={(!hud.semCorpo || Boolean(hud.posse)) && (hud.posse ? hud.posse.modo === 'primeira' : hud.olhar === 'primeira') ? 'ativo' : undefined}
+            aria-pressed={(!hud.semCorpo || Boolean(hud.posse)) && (hud.posse ? hud.posse.modo === 'primeira' : hud.olhar === 'primeira')}
             data-testid="ilha-olhar-primeira"
             onClick={() => irParaOlhar('primeira')}
           >
@@ -3178,8 +3854,8 @@ export const IlhaRua: React.FC = () => {
           </button>
           <button
             type="button"
-            className={!hud.semCorpo && hud.olhar === 'terceira' ? 'ativo' : undefined}
-            aria-pressed={!hud.semCorpo && hud.olhar === 'terceira'}
+            className={(!hud.semCorpo || Boolean(hud.posse)) && (hud.posse ? hud.posse.modo === 'terceira' : hud.olhar === 'terceira') ? 'ativo' : undefined}
+            aria-pressed={(!hud.semCorpo || Boolean(hud.posse)) && (hud.posse ? hud.posse.modo === 'terceira' : hud.olhar === 'terceira')}
             data-testid="ilha-olhar-terceira"
             onClick={() => irParaOlhar('terceira')}
           >
@@ -3187,18 +3863,105 @@ export const IlhaRua: React.FC = () => {
           </button>
           <button
             type="button"
-            className={hud.semCorpo || hud.olhar === 'imperio' ? 'ativo' : undefined}
-            aria-pressed={hud.semCorpo || hud.olhar === 'imperio'}
+            className={(hud.semCorpo && !hud.posse) || (!hud.posse && hud.olhar === 'imperio') ? 'ativo' : undefined}
+            aria-pressed={(hud.semCorpo && !hud.posse) || (!hud.posse && hud.olhar === 'imperio')}
             data-testid="ilha-olhar-imperio"
             onClick={() => irParaOlhar('imperio')}
           >
             Império
           </button>
-          <span className={hud.semCorpo ? 'ilha-obs-sem-corpo' : undefined} data-testid="ilha-olhar">
-            {hud.semCorpo ? 'Observando · Império' : olharNome(hud.olhar)}
+          <span className={hud.semCorpo && !hud.posse ? 'ilha-obs-sem-corpo' : undefined} data-testid="ilha-olhar">
+            {hud.posse
+              ? `${olharNome(hud.posse.modo)} · Posse`
+              : hud.semCorpo
+                ? 'Observando · Império'
+                : olharNome(hud.olhar)}
           </span>
         </div>
         <SeloDeVida vida={corpoAtual.heroi.army} />
+        {(corpoAtual.heroi.invulneravelRestante ?? 0) > 0 && !derrotado && (
+          <div className="ilha-escudo-badge" data-testid="ilha-escudo-ressurreicao">
+            🛡️ Escudo {Math.ceil(corpoAtual.heroi.invulneravelRestante ?? 0)}s
+          </div>
+        )}
+        {(() => {
+          const heroisLista = listarHerois(hud)
+          const heroisVivosLista = heroisLista.filter((h) => h.vivo && h.army > 0)
+          const ativoId = hud.heroiAtivoId ?? 0
+          const ativoObj = heroisLista.find((h) => h.id === ativoId)
+          const ehConstrutor = Boolean(ativoObj && ativoObj.vivo && SPEC_HEROI[ativoObj.classe].capacidadeConstrutor)
+          if (heroisVivosLista.length <= 1 && !ehConstrutor) return null
+          return (
+            <div className="ilha-herois-barra" data-testid="ilha-herois-barra">
+              {heroisVivosLista.length > 1 &&
+                heroisVivosLista.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    className={h.id === ativoId ? 'ilha-chip ativo' : 'ilha-chip'}
+                    data-testid={`ilha-heroi-btn-${h.classe}`}
+                    onClick={() => {
+                      const prox = selecionarHeroiAtivo(sim.current, h.id)
+                      if (prox !== sim.current) {
+                        publicar(prox)
+                        setPower(`${SPEC_HEROI[h.classe].tituloPt} selecionado`)
+                      }
+                    }}
+                  >
+                    {h.classe === 'ataque' ? '⚔️ Ataque' : h.classe === 'tanque' ? '🛡️ Tanque' : '🔨 Construtor'} ({h.army})
+                  </button>
+                ))}
+              {ehConstrutor && (
+                <>
+                  <button
+                    type="button"
+                    className="ilha-chip"
+                    data-testid="ilha-construtor-coletar"
+                    onClick={() => {
+                      const rec = sim.current.recursos
+                        .filter((r) => r.hp > 0 && r.yBase >= -0.5)
+                        .sort(
+                          (a, b) =>
+                            Math.hypot(a.x - sim.current.heroi.x, a.z - sim.current.heroi.z) -
+                            Math.hypot(b.x - sim.current.heroi.x, b.z - sim.current.heroi.z),
+                        )[0]
+                      if (!rec) {
+                        setPower('Nenhum recurso próximo para coletar')
+                        return
+                      }
+                      publicar(ordenarConstrutorColetar(sim.current, ativoId, rec.id))
+                      setPower('Construtor coletando recurso')
+                    }}
+                  >
+                    🪵 Coletar
+                  </button>
+                  <button
+                    type="button"
+                    className="ilha-chip"
+                    data-testid="ilha-construtor-reparar"
+                    onClick={() => {
+                      const danificada = sim.current.obras
+                        .filter((o) => o.lado !== 'inimigo' && (o.hp < o.maxHp || o.hp <= 0))
+                        .sort(
+                          (a, b) =>
+                            Math.hypot(a.x - sim.current.heroi.x, a.z - sim.current.heroi.z) -
+                            Math.hypot(b.x - sim.current.heroi.x, b.z - sim.current.heroi.z),
+                        )[0]
+                      if (!danificada) {
+                        setPower('Nenhuma obra danificada para reparar')
+                        return
+                      }
+                      publicar(ordenarConstrutorReparar(sim.current, ativoId, danificada.id))
+                      setPower('Construtor reparando obra')
+                    }}
+                  >
+                    🔧 Reparar
+                  </button>
+                </>
+              )}
+            </div>
+          )
+        })()}
         {/* O STATUS DA BASE virou uma lista VERTICAL que abre ao clicar (pedido do usuário, 23/11: «o status dos seus edifícios não é pra ficar mostrando horizontalmente [...] um filtro vertical que ao clicar aparece as suas
             construções e o que você quer evoluir»). A linha horizontal antiga («Núcleo nível 1 · vida · tropas · ... · Torre Nv. 1 · Quartel Nv. 1 ...») cortava o que passava de ~900 px; os avisos dela (sem caminho, núcleo inimigo
             destruído, dragão, obra frágil, «Leva em Xs») continuam, agora no topo do painel aberto. A lógica é de `listaDeConstrucoes.ts`; o preço e o ganho de cada nível, de `evolucaoObra.ts`. */}
@@ -3306,235 +4069,435 @@ export const IlhaRua: React.FC = () => {
             )}
           </div>
         )}
-        {tatico && !derrotado && (
-          <div className="ilha-ferramentas" data-testid="ilha-ferramentas">
-            <div className="ilha-ferramentas-grade">
-              {(['nucleo', 'torre', 'portao', 'quartel', 'britador', 'serraria', 'mina'] as const).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={tool.current === id || intencao === id ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                  data-testid={`ilha-construir-${id}`}
-                  aria-label={META_INTENCOES[id].titulo}
-                  onClick={() => setIntencao(id)}
-                >
-                  <IconeSvg id={id} size={18} />
-                </button>
-              ))}
-              <button
-                type="button"
-                className={intencao === 'evoluir' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-evoluir"
-                aria-label={META_INTENCOES.evoluir.titulo}
-                onClick={() => setIntencao('evoluir')}
-              >
-                <IconeSvg id="evoluir" size={18} />
-              </button>
-              <button
-                type="button"
-                className={intencao === 'tropa' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-tropa"
-                aria-label={META_INTENCOES.tropa.titulo}
-                onClick={() => setIntencao('tropa')}
-              >
-                <IconeSvg id="tropa" size={18} />
-              </button>
-              <button
-                type="button"
-                className={intencao === 'todas' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-todas"
-                aria-label={META_INTENCOES.todas.titulo}
-                onClick={() => setIntencao('todas')}
-              >
-                <IconeSvg id="todas" size={18} />
-              </button>
-              <button
-                type="button"
-                className={intencao === 'atacar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-atacar"
-                aria-label={META_INTENCOES.atacar.titulo}
-                onClick={() => setIntencao('atacar')}
-              >
-                <IconeSvg id="atacar" size={18} />
-              </button>
-              <button
-                type="button"
-                className={posturaMarcada('vigia') ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-automatico"
-                aria-label="Vigia"
-                aria-pressed={posturaMarcada('vigia')}
-                onClick={() => aplicarPostura('vigia')}
-              >
-                <IconeSvg id="automatico" size={18} />
-              </button>
-              <button
-                type="button"
-                className={posturaMarcada('noLugar') ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-postura-no-lugar"
-                aria-label="No lugar"
-                aria-pressed={posturaMarcada('noLugar')}
-                onClick={() => aplicarPostura('noLugar')}
-              >
-                <IconeSvg id="desmarcar" size={18} />
-              </button>
-              <button
-                type="button"
-                className={posturaMarcada('calado') ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-postura-calado"
-                aria-label="Calado"
-                aria-pressed={posturaMarcada('calado')}
-                onClick={() => aplicarPostura('calado')}
-              >
-                <IconeSvg id="cancelar" size={18} />
-              </button>
-              {(temMinaPronta || noSubsoloHud) && (
+        {tatico && !derrotado && (() => {
+          const obraPainelCtx =
+            painelObraId !== null
+              ? hud.obras.find((o) => o.id === painelObraId && o.lado !== 'inimigo' && o.hp > 0)
+              : undefined
+          const ctxHud = derivarContextoHud({
+            qtdTropasSelecionadas: selectedIds.length,
+            heroiEscolhido,
+            heroiAtivoClasse: hud.heroi.classe,
+            obraPainelTipo: obraPainelCtx?.tipo ?? null,
+            modoConstruirAberto:
+              modoConstruirAberto ||
+              Boolean(tool.current) ||
+              painelBlocosAberto ||
+              modoLinhaBlocos ||
+              Boolean(modoConsagrar),
+          })
+          const construtorOciosoHud = encontrarConstrutorOcioso(hud)
+          const vivasCtxSet = new Set(hud.unidades.filter((u) => u.lado === 'aliado' && u.hp > 0).map((u) => u.id))
+          return (
+            <div className="ilha-barra-contextual" data-testid="ilha-barra-contextual">
+              <div className="ilha-ctx-cabecalho">
+                <span className="ilha-ctx-titulo" data-testid="ilha-ctx-titulo">
+                  {ctxHud.tituloPt}
+                </span>
                 <button
                   type="button"
-                  className={noSubsoloHud || intencao === 'subsolo' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                  data-testid="ilha-subsolo"
-                  aria-label={META_INTENCOES.subsolo.titulo}
-                  onClick={() => setIntencao('subsolo')}
+                  data-testid="ilha-cmd-focar-heroi"
+                  aria-label="Focar Herói (H)"
+                  onClick={() => {
+                    if (sim.current.semCorpo || sim.current.heroi.army <= 0) return
+                    cam.current = { ...cam.current, x: sim.current.heroi.x, z: sim.current.heroi.z }
+                    setHeroiEscolhido(true)
+                    definirSelecao([])
+                    setModoConstruirAberto(false)
+                    setFerramenta('Herói')
+                  }}
                 >
-                  <IconeSvg id="subsolo" size={18} />
+                  🎯 Herói (H)
                 </button>
-              )}
-              <button
-                type="button"
-                className={painelBlocosAberto || intencao === 'editarBlocos' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-editar-blocos"
-                aria-label={META_INTENCOES.editarBlocos.titulo}
-                onClick={() => setIntencao('editarBlocos')}
-              >
-                <IconeSvg id="editarBlocos" size={18} />
-              </button>
-              <button
-                type="button"
-                className={modoLinhaBlocos || intencao === 'muralhaLinha' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-muralha-linha"
-                aria-label={META_INTENCOES.muralhaLinha.titulo}
-                onClick={() => setIntencao('muralhaLinha')}
-              >
-                <IconeSvg id="muralhaLinha" size={18} />
-              </button>
-              <button
-                type="button"
-                className={Boolean(modoConsagrar) || intencao === 'consagrar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                data-testid="ilha-consagrar"
-                aria-label={META_INTENCOES.consagrar.titulo}
-                onClick={() => setIntencao('consagrar')}
-              >
-                <IconeSvg id="consagrar" size={18} />
-              </button>
-              {painelBlocosAberto && (
-                <>
+                {nucleo && nucleo.hp > 0 && (
                   <button
                     type="button"
-                    className={modoBloco === 'adicionar' || intencao === 'blocoAdicionar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                    data-testid="ilha-bloco-adicionar"
-                    aria-label={META_INTENCOES.blocoAdicionar.titulo}
-                    onClick={() => setIntencao('blocoAdicionar')}
-                  >
-                    <IconeSvg id="blocoAdicionar" size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    className={modoBloco === 'remover' || intencao === 'blocoRemover' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                    data-testid="ilha-bloco-remover"
-                    aria-label={META_INTENCOES.blocoRemover.titulo}
-                    onClick={() => setIntencao('blocoRemover')}
-                  >
-                    <IconeSvg id="blocoRemover" size={18} />
-                  </button>
-                </>
-              )}
-              {ruinaNossa && (
-                <button
-                  type="button"
-                  className={intencao === 'reparar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
-                  data-testid="ilha-reparar"
-                  aria-label={META_INTENCOES.reparar.titulo}
-                  onClick={() => setIntencao('reparar')}
-                >
-                  <IconeSvg id="reparar" size={18} />
-                </button>
-              )}
-            </div>
-            {(painelBlocosAberto || modoLinhaBlocos) && (
-              <div className="ilha-subbarra" data-testid="ilha-subbarra-blocos">
-                {(['madeira', 'pedra', 'ouro'] as const).map((mat) => (
-                  <button
-                    key={mat}
-                    type="button"
-                    className={materialBloco === mat ? 'ilha-chip ativo' : 'ilha-chip'}
-                    data-testid={`ilha-mat-${mat}`}
-                    aria-label={`Material ${SPEC_BLOCO_MATERIAL[mat].nome}`}
+                    data-testid="ilha-cmd-focar-nucleo"
+                    aria-label="Focar Núcleo"
                     onClick={() => {
-                      materialBlocoRef.current = mat
-                      setMaterialBloco(mat)
-                      if (modoLinhaRef.current) {
-                        setFerramenta(`Linha 360° (${alturaLinhaRef.current}b · ${SPEC_BLOCO_MATERIAL[mat].nome})`)
-                      } else if (modoBlocoRef.current === 'adicionar') {
-                        setFerramenta(`Modo Bloco: Adicionar (${SPEC_BLOCO_MATERIAL[mat].nome})`)
-                      }
+                      cam.current = { ...cam.current, x: nucleo.x, z: nucleo.z }
+                      painelObraRef.current = nucleo.id
+                      evoluirId.current = nucleo.id
+                      setPainelObraId(nucleo.id)
+                      setConfirmarVendaId(null)
+                      setHeroiEscolhido(false)
+                      definirSelecao([])
+                      setModoConstruirAberto(false)
                     }}
                   >
-                    {SPEC_BLOCO_MATERIAL[mat].nome}
+                    🏛️ Núcleo
                   </button>
-                ))}
-                {modoLinhaBlocos &&
-                  ([1, 2, 3] as const).map((alt) => (
+                )}
+                {construtorOciosoHud && (
+                  <button
+                    type="button"
+                    data-testid="ilha-cmd-construtor-ocioso"
+                    aria-label="Construtor Ocioso (.)"
+                    onClick={() => {
+                      const prox = selecionarHeroiAtivo(sim.current, construtorOciosoHud.id)
+                      publicar(prox)
+                      cam.current = { ...cam.current, x: construtorOciosoHud.x, z: construtorOciosoHud.z }
+                      setHeroiEscolhido(true)
+                      definirSelecao([])
+                      setModoConstruirAberto(false)
+                      setPower('Construtor ocioso selecionado!')
+                    }}
+                  >
+                    🔨 Ocioso (.)
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={modoConstruirAberto ? 'ativo' : undefined}
+                  data-testid="ilha-cmd-toggle-construir"
+                  aria-label="Construir e Blocos"
+                  onClick={() => setModoConstruirAberto((aberto) => !aberto)}
+                >
+                  🛠️ Construir
+                </button>
+                <button
+                  type="button"
+                  className={intencao === 'todas' ? 'ativo' : undefined}
+                  data-testid="ilha-todas"
+                  aria-label={META_INTENCOES.todas.titulo}
+                  onClick={() => setIntencao('todas')}
+                >
+                  👥 Todas
+                </button>
+                <button
+                  type="button"
+                  className={intencao === 'evoluir' ? 'ativo' : undefined}
+                  data-testid="ilha-evoluir"
+                  aria-label={META_INTENCOES.evoluir.titulo}
+                  onClick={() => setIntencao('evoluir')}
+                >
+                  ⬆️ Evoluir
+                </button>
+                {Object.entries(gruposControle).map(([slotStr, idsGrupo]) => {
+                  const slotNum = Number(slotStr)
+                  const vivosNoGrupo = idsGrupo.filter((gid) => vivasCtxSet.has(gid))
+                  if (vivosNoGrupo.length === 0) return null
+                  return (
                     <button
-                      key={alt}
+                      key={`grupo-${slotNum}`}
                       type="button"
-                      className={alturaLinha === alt ? 'ilha-chip ativo' : 'ilha-chip'}
-                      data-testid={`ilha-linha-alt-${alt}`}
-                      aria-label={`Altura ${alt} ${alt === 1 ? 'bloco' : 'blocos'}`}
+                      className="ilha-chip"
+                      data-testid={`ilha-grupo-${slotNum}`}
                       onClick={() => {
-                        alturaLinhaRef.current = alt
-                        setAlturaLinha(alt)
-                        setFerramenta(`Linha 360° (${alt}b · ${SPEC_BLOCO_MATERIAL[materialBlocoRef.current].nome})`)
+                        definirSelecao(vivosNoGrupo)
+                        setHeroiEscolhido(false)
+                        setModoConstruirAberto(false)
+                        setFerramenta(`Grupo ${slotNum} (${vivosNoGrupo.length})`)
                       }}
                     >
-                      {alt === 1 ? '1b Trinch' : alt === 2 ? '2b Muralha' : '3b Alta'}
+                      G{slotNum} ({vivosNoGrupo.length})
+                    </button>
+                  )
+                })}
+              </div>
+              {ctxHud.mostrarConstrucao && (
+                <div className="ilha-ctx-acoes" data-testid="ilha-ctx-construcao">
+                  {(['nucleo', 'torre', 'portao', 'quartel', 'britador', 'serraria', 'mina'] as const).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={tool.current === id || intencao === id ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                      data-testid={`ilha-construir-${id}`}
+                      aria-label={META_INTENCOES[id].titulo}
+                      onClick={() => setIntencao(id)}
+                    >
+                      <IconeSvg id={id} size={18} />
                     </button>
                   ))}
-              </div>
-            )}
-            {modoConsagrar && (
-              <div className="ilha-subbarra" data-testid="ilha-subbarra-consagrar">
-                {(
-                  [
-                    ['nucleo', 'Núcleo'],
-                    ['torre', 'Torre'],
-                    ['quartel', 'Quartel'],
-                    ['portao', 'Portão'],
-                    ['britador', 'Britador'],
-                    ['serraria', 'Serraria'],
-                    ['mina', 'Mina'],
-                  ] as const
-                ).map(([peca, rotulo]) => (
+                  {(temMinaPronta || noSubsoloHud) && (
+                    <button
+                      type="button"
+                      className={noSubsoloHud || intencao === 'subsolo' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                      data-testid="ilha-subsolo"
+                      aria-label={META_INTENCOES.subsolo.titulo}
+                      onClick={() => setIntencao('subsolo')}
+                    >
+                      <IconeSvg id="subsolo" size={18} />
+                    </button>
+                  )}
                   <button
-                    key={peca}
                     type="button"
-                    className={modoConsagrar === peca ? 'ilha-chip ativo' : 'ilha-chip'}
-                    data-testid={`ilha-consagrar-tipo-${peca}`}
+                    className={painelBlocosAberto || intencao === 'editarBlocos' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                    data-testid="ilha-editar-blocos"
+                    aria-label={META_INTENCOES.editarBlocos.titulo}
+                    onClick={() => setIntencao('editarBlocos')}
+                  >
+                    <IconeSvg id="editarBlocos" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className={modoLinhaBlocos || intencao === 'muralhaLinha' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                    data-testid="ilha-muralha-linha"
+                    aria-label={META_INTENCOES.muralhaLinha.titulo}
+                    onClick={() => setIntencao('muralhaLinha')}
+                  >
+                    <IconeSvg id="muralhaLinha" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className={Boolean(modoConsagrar) || intencao === 'consagrar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                    data-testid="ilha-consagrar"
+                    aria-label={META_INTENCOES.consagrar.titulo}
+                    onClick={() => setIntencao('consagrar')}
+                  >
+                    <IconeSvg id="consagrar" size={18} />
+                  </button>
+                  {painelBlocosAberto && (
+                    <>
+                      <button
+                        type="button"
+                        className={modoBloco === 'adicionar' || intencao === 'blocoAdicionar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                        data-testid="ilha-bloco-adicionar"
+                        aria-label={META_INTENCOES.blocoAdicionar.titulo}
+                        onClick={() => setIntencao('blocoAdicionar')}
+                      >
+                        <IconeSvg id="blocoAdicionar" size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        className={modoBloco === 'remover' || intencao === 'blocoRemover' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                        data-testid="ilha-bloco-remover"
+                        aria-label={META_INTENCOES.blocoRemover.titulo}
+                        onClick={() => setIntencao('blocoRemover')}
+                      >
+                        <IconeSvg id="blocoRemover" size={18} />
+                      </button>
+                    </>
+                  )}
+                  {ruinaNossa && (
+                    <button
+                      type="button"
+                      className={intencao === 'reparar' ? 'ilha-icone-btn ativo' : 'ilha-icone-btn'}
+                      data-testid="ilha-reparar"
+                      aria-label={META_INTENCOES.reparar.titulo}
+                      onClick={() => setIntencao('reparar')}
+                    >
+                      <IconeSvg id="reparar" size={18} />
+                    </button>
+                  )}
+                </div>
+              )}
+              {ctxHud.mostrarOrdensCombate && (
+                <div className="ilha-ctx-acoes" data-testid="ilha-ctx-combate">
+                  <button
+                    type="button"
+                    className={modoOrdemCursor === 'attackMove' ? 'ativo' : undefined}
+                    data-testid="ilha-cmd-attack-move"
+                    aria-label="Marcha de ataque (A)"
                     onClick={() => {
-                      modoConsagrarRef.current = peca
-                      setModoConsagrar(peca)
+                      modoOrdemCursorRef.current = 'attackMove'
+                      setModoOrdemCursor('attackMove')
+                      setFerramenta('Attack-Move: clique no destino no chão')
+                      setPower('Attack-Move: clique no chão para avançar atacando (Esc cancela)')
                     }}
                   >
-                    {rotulo}
+                    ⚔️ Atacar (A)
                   </button>
-                ))}
-              </div>
-            )}
-            <p>
-              {previewLinha
-                ? `Linha: ${previewLinha.plano.celulas.length} blocos · Custo ${previewLinha.plano.custoTotal} ${SPEC_BLOCO_MATERIAL[previewLinha.plano.material].nome}${previewLinha.temRecurso ? '' : ' (insuficiente)'}`
-                : ferramenta || 'Toque num ícone para ver a descrição e confirmar.'}
-            </p>
-          </div>
-        )}
+                  <button
+                    type="button"
+                    className={intencao === 'atacar' ? 'ativo' : undefined}
+                    data-testid="ilha-atacar"
+                    aria-label={META_INTENCOES.atacar.titulo}
+                    onClick={() => setIntencao('atacar')}
+                  >
+                    🎯 Alvo próximo
+                  </button>
+                  <button
+                    type="button"
+                    className={modoOrdemCursor === 'patrulhar_b' ? 'ativo' : undefined}
+                    data-testid="ilha-cmd-patrulhar"
+                    aria-label="Patrulha A↔B (P)"
+                    onClick={() => {
+                      modoOrdemCursorRef.current = 'patrulhar_b'
+                      setModoOrdemCursor('patrulhar_b')
+                      setFerramenta('Patrulha: clique no ponto B no chão')
+                      setPower('Patrulha A ↔ B: clique no ponto B no chão (Esc cancela)')
+                    }}
+                  >
+                    🚶 Patrulha (P)
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="ilha-cmd-parar"
+                    aria-label="Parar (S)"
+                    onClick={() => {
+                      publicar(pararUnidades(sim.current, selected.current, heroiEscolhido))
+                      setPower('Unidades paradas (S)')
+                    }}
+                  >
+                    ✋ Parar (S)
+                  </button>
+                  {selectedIds.length === 1 &&
+                    hud.unidades.some((u) => u.id === selectedIds[0] && u.lado === 'aliado' && u.hp > 0) && (
+                      <>
+                        <button
+                          type="button"
+                          data-testid="ilha-posse-primeira"
+                          aria-label="Possuir tropa em 1ª Pessoa (1)"
+                          onClick={() => irParaOlhar('primeira')}
+                        >
+                          👁️ 1ª Pessoa (1)
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="ilha-posse-terceira"
+                          aria-label="Possuir tropa em 3ª Pessoa (2)"
+                          onClick={() => irParaOlhar('terceira')}
+                        >
+                          🎥 3ª Pessoa (2)
+                        </button>
+                      </>
+                    )}
+                  {ctxHud.mostrarPosturas && (
+                    <>
+                      <button
+                        type="button"
+                        className={posturaMarcada('vigia') ? 'ativo' : undefined}
+                        data-testid="ilha-automatico"
+                        aria-label="Vigia"
+                        aria-pressed={posturaMarcada('vigia')}
+                        onClick={() => aplicarPostura('vigia')}
+                      >
+                        🛡️ Vigia
+                      </button>
+                      <button
+                        type="button"
+                        className={posturaMarcada('noLugar') ? 'ativo' : undefined}
+                        data-testid="ilha-postura-no-lugar"
+                        aria-label="No lugar"
+                        aria-pressed={posturaMarcada('noLugar')}
+                        onClick={() => aplicarPostura('noLugar')}
+                      >
+                        📍 No lugar
+                      </button>
+                      <button
+                        type="button"
+                        className={posturaMarcada('calado') ? 'ativo' : undefined}
+                        data-testid="ilha-postura-calado"
+                        aria-label="Calado"
+                        aria-pressed={posturaMarcada('calado')}
+                        onClick={() => aplicarPostura('calado')}
+                      >
+                        🤫 Calado
+                      </button>
+                    </>
+                  )}
+                  {selectedIds.length > 0 && (
+                    <div className="ilha-ctx-grupo-compacto" role="group" aria-label="Formação do exército">
+                      {(['linha', 'caixa', 'dispersa'] as const).map((formacao: TipoFormacao) => (
+                        <button
+                          key={formacao}
+                          type="button"
+                          className={(hud.formacao ?? 'caixa') === formacao ? 'ativo' : undefined}
+                          data-testid={`ilha-formacao-${formacao}`}
+                          aria-pressed={(hud.formacao ?? 'caixa') === formacao}
+                          onClick={() => {
+                            publicar(definirFormacao(sim.current, formacao))
+                            setPower(
+                              formacao === 'linha'
+                                ? 'Formação em Linha ativa'
+                                : formacao === 'dispersa'
+                                  ? 'Formação Dispersa (anti-Dragão) ativa'
+                                  : 'Formação em Caixa ativa',
+                            )
+                          }}
+                        >
+                          {formacao === 'linha' ? '═ Linha' : formacao === 'dispersa' ? '✦ Dispersa' : '▣ Caixa'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {(painelBlocosAberto || modoLinhaBlocos) && (
+                <div className="ilha-subbarra" data-testid="ilha-subbarra-blocos">
+                  {(['madeira', 'pedra', 'ouro'] as const).map((mat) => (
+                    <button
+                      key={mat}
+                      type="button"
+                      className={materialBloco === mat ? 'ilha-chip ativo' : 'ilha-chip'}
+                      data-testid={`ilha-mat-${mat}`}
+                      aria-label={`Material ${SPEC_BLOCO_MATERIAL[mat].nome}`}
+                      onClick={() => {
+                        materialBlocoRef.current = mat
+                        setMaterialBloco(mat)
+                        if (modoLinhaRef.current) {
+                          setFerramenta(`Linha 360° (${alturaLinhaRef.current}b · ${SPEC_BLOCO_MATERIAL[mat].nome})`)
+                        } else if (modoBlocoRef.current === 'adicionar') {
+                          setFerramenta(`Modo Bloco: Adicionar (${SPEC_BLOCO_MATERIAL[mat].nome})`)
+                        }
+                      }}
+                    >
+                      {SPEC_BLOCO_MATERIAL[mat].nome}
+                    </button>
+                  ))}
+                  {modoLinhaBlocos &&
+                    ([1, 2, 3] as const).map((alt) => (
+                      <button
+                        key={alt}
+                        type="button"
+                        className={alturaLinha === alt ? 'ilha-chip ativo' : 'ilha-chip'}
+                        data-testid={`ilha-linha-alt-${alt}`}
+                        aria-label={`Altura ${alt} ${alt === 1 ? 'bloco' : 'blocos'}`}
+                        onClick={() => {
+                          alturaLinhaRef.current = alt
+                          setAlturaLinha(alt)
+                          setFerramenta(`Linha 360° (${alt}b · ${SPEC_BLOCO_MATERIAL[materialBlocoRef.current].nome})`)
+                        }}
+                      >
+                        {alt === 1 ? '1b Trinch' : alt === 2 ? '2b Muralha' : '3b Alta'}
+                      </button>
+                    ))}
+                </div>
+              )}
+              {modoConsagrar && (
+                <div className="ilha-subbarra" data-testid="ilha-subbarra-consagrar">
+                  {(
+                    [
+                      ['nucleo', 'Núcleo'],
+                      ['torre', 'Torre'],
+                      ['quartel', 'Quartel'],
+                      ['portao', 'Portão'],
+                      ['britador', 'Britador'],
+                      ['serraria', 'Serraria'],
+                      ['mina', 'Mina'],
+                    ] as const
+                  ).map(([peca, rotulo]) => (
+                    <button
+                      key={peca}
+                      type="button"
+                      className={modoConsagrar === peca ? 'ilha-chip ativo' : 'ilha-chip'}
+                      data-testid={`ilha-consagrar-tipo-${peca}`}
+                      onClick={() => {
+                        modoConsagrarRef.current = peca
+                        setModoConsagrar(peca)
+                      }}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(previewLinha || ferramenta || ctxHud.contexto === 'mapa_livre' || ctxHud.mostrarProducaoQuartel || ctxHud.mostrarProducaoNucleo) && (
+                <p className="ilha-ctx-nota">
+                  {previewLinha
+                    ? `Linha: ${previewLinha.plano.celulas.length} blocos · Custo ${previewLinha.plano.custoTotal} ${SPEC_BLOCO_MATERIAL[previewLinha.plano.material].nome}${previewLinha.temRecurso ? '' : ' (insuficiente)'}`
+                    : ferramenta ||
+                    (ctxHud.mostrarProducaoQuartel
+                      ? 'Painel do Quartel aberto à direita: treine tropas ou defina o Rally Point.'
+                      : ctxHud.mostrarProducaoNucleo
+                        ? 'Painel do Núcleo aberto à direita: treine Heróis ou evolua até o Nível 5.'
+                        : 'Selecione Herói (H), tropas (duplo clique = tipo), ou clique em Construir.')}
+                </p>
+              )}
+            </div>
+          )
+        })()}
         {derrotado ? (
           <>
             <div className="ilha-fim">
@@ -3547,6 +4510,9 @@ export const IlhaRua: React.FC = () => {
                 atlasRef.current = criarAtlas()
                 sim.current = estadoCena(atlasRef.current)
                 limparInteracao()
+                setModoRessurreicaoConta(false)
+                modoRessurreicaoContaRef.current = false
+                setRessurreicaoMinimizada(false)
                 publicar(sim.current)
                 setPower('')
                 contaAtivaRef.current = null
@@ -3622,7 +4588,7 @@ export const IlhaRua: React.FC = () => {
               onPointerDown={(event) => {
                 event.stopPropagation()
                 event.preventDefault()
-                if (sim.current.derrota || sim.current.olhar === 'imperio' || sim.current.semCorpo) return
+                if (sim.current.derrota || sim.current.olhar === 'imperio' || (sim.current.semCorpo && !sim.current.posse)) return
                 if (modoBlocoRef.current) {
                   aplicarEdicaoVoxelRef.current()
                   return
@@ -3646,7 +4612,7 @@ export const IlhaRua: React.FC = () => {
               onClick={(event) => {
                 // Teclado (Enter ou Espaço no botão focado): `detail` é 0. Mouse e toque já agiram no pointerdown.
                 if (event.detail !== 0) return
-                if (sim.current.derrota || sim.current.olhar === 'imperio' || sim.current.semCorpo) return
+                if (sim.current.derrota || sim.current.olhar === 'imperio' || (sim.current.semCorpo && !sim.current.posse)) return
                 if (modoBlocoRef.current) {
                   aplicarEdicaoVoxelRef.current()
                   return
@@ -3675,7 +4641,7 @@ export const IlhaRua: React.FC = () => {
               </>
             )}
           </button>
-          {!derrotado && !hud.semCorpo && (
+          {!derrotado && !hud.semCorpo && !ressurreicaoAtiva && (
             contaAtiva && !contaAtiva.resolvida && telaEstudo === 'jogo' ? (
               <button
                 type="button"
@@ -3793,9 +4759,9 @@ export const IlhaRua: React.FC = () => {
           const reembolsoPainel = obraPainel.tipo !== 'nucleo' ? calcularReembolsoVenda(hud, obraPainel.id) : null
           const partesReembolso = reembolsoPainel
             ? [
-                reembolsoPainel.madeira > 0 ? `${reembolsoPainel.madeira} mad` : '',
-                reembolsoPainel.ouro > 0 ? `${reembolsoPainel.ouro} ouro` : '',
-              ].filter(Boolean)
+              reembolsoPainel.madeira > 0 ? `${reembolsoPainel.madeira} mad` : '',
+              reembolsoPainel.ouro > 0 ? `${reembolsoPainel.ouro} ouro` : '',
+            ].filter(Boolean)
             : []
           const textoReembolso = partesReembolso.join(' + ')
           const confirmandoVenda = confirmarVendaId === obraPainel.id
@@ -3918,7 +4884,158 @@ export const IlhaRua: React.FC = () => {
                 )}
               </div>
               {obraPainel.tipo === 'nucleo' && (
-                <p className="ilha-painel-nota">O Núcleo é fixo e não pode ser movido nem vendido.</p>
+                <>
+                  <div className="ilha-painel-producao" data-testid="ilha-painel-herois">
+                    <span className="ilha-painel-subtitulo">
+                      Heróis ({listarHerois(hud).filter((h) => h.vivo && h.army > 0).length}/
+                      {limiteHeroisPorNivelNucleo(maiorNivelNucleoNosso(hud))} · Nv.{maiorNivelNucleoNosso(hud)})
+                    </span>
+                    <div className="ilha-painel-acoes">
+                      {(['ataque', 'tanque', 'construtor'] as const).map((classe) => (
+                        <button
+                          key={classe}
+                          type="button"
+                          data-testid={`ilha-treinar-heroi-${classe}`}
+                          onClick={() => {
+                            if (obraEmConstrucao(obraPainel)) {
+                              setPower('Aguarde concluir a construção antes de treinar')
+                              return
+                            }
+                            const prox = enfileirarHeroi(sim.current, obraPainel.id, classe)
+                            if (prox === sim.current) {
+                              setPower('Limite de heróis, classe já ativa ou recursos insuficientes (2 lic. ou 4 ouro + 3 mad.)')
+                              return
+                            }
+                            publicar(prox)
+                            setPower(`${SPEC_HEROI[classe].tituloPt} na fila do Núcleo!`)
+                          }}
+                        >
+                          {classe === 'ataque' ? '⚔️ Ataque' : classe === 'tanque' ? '🛡️ Tanque' : '🔨 Construtor'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="ilha-painel-nota">O Núcleo é fixo e não pode ser movido nem vendido.</p>
+                </>
+              )}
+              {obraPainel.tipo === 'quartel' && (
+                <div className="ilha-painel-producao" data-testid="ilha-painel-quartel">
+                  <span className="ilha-painel-subtitulo">Recrutar Tropas (Fila)</span>
+                  <div className="ilha-painel-acoes">
+                    {(['soldado', 'arqueiro', 'lanceiro'] as const).map((tipoT) => (
+                      <button
+                        key={tipoT}
+                        type="button"
+                        data-testid={`ilha-treinar-tropa-${tipoT}`}
+                        onClick={() => {
+                          if (obraEmConstrucao(obraPainel)) {
+                            setPower('Aguarde concluir a construção antes de treinar')
+                            return
+                          }
+                          const prox = enfileirarTropa(sim.current, obraPainel.id, tipoT)
+                          if (prox === sim.current) {
+                            setPower('Fila cheia, limite de tropas ou recursos insuficientes')
+                            return
+                          }
+                          publicar(prox)
+                          setPower(`${SPEC_TROPA_ALIADA[tipoT].tituloPt} na fila!`)
+                        }}
+                      >
+                        {tipoT === 'soldado' ? '⚔️ Soldado' : tipoT === 'arqueiro' ? '🏹 Arqueiro' : '🔱 Lanceiro'}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      data-testid="ilha-painel-rally"
+                      onClick={() => {
+                        tool.current = null
+                        moverObraIdRef.current = null
+                        rallyObraIdRef.current = obraPainel.id
+                        publicar(definirOlhar(sim.current, 'imperio'))
+                        setFerramenta('Ponto de Encontro · clique no chão')
+                        setPower('Clique no chão para definir o Ponto de Encontro do Quartel (Esc cancela)')
+                      }}
+                    >
+                      🚩 Rally Point
+                    </button>
+                  </div>
+                </div>
+              )}
+              {(obraPainel.tipo === 'nucleo' || obraPainel.tipo === 'quartel') && (
+                <div className="ilha-painel-producao" data-testid="ilha-painel-upgrades">
+                  <span className="ilha-painel-subtitulo">Upgrades de Era</span>
+                  <div className="ilha-painel-acoes">
+                    {(['forja', 'alvenaria', 'botas'] as const).map((tipoUp: TipoUpgradeEra) => {
+                      const specUp = SPEC_UPGRADE_ERA[tipoUp]
+                      const nvAtual = hud.upgradesEra?.[tipoUp] ?? 0
+                      const custoUp = custoUpgradeEra(tipoUp, nvAtual)
+                      const noMax = nvAtual >= specUp.maxNivel
+                      return (
+                        <button
+                          key={tipoUp}
+                          type="button"
+                          data-testid={`ilha-upgrade-${tipoUp}`}
+                          title={specUp.resumoPt}
+                          onClick={() => {
+                            if (noMax) {
+                              setPower(`${specUp.nomePt} já está no nível máximo`)
+                              return
+                            }
+                            const prox = comprarUpgradeEra(sim.current, tipoUp)
+                            if (prox === sim.current) {
+                              setPower(`Precisa de ${custoUp.ouro} ouro e ${custoUp.madeira} madeira para ${specUp.nomePt}`)
+                              return
+                            }
+                            publicar(prox)
+                            setPower(`${specUp.nomePt} Nv.${nvAtual + 1} pesquisada!`)
+                          }}
+                        >
+                          {tipoUp === 'forja' ? '🔥 Forja' : tipoUp === 'alvenaria' ? '🧱 Alvenaria' : '🥾 Botas'}{' '}
+                          {noMax ? 'MAX' : `${nvAtual}/${specUp.maxNivel} (${custoUp.ouro}o ${custoUp.madeira}m)`}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {Boolean(obraPainel.filaProducao?.length) && (
+                <div className="ilha-painel-fila" data-testid="ilha-painel-fila">
+                  <span className="ilha-painel-subtitulo">
+                    Fila (×{obraPainel.filaProducao!.length}) — clique para cancelar (100% reembolso)
+                  </span>
+                  {(() => {
+                    const primeiro = obraPainel.filaProducao![0]
+                    const pct =
+                      primeiro.tempoTotalSeg > 0
+                        ? Math.max(0, Math.min(100, ((primeiro.tempoTotalSeg - primeiro.tempoRestanteSeg) / primeiro.tempoTotalSeg) * 100))
+                        : 0
+                    return (
+                      <div className="ilha-ressurreicao-barra">
+                        <div className="ilha-ressurreicao-progresso" style={{ width: `${pct}%` }} />
+                      </div>
+                    )
+                  })()}
+                  <div className="ilha-fila-itens">
+                    {obraPainel.filaProducao!.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="ilha-chip"
+                        data-testid={`ilha-fila-cancelar-${item.id}`}
+                        onClick={() => {
+                          publicar(cancelarItemFila(sim.current, obraPainel.id, item.id))
+                          setPower('Item cancelado com 100% de reembolso')
+                        }}
+                      >
+                        ✕{' '}
+                        {item.categoria === 'heroi'
+                          ? (item.classeHeroi ? SPEC_HEROI[item.classeHeroi].tituloPt : 'Herói')
+                          : SPEC_TROPA_ALIADA[(item.tipoTropa ?? 'soldado') as TipoTropaAliada].tituloPt}{' '}
+                        ({Math.ceil(item.tempoRestanteSeg)}s)
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )
@@ -4050,61 +5167,121 @@ export const IlhaRua: React.FC = () => {
                 for (let j = maxJ; j >= minJ; j -= 1) {
                   for (let i = minI; i <= maxI; i += 1) quadrados.push({ i, j, ficha: porChave.get(`${i},${j}`) })
                 }
-                return quadrados.map(({ i, j, ficha }) => (
-                  <button
-                    key={`${i}-${j}`}
-                    type="button"
-                    data-testid={`ilha-mapa-${i}-${j}`}
-                    data-dono={ficha?.dono}
-                    title={ficha ? `${i}, ${j} (${nomeDoBioma(ficha.bioma)}): ${TEXTO_DO_DONO[ficha.dono]}` : `${i}, ${j}`}
-                    className={[
-                      'ilha-mini-quadrado',
-                      ficha ? `ilha-dono-${ficha.dono}` : 'ilha-mapa-vazio',
-                      ficha?.ritmo === 'cheio' ? 'ilha-mapa-cheio' : '',
-                      ficha?.corpo ? 'ilha-mapa-corpo' : '',
-                      ficha?.cena ? 'ilha-mapa-vendo' : '',
-                      ficha?.alerta === 'verde' ? 'ilha-alerta-verde' : '',
-                      ficha?.alerta === 'vermelho' ? 'ilha-alerta-vermelho' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    style={{
-                      left: i * PARTIDA.ladoMapa * escala - ladoPx / 2,
-                      top: -(j * PARTIDA.ladoMapa * escala) - ladoPx / 2,
-                      width: ladoPx,
-                      height: ladoPx,
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      limparInteracao()
-                      atlasRef.current = abrirMapa(atlasRef.current, i, j)
-                      sim.current = estadoCena(atlasRef.current)
-                      cam.current = { x: 0, z: 0, yaw: cam.current.yaw }
-                      publicar(sim.current)
-                    }}
-                  />
-                ))
+                return quadrados.map(({ i, j, ficha }) => {
+                  const pingEste =
+                    pingAtaque !== null &&
+                    Date.now() < pingAtaque.expiraEm &&
+                    pingAtaque.mapaI === i &&
+                    pingAtaque.mapaJ === j
+                  return (
+                    <button
+                      key={`${i}-${j}`}
+                      type="button"
+                      data-testid={`ilha-mapa-${i}-${j}`}
+                      data-dono={ficha?.dono}
+                      title={ficha ? `${i}, ${j} (${nomeDoBioma(ficha.bioma)}): ${TEXTO_DO_DONO[ficha.dono]}` : `${i}, ${j}`}
+                      className={[
+                        'ilha-mini-quadrado',
+                        ficha ? `ilha-dono-${ficha.dono}` : 'ilha-mapa-vazio',
+                        ficha?.ritmo === 'cheio' ? 'ilha-mapa-cheio' : '',
+                        ficha?.corpo ? 'ilha-mapa-corpo' : '',
+                        ficha?.cena ? 'ilha-mapa-vendo' : '',
+                        ficha?.alerta === 'verde' ? 'ilha-alerta-verde' : '',
+                        ficha?.alerta === 'vermelho' ? 'ilha-alerta-vermelho' : '',
+                        pingEste ? 'ilha-ping-ataque' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={{
+                        left: i * PARTIDA.ladoMapa * escala - ladoPx / 2,
+                        top: -(j * PARTIDA.ladoMapa * escala) - ladoPx / 2,
+                        width: ladoPx,
+                        height: ladoPx,
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (sim.current.posse) publicar(sairDaPosse(sim.current, 'imperio'))
+                        limparInteracao()
+                        atlasRef.current = abrirMapa(atlasRef.current, i, j)
+                        sim.current = estadoCena(atlasRef.current)
+                        cam.current = { x: 0, z: 0, yaw: cam.current.yaw }
+                        publicar(sim.current)
+                      }}
+                    >
+                      {ficha ? <span className="ilha-mini-quadrado-bioma">{siglaDoBioma(ficha.bioma)}</span> : null}
+                    </button>
+                  )
+                })
               })()}
             </div>
             <div className="ilha-pipa" />
           </div>
-          <button
-            type="button"
-            className="ilha-voltar"
-            data-testid="ilha-voltar-corpo"
-            onClick={(event) => {
-              event.stopPropagation()
-              limparInteracao()
-              atlasRef.current = voltarAoCorpo(atlasRef.current)
-              sim.current = estadoCena(atlasRef.current)
-              cam.current = { x: sim.current.heroi.x, z: sim.current.heroi.z, yaw: 0 }
-              publicar(sim.current)
-            }}
-          >
-            Voltar ao corpo
-          </button>
+          <div className="ilha-mini-rodape">
+            {pingAtaque && Date.now() < pingAtaque.expiraEm && (
+              <button
+                type="button"
+                className="ilha-ping-ir"
+                data-testid="ilha-ping-ir"
+                title={`Ir ao ataque em (${pingAtaque.mapaI}, ${pingAtaque.mapaJ}) (F)`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  irParaPingAtaque()
+                }}
+              >
+                ⚠ ({pingAtaque.mapaI},{pingAtaque.mapaJ}) (F)
+              </button>
+            )}
+            <button
+              type="button"
+              className="ilha-voltar"
+              data-testid="ilha-voltar-corpo"
+              onClick={(event) => {
+                event.stopPropagation()
+                if (sim.current.posse) publicar(sairDaPosse(sim.current, 'imperio'))
+                limparInteracao()
+                atlasRef.current = voltarAoCorpo(atlasRef.current)
+                sim.current = estadoCena(atlasRef.current)
+                cam.current = { x: sim.current.heroi.x, z: sim.current.heroi.z, yaw: 0 }
+                publicar(sim.current)
+              }}
+            >
+              {pingAtaque && Date.now() < pingAtaque.expiraEm ? 'Voltar' : 'Voltar ao corpo'}
+            </button>
+          </div>
         </div>
       )}
+      {(() => {
+        const possuidaHud = alvoPossuidoVivo(hud)
+        if (!possuidaHud) return null
+        return (
+          <div className="ilha-posse-banner" data-testid="ilha-posse-banner">
+            <span>
+              🎮 Possuindo: {tituloUnidadePossuida(possuidaHud)} (HP {Math.ceil(possuidaHud.hp)})
+            </span>
+            {!hud.semCorpo && (
+              <button
+                type="button"
+                data-testid="ilha-posse-sair-heroi"
+                onClick={() => {
+                  publicar(sairDaPosse(sim.current, 'terceira'))
+                  setHeroiEscolhido(true)
+                  definirSelecao([])
+                  setPower('Retornou ao controle do Herói')
+                }}
+              >
+                Herói (H)
+              </button>
+            )}
+            <button
+              type="button"
+              data-testid="ilha-posse-sair-imperio"
+              onClick={() => irParaOlhar('imperio')}
+            >
+              Império (3)
+            </button>
+          </div>
+        )
+      })()}
       {caixa && (
         <div
           className="ilha-retangulo"
@@ -4120,6 +5297,21 @@ export const IlhaRua: React.FC = () => {
         <div className="ilha-power" data-testid="ilha-power">
           {power}
         </div>
+      )}
+      {ressurreicaoAtiva && telaEstudo === 'jogo' && (
+        <ModalRessurreicao
+          estado={ressurreicaoAtiva}
+          nucleosVivos={nucleosVivosRess}
+          minimizado={ressurreicaoMinimizada}
+          grauSelecionado={tier}
+          onSelecionarNucleo={(mi, mj, obraId) => {
+            atlasRef.current = escolherNucleoRessurreicao(atlasRef.current, mi, mj, obraId)
+            setMapaTick((v) => v + 1)
+          }}
+          onSelecionarGrau={(g) => setTier(g)}
+          onRenascerViaConta={() => openConta(tier, { forcarNova: true, registrarAbandono: false })}
+          onAlternarMinimizar={(min) => setRessurreicaoMinimizada(min)}
+        />
       )}
       {telaEstudo === 'conta' && (
         <ModalConta

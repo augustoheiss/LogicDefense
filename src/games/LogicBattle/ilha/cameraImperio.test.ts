@@ -1,4 +1,6 @@
 import {
+  aplicarZoomCameraImperio,
+  avaliarCliqueDireitoImperio,
   CAMERA_IMPERIO,
   combinarEntradaPan,
   entradaBordaCameraImperio,
@@ -6,6 +8,7 @@ import {
   normalizarYaw,
   passoCameraImperio,
   posicaoCameraImperio,
+  resetarCameraImperio,
   yawDaBussolaNoImperio,
   type CameraImperioState,
 } from './cameraImperio'
@@ -149,4 +152,23 @@ export function run(): void {
   assert(prioTec.frente === -1 && prioTec.lado === 0, 'teclado deve vencer borda')
   const prioBorda = combinarEntradaPan({ frente: 0, lado: 0 }, { frente: 0.7, lado: -0.7 })
   assert(perto(prioBorda.frente, 0.7) && perto(prioBorda.lado, -0.7), 'borda assume quando teclado está neutro')
+
+  // 12. Zoom (wheel) respeita limites min/max e escala posicaoCameraImperio
+  let zoomCam: CameraImperioState = { x: 0, z: 0, yaw: 0 }
+  for (let i = 0; i < 20; i += 1) zoomCam = aplicarZoomCameraImperio(zoomCam, -120)
+  assert(perto(zoomCam.zoom ?? 1, CAMERA_IMPERIO.zoomMin), 'zoom min travado')
+  const posPerto = posicaoCameraImperio(zoomCam)
+  assert(perto(posPerto.y, CAMERA_IMPERIO.altura * CAMERA_IMPERIO.zoomMin), 'posicao y escalada pelo zoom min')
+  for (let i = 0; i < 30; i += 1) zoomCam = aplicarZoomCameraImperio(zoomCam, 120)
+  assert(perto(zoomCam.zoom ?? 1, CAMERA_IMPERIO.zoomMax), 'zoom max travado')
+
+  // 13. Duplo clique RMB (<280ms, <=8px) reseta yaw=0 e zoom=1 suprimindo ordem; cliques espacados ordenam
+  const r1 = avaliarCliqueDireitoImperio(null, { tempoMs: 1000, clientX: 200, clientY: 200 })
+  assert(r1.acao === 'ordenar' && r1.proximoRegistro !== null, 'rmb 1o clique ordena')
+  const r2 = avaliarCliqueDireitoImperio(r1.proximoRegistro, { tempoMs: 1180, clientX: 204, clientY: 202 })
+  assert(r2.acao === 'resetar_camera' && r2.proximoRegistro === null, 'rmb duplo clique rapido reseta camera')
+  const resetada = resetarCameraImperio({ x: 12, z: -8, yaw: 1.4, zoom: 1.5 })
+  assert(resetada.x === 12 && resetada.z === -8 && resetada.yaw === 0 && resetada.zoom === 1, 'resetarCameraImperio zera yaw e zoom')
+  const rLonge = avaliarCliqueDireitoImperio(r1.proximoRegistro, { tempoMs: 1400, clientX: 200, clientY: 200 })
+  assert(rLonge.acao === 'ordenar', 'rmb fora da janela de 280ms ordena normalmente')
 }

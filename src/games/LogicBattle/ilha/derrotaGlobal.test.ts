@@ -52,11 +52,14 @@ export function run(): void {
     assert(fim.heroi.army > 0 && fim.semCorpo === false, 'derrota: o herói segue vivo e no corpo depois de perder a base daqui')
   }
 
-  // 3) o HERÓI MORTO (vida 0) continua derrota mesmo com outra base viva: a ressurreição (L4) é outra fatia
+  // 3) o HERÓI MORTO (vida 0) COM base viva entra em ressurreição (não derrota); SEM base viva encerra
   {
     const base = ficha({ outraBaseViva: true, forte: true })
-    const morto = stepPartida({ ...base, heroi: { ...base.heroi, army: 0 } }, INPUT_PARADO, 0.05)
-    assert(morto.derrota === true, 'derrota: herói com vida 0 encerra o jogo (a ressurreição ainda não existe), com ou sem outra base')
+    const comBase = stepPartida({ ...base, heroi: { ...base.heroi, army: 0 } }, INPUT_PARADO, 0.05)
+    assert(comBase.derrota === false && comBase.heroiCaido === true, 'derrota: herói com vida 0 com base viva aguarda ressurreição sem derrota')
+    const semBase = { ...base, outraBaseViva: false, obras: base.obras.filter((o) => o.lado !== 'nosso') }
+    const mortoSemBase = stepPartida({ ...semBase, heroi: { ...semBase.heroi, army: 0 } }, INPUT_PARADO, 0.05)
+    assert(mortoSemBase.derrota === true, 'derrota: herói com vida 0 sem nenhum núcleo vivo encerra o jogo')
   }
 
   // 4) o ATLAS escreve o campo: o herói num vizinho, a base de casa viva e forte → a base do vizinho cai → SEM derrota global

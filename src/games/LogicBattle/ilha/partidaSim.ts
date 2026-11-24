@@ -46,8 +46,14 @@ import { Bloqueio, encaixarLivre, encontrarCaminho, Marco } from './caminho'
 import { applyGateWithRemainder } from './armyMath'
 import { aplicarFatorAoBuff, fatorDoBuff } from './buffPorErro'
 import {
-  GRAU_PARTIDA,
+  custoUpgradeEra,
   DIMENSOES_OBRA,
+  fatorDanoForja,
+  fatorHpAlvenaria,
+  fatorVelBotas,
+  GRAU_PARTIDA,
+  limiteHeroisPorNivelNucleo,
+  multiplicadorTrianguloAoE,
   OBRA_CENTRO_Y,
   OBSTACULOS,
   Olhar,
@@ -57,8 +63,18 @@ import {
   PecaId,
   PLUS_TEN,
   Postura,
+  SPEC_HEROI,
+  SPEC_TROPA_ALIADA,
+  SPEC_UPGRADE_ERA,
   TEMPO_CONSTRUCAO,
+  type ClasseHeroi,
+  type EstadoPosse,
+  type TipoFormacao,
+  type TipoUpgradeEra,
+  type UpgradesEra,
   type GrauConta,
+  type SpecTropaAliada,
+  type TipoTropaAliada,
 } from './partidaPolicies'
 import { alcanceDaTorreNoNivel, custoDeEvoluir, danoDaTorreNoNivel, fatorDoNivel, nivelDaBaseInimiga, quantidadeDaLevaNaOnda, tropaVidaNoNivel, vidaMaximaNoNivel } from './evolucaoObra'
 
@@ -90,6 +106,33 @@ export interface Heroi {
   army: number
   shootCooldown: number
   carregandoKg: number
+  invulneravelRestante?: number
+  classe?: ClasseHeroi
+}
+
+export type TarefaConstrutor =
+  | { readonly tipo: 'coletar'; readonly recursoId: number }
+  | { readonly tipo: 'reparar'; readonly obraId: number }
+
+export interface HeroiEntidade extends Heroi {
+  readonly id: number
+  readonly classe: ClasseHeroi
+  readonly vivo: boolean
+  readonly maxHp: number
+  readonly ordem?: HeroiOrdem | null
+  readonly postura?: Postura
+  readonly tarefaConstrutor?: TarefaConstrutor | null
+  readonly acaoCooldown?: number
+}
+
+export interface ItemFilaProducao {
+  readonly id: number
+  readonly categoria: 'tropa' | 'heroi'
+  readonly tipoTropa?: TipoTropaAliada
+  readonly classeHeroi?: ClasseHeroi
+  readonly tempoTotalSeg: number
+  readonly tempoRestanteSeg: number
+  readonly custoPago: { readonly credito: number; readonly ouro: number; readonly madeira: number }
 }
 
 export interface Obra {
@@ -109,6 +152,8 @@ export interface Obra {
   blocosLivres?: BlocoMundo[]
   estornosMadeiraRestantes?: number
   custoBaseMadeiraPago?: number
+  filaProducao?: ItemFilaProducao[]
+  rallyPoint?: { readonly x: number; readonly z: number } | null
 }
 
 export function obraEmConstrucao(obra: Obra): boolean {
@@ -127,6 +172,7 @@ export interface Unidade {
   id: number
   lado: 'aliado' | 'inimigo'
   papel: Papel
+  tipoTropa?: TipoTropaAliada
   x: number
   z: number
   hp: number
@@ -227,6 +273,11 @@ export interface PartidaState {
    * Ausente ou falso = partida isolada (um mapa só, todo teste antigo): a queda do núcleo encerra, como sempre foi.
    */
   outraBaseViva?: boolean
+  heroiCaido?: boolean
+  mortesHeroi?: number
+  herois?: HeroiEntidade[]
+  heroiAtivoId?: number
+  posse?: EstadoPosse | null
   versaoRecursos: number
   subsoloCentro: { x: number; z: number } | null
   blocosMapa: Record<string, BlocoMundo>
@@ -235,6 +286,9 @@ export interface PartidaState {
    * Guardado no estado para as ondas FUTURAS nascerem iguais (senão a dificuldade sumiria na 1ª onda). Ausente = 1×: o jogo é o de sempre.
    */
   fatorInimigo?: number
+  formacao?: TipoFormacao
+  upgradesEra?: UpgradesEra
+  contatoInimigoHeroiCooldown?: number
 }
 
 /**
@@ -268,6 +322,8 @@ export type HeroiOrdem =
   | { tipo: 'mover'; x: number; z: number; rota: Rota }
   | { tipo: 'atacar'; alvoId: number; rota: Rota | null }
   | { tipo: 'atacarObra'; obraId: number; rota: Rota | null }
+  | { tipo: 'patrulhar'; ax: number; az: number; bx: number; bz: number; indoPara: 'a' | 'b'; rota: Rota | null }
+  | { tipo: 'attackMove'; x: number; z: number; rota: Rota | null }
 
 const VAZIO: PartidaInput = { forward: false, back: false, strafe: 0 }
 
@@ -375,6 +431,14 @@ export function visaoLivreNoEstado(
 
 function dentroDaUniao(state: PartidaState, x: number, z: number): boolean {
   if (!state.semCorpo && Math.hypot(x - state.heroi.x, z - state.heroi.z) <= PARTIDA.visao.heroi) return true
+  if (state.herois) {
+    const ativoId = state.heroiAtivoId ?? 0
+    for (const h of state.herois) {
+      if (h.id !== ativoId && h.vivo && h.army > 0 && Math.hypot(x - h.x, z - h.z) <= PARTIDA.visao.heroi) {
+        return true
+      }
+    }
+  }
   for (const unidade of state.unidades) {
     if (unidade.lado === 'aliado' && unidade.hp > 0 && Math.hypot(x - unidade.x, z - unidade.z) <= PARTIDA.visao.tropa) {
       return true
@@ -415,6 +479,12 @@ export function marcarChao(state: PartidaState): PartidaState {
     }
   }
   if (!state.semCorpo) carimbar(state.heroi.x, state.heroi.z, PARTIDA.visao.heroi)
+  if (state.herois) {
+    const ativoId = state.heroiAtivoId ?? 0
+    for (const h of state.herois) {
+      if (h.id !== ativoId && h.vivo && h.army > 0) carimbar(h.x, h.z, PARTIDA.visao.heroi)
+    }
+  }
   for (const unidade of state.unidades) {
     if (unidade.lado === 'aliado' && unidade.hp > 0) carimbar(unidade.x, unidade.z, PARTIDA.visao.tropa)
   }
@@ -448,36 +518,11 @@ export function alcanceDaTorre(torre: Obra): number {
   return alcanceDaTorreNoNivel(torre.nivel)
 }
 
-export function marcadoPelaTorre(state: PartidaState, unidade: Unidade): boolean {
-  if (!inimigoVisivel(state, unidade)) return false
-  let noOlho = false
-  for (const torre of state.obras) {
-    if (!nossa(torre) || torre.tipo !== 'torre' || torre.hp <= 0 || obraEmConstrucao(torre)) continue
-    const cota = cotaVisaoTorreBlocos(torre.nivel)
-    const alcance = alcanceDaTorre(torre)
-    if (
-      pontosDoCorpo(unidade).some(
-        (ponto) =>
-          Math.hypot(ponto.x - torre.x, ponto.z - torre.z) <= alcance &&
-          visaoLivreNoEstado(state, torre.x, torre.z, cota, ponto.x, ponto.z, 0),
-      )
-    ) {
-      return false
-    }
-    if (
-      Math.hypot(unidade.x - torre.x, unidade.z - torre.z) <= alcance &&
-      visaoLivreNoEstado(state, torre.x, torre.z, cota, unidade.x, unidade.z, 0)
-    ) {
-      noOlho = true
-    }
-  }
-  return noOlho
-}
-
-export function alcanceDoTiro(x: number, z: number, yaw: number): number {
+export function alcanceDoTiro(x: number, z: number, yaw: number, classe?: ClasseHeroi): number {
   const borda = alcanceAteABorda(x, z, yaw)
-  if (!PARTIDA.nuvem) return borda
-  return Math.min(borda, PARTIDA.visao.heroi)
+  const alcanceClasse = classe ? SPEC_HEROI[classe].alcance : PARTIDA.visao.heroi
+  if (!PARTIDA.nuvem) return Math.min(borda, alcanceClasse)
+  return Math.min(borda, PARTIDA.visao.heroi, alcanceClasse)
 }
 
 export function alvoDoBotao(state: PartidaState): number | null {
@@ -634,7 +679,24 @@ function cair(
 }
 
 export function pular(state: PartidaState): PartidaState {
-  if (state.derrota || state.semCorpo || state.olhar === 'imperio') return state
+  if (state.derrota || state.olhar === 'imperio') return state
+  if (state.posse) {
+    const alvo = state.unidades.find((u) => u.id === state.posse!.unidadeId && u.lado === 'aliado' && u.hp > 0)
+    if (!alvo) return state
+    const piso = pisoUniversalEm(
+      alvo.x,
+      state.posse.y,
+      alvo.z,
+      state.pedraNoChao,
+      state.obras,
+      state.recursos,
+      state.subsoloCentro,
+      state.blocosMapa,
+    )
+    if (state.posse.y > piso + 0.08) return state
+    return { ...state, posse: { ...state.posse, y: piso, vy: PARTIDA.pulo } }
+  }
+  if (state.semCorpo || state.heroi.army <= 0) return state
   const piso = pisoUniversalEm(
     state.heroi.x,
     state.heroi.y,
@@ -694,7 +756,13 @@ export function alternarSubsolo(state: PartidaState): PartidaState {
 }
 
 export function definirOlhar(state: PartidaState, olhar: Olhar): PartidaState {
-  if (state.semCorpo) return state
+  if (state.semCorpo && olhar !== 'imperio' && !state.posse) return state
+  if (olhar === 'imperio' && state.posse) {
+    return { ...state, olhar: 'imperio', posse: null }
+  }
+  if (state.posse && (olhar === 'primeira' || olhar === 'terceira')) {
+    return { ...state, olhar, posse: { ...state.posse, modo: olhar } }
+  }
   if (state.olhar === olhar) return state
   // A ordem do herói nasce no império e só lá é executada. Levada para o corpo ficaria presa: bloquearia a vigia
   // (`mover`) ou ficaria obsoleta (`atacar`) até o jogador mexer no WASD (D-B4).
@@ -703,10 +771,20 @@ export function definirOlhar(state: PartidaState, olhar: Olhar): PartidaState {
 }
 
 export function mira(state: PartidaState, dYaw: number, dPitch: number): PartidaState {
-  if (state.semCorpo) return state
   const yawDelta = Number.isFinite(dYaw) ? dYaw : 0
   const pitchDelta = Number.isFinite(dPitch) ? dPitch : 0
   if (yawDelta === 0 && pitchDelta === 0) return state
+  if (state.posse) {
+    return {
+      ...state,
+      posse: {
+        ...state.posse,
+        yaw: state.posse.yaw + yawDelta,
+        pitch: clampPitch(state.posse.pitch + pitchDelta),
+      },
+    }
+  }
+  if (state.semCorpo) return state
   return {
     ...state,
     heroi: {
@@ -910,7 +988,8 @@ export function fundar(
     return { ...rec, hp: 0, regeneraEm: PARTIDA.rebroteArvoreSeg }
   })
 
-  const hp = tipo === 'nucleo' ? PARTIDA.nucleoHp : 40 + 10
+  const hpBase = tipo === 'nucleo' ? PARTIDA.nucleoHp : 40 + 10
+  const hp = Math.round(hpBase * fatorHpAlvenaria(state.upgradesEra))
   const duracao = opcoes?.emConstrucao ? TEMPO_CONSTRUCAO[tipo] : 0
   const obra: Obra = {
     id: state.nextId,
@@ -1631,13 +1710,34 @@ export function pontosFormacaoTropa(
   obras: readonly Obra[] = [],
   recursos: readonly RecursoNatural[] = [],
   blocosMapa?: MapaBlocos,
+  formacao: TipoFormacao = 'caixa',
 ): { x: number; z: number }[] {
   const centro = puxaLimite(centroX, centroZ)
   if (quantidade <= 1) return [centro]
-  const espaco = PARTIDA.tropaEspacoFormacao
+  const espaco = PARTIDA.tropaEspacoFormacao * (formacao === 'dispersa' ? 2.15 : formacao === 'linha' ? 1.15 : 1)
   const validos: { x: number; z: number }[] = []
-  if (livreParaTropa(centro.x, centro.z, obras, recursos, blocosMapa)) validos.push(centro)
-  for (let anel = 1; validos.length < quantidade && anel <= 6; anel += 1) {
+
+  if (formacao === 'linha') {
+    const porLinha = Math.min(8, quantidade)
+    const linhas = Math.ceil(quantidade / porLinha)
+    for (let l = 0; l < linhas && validos.length < quantidade; l += 1) {
+      const zOff = (l - (linhas - 1) / 2) * espaco * 1.15
+      const faltam = Math.min(porLinha, quantidade - validos.length)
+      for (let c = 0; c < faltam; c += 1) {
+        const xOff = (c - (faltam - 1) / 2) * espaco
+        const p = puxaLimite(centroX + xOff, centroZ + zOff)
+        if (!livreParaTropa(p.x, p.z, obras, recursos, blocosMapa)) continue
+        if (validos.some((v) => Math.hypot(v.x - p.x, v.z - p.z) < 0.5)) continue
+        validos.push(p)
+      }
+    }
+  }
+
+  if (validos.length < quantidade && formacao !== 'linha') {
+    if (livreParaTropa(centro.x, centro.z, obras, recursos, blocosMapa)) validos.push(centro)
+  }
+  const maxAneis = formacao === 'dispersa' ? 8 : 6
+  for (let anel = 1; validos.length < quantidade && anel <= maxAneis; anel += 1) {
     const pontosAnel = 6 * anel
     const raio = anel * espaco
     for (let i = 0; i < pontosAnel && validos.length < quantidade; i += 1) {
@@ -1654,6 +1754,42 @@ export function pontosFormacaoTropa(
     resultado.push(base[i % base.length])
   }
   return resultado
+}
+
+export function definirFormacao(state: PartidaState, formacao: TipoFormacao): PartidaState {
+  if (state.formacao === formacao) return state
+  return { ...state, formacao }
+}
+
+export function comprarUpgradeEra(state: PartidaState, tipo: TipoUpgradeEra): PartidaState {
+  if (state.derrota) return state
+  const atuais: UpgradesEra = state.upgradesEra ?? { forja: 0, alvenaria: 0, botas: 0 }
+  const nivelAtual = atuais[tipo]
+  const spec = SPEC_UPGRADE_ERA[tipo]
+  if (nivelAtual >= spec.maxNivel) return state
+  const custo = custoUpgradeEra(tipo, nivelAtual)
+  if (state.ouro < custo.ouro || state.madeira < custo.madeira) return state
+
+  const proxUpgrades: UpgradesEra = { ...atuais, [tipo]: nivelAtual + 1 }
+  let obras = state.obras
+  if (tipo === 'alvenaria') {
+    const fatorAntes = fatorHpAlvenaria(atuais)
+    const fatorDepois = fatorHpAlvenaria(proxUpgrades)
+    const razao = fatorDepois / fatorAntes
+    obras = state.obras.map((obra) => {
+      if (!nossa(obra) || obra.hp <= 0) return obra
+      const novoMax = Math.round(obra.maxHp * razao)
+      const novoHp = Math.min(novoMax, Math.round(obra.hp * razao))
+      return { ...obra, hp: novoHp, maxHp: novoMax }
+    })
+  }
+  return {
+    ...state,
+    ouro: state.ouro - custo.ouro,
+    madeira: state.madeira - custo.madeira,
+    upgradesEra: proxUpgrades,
+    obras,
+  }
 }
 
 function separarAliados(
@@ -1703,6 +1839,38 @@ function separarAliados(
     const pos = escorrega(u.x, u.z, u.x + push.x, u.z + push.z, obras, solto, 0, recursos, null, blocosMapa)
     return { ...u, x: pos.x, z: pos.z }
   })
+}
+
+/**
+ * Retorna uma posição caminhável ao redor da obra dada (ou valida uma posição candidata).
+ * Compartilhado entre spawn de tropas e ressurreição segura do herói.
+ */
+export function pontoLivreAoRedorDaObra(
+  state: PartidaState,
+  obra: Obra,
+  cx?: number,
+  cz?: number,
+): { x: number; z: number } | null {
+  if (cx !== undefined && cz !== undefined) {
+    return livreParaTropa(cx, cz, state.obras, state.recursos, state.blocosMapa) ? { x: cx, z: cz } : null
+  }
+  const meiaLivre = obra.blocosLivres?.length ? meiaLarguraObraLivre(obra.blocosLivres, obra.x, obra.z) : null
+  const distBase = meiaLivre
+    ? Math.max(meiaLivre.hx, meiaLivre.hz) + 0.75
+    : obra.blocosNv5
+      ? meiaLarguraNv5() + 0.55
+      : 1.8
+  for (let anel = 0; anel < 3; anel += 1) {
+    const dist = distBase + anel * 1.1
+    for (let passo = 0; passo < 12; passo += 1) {
+      const ang = (passo * 2 * Math.PI) / 12
+      const px = obra.x + Math.cos(ang) * dist
+      const pz = obra.z + Math.sin(ang) * dist
+      if (livreParaTropa(px, pz, state.obras, state.recursos, state.blocosMapa)) return { x: px, z: pz }
+    }
+  }
+  const cel = encaixarLivre(Math.round(obra.x / PARTIDA.celula), Math.round(obra.z / PARTIDA.celula), bloqueiosDe(state))
+  return cel ? { x: cel[0] * PARTIDA.celula, z: cel[1] * PARTIDA.celula } : null
 }
 
 export function criarTropa(state: PartidaState, obraId: number): PartidaState {
@@ -1784,6 +1952,510 @@ export function criarTropa(state: PartidaState, obraId: number): PartidaState {
     nextId: state.nextId + 1,
     unidades: [...state.unidades, unidade],
   })
+}
+
+function heroisGarantidos(state: PartidaState): HeroiEntidade[] {
+  if (state.herois && state.herois.length > 0) return state.herois
+  const classe = state.heroi.classe ?? 'ataque'
+  return [
+    {
+      ...state.heroi,
+      id: 0,
+      classe,
+      vivo: state.heroi.army > 0,
+      maxHp: Math.max(SPEC_HEROI[classe].hpBase, state.heroi.army),
+      ordem: state.heroiOrdem,
+      postura: state.heroiPostura ?? 'vigia',
+      tarefaConstrutor: null,
+      acaoCooldown: 0,
+    },
+  ]
+}
+
+export function listarHerois(state: PartidaState): HeroiEntidade[] {
+  const ativoId = state.heroiAtivoId ?? 0
+  return heroisGarantidos(state).map((h) =>
+    h.id === ativoId
+      ? {
+          ...h,
+          ...state.heroi,
+          classe: h.classe,
+          vivo: state.heroi.army > 0,
+          ordem: state.heroiOrdem,
+          postura: state.heroiPostura ?? h.postura ?? 'vigia',
+        }
+      : h,
+  )
+}
+
+function sincronizarHerois(state: PartidaState): PartidaState {
+  if (!state.herois && state.heroi.classe === undefined) return state
+  const herois = listarHerois(state)
+  return {
+    ...state,
+    herois,
+    heroiAtivoId: state.heroiAtivoId ?? herois[0]?.id ?? 0,
+  }
+}
+
+export function selecionarHeroiAtivo(state: PartidaState, heroiId: number): PartidaState {
+  const lista = listarHerois(state)
+  const alvo = lista.find((h) => h.id === heroiId && h.vivo && h.army > 0)
+  if (!alvo) return state
+  const atualId = state.heroiAtivoId ?? 0
+  if (atualId === heroiId && state.herois) return state
+  return {
+    ...state,
+    herois: lista,
+    heroiAtivoId: alvo.id,
+    heroiOrdem: alvo.ordem ?? null,
+    heroiPostura: alvo.postura ?? 'vigia',
+    heroi: {
+      x: alvo.x,
+      z: alvo.z,
+      y: alvo.y,
+      vy: alvo.vy,
+      yaw: alvo.yaw,
+      pitch: alvo.pitch,
+      army: alvo.army,
+      shootCooldown: alvo.shootCooldown,
+      carregandoKg: alvo.carregandoKg,
+      invulneravelRestante: alvo.invulneravelRestante,
+      classe: alvo.classe,
+    },
+  }
+}
+
+export function maiorNivelNucleoNosso(state: PartidaState): number {
+  let maior = 0
+  for (const o of state.obras) {
+    if (nossa(o) && o.tipo === 'nucleo' && o.hp > 0) {
+      maior = Math.max(maior, o.nivel)
+    }
+  }
+  return maior
+}
+
+function tropasEmFilaTotal(state: PartidaState): number {
+  let total = 0
+  for (const o of state.obras) {
+    if (!nossa(o) || o.hp <= 0 || !o.filaProducao) continue
+    for (const item of o.filaProducao) {
+      if (item.categoria === 'tropa') total += 1
+    }
+  }
+  return total
+}
+
+function classesHeroiEmFilaOuVivas(state: PartidaState): Set<ClasseHeroi> {
+  const classes = new Set<ClasseHeroi>()
+  for (const h of listarHerois(state)) {
+    if (h.vivo && h.army > 0) classes.add(h.classe)
+  }
+  for (const o of state.obras) {
+    if (!nossa(o) || o.hp <= 0 || !o.filaProducao) continue
+    for (const item of o.filaProducao) {
+      if (item.categoria === 'heroi' && item.classeHeroi) classes.add(item.classeHeroi)
+    }
+  }
+  return classes
+}
+
+export function enfileirarTropa(
+  state: PartidaState,
+  obraId: number,
+  tipoTropa: TipoTropaAliada = 'soldado',
+): PartidaState {
+  if (state.derrota) return state
+  const obra = state.obras.find(
+    (item) =>
+      item.id === obraId &&
+      nossa(item) &&
+      item.hp > 0 &&
+      !obraEmConstrucao(item) &&
+      (item.tipo === 'nucleo' || item.tipo === 'quartel'),
+  )
+  if (!obra) return state
+  const filaAtual = obra.filaProducao ?? []
+  if (filaAtual.length >= PARTIDA.maxFilaProducao) return state
+  if (aliadosVivos(state).length + tropasEmFilaTotal(state) >= PARTIDA.allyCap) return state
+
+  const spec = SPEC_TROPA_ALIADA[tipoTropa]
+  const podeCredito = state.credito >= spec.custoCredito
+  const podeRecursos = state.ouro >= spec.custoOuro && state.madeira >= spec.custoMadeira
+  if (!podeCredito && !podeRecursos) return state
+
+  const custoPago = podeCredito
+    ? { credito: spec.custoCredito, ouro: 0, madeira: 0 }
+    : { credito: 0, ouro: spec.custoOuro, madeira: spec.custoMadeira }
+
+  const item: ItemFilaProducao = {
+    id: state.nextId,
+    categoria: 'tropa',
+    tipoTropa,
+    tempoTotalSeg: spec.cooldownSeg,
+    tempoRestanteSeg: spec.cooldownSeg,
+    custoPago,
+  }
+  return {
+    ...state,
+    nextId: state.nextId + 1,
+    credito: state.credito - custoPago.credito,
+    ouro: state.ouro - custoPago.ouro,
+    madeira: state.madeira - custoPago.madeira,
+    obras: state.obras.map((o) =>
+      o.id === obra.id ? { ...o, filaProducao: [...(o.filaProducao ?? []), item] } : o,
+    ),
+  }
+}
+
+export function enfileirarHeroi(
+  state: PartidaState,
+  nucleoId: number,
+  classe: ClasseHeroi,
+): PartidaState {
+  if (state.derrota) return state
+  const nucleo = state.obras.find(
+    (item) =>
+      item.id === nucleoId &&
+      nossa(item) &&
+      item.tipo === 'nucleo' &&
+      item.hp > 0 &&
+      !obraEmConstrucao(item),
+  )
+  if (!nucleo) return state
+  const filaAtual = nucleo.filaProducao ?? []
+  if (filaAtual.length >= PARTIDA.maxFilaProducao) return state
+
+  const limite = limiteHeroisPorNivelNucleo(maiorNivelNucleoNosso(state))
+  const classesAtivas = classesHeroiEmFilaOuVivas(state)
+  if (classesAtivas.size >= limite || classesAtivas.has(classe)) return state
+
+  const podeCredito = state.credito >= PARTIDA.heroiCustoCredito
+  const podeRecursos = state.ouro >= PARTIDA.heroiCustoOuro && state.madeira >= PARTIDA.heroiCustoMadeira
+  if (!podeCredito && !podeRecursos) return state
+
+  const custoPago = podeCredito
+    ? { credito: PARTIDA.heroiCustoCredito, ouro: 0, madeira: 0 }
+    : { credito: 0, ouro: PARTIDA.heroiCustoOuro, madeira: PARTIDA.heroiCustoMadeira }
+
+  const spec = SPEC_HEROI[classe]
+  const item: ItemFilaProducao = {
+    id: state.nextId,
+    categoria: 'heroi',
+    classeHeroi: classe,
+    tempoTotalSeg: spec.cooldownTreinoSeg,
+    tempoRestanteSeg: spec.cooldownTreinoSeg,
+    custoPago,
+  }
+  return {
+    ...state,
+    nextId: state.nextId + 1,
+    credito: state.credito - custoPago.credito,
+    ouro: state.ouro - custoPago.ouro,
+    madeira: state.madeira - custoPago.madeira,
+    obras: state.obras.map((o) =>
+      o.id === nucleo.id ? { ...o, filaProducao: [...(o.filaProducao ?? []), item] } : o,
+    ),
+  }
+}
+
+export function cancelarItemFila(state: PartidaState, obraId: number, itemId: number): PartidaState {
+  const obra = state.obras.find((o) => o.id === obraId && nossa(o) && o.hp > 0)
+  if (!obra || !obra.filaProducao || obra.filaProducao.length === 0) return state
+  const alvo = obra.filaProducao.find((i) => i.id === itemId)
+  if (!alvo) return state
+  return {
+    ...state,
+    credito: state.credito + alvo.custoPago.credito,
+    ouro: state.ouro + alvo.custoPago.ouro,
+    madeira: state.madeira + alvo.custoPago.madeira,
+    obras: state.obras.map((o) =>
+      o.id === obraId
+        ? { ...o, filaProducao: (o.filaProducao ?? []).filter((i) => i.id !== itemId) }
+        : o,
+    ),
+  }
+}
+
+export function definirRallyPoint(state: PartidaState, obraId: number, x: number, z: number): PartidaState {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return state
+  const obra = state.obras.find(
+    (o) => o.id === obraId && nossa(o) && o.hp > 0 && (o.tipo === 'quartel' || o.tipo === 'nucleo'),
+  )
+  if (!obra) return state
+  const limitado = puxaLimite(x, z)
+  return {
+    ...state,
+    obras: state.obras.map((o) => (o.id === obraId ? { ...o, rallyPoint: limitado } : o)),
+  }
+}
+
+export function ordenarConstrutorColetar(state: PartidaState, heroiId: number, recursoId: number): PartidaState {
+  const rec = state.recursos.find((r) => r.id === recursoId && r.hp > 0)
+  if (!rec) return state
+  const lista = listarHerois(state)
+  const alvo = lista.find((h) => h.id === heroiId && h.vivo && SPEC_HEROI[h.classe].capacidadeConstrutor)
+  if (!alvo) return state
+  const ativoId = state.heroiAtivoId ?? lista[0]?.id ?? 0
+  return {
+    ...state,
+    ...(heroiId === ativoId ? { heroiOrdem: null } : {}),
+    herois: lista.map((h) =>
+      h.id === heroiId
+        ? { ...h, tarefaConstrutor: { tipo: 'coletar', recursoId }, ordem: null }
+        : h,
+    ),
+  }
+}
+
+export function ordenarConstrutorReparar(state: PartidaState, heroiId: number, obraId: number): PartidaState {
+  const obra = state.obras.find((o) => o.id === obraId && nossa(o) && (o.hp < o.maxHp || o.hp <= 0))
+  if (!obra) return state
+  const lista = listarHerois(state)
+  const alvo = lista.find((h) => h.id === heroiId && h.vivo && SPEC_HEROI[h.classe].capacidadeConstrutor)
+  if (!alvo) return state
+  const ativoId = state.heroiAtivoId ?? lista[0]?.id ?? 0
+  return {
+    ...state,
+    ...(heroiId === ativoId ? { heroiOrdem: null } : {}),
+    herois: lista.map((h) =>
+      h.id === heroiId
+        ? { ...h, tarefaConstrutor: { tipo: 'reparar', obraId }, ordem: null }
+        : h,
+    ),
+  }
+}
+
+export function encontrarConstrutorOcioso(state: PartidaState): HeroiEntidade | null {
+  const lista = listarHerois(state)
+  return (
+    lista.find(
+      (h) =>
+        h.vivo &&
+        h.army > 0 &&
+        SPEC_HEROI[h.classe].capacidadeConstrutor &&
+        !h.tarefaConstrutor &&
+        !h.ordem,
+    ) ?? null
+  )
+}
+
+function executarTarefaConstrutor(
+  state: PartidaState,
+  construtor: HeroiEntidade,
+  dt: number,
+): { state: PartidaState; construtor: HeroiEntidade } {
+  const tarefa = construtor.tarefaConstrutor
+  if (!tarefa || !construtor.vivo || construtor.army <= 0) return { state, construtor }
+  const cd = Math.max(0, (construtor.acaoCooldown ?? 0) - dt)
+  const atualizado = { ...construtor, acaoCooldown: cd }
+
+  if (tarefa.tipo === 'coletar') {
+    const rec = state.recursos.find((r) => r.id === tarefa.recursoId && r.hp > 0)
+    if (!rec) return { state, construtor: { ...atualizado, tarefaConstrutor: null } }
+    const dist = Math.hypot(rec.x - atualizado.x, rec.z - atualizado.z)
+    if (dist > 2.2) {
+      const dx = rec.x - atualizado.x
+      const dz = rec.z - atualizado.z
+      const passo = Math.min(PARTIDA.heroSpeed * dt, dist)
+      const prox = escorrega(
+        atualizado.x,
+        atualizado.z,
+        atualizado.x + (dx / dist) * passo,
+        atualizado.z + (dz / dist) * passo,
+        state.obras,
+        PARTIDA.atlas === 'grade',
+        atualizado.y,
+        [],
+        state.subsoloCentro,
+        state.blocosMapa,
+      )
+      return { state, construtor: { ...atualizado, x: prox.x, z: prox.z, yaw: yawAte(atualizado.x, atualizado.z, rec.x, rec.z) } }
+    }
+    if (cd > 0) return { state, construtor: atualizado }
+    const danoRec = 1
+    const novoHp = Math.max(0, rec.hp - danoRec)
+    const ganhoMadeira = rec.tipo === 'arvore' ? 1 : 0
+    const ganhoOuro = rec.tipo === 'ouro' ? 1 : 0
+    const recursos = state.recursos.map((r) =>
+      r.id === rec.id
+        ? { ...r, hp: novoHp, ...(novoHp <= 0 && r.tipo === 'arvore' ? { regeneraEm: PARTIDA.rebroteArvoreSeg } : {}) }
+        : r,
+    )
+    return {
+      state: {
+        ...state,
+        recursos,
+        madeira: state.madeira + ganhoMadeira,
+        ouro: state.ouro + ganhoOuro,
+        versaoRecursos: novoHp <= 0 ? state.versaoRecursos + 1 : state.versaoRecursos,
+      },
+      construtor: {
+        ...atualizado,
+        acaoCooldown: PARTIDA.construtorColetaCooldownSeg,
+        tarefaConstrutor: novoHp <= 0 ? null : tarefa,
+      },
+    }
+  }
+
+  const obra = state.obras.find((o) => o.id === tarefa.obraId && nossa(o))
+  if (!obra || (obra.hp > 0 && obra.hp >= obra.maxHp)) {
+    return { state, construtor: { ...atualizado, tarefaConstrutor: null } }
+  }
+  const peri = aproximacaoDaObra(obra, atualizado.x, atualizado.z)
+  const dist = Math.hypot(peri.x - atualizado.x, peri.z - atualizado.z)
+  if (dist > 1.8 && !emContatoComObra(atualizado.x, atualizado.z, obra)) {
+    const dx = peri.x - atualizado.x
+    const dz = peri.z - atualizado.z
+    const passo = Math.min(PARTIDA.heroSpeed * dt, dist)
+    const prox = escorrega(
+      atualizado.x,
+      atualizado.z,
+      atualizado.x + (dx / dist) * passo,
+      atualizado.z + (dz / dist) * passo,
+      state.obras,
+      PARTIDA.atlas === 'grade',
+      atualizado.y,
+      state.recursos,
+      state.subsoloCentro,
+      state.blocosMapa,
+    )
+    return { state, construtor: { ...atualizado, x: prox.x, z: prox.z, yaw: yawAte(atualizado.x, atualizado.z, obra.x, obra.z) } }
+  }
+  if (cd > 0) return { state, construtor: atualizado }
+  if (obra.hp <= 0) {
+    const reparado = repararObra(state, obra.id)
+    if (reparado === state) return { state, construtor: { ...atualizado, tarefaConstrutor: null } }
+    return {
+      state: reparado,
+      construtor: { ...atualizado, acaoCooldown: PARTIDA.construtorReparoCooldownSeg, tarefaConstrutor: null },
+    }
+  }
+  if (state.madeira < 1) return { state, construtor: { ...atualizado, tarefaConstrutor: null } }
+  const novoHp = Math.min(obra.maxHp, obra.hp + PARTIDA.construtorReparoPorTick)
+  return {
+    state: {
+      ...state,
+      madeira: state.madeira - 1,
+      obras: state.obras.map((o) => (o.id === obra.id ? { ...o, hp: novoHp } : o)),
+    },
+    construtor: {
+      ...atualizado,
+      acaoCooldown: PARTIDA.construtorReparoCooldownSeg,
+      tarefaConstrutor: novoHp >= obra.maxHp ? null : tarefa,
+    },
+  }
+}
+
+function passoFilasProducao(state: PartidaState, dt: number): PartidaState {
+  let atual = state
+  let mudouFila = false
+  const novasObras = atual.obras.map((obra) => {
+    if (!nossa(obra) || obra.hp <= 0 || obraEmConstrucao(obra) || !obra.filaProducao?.length) return obra
+    const [primeiro, ...resto] = obra.filaProducao
+    const restante = Math.max(0, primeiro.tempoRestanteSeg - dt)
+    mudouFila = true
+    if (restante > 0) {
+      return { ...obra, filaProducao: [{ ...primeiro, tempoRestanteSeg: restante }, ...resto] }
+    }
+    if (primeiro.categoria === 'tropa') {
+      const tipoTropa = primeiro.tipoTropa ?? 'soldado'
+      const spec = SPEC_TROPA_ALIADA[tipoTropa]
+      const spawn = pontoLivreAoRedorDaObra(atual, obra) ?? { x: obra.x + 2, z: obra.z }
+      const novaUnidade: Unidade = {
+        id: atual.nextId,
+        lado: 'aliado',
+        papel: 'tropa',
+        tipoTropa,
+        x: spawn.x,
+        z: spawn.z,
+        hp: Math.round(tropaVidaNoNivel(obra.nivel) * spec.hpFator * 10) / 10,
+        postura: 'vigia',
+        posturaBase: 'vigia',
+        ordem: null,
+        ancora: null,
+        cooldown: 0,
+        segmentos: [],
+        alerta: true,
+      }
+      atual = {
+        ...atual,
+        nextId: atual.nextId + 1,
+        unidades: [...atual.unidades, novaUnidade],
+      }
+      if (obra.rallyPoint) {
+        atual = ordenar(atual, [novaUnidade.id], { tipo: 'mover', x: obra.rallyPoint.x, z: obra.rallyPoint.z })
+      }
+    } else if (primeiro.categoria === 'heroi' && primeiro.classeHeroi) {
+      const classe = primeiro.classeHeroi
+      const spec = SPEC_HEROI[classe]
+      const spawn = pontoLivreAoRedorDaObra(atual, obra) ?? { x: obra.x + 2.2, z: obra.z }
+      const lista = listarHerois(atual)
+      const novoHeroi: HeroiEntidade = {
+        id: atual.nextId,
+        classe,
+        vivo: true,
+        maxHp: spec.hpBase,
+        x: spawn.x,
+        z: spawn.z,
+        y: 0,
+        vy: 0,
+        yaw: 0,
+        pitch: 0,
+        army: spec.hpBase,
+        shootCooldown: 0,
+        carregandoKg: 0,
+        invulneravelRestante: 0,
+        ordem: null,
+        postura: 'vigia',
+        tarefaConstrutor: null,
+        acaoCooldown: 0,
+      }
+      atual = {
+        ...atual,
+        nextId: atual.nextId + 1,
+        herois: [...lista, novoHeroi],
+        heroiAtivoId: atual.heroiAtivoId ?? lista[0]?.id ?? 0,
+      }
+    }
+    return { ...obra, filaProducao: resto }
+  })
+  if (!mudouFila) return atual
+  return { ...atual, obras: novasObras }
+}
+
+function passoHeroisECons(state: PartidaState, dt: number): PartidaState {
+  if (!state.herois?.length) return state
+  let atual = sincronizarHerois(state)
+  const ativoId = atual.heroiAtivoId ?? 0
+  const lista = atual.herois ?? []
+  const novosHerois: HeroiEntidade[] = []
+  for (const h of lista) {
+    let atualizado: HeroiEntidade = {
+      ...h,
+      shootCooldown: Math.max(0, h.shootCooldown - dt),
+      invulneravelRestante: Math.max(0, (h.invulneravelRestante ?? 0) - dt),
+    }
+    if (atualizado.tarefaConstrutor) {
+      const res = executarTarefaConstrutor(atual, atualizado, dt)
+      atual = res.state
+      atualizado = res.construtor
+      if (atualizado.id === ativoId) {
+        atual = {
+          ...atual,
+          heroi: {
+            ...atual.heroi,
+            x: atualizado.x,
+            z: atualizado.z,
+            yaw: atualizado.yaw,
+          },
+        }
+      }
+    }
+    novosHerois.push(atualizado)
+  }
+  return { ...atual, herois: novosHerois }
 }
 
 export function idsNoRetangulo(
@@ -1870,8 +2542,16 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
   if (idsElegiveis.length === 0) return state
   const bloqueios = bloqueiosDe(state)
   const slotsPorId = new Map<number, { x: number; z: number }>()
-  if (ordem.tipo === 'mover') {
-    const slots = pontosFormacaoTropa(ordem.x, ordem.z, idsElegiveis.length, state.obras, state.recursos, state.blocosMapa)
+  if (ordem.tipo === 'mover' || ordem.tipo === 'attackMove') {
+    const slots = pontosFormacaoTropa(
+      ordem.x,
+      ordem.z,
+      idsElegiveis.length,
+      state.obras,
+      state.recursos,
+      state.blocosMapa,
+      state.formacao ?? 'caixa',
+    )
     idsElegiveis.forEach((id, i) => slotsPorId.set(id, slots[i]))
   }
   const custoAgua =
@@ -1881,6 +2561,43 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
   const unidades = state.unidades.map((unidade) => {
     if (!quer.has(unidade.id) || unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
     const posturaBase = baseGuardada(unidade)
+    if (ordem.tipo === 'patrulhar') {
+      const aLim = puxaLimite(ordem.ax, ordem.az)
+      const bLim = puxaLimite(ordem.bx, ordem.bz)
+      return {
+        ...unidade,
+        postura: 'ordens' as const,
+        posturaBase,
+        ancora: null,
+        ordem: {
+          tipo: 'patrulhar' as const,
+          ax: aLim.x,
+          az: aLim.z,
+          bx: bLim.x,
+          bz: bLim.z,
+          indoPara: ordem.indoPara,
+        },
+        rota: null,
+      }
+    }
+    if (ordem.tipo === 'attackMove') {
+      const destino = slotsPorId.get(unidade.id) ?? puxaLimite(ordem.x, ordem.z)
+      const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua)
+      return {
+        ...unidade,
+        postura: 'ordens' as const,
+        posturaBase,
+        ancora: null,
+        ordem: { tipo: 'attackMove' as const, x: destino.x, z: destino.z },
+        rota: {
+          marcos: marcos ?? [],
+          renovarEm: state.tempo + PARTIDA.recalcularSeg,
+          semCaminho: marcos === null,
+          versao: state.versaoSolidos,
+          modo: 'fixo' as const,
+        },
+      }
+    }
     if (ordem.tipo !== 'mover') return { ...unidade, postura: 'ordens' as const, posturaBase, ordem, rota: null }
     const destino = slotsPorId.get(unidade.id) ?? { x: ordem.x, z: ordem.z }
     const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua)
@@ -1905,6 +2622,32 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
     }
   })
   return { ...state, unidades }
+}
+
+export function pararUnidades(
+  state: PartidaState,
+  ids: readonly number[],
+  pararHeroi = false,
+): PartidaState {
+  if (state.derrota) return state
+  const quer = new Set(ids)
+  let mudou = false
+  const unidades = state.unidades.map((unidade) => {
+    if (!quer.has(unidade.id) || unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
+    mudou = true
+    return {
+      ...unidade,
+      postura: unidade.postura === 'ordens' ? baseGuardada(unidade) : unidade.postura,
+      ordem: null,
+      ancora: null,
+      rota: null,
+    }
+  })
+  let atual = mudou ? { ...state, unidades } : state
+  if (pararHeroi && !atual.semCorpo) {
+    atual = { ...limparTarefaConstrutorAtivo(atual), heroiOrdem: null }
+  }
+  return atual
 }
 
 export function postura(state: PartidaState, ids: readonly number[], valor: Postura): PartidaState {
@@ -2031,12 +2774,13 @@ function nascerDragaoDaLeva(state: PartidaState): PartidaState {
   const saida = saidaDaBase(origem, alvoDaSaida(state, origem))
   const celula = encaixarLivre(Math.round(saida.x / PARTIDA.celula), Math.round(saida.z / PARTIDA.celula), bloqueiosDe(state))
   if (!celula) return state
+  const fator = fatorDoEstado(state)
   return {
     ...state,
     nextId: state.nextId + 1,
     unidades: [
       ...state.unidades,
-      criarCorpoDragao(state.nextId, celula[0] * PARTIDA.celula, celula[1] * PARTIDA.celula),
+      criarCorpoDragao(state.nextId, celula[0] * PARTIDA.celula, celula[1] * PARTIDA.celula, fator),
     ],
   }
 }
@@ -2138,18 +2882,19 @@ function registrarTrilha(antes: Unidade, depois: Unidade): Unidade {
   return { ...depois, trilha }
 }
 
-function criarCorpoDragao(id: number, x: number, z: number): Unidade {
+function criarCorpoDragao(id: number, x: number, z: number, fator = 1): Unidade {
+  const f = Number.isFinite(fator) && fator >= 1 ? fator : 1
   return {
     id,
     lado: 'inimigo',
     papel: 'dragao',
     x,
     z,
-    hp: 30,
+    hp: Math.round(30 * f),
     postura: 'automatico',
     ordem: null,
     cooldown: 0,
-    segmentos: [48, 36, 24, 12, 6],
+    segmentos: [48, 36, 24, 12, 6].map((n) => Math.round(n * f)),
     alerta: true,
     trilha: [],
   }
@@ -2273,34 +3018,42 @@ function entradaNoCorpo(dx: number, dz: number, direcao: { x: number; y: number;
   return entrada
 }
 
-export function atirar(state: PartidaState): PartidaState {
-  if (state.derrota || state.semCorpo || state.heroi.shootCooldown > 0) return state
-  const gasto: PartidaState = {
-    ...state,
-    heroi: { ...state.heroi, shootCooldown: PARTIDA.shootCooldown },
-  }
-  if (Math.abs(state.heroi.pitch) >= PARTIDA.pitchTetoTiro) return gasto
-  const fx = -Math.sin(state.heroi.yaw)
-  const fz = Math.cos(state.heroi.yaw)
-  const olhar = vetorDoOlhar(state.heroi.yaw, state.heroi.pitch)
-  const origemY = PARTIDA.eyeY + state.heroi.y
-  const alcance = alcanceDoTiro(state.heroi.x, state.heroi.z, state.heroi.yaw)
+function dispararDoAtor(
+  state: PartidaState,
+  ator: {
+    readonly x: number
+    readonly y: number
+    readonly z: number
+    readonly yaw: number
+    readonly pitch: number
+    readonly alcance: number
+    readonly dano: number
+    readonly tipoAtacante?: TipoTropaAliada
+  },
+  gasto: PartidaState,
+): PartidaState {
+  if (Math.abs(ator.pitch) >= PARTIDA.pitchTetoTiro) return gasto
+  const fx = -Math.sin(ator.yaw)
+  const fz = Math.cos(ator.yaw)
+  const olhar = vetorDoOlhar(ator.yaw, ator.pitch)
+  const origemY = PARTIDA.eyeY + ator.y
+  const alcance = ator.alcance
   let alvo: Unidade | null = null
   let obraAlvo: Obra | null = null
   let melhor = Number.POSITIVE_INFINITY
-  const cotaHeroi = cotaVisaoHeroiBlocos(state.heroi.y)
+  const cotaHeroi = cotaVisaoHeroiBlocos(ator.y)
   for (const unidade of state.unidades) {
     if (unidade.lado !== 'inimigo' || unidade.hp <= 0 || !inimigoVisivel(state, unidade)) continue
     for (const ponto of pontosDoCorpo(unidade)) {
-      const dx = ponto.x - state.heroi.x
-      const dz = ponto.z - state.heroi.z
+      const dx = ponto.x - ator.x
+      const dz = ponto.z - ator.z
       const alongChao = dx * fx + dz * fz
       if (alongChao < 0.35 || alongChao > alcance + 0.05) continue
-      if (!visaoLivreNoEstado(state, state.heroi.x, state.heroi.z, cotaHeroi, ponto.x, ponto.z, 0)) continue
+      if (!visaoLivreNoEstado(state, ator.x, ator.z, cotaHeroi, ponto.x, ponto.z, 0)) continue
       const corpo = aproximaCorpo(
-        state.heroi.x,
+        ator.x,
         origemY,
-        state.heroi.z,
+        ator.z,
         olhar.x,
         olhar.y,
         olhar.z,
@@ -2316,15 +3069,15 @@ export function atirar(state: PartidaState): PartidaState {
   }
   for (const obra of state.obras) {
     if (nossa(obra) || obra.hp <= 0 || !cobertoAgora(state, obra.x, obra.z)) continue
-    if (Math.hypot(obra.x - state.heroi.x, obra.z - state.heroi.z) > alcance) continue
-    if (!visaoLivreNoEstado(state, state.heroi.x, state.heroi.z, cotaHeroi, obra.x, obra.z, 0)) continue
+    if (Math.hypot(obra.x - ator.x, obra.z - ator.z) > alcance) continue
+    if (!visaoLivreNoEstado(state, ator.x, ator.z, cotaHeroi, obra.x, obra.z, 0)) continue
     const entrada = entradaNaObra(state, obra, olhar, origemY)
     if (!Number.isFinite(entrada) || entrada > melhor + 1e-8) continue
     obraAlvo = obra
     melhor = entrada
   }
   if (obraAlvo) {
-    const ferida = aplicarDanoObra(obraAlvo, 12)
+    const ferida = aplicarDanoObra(obraAlvo, ator.dano)
     return {
       ...gasto,
       obras: gasto.obras.map((obra) => (obra.id === obraAlvo.id ? ferida : obra)),
@@ -2334,10 +3087,10 @@ export function atirar(state: PartidaState): PartidaState {
   if (!alvo) {
     const colheita = atingirRecursoNoTiro(
       gasto.recursos,
-      state.heroi.x,
-      state.heroi.y,
-      state.heroi.z,
-      state.heroi.yaw,
+      ator.x,
+      ator.y,
+      ator.z,
+      ator.yaw,
       alcance,
       PARTIDA.rebroteArvoreSeg,
     )
@@ -2351,12 +3104,64 @@ export function atirar(state: PartidaState): PartidaState {
     }
   }
   const id = alvo.id
+  const danoEfetivo = ator.tipoAtacante
+    ? Math.round(ator.dano * multiplicadorTrianguloAoE(ator.tipoAtacante, alvo.papel) * 100) / 100
+    : ator.dano
   return {
     ...gasto,
     unidades: gasto.unidades.map((unidade) =>
-      unidade.id === id ? fereDragaoOuCorpo(unidade, 12) : unidade,
+      unidade.id === id ? fereDragaoOuCorpo(unidade, danoEfetivo) : unidade,
     ),
   }
+}
+
+export function atirar(state: PartidaState): PartidaState {
+  if (state.derrota) return state
+  if (state.posse) {
+    const tropaPos = state.unidades.find((u) => u.id === state.posse!.unidadeId && u.lado === 'aliado' && u.hp > 0)
+    if (!tropaPos || state.posse.shootCooldown > 0 || state.olhar === 'imperio') return state
+    const spec = specDeTropa(tropaPos)
+    const alcance = Math.max(spec.alcance, 3.2)
+    const tipoAtacante = tropaPos.tipoTropa ?? 'soldado'
+    const gasto: PartidaState = {
+      ...state,
+      posse: { ...state.posse, shootCooldown: PARTIDA.shootCooldown },
+    }
+    return dispararDoAtor(
+      state,
+      {
+        x: tropaPos.x,
+        y: state.posse.y,
+        z: tropaPos.z,
+        yaw: state.posse.yaw,
+        pitch: state.posse.pitch,
+        alcance,
+        dano: spec.danoOrdem * fatorDanoForja(state.upgradesEra),
+        tipoAtacante,
+      },
+      gasto,
+    )
+  }
+  if (state.semCorpo || state.heroi.army <= 0 || state.heroi.shootCooldown > 0) return state
+  const gasto: PartidaState = {
+    ...state,
+    heroi: { ...state.heroi, shootCooldown: PARTIDA.shootCooldown },
+  }
+  const alcance = alcanceDoTiro(state.heroi.x, state.heroi.z, state.heroi.yaw, state.heroi.classe)
+  const danoHeroi = SPEC_HEROI[state.heroi.classe ?? 'ataque'].danoTiro
+  return dispararDoAtor(
+    state,
+    {
+      x: state.heroi.x,
+      y: state.heroi.y,
+      z: state.heroi.z,
+      yaw: state.heroi.yaw,
+      pitch: state.heroi.pitch,
+      alcance,
+      dano: danoHeroi,
+    },
+    gasto,
+  )
 }
 
 function maisPerto(x: number, z: number, lista: readonly { id: number; x: number; z: number }[]): number | null {
@@ -2514,34 +3319,68 @@ export function yawAte(x: number, z: number, tx: number, tz: number): number {
   return Math.atan2(-(tx - x), tz - z)
 }
 
+function limparTarefaConstrutorAtivo(state: PartidaState): PartidaState {
+  if (!state.herois?.length) return state
+  const ativoId = state.heroiAtivoId ?? state.herois[0]?.id ?? 0
+  if (!state.herois.some((h) => h.id === ativoId && h.tarefaConstrutor)) return state
+  return {
+    ...state,
+    herois: state.herois.map((h) => (h.id === ativoId ? { ...h, tarefaConstrutor: null } : h)),
+  }
+}
+
 export function ordenarHeroi(state: PartidaState, ordem: Ordem): PartidaState {
   if (state.derrota || state.semCorpo) return state
+  const limpo = limparTarefaConstrutorAtivo(state)
+  if (ordem.tipo === 'patrulhar') {
+    const aLim = puxaLimite(ordem.ax, ordem.az)
+    const bLim = puxaLimite(ordem.bx, ordem.bz)
+    return {
+      ...limpo,
+      heroiOrdem: {
+        tipo: 'patrulhar',
+        ax: aLim.x,
+        az: aLim.z,
+        bx: bLim.x,
+        bz: bLim.z,
+        indoPara: ordem.indoPara,
+        rota: null,
+      },
+    }
+  }
+  if (ordem.tipo === 'attackMove') {
+    const dLim = puxaLimite(ordem.x, ordem.z)
+    return {
+      ...limpo,
+      heroiOrdem: { tipo: 'attackMove', x: dLim.x, z: dLim.z, rota: null },
+    }
+  }
   if (ordem.tipo === 'mover') {
     const custoAgua =
-      state.lagoas.length > 0
-        ? (px: number, pz: number) => (emAguaRasa(state.lagoas, px, pz, 0) ? PARTIDA.custoAguaCaminho : 1)
+      limpo.lagoas.length > 0
+        ? (px: number, pz: number) => (emAguaRasa(limpo.lagoas, px, pz, 0) ? PARTIDA.custoAguaCaminho : 1)
         : undefined
-    const marcos = encontrarCaminho(state.heroi.x, state.heroi.z, ordem.x, ordem.z, bloqueiosDe(state), custoAgua)
+    const marcos = encontrarCaminho(limpo.heroi.x, limpo.heroi.z, ordem.x, ordem.z, bloqueiosDe(limpo), custoAgua)
     return {
-      ...state,
+      ...limpo,
       heroiOrdem: {
         tipo: 'mover',
         x: ordem.x,
         z: ordem.z,
         rota: {
           marcos: marcos ?? [],
-          renovarEm: state.tempo + PARTIDA.recalcularSeg,
+          renovarEm: limpo.tempo + PARTIDA.recalcularSeg,
           semCaminho: marcos === null,
-          versao: state.versaoSolidos,
+          versao: limpo.versaoSolidos,
           modo: 'fixo',
         },
       },
     }
   }
   if (ordem.tipo === 'atacarObra') {
-    return { ...state, heroiOrdem: { tipo: 'atacarObra', obraId: ordem.obraId, rota: null } }
+    return { ...limpo, heroiOrdem: { tipo: 'atacarObra', obraId: ordem.obraId, rota: null } }
   }
-  return { ...state, heroiOrdem: { tipo: 'atacar', alvoId: ordem.alvoId, rota: null } }
+  return { ...limpo, heroiOrdem: { tipo: 'atacar', alvoId: ordem.alvoId, rota: null } }
 }
 
 export function posturaHeroi(state: PartidaState, valor: Postura): PartidaState {
@@ -2666,6 +3505,110 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
     if (Math.hypot(atual.heroi.x - obra.x, atual.heroi.z - obra.z) <= PARTIDA.shootRange) return atirar(atual)
     return atual
   }
+  if (ordem.tipo === 'patrulhar' || ordem.tipo === 'attackMove') {
+    const alcHeroi = SPEC_HEROI[state.heroi.classe ?? 'ataque'].alcance
+    const cota = cotaVisaoHeroiBlocos(state.heroi.y)
+    let melhorIni: Unidade | null = null
+    let melhorDist: number = Math.max(PARTIDA.visao.heroi, alcHeroi)
+    for (const u of state.unidades) {
+      if (u.lado !== 'inimigo' || u.hp <= 0 || u.papel === 'isca') continue
+      const d = Math.hypot(u.x - state.heroi.x, u.z - state.heroi.z)
+      if (d <= melhorDist && visaoLivreNoEstado(state, state.heroi.x, state.heroi.z, cota, u.x, u.z, 0)) {
+        melhorDist = d
+        melhorIni = u
+      }
+    }
+    if (melhorIni) {
+      const yaw = yawAte(state.heroi.x, state.heroi.z, melhorIni.x, melhorIni.z)
+      if (melhorDist <= alcHeroi) {
+        return atirar({ ...state, heroi: { ...state.heroi, yaw, pitch: 0 } })
+      }
+      const andou = avancarRota(
+        sombraDoHeroi(state, ordem.rota),
+        melhorIni.x,
+        melhorIni.z,
+        PARTIDA.heroSpeed,
+        dt,
+        state.obras,
+        state.tempo,
+        state.versaoSolidos,
+        bloqueios,
+        'vivo',
+        state.lagoas,
+        state.blocosMapa,
+      )
+      return {
+        ...state,
+        heroi: { ...state.heroi, x: andou.x, z: andou.z, yaw, pitch: 0 },
+        heroiOrdem: { ...ordem, rota: andou.rota ?? null },
+      }
+    }
+    if (ordem.tipo === 'patrulhar') {
+      const alvoX = ordem.indoPara === 'b' ? ordem.bx : ordem.ax
+      const alvoZ = ordem.indoPara === 'b' ? ordem.bz : ordem.az
+      let ordemAtual = ordem
+      let destX = alvoX
+      let destZ = alvoZ
+      if (Math.hypot(alvoX - state.heroi.x, alvoZ - state.heroi.z) < 1.0) {
+        const proxSentido = ordem.indoPara === 'b' ? ('a' as const) : ('b' as const)
+        destX = proxSentido === 'b' ? ordem.bx : ordem.ax
+        destZ = proxSentido === 'b' ? ordem.bz : ordem.az
+        ordemAtual = { ...ordem, indoPara: proxSentido, rota: null }
+      }
+      const andou = avancarRota(
+        sombraDoHeroi(state, ordemAtual.rota),
+        destX,
+        destZ,
+        PARTIDA.heroSpeed,
+        dt,
+        state.obras,
+        state.tempo,
+        state.versaoSolidos,
+        bloqueios,
+        'fixo',
+        state.lagoas,
+        state.blocosMapa,
+      )
+      return {
+        ...state,
+        heroi: {
+          ...state.heroi,
+          x: andou.x,
+          z: andou.z,
+          yaw: yawAte(state.heroi.x, state.heroi.z, destX, destZ),
+          pitch: 0,
+        },
+        heroiOrdem: { ...ordemAtual, rota: andou.rota ?? null },
+      }
+    }
+    const chegou = Math.hypot(ordem.x - state.heroi.x, ordem.z - state.heroi.z) < 0.9
+    if (chegou) return { ...state, heroiOrdem: null }
+    const andou = avancarRota(
+      sombraDoHeroi(state, ordem.rota),
+      ordem.x,
+      ordem.z,
+      PARTIDA.heroSpeed,
+      dt,
+      state.obras,
+      state.tempo,
+      state.versaoSolidos,
+      bloqueios,
+      'fixo',
+      state.lagoas,
+      state.blocosMapa,
+    )
+    return {
+      ...state,
+      heroi: {
+        ...state.heroi,
+        x: andou.x,
+        z: andou.z,
+        yaw: yawAte(state.heroi.x, state.heroi.z, andou.x, andou.z),
+        pitch: 0,
+      },
+      heroiOrdem: { ...ordem, rota: andou.rota ?? null },
+    }
+  }
   const alvo = state.unidades.find((unidade) => unidade.id === ordem.alvoId && unidade.hp > 0)
   if (!alvo) return { ...state, heroiOrdem: null }
   const dist = Math.hypot(state.heroi.x - alvo.x, state.heroi.z - alvo.z)
@@ -2698,7 +3641,7 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
 }
 
 function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): PartidaState {
-  if (state.semCorpo) return state
+  if (state.semCorpo || state.heroi.army <= 0) return state
   if (state.olhar === 'imperio') {
     let ordem = seguirOrdemHeroi(state, dt)
     if (!ordem.heroiOrdem) ordem = vigiarHeroi(ordem)
@@ -2722,8 +3665,9 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
     : (input.forward ? 1 : 0) - (input.back ? 1 : 0)
   const lado = analogico ? Math.max(-1, Math.min(1, input.eixoX ?? 0)) : input.strafe
   const andando = Math.abs(drive) > 0.2 || Math.abs(lado) > 0.2
-  if (state.heroiOrdem && andando) {
-    state = { ...state, heroiOrdem: null }
+  if (andando) {
+    if (state.heroiOrdem) state = { ...state, heroiOrdem: null }
+    state = limparTarefaConstrutorAtivo(state)
   }
   if (!andando && state.heroiOrdem?.tipo !== 'mover') {
     state = vigiarHeroi(state)
@@ -2879,20 +3823,95 @@ function altarNoPasso(state: PartidaState): PartidaState {
   return state
 }
 
+function aplicarReducaoHeroi(danoBruto: number, classe?: ClasseHeroi): number {
+  const red = SPEC_HEROI[classe ?? 'ataque'].reducaoDanoPct
+  return Math.max(1, Math.ceil(danoBruto * (1 - red)))
+}
+
 function danoHordaNoHeroi(state: PartidaState): PartidaState {
-  if (state.semCorpo || state.heroi.y < -0.9) return state
+  if (state.semCorpo || state.heroi.army <= 0 || (state.heroi.invulneravelRestante ?? 0) > 0 || state.heroi.y < -0.9) {
+    return state
+  }
   let army = state.heroi.army
   let mudou = false
+  const danoRecebido = aplicarReducaoHeroi(PARTIDA.hitDamage, state.heroi.classe)
   const unidades = state.unidades.map((unidade) => {
     if (unidade.papel !== 'horda' || unidade.hp <= 0) return unidade
     const dist = Math.hypot(unidade.x - state.heroi.x, unidade.z - state.heroi.z)
     if (dist > PARTIDA.hitRadius) return unidade
     mudou = true
-    army = clampVidaPartida(army - PARTIDA.hitDamage)
+    army = clampVidaPartida(army - danoRecebido)
     return { ...unidade, hp: 0 }
   })
   if (!mudou) return state
   return { ...state, unidades, heroi: { ...state.heroi, army } }
+}
+
+/**
+ * Sitiantes e Dragões também causam dano de contato contínuo (com cooldown) no Herói,
+ * respeitando `invulneravelRestante`, redução de Tanque e escalonamento por camada do mapa.
+ */
+export function danoContatoInimigosNoHeroi(state: PartidaState, dt: number): PartidaState {
+  const atualCd = Math.max(0, (state.contatoInimigoHeroiCooldown ?? 0) - dt)
+  if (state.semCorpo || state.heroi.army <= 0 || (state.heroi.invulneravelRestante ?? 0) > 0 || state.heroi.y < -0.9) {
+    return atualCd === (state.contatoInimigoHeroiCooldown ?? 0)
+      ? state
+      : { ...state, contatoInimigoHeroiCooldown: atualCd }
+  }
+  if (atualCd > 0) {
+    return { ...state, contatoInimigoHeroiCooldown: atualCd }
+  }
+  const agressor = state.unidades.find(
+    (u) =>
+      u.lado === 'inimigo' &&
+      u.hp > 0 &&
+      (u.papel === 'sitiante' || u.papel === 'dragao') &&
+      Math.hypot(u.x - state.heroi.x, u.z - state.heroi.z) <= PARTIDA.hitRadius + 0.35,
+  )
+  if (!agressor) {
+    return atualCd === (state.contatoInimigoHeroiCooldown ?? 0)
+      ? state
+      : { ...state, contatoInimigoHeroiCooldown: atualCd }
+  }
+  const baseDano = agressor.papel === 'dragao' ? PARTIDA.danoContatoDragaoHeroi : PARTIDA.danoContatoSitianteHeroi
+  const danoFinal = aplicarReducaoHeroi(baseDano, state.heroi.classe)
+  return {
+    ...state,
+    contatoInimigoHeroiCooldown: PARTIDA.contatoInimigoHeroiCooldown,
+    heroi: { ...state.heroi, army: clampVidaPartida(state.heroi.army - danoFinal) },
+  }
+}
+
+function specDeTropa(unidade: Unidade, upgrades?: UpgradesEra): SpecTropaAliada {
+  const base =
+    unidade.lado === 'aliado' && unidade.tipoTropa
+      ? SPEC_TROPA_ALIADA[unidade.tipoTropa]
+      : SPEC_TROPA_ALIADA.soldado
+  if (!upgrades || unidade.lado !== 'aliado') return base
+  const fatorVel = fatorVelBotas(upgrades)
+  const fatorDano = fatorDanoForja(upgrades)
+  if (fatorVel === 1 && fatorDano === 1) return base
+  return {
+    ...base,
+    vel: base.vel * fatorVel,
+    danoBase: Math.round(base.danoBase * fatorDano * 100) / 100,
+    danoOrdem: Math.round(base.danoOrdem * fatorDano * 100) / 100,
+  }
+}
+
+function emAlcanceDeUnidade(state: PartidaState, unidade: Unidade, alvo: Unidade, spec: SpecTropaAliada): boolean {
+  if (Math.hypot(alvo.x - unidade.x, alvo.z - unidade.z) > spec.alcance) return false
+  if (spec.alcance <= PARTIDA.melee + 0.5) return true
+  return visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), alvo.x, alvo.z, 0)
+}
+
+function emAlcanceDeObra(state: PartidaState, unidade: Unidade, obra: Obra, spec: SpecTropaAliada): boolean {
+  if (emContatoComObra(unidade.x, unidade.z, obra)) return true
+  if (spec.alcance <= PARTIDA.melee + 0.5) return false
+  return (
+    Math.hypot(obra.x - unidade.x, obra.z - unidade.z) <= spec.alcance + 1.5 &&
+    visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), obra.x, obra.z, 0)
+  )
 }
 
 function emContatoComObra(px: number, pz: number, obra: Obra): boolean {
@@ -2963,6 +3982,7 @@ function passoVigiaUnidade(
     )
     alvoId = maisPerto(unidade.x, unidade.z, naColeira)
   }
+  const spec = specDeTropa(unidade, state.upgradesEra)
   const alvo = alvoId === null ? undefined : inimigos.find((item) => item.id === alvoId)
   if (alvo) {
     if (!ancora) ancora = { x: unidade.x, z: unidade.z }
@@ -2970,12 +3990,12 @@ function passoVigiaUnidade(
       return unidade
     }
     const comAncora = { ...unidade, ancora }
-    if (Math.hypot(alvo.x - unidade.x, alvo.z - unidade.z) <= PARTIDA.melee) return comAncora
+    if (emAlcanceDeUnidade(state, unidade, alvo, spec)) return comAncora
     return avancarRota(
       comAncora,
       alvo.x,
       alvo.z,
-      PARTIDA.allySpeed,
+      spec.vel,
       dt,
       obras,
       state.tempo,
@@ -3022,13 +4042,13 @@ function passoVigiaUnidade(
     return unidade
   }
   const comObra = { ...unidade, ancora }
-  if (emContatoComObra(unidade.x, unidade.z, alvoObra)) return comObra
+  if (emAlcanceDeObra(state, unidade, alvoObra, spec)) return comObra
   const peri = aproximacaoDaObra(alvoObra, unidade.x, unidade.z)
   return avancarRota(
     comObra,
     peri.x,
     peri.z,
-    PARTIDA.allySpeed,
+    spec.vel,
     dt,
     obras,
     state.tempo,
@@ -3077,6 +4097,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
 
   unidades = unidades.map((unidade) => {
     if (unidade.hp <= 0) return unidade
+    if (state.posse && unidade.id === state.posse.unidadeId) return unidade
     if (unidade.papel === 'horda') {
       const obraPerto = obrasVivas.some((obra) => Math.hypot(unidade.x - obra.x, unidade.z - obra.z) < 12)
       const alerta =
@@ -3170,7 +4191,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         unidade,
         unidade.ordem.x,
         unidade.ordem.z,
-        PARTIDA.allySpeed,
+        specDeTropa(unidade, state.upgradesEra).vel,
         dt,
         obras,
         state.tempo,
@@ -3182,6 +4203,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacarObra') {
+      const spec = specDeTropa(unidade, state.upgradesEra)
       let alvoObra = obraInimigaViva(unidade.ordem.obraId)
       let ordem: Ordem | null = unidade.ordem
       let rota = unidade.rota
@@ -3193,7 +4215,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         ordem = { tipo: 'atacarObra', obraId: alvoObra.id }
         rota = null
       }
-      if (emContatoComObra(unidade.x, unidade.z, alvoObra)) {
+      if (emAlcanceDeObra(state, unidade, alvoObra, spec)) {
         return { ...unidade, ordem, rota }
       }
       const peri = aproximacaoDaObra(alvoObra, unidade.x, unidade.z)
@@ -3201,7 +4223,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         { ...unidade, ordem, rota },
         peri.x,
         peri.z,
-        PARTIDA.allySpeed,
+        spec.vel,
         dt,
         obras,
         state.tempo,
@@ -3213,6 +4235,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacar') {
+      const spec = specDeTropa(unidade, state.upgradesEra)
       let alvo = vivo(unidade.ordem.alvoId)
       let ordem: Ordem | null = unidade.ordem
       let rota = unidade.rota
@@ -3231,11 +4254,14 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         ordem = { tipo: 'atacar', alvoId: alvo.id }
         rota = null
       }
+      if (emAlcanceDeUnidade(state, unidade, alvo, spec)) {
+        return { ...unidade, ordem, rota }
+      }
       return avancarRota(
         { ...unidade, ordem, rota },
         alvo.x,
         alvo.z,
-        PARTIDA.allySpeed,
+        spec.vel,
         dt,
         obras,
         state.tempo,
@@ -3245,6 +4271,92 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         state.lagoas,
         blocosMapa,
       )
+    }
+    if (unidade.postura === 'ordens' && (unidade.ordem?.tipo === 'patrulhar' || unidade.ordem?.tipo === 'attackMove')) {
+      const spec = specDeTropa(unidade, state.upgradesEra)
+      const baseEngaj = unidade.ancora ?? null
+      const inimigos = unidades.filter((item) => item.lado === 'inimigo' && item.hp > 0 && item.papel !== 'isca')
+      const vistos = inimigos.filter(
+        (item) =>
+          Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.visao.tropa &&
+          visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), item.x, item.z, 0),
+      )
+      const cands = baseEngaj
+        ? vistos.filter((item) => Math.hypot(item.x - baseEngaj.x, item.z - baseEngaj.z) <= PARTIDA.acquireAliado)
+        : vistos
+      const alvoId = maisPerto(unidade.x, unidade.z, cands)
+      const alvo = alvoId === null ? undefined : inimigos.find((item) => item.id === alvoId)
+      if (alvo) {
+        const ancora = baseEngaj ?? { x: unidade.x, z: unidade.z }
+        const comAncora = { ...unidade, ancora }
+        if (emAlcanceDeUnidade(state, unidade, alvo, spec)) return comAncora
+        return avancarRota(comAncora, alvo.x, alvo.z, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
+      }
+      const obrasHostis = obras.filter(
+        (item) =>
+          !nossa(item) &&
+          item.hp > 0 &&
+          cobertoAgora(state, item.x, item.z) &&
+          Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.visao.tropa &&
+          visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), item.x, item.z, 0),
+      )
+      const candsObra = baseEngaj
+        ? obrasHostis.filter((item) => Math.hypot(item.x - baseEngaj.x, item.z - baseEngaj.z) <= PARTIDA.acquireAliado)
+        : obrasHostis
+      const obraId = maisPerto(unidade.x, unidade.z, candsObra)
+      const alvoObra = obraId === null ? undefined : obras.find((item) => item.id === obraId && item.hp > 0)
+      if (alvoObra) {
+        const ancora = baseEngaj ?? { x: unidade.x, z: unidade.z }
+        const comObra = { ...unidade, ancora }
+        if (emAlcanceDeObra(state, unidade, alvoObra, spec)) return comObra
+        const peri = aproximacaoDaObra(alvoObra, unidade.x, unidade.z)
+        return avancarRota(comObra, peri.x, peri.z, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
+      }
+      const retomando = unidade.ancora ? { ...unidade, ancora: null } : unidade
+      if (retomando.ordem?.tipo === 'patrulhar') {
+        const p = retomando.ordem
+        const alvoX = p.indoPara === 'b' ? p.bx : p.ax
+        const alvoZ = p.indoPara === 'b' ? p.bz : p.az
+        if (Math.hypot(alvoX - retomando.x, alvoZ - retomando.z) < 1.1) {
+          const proxSentido = p.indoPara === 'b' ? ('a' as const) : ('b' as const)
+          const proxX = proxSentido === 'b' ? p.bx : p.ax
+          const proxZ = proxSentido === 'b' ? p.bz : p.az
+          return avancarRota(
+            { ...retomando, ordem: { ...p, indoPara: proxSentido }, rota: null },
+            proxX,
+            proxZ,
+            spec.vel,
+            dt,
+            obras,
+            state.tempo,
+            versao,
+            bloqueios,
+            'fixo',
+            state.lagoas,
+            blocosMapa,
+          )
+        }
+        return avancarRota(retomando, alvoX, alvoZ, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'fixo', state.lagoas, blocosMapa)
+      }
+      if (retomando.ordem?.tipo === 'attackMove') {
+        if (Math.hypot(retomando.ordem.x - retomando.x, retomando.ordem.z - retomando.z) < 0.9) {
+          return encerrarOrdemDeAtaque(retomando)
+        }
+        return avancarRota(
+          retomando,
+          retomando.ordem.x,
+          retomando.ordem.z,
+          spec.vel,
+          dt,
+          obras,
+          state.tempo,
+          versao,
+          bloqueios,
+          'fixo',
+          state.lagoas,
+          blocosMapa,
+        )
+      }
     }
     if (unidade.postura === 'vigia' || unidade.postura === 'automatico' || unidade.postura === 'noLugar' || unidade.postura === 'calado') {
       return passoVigiaUnidade(state, unidade, unidades, obras, dt, bloqueios, versao, blocosMapa)
@@ -3280,19 +4392,19 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
   const agressores = new Set<number>()
   for (const unidade of unidades) {
     if (unidade.hp <= 0 || unidade.cooldown > 0) continue
+    if (state.posse && unidade.id === state.posse.unidadeId) continue
     if (unidade.lado === 'aliado') {
+      const spec = specDeTropa(unidade, state.upgradesEra)
+      const tipoAtacante = unidade.tipoTropa ?? 'soldado'
       if (unidade.postura === 'calado') continue
       if (unidade.postura === 'noLugar') {
         const inimigosParados = unidades.filter(
-          (item) => item.lado === 'inimigo' && item.hp > 0 && Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.melee,
+          (item) => item.lado === 'inimigo' && item.hp > 0 && Math.hypot(item.x - unidade.x, item.z - unidade.z) <= spec.alcance,
         )
         const paradoId = maisPerto(unidade.x, unidade.z, inimigosParados)
         const parado = paradoId === null ? undefined : unidades.find((item) => item.id === paradoId && item.hp > 0)
-        if (
-          parado &&
-          visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), parado.x, parado.z, 0)
-        ) {
-          fere(parado.id, PARTIDA.danoAutomatico)
+        if (parado && emAlcanceDeUnidade(state, unidade, parado, spec)) {
+          fere(parado.id, spec.danoBase * multiplicadorTrianguloAoE(tipoAtacante, parado.papel))
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -3301,8 +4413,8 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       }
       if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacarObra') {
         const alvoObra = obraInimigaViva(unidade.ordem.obraId)
-        if (alvoObra && emContatoComObra(unidade.x, unidade.z, alvoObra)) {
-          fereObra(alvoObra.id, PARTIDA.danoOrdem)
+        if (alvoObra && emAlcanceDeObra(state, unidade, alvoObra, spec)) {
+          fereObra(alvoObra.id, spec.danoOrdem)
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -3310,15 +4422,20 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         continue
       }
       let alvoId: number | null = null
+      const emBuscaAtiva =
+        unidade.postura === 'automatico' ||
+        unidade.postura === 'vigia' ||
+        (unidade.postura === 'ordens' && (unidade.ordem?.tipo === 'patrulhar' || unidade.ordem?.tipo === 'attackMove'))
       if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacar') alvoId = unidade.ordem.alvoId
-      if (unidade.postura === 'automatico' || unidade.postura === 'vigia') {
+      if (emBuscaAtiva) {
         const inimigos = unidades.filter((item) => item.lado === 'inimigo' && item.hp > 0)
-        alvoId = maisPerto(unidade.x, unidade.z, inimigos.filter((item) => Math.hypot(item.x - unidade.x, item.z - unidade.z) <= PARTIDA.melee + 0.2))
+        alvoId = maisPerto(unidade.x, unidade.z, inimigos.filter((item) => Math.hypot(item.x - unidade.x, item.z - unidade.z) <= spec.alcance + 0.2))
       }
       if (alvoId !== null) {
         const alvo = unidades.find((item) => item.id === alvoId && item.hp > 0)
-        if (alvo && Math.hypot(alvo.x - unidade.x, alvo.z - unidade.z) <= PARTIDA.melee) {
-          const dano = unidade.postura === 'ordens' ? PARTIDA.danoOrdem : PARTIDA.danoAutomatico
+        if (alvo && emAlcanceDeUnidade(state, unidade, alvo, spec)) {
+          const base = unidade.postura === 'ordens' ? spec.danoOrdem : spec.danoBase
+          const dano = base * multiplicadorTrianguloAoE(tipoAtacante, alvo.papel)
           fere(alvo.id, dano)
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
@@ -3326,11 +4443,11 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
           continue
         }
       }
-      if (unidade.postura === 'automatico' || unidade.postura === 'vigia') {
-        const obrasEmContato = obras.filter((item) => !nossa(item) && item.hp > 0 && emContatoComObra(unidade.x, unidade.z, item))
+      if (emBuscaAtiva) {
+        const obrasEmContato = obras.filter((item) => !nossa(item) && item.hp > 0 && emAlcanceDeObra(state, unidade, item, spec))
         const obraId = maisPerto(unidade.x, unidade.z, obrasEmContato)
         if (obraId !== null) {
-          fereObra(obraId, PARTIDA.danoAutomatico)
+          fereObra(obraId, unidade.postura === 'ordens' ? spec.danoOrdem : spec.danoBase)
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -3430,7 +4547,14 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         }
       }
     }
-    if (torre.lado === 'inimigo' && !state.semCorpo && state.heroi.y >= -0.9 && army > 0 && !jaAlvo.has(-1)) {
+    if (
+      torre.lado === 'inimigo' &&
+      !state.semCorpo &&
+      state.heroi.y >= -0.9 &&
+      army > 0 &&
+      (state.heroi.invulneravelRestante ?? 0) <= 0 &&
+      !jaAlvo.has(-1)
+    ) {
       const dist = Math.hypot(state.heroi.x - torre.x, state.heroi.z - torre.z)
       if (dist <= alcance && dist <= melhor && visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, state.heroi.x, state.heroi.z, state.heroi.y)) {
         id = -1
@@ -3440,8 +4564,16 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       jaAlvo.add(id)
       // A vida do HERÓI é um inteiro (`clampVidaPartida` faz `floor`, o HUD mostra o número exato). O dano da torre agora é fracionário a partir do nível 3 (13,5), e `army − 13,5` com `floor` já tiraria 14 por acaso
       // do arredondamento: o `ceil` explícito diz a regra em voz alta (um golpe nunca tira «meio ponto» a menos) e não depende do `floor` de outra função. Unidades e obras têm vida fracionária: o dano vale inteiro.
-      if (id === -1) army = clampVidaPartida(army - Math.ceil(danoTorre))
-      else fere(id, danoTorre)
+      if (id === -1) {
+        army = clampVidaPartida(army - aplicarReducaoHeroi(Math.ceil(danoTorre), state.heroi.classe))
+      } else {
+        const alvoUn = unidades.find((u) => u.id === id)
+        const mult =
+          torre.lado === 'inimigo' && alvoUn?.lado === 'aliado' && alvoUn.tipoTropa
+            ? multiplicadorTrianguloAoE('torre', alvoUn.tipoTropa)
+            : 1
+        fere(id, danoTorre * mult)
+      }
       obras = obras.map((item) => (item.id === torre.id ? { ...item, cooldown: PARTIDA.torreCooldown } : item))
       continue
     }
@@ -3512,7 +4644,14 @@ function passoOnda(state: PartidaState, dt: number): PartidaState {
   // Só a metade INIMIGA da condição continua: sem base inimiga não há de onde a onda sair. A metade «sem núcleo seu» SAIU (22/11, pedido do usuário): o inimigo evolui mesmo num mapa onde
   // ninguém fundou base, e quando alguém chega encontra uma base maior e um exército (a dificuldade cresce com o tempo). Para onde a leva sai: `alvoDaSaida`.
   if (!inimigo) return state.ondaRelogio === 0 ? state : { ...state, ondaRelogio: 0 }
-  const relogio = state.ondaRelogio + dt
+  let relogio = state.ondaRelogio + dt
+  if (state.ondaNumero === 0 && PARTIDA.atrasoPrimeiraLevaNucleoConstrucao) {
+    const nossoEmConstrucao = state.obras.some((o) => nossa(o) && o.tipo === 'nucleo' && o.hp > 0 && obraEmConstrucao(o))
+    const temNucleoPronto = state.obras.some((o) => nossa(o) && o.tipo === 'nucleo' && o.hp > 0 && !obraEmConstrucao(o))
+    if (nossoEmConstrucao && !temNucleoPronto) {
+      relogio = Math.min(relogio, PARTIDA.ondaPeriodo - 1)
+    }
+  }
   if (relogio < PARTIDA.ondaPeriodo) return { ...state, ondaRelogio: relogio }
   if (vivosInimigos(state).length >= PARTIDA.enemyCap) return { ...state, ondaRelogio: 0 }
   const numero = state.ondaNumero + 1
@@ -3553,22 +4692,127 @@ function passoOnda(state: PartidaState, dt: number): PartidaState {
 
 function checaDerrota(antes: PartidaState, state: PartidaState): PartidaState {
   if (state.semCorpo) return state
-  if (state.heroi.army <= 0) return { ...state, derrota: true }
+  const nucleoVivoLocal = nucleoNosso(state.obras) !== undefined
+  const temAlgumNucleoVivo = nucleoVivoLocal || state.outraBaseViva === true
+  if (state.heroi.army <= 0) {
+    const outroVivo = state.herois?.find((h) => h.id !== (state.heroiAtivoId ?? 0) && h.vivo && h.army > 0)
+    if (outroVivo) {
+      const comMorto = sincronizarHerois(state)
+      return selecionarHeroiAtivo(comMorto, outroVivo.id)
+    }
+    if (temAlgumNucleoVivo) {
+      const jaCaido = state.heroiCaido === true
+      return {
+        ...state,
+        heroiCaido: true,
+        mortesHeroi: jaCaido ? (state.mortesHeroi ?? 1) : (state.mortesHeroi ?? 0) + 1,
+        heroiOrdem: null,
+        olhar: 'imperio',
+      }
+    }
+    return { ...state, derrota: true }
+  }
   const nucleoAntes = nucleoNosso(antes.obras, false)
   const nucleo = nucleoNosso(state.obras, false)
   const caiuAgora = nucleoAntes !== undefined && nucleoAntes.hp > 0 && nucleo !== undefined && nucleo.hp <= 0
   if (!caiuAgora) return state
-  // Com outra base nossa viva em outro mapa (o atlas escreve `outraBaseViva`), perder ESTA não encerra o jogo: só cai a ÚLTIMA base. O herói morto (vida 0, acima) segue sendo derrota: a ressurreição (L4) é outra fatia.
+  // Com outra base nossa viva em outro mapa (o atlas escreve `outraBaseViva`), perder ESTA não encerra o jogo: só cai a ÚLTIMA base.
   if (state.outraBaseViva === true) return state
   return { ...state, derrota: true }
 }
 
+function passoPosse(state: PartidaState, input: PartidaInput, dt: number): PartidaState {
+  if (!state.posse) return state
+  const alvo = state.unidades.find((u) => u.id === state.posse!.unidadeId && u.lado === 'aliado' && u.hp > 0)
+  if (!alvo) {
+    return {
+      ...state,
+      posse: null,
+      ...(state.semCorpo ? {} : { olhar: 'imperio' as const }),
+    }
+  }
+  const shootCooldown = Math.max(0, state.posse.shootCooldown - dt)
+  if (state.olhar === 'imperio') {
+    return { ...state, posse: { ...state.posse, shootCooldown } }
+  }
+  const analogico = typeof input.eixoX === 'number' || typeof input.eixoY === 'number'
+  const drive = analogico
+    ? Math.max(-1, Math.min(1, input.eixoY ?? 0))
+    : (input.forward ? 1 : 0) - (input.back ? 1 : 0)
+  const lado = analogico ? Math.max(-1, Math.min(1, input.eixoX ?? 0)) : input.strafe
+  const yaw = state.posse.yaw
+  const fx = -Math.sin(yaw)
+  const fz = Math.cos(yaw)
+  const rx = -Math.cos(yaw)
+  const rz = -Math.sin(yaw)
+  let mx = fx * drive + rx * lado
+  let mz = fz * drive + rz * lado
+  const mag = Math.hypot(mx, mz)
+  if (mag > 1) {
+    mx /= mag
+    mz /= mag
+  }
+  const spec = specDeTropa(alvo, state.upgradesEra)
+  const fatorAgua = emAguaRasa(state.lagoas, alvo.x, alvo.z, state.posse.y) ? PARTIDA.aguaFatorVelocidade : 1
+  const dist = spec.vel * fatorAgua * dt
+  const x1 = alvo.x + mx * dist
+  const z1 = alvo.z + mz * dist
+  const pos = escorrega(
+    alvo.x,
+    alvo.z,
+    x1,
+    z1,
+    state.obras,
+    PARTIDA.atlas === 'grade',
+    state.posse.y,
+    state.recursos,
+    state.subsoloCentro,
+    state.blocosMapa,
+  )
+  const clamped = puxaLimite(pos.x, pos.z)
+  const queda = cair(
+    state.posse.y,
+    state.posse.vy,
+    clamped.x,
+    clamped.z,
+    state.pedraNoChao,
+    state.obras,
+    state.recursos,
+    state.subsoloCentro,
+    dt,
+    state.blocosMapa,
+  )
+  return {
+    ...state,
+    posse: { ...state.posse, y: queda.y, vy: queda.vy, shootCooldown },
+    unidades: state.unidades.map((u) =>
+      u.id === alvo.id ? { ...u, x: clamped.x, z: clamped.z, ordem: null, rota: null } : u,
+    ),
+  }
+}
+
+function liberarPosseSeMorreu(state: PartidaState): PartidaState {
+  if (!state.posse) return state
+  const viva = state.unidades.some((u) => u.id === state.posse!.unidadeId && u.lado === 'aliado' && u.hp > 0)
+  if (viva) return state
+  return {
+    ...state,
+    posse: null,
+    ...(state.semCorpo ? {} : { olhar: 'imperio' as const }),
+  }
+}
+
 function passoCurto(state: PartidaState, input: PartidaInput, dt: number): PartidaState {
-  let atual = passoHeroi(state, input, dt)
+  let atual = passoHeroi(state, state.posse ? VAZIO : input, dt)
+  atual = passoPosse(atual, input, dt)
   atual = portoesConstruidos(atual)
   atual = altarNoPasso(atual)
+  atual = passoFilasProducao(atual, dt)
+  atual = passoHeroisECons(atual, dt)
   atual = passoUnidades(atual, dt)
+  atual = liberarPosseSeMorreu(atual)
   atual = danoHordaNoHeroi(atual)
+  atual = danoContatoInimigosNoHeroi(atual, dt)
   atual = passoOnda(atual, dt)
 
   const serrarias = atual.obras.filter(
@@ -3588,7 +4832,11 @@ function passoCurto(state: PartidaState, input: PartidaInput, dt: number): Parti
     relogioExtracao: eco.relogioExtracao,
     restoExtracao: eco.restos,
     versaoRecursos: eco.mudouMalha ? atual.versaoRecursos + 1 : atual.versaoRecursos,
-    heroi: { ...atual.heroi, shootCooldown: Math.max(0, atual.heroi.shootCooldown - dt) },
+    heroi: {
+      ...atual.heroi,
+      shootCooldown: Math.max(0, atual.heroi.shootCooldown - dt),
+      invulneravelRestante: Math.max(0, (atual.heroi.invulneravelRestante ?? 0) - dt),
+    },
   }
   return checaDerrota(state, marcarChao(atual))
 }

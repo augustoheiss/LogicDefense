@@ -805,7 +805,7 @@ export const FIGURAS_ENEM: Readonly<Record<string, readonly FiguraManifesto[]>> 
     { src: '/enem/figuras/2019/q142.png', alt: 'Figura da questao 142 do ENEM 2019 (Caderno 5 Amarelo)', largura: 672, altura: 463, papel: 'enunciado', tipoVisual: 'geometria' },
   ],
   '2019:143': [
-    { src: '/enem/figuras/2019/q143.png', alt: 'Figura da questao 143 do ENEM 2019 (Caderno 5 Amarelo)', largura: 692, altura: 314, papel: 'enunciado', tipoVisual: 'grafico' },
+    { src: '/enem/figuras/2019/q143.png', alt: 'Figura da questao 143 do ENEM 2019 (Caderno 5 Amarelo)', largura: 692, altura: 314, papel: 'enunciado', tipoVisual: 'tabela' },
   ],
   '2019:147': [
     { src: '/enem/figuras/2019/q147.png', alt: 'Figura da questao 147 do ENEM 2019 (Caderno 5 Amarelo)', largura: 765, altura: 374, papel: 'enunciado', tipoVisual: 'tabela' },
