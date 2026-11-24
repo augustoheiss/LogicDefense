@@ -10,12 +10,12 @@ import {
   Object3D,
 } from 'three'
 import type { BiomaId, LagoaRasa, RecursoNatural } from '../biomaRecursos'
-import { PARTIDA } from '../partidaPolicies'
-import { chaoRevelado, type PartidaState } from '../partidaSim'
+import type { PartidaState } from '../partidaSim'
 import { semRaycast } from '../raycastCena'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
 import { gerarPropsDecorativos } from './propsDecorativos'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
+import { alturaVisualRecurso, paisagemNaturalVisivel } from './suporteFundacao'
 import type { PacoteTexturasBioma } from './texturasPbrProcedural'
 
 export interface PropsBiomaInstancedProps {
@@ -154,14 +154,15 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
 
     for (const rec of recursos) {
       if (rec.yBase < -0.9) continue
-      if (PARTIDA.nuvem && !chaoRevelado(state, rec.x, rec.z)) continue
+      if (!paisagemNaturalVisivel(state, rec.x, rec.z)) continue
       const rot = ((rec.id * 1.618) % (Math.PI * 2))
       const escala = 0.88 + ((rec.id * 37) % 30) / 100
+      const ySolo = alturaVisualRecurso(rec.yBase)
 
       if (rec.tipo === 'arvore') {
         if (rec.hp <= 0) {
           if (tocosRef.current && nToco < MAX_ARVORES) {
-            molde.position.set(rec.x, rec.yBase + 0.14, rec.z)
+            molde.position.set(rec.x, ySolo + 0.12, rec.z)
             molde.rotation.set(0, rot, 0)
             molde.scale.set(escala, 1, escala)
             molde.updateMatrix()
@@ -169,14 +170,14 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           }
         } else if (nArv < MAX_ARVORES) {
           if (troncosRef.current) {
-            molde.position.set(rec.x, rec.yBase + 0.68 * escala, rec.z)
+            molde.position.set(rec.x, ySolo + 0.62 * escala, rec.z)
             molde.rotation.set(0, rot, 0)
             molde.scale.set(escala, escala, escala)
             molde.updateMatrix()
             troncosRef.current.setMatrixAt(nArv, molde.matrix)
           }
           if (copas1Ref.current) {
-            molde.position.set(rec.x, rec.yBase + 1.5 * escala, rec.z)
+            molde.position.set(rec.x, ySolo + 1.44 * escala, rec.z)
             molde.rotation.set(0, rot + 0.4, 0)
             const sx = cat.copaFormato === 'retorcida' ? escala * 1.15 : escala
             molde.scale.set(sx, escala, sx)
@@ -184,7 +185,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
             copas1Ref.current.setMatrixAt(nArv, molde.matrix)
           }
           if (copas2Ref.current) {
-            molde.position.set(rec.x, rec.yBase + 2.15 * escala, rec.z)
+            molde.position.set(rec.x, ySolo + 2.09 * escala, rec.z)
             molde.rotation.set(0, rot + 1.1, 0)
             molde.scale.set(escala * 0.78, escala * 0.86, escala * 0.78)
             molde.updateMatrix()
@@ -195,7 +196,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       } else {
         if (rec.hp <= 0) {
           if (ouroVazioRef.current && nOuroVazio < MAX_OURO) {
-            molde.position.set(rec.x, rec.yBase + 0.08, rec.z)
+            molde.position.set(rec.x, ySolo + 0.06, rec.z)
             molde.rotation.set(0, rot, 0)
             molde.scale.set(1, 1, 1)
             molde.updateMatrix()
@@ -203,21 +204,21 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           }
         } else if (nOuro < MAX_OURO) {
           if (rochasOuroRef.current) {
-            molde.position.set(rec.x, rec.yBase + 0.36, rec.z)
+            molde.position.set(rec.x, ySolo + 0.3 * escala, rec.z)
             molde.rotation.set(0.08, rot, -0.06)
             molde.scale.set(escala, escala * 0.9, escala)
             molde.updateMatrix()
             rochasOuroRef.current.setMatrixAt(nOuro, molde.matrix)
           }
           if (cristais1Ref.current) {
-            molde.position.set(rec.x + 0.18, rec.yBase + 0.66, rec.z + 0.1)
+            molde.position.set(rec.x + 0.18, ySolo + 0.58 * escala, rec.z + 0.1)
             molde.rotation.set(0.3, rot + 0.4, -0.2)
             molde.scale.set(escala, escala, escala)
             molde.updateMatrix()
             cristais1Ref.current.setMatrixAt(nOuro, molde.matrix)
           }
           if (cristais2Ref.current) {
-            molde.position.set(rec.x - 0.2, rec.yBase + 0.56, rec.z - 0.14)
+            molde.position.set(rec.x - 0.2, ySolo + 0.48 * escala, rec.z - 0.14)
             molde.rotation.set(-0.2, rot + 0.9, 0.35)
             molde.scale.set(escala, escala, escala)
             molde.updateMatrix()
@@ -242,7 +243,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
     atualizar(cristais1Ref.current, nOuro)
     atualizar(cristais2Ref.current, nOuro)
     atualizar(ouroVazioRef.current, nOuroVazio)
-  }, [recursos, state, state.versaoChao, state.versaoRecursos, cat.copaFormato, molde])
+  }, [recursos, state, state.versaoChao, state.versaoRecursos, state.semCorpo, cat.copaFormato, molde])
 
   // 2. Atualiza instâncias de micro-natureza (grama, flores, pedras, margens)
   useLayoutEffect(() => {
@@ -252,7 +253,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       let n = 0
       for (const g of decor.gramas) {
         if (n >= MAX_GRAMA) break
-        if (PARTIDA.nuvem && !chaoRevelado(state, g.x, g.z)) continue
+        if (!paisagemNaturalVisivel(state, g.x, g.z)) continue
         molde.position.set(g.x, -0.45, g.z)
         molde.rotation.set(0, g.rotY, 0)
         molde.scale.set(g.escala, g.altura, g.escala)
@@ -269,7 +270,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       let n = 0
       for (const fl of decor.flores) {
         if (n >= MAX_FLORES) break
-        if (PARTIDA.nuvem && !chaoRevelado(state, fl.x, fl.z)) continue
+        if (!paisagemNaturalVisivel(state, fl.x, fl.z)) continue
         molde.position.set(fl.x, -0.34, fl.z)
         molde.rotation.set(0, fl.rotY, 0)
         molde.scale.set(fl.escala, fl.escala, fl.escala)
@@ -289,7 +290,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       let n = 0
       for (const p of decor.pedras) {
         if (n >= MAX_PEDRAS) break
-        if (PARTIDA.nuvem && !chaoRevelado(state, p.x, p.z)) continue
+        if (!paisagemNaturalVisivel(state, p.x, p.z)) continue
         molde.position.set(p.x, -0.42 + p.escalaY * 0.35, p.z)
         molde.rotation.set(0.15, p.rotY, 0.1)
         molde.scale.set(p.escalaX, p.escalaY, p.escalaZ)
@@ -305,7 +306,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       let nj = 0
       let nv = 0
       for (const m of decor.margens) {
-        if (PARTIDA.nuvem && !chaoRevelado(state, m.x, m.z)) continue
+        if (!paisagemNaturalVisivel(state, m.x, m.z)) continue
         if (m.tipo === 'junco' && nj < MAX_MARGENS) {
           molde.position.set(m.x, -0.25, m.z)
           molde.rotation.set(0.08, m.rotY, 0)
@@ -325,7 +326,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       vitoriasRef.current.count = nv
       vitoriasRef.current.instanceMatrix.needsUpdate = true
     }
-  }, [decor, noSubsolo, state, state.versaoChao, cat.coresFlores, molde])
+  }, [decor, noSubsolo, state, state.versaoChao, state.semCorpo, cat.coresFlores, molde])
 
   if (noSubsolo) return null
 

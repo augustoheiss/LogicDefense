@@ -2,11 +2,11 @@ import { useFrame } from '@react-three/fiber'
 import React, { useEffect, useMemo } from 'react'
 import { Color, ShaderMaterial } from 'three'
 import type { BiomaId, LagoaRasa } from '../biomaRecursos'
-import { PARTIDA } from '../partidaPolicies'
-import { chaoRevelado, type PartidaState } from '../partidaSim'
+import type { PartidaState } from '../partidaSim'
 import { semRaycast } from '../raycastCena'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
+import { paisagemNaturalVisivel } from './suporteFundacao'
 import type { PacoteTexturasBioma } from './texturasPbrProcedural'
 
 export interface AguaBiomaShaderProps {
@@ -101,7 +101,7 @@ export const AguaBiomaShader: React.FC<AguaBiomaShaderProps> = ({
   return (
     <group name="agua-bioma">
       {lagoas.map((lagoa, idx) => {
-        const visivel = !PARTIDA.nuvem || chaoRevelado(state, lagoa.x, lagoa.z)
+        const visivel = paisagemNaturalVisivel(state, lagoa.x, lagoa.z)
         if (!visivel) return null
         return (
           <group key={`lagoa-vis-${idx}`} position={[lagoa.x, -0.41, lagoa.z]}>

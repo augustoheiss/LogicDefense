@@ -1,10 +1,106 @@
-import { emAguaRasa, type LagoaRasa } from '../biomaRecursos'
+import { emAguaRasa, type LagoaRasa, VOXEL_NV5 } from '../biomaRecursos'
+import { PASSO_BLOCO_MUNDO } from '../blocosMundo'
+import { DIMENSOES_OBRA, PARTIDA, type Olhar } from '../partidaPolicies'
+import { chaoRevelado, type Obra, type PartidaState } from '../partidaSim'
 
 export const Y_SOLO_VISUAL = -0.45
 export const Y_AGUA_VISUAL = -0.375
 export const Y_TOPO_FUNDACAO = 0.02
 
 export type TipoSuporteFundacao = 'terra' | 'agua'
+
+export function paisagemNaturalVisivel(state: PartidaState, x: number, z: number): boolean {
+  return !PARTIDA.nuvem || state.semCorpo || chaoRevelado(state, x, z)
+}
+
+export function configVisualNuvem(
+  olharDesenho: Olhar,
+  semCorpo: boolean,
+): {
+  readonly altura: number
+  readonly centroY: number
+  readonly cor: string
+  readonly opacidade: number
+  readonly depthWrite: boolean
+} {
+  if (semCorpo) {
+    return {
+      altura: 0.24,
+      centroY: Y_SOLO_VISUAL + 0.12,
+      cor: '#0f172a',
+      opacidade: 0.34,
+      depthWrite: false,
+    }
+  }
+  const altura = olharDesenho === 'imperio' ? 4 : 3.2
+  return {
+    altura,
+    centroY: altura / 2,
+    cor: '#d5e2ea',
+    opacidade: 0.92,
+    depthWrite: true,
+  }
+}
+
+export function alturaVisualRecurso(yBase: number): number {
+  return yBase < -0.9 ? yBase : Y_SOLO_VISUAL
+}
+
+export function alturaSapataMuralha(): { readonly altura: number; readonly centroY: number } {
+  return {
+    altura: 0.49,
+    centroY: Y_SOLO_VISUAL + 0.235,
+  }
+}
+
+export function pegadaEfetivaFundacao(
+  obra: Pick<Obra, 'tipo' | 'x' | 'z' | 'hp' | 'construindoRestante' | 'blocosNv5'> & {
+    readonly blocosLivres?: readonly { readonly x: number; readonly z: number; readonly hp: number }[]
+  },
+): { readonly cx: number; readonly cz: number; readonly dim: readonly [number, number, number] } {
+  const dimBase = DIMENSOES_OBRA[obra.tipo]
+  const emObra = Boolean(obra.construindoRestante && obra.construindoRestante > 0)
+  if (obra.hp > 0 && !emObra) {
+    if (obra.blocosNv5) {
+      return {
+        cx: obra.x,
+        cz: obra.z,
+        dim: [
+          VOXEL_NV5.nx * VOXEL_NV5.passo,
+          VOXEL_NV5.ny * VOXEL_NV5.passo,
+          VOXEL_NV5.nz * VOXEL_NV5.passo,
+        ],
+      }
+    }
+    if (obra.blocosLivres && obra.blocosLivres.length > 0) {
+      let minX = Number.POSITIVE_INFINITY
+      let maxX = Number.NEGATIVE_INFINITY
+      let minZ = Number.POSITIVE_INFINITY
+      let maxZ = Number.NEGATIVE_INFINITY
+      let vivos = 0
+      for (const b of obra.blocosLivres) {
+        if (b.hp <= 0) continue
+        vivos += 1
+        if (b.x < minX) minX = b.x
+        if (b.x > maxX) maxX = b.x
+        if (b.z < minZ) minZ = b.z
+        if (b.z > maxZ) maxZ = b.z
+      }
+      if (vivos > 0) {
+        return {
+          cx: ((minX + maxX) / 2) * PASSO_BLOCO_MUNDO,
+          cz: ((minZ + maxZ) / 2) * PASSO_BLOCO_MUNDO,
+          dim: [
+            (maxX - minX + 1) * PASSO_BLOCO_MUNDO,
+            dimBase[1],
+            (maxZ - minZ + 1) * PASSO_BLOCO_MUNDO,
+          ],
+        }
+      }
+    }
+  }
+  return { cx: obra.x, cz: obra.z, dim: dimBase }
+}
 
 export interface CurvaConstrucao {
   readonly escalaAlicerceY: number
@@ -87,6 +183,14 @@ export function posicoesEstacasPier(dim: readonly [number, number, number]): rea
   }
   if (dim[2] >= 1.95) {
     estacas.push([-px, 0], [px, 0])
+  }
+  if (dim[0] >= 4.5 || dim[2] >= 4.5) {
+    estacas.push(
+      [-px * 0.45, -pz * 0.45],
+      [px * 0.45, -pz * 0.45],
+      [-px * 0.45, pz * 0.45],
+      [px * 0.45, pz * 0.45],
+    )
   }
   return estacas
 }
