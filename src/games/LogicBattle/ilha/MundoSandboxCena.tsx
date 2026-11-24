@@ -16,10 +16,10 @@ import {
   PreviewLinhaBlocos,
 } from './ObrasArquiteturaCena'
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
-import { chaoRevelado, cobertoAgora, obraEmConstrucao, PartidaState } from './partidaSim'
+import { cobertoAgora, obraEmConstrucao, PartidaState } from './partidaSim'
 import type { AlvoEdicaoVoxel } from './verticalidadeVoxel'
 import { FundacoesObrasCena } from './visual/FundacaoObraCena'
-import { classificarSuporteObra } from './visual/suporteFundacao'
+import { alturaVisualRecurso, classificarSuporteObra, paisagemNaturalVisivel, Y_SOLO_VISUAL } from './visual/suporteFundacao'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 
 export interface MundoSandboxCenaProps {
@@ -75,7 +75,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
       {/* 1. Água Rasa (quando visualAprimorado ativo, renderizada via AguaBiomaShader) */}
       {!visualAprimorado &&
         lagoas.map((lagoa, idx) => {
-          const visivel = !PARTIDA.nuvem || chaoRevelado(state, lagoa.x, lagoa.z)
+          const visivel = paisagemNaturalVisivel(state, lagoa.x, lagoa.z)
           if (!visivel) return null
           return (
             <group key={`lagoa-${idx}`} position={[lagoa.x, -0.41, lagoa.z]}>
@@ -96,28 +96,29 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         const ehSubsolo = rec.yBase < -0.9
         if (ehSubsolo && !noSubsolo) return null
         if (!ehSubsolo && visualAprimorado) return null
-        if (!ehSubsolo && PARTIDA.nuvem && !chaoRevelado(state, rec.x, rec.z)) return null
+        if (!ehSubsolo && !paisagemNaturalVisivel(state, rec.x, rec.z)) return null
+        const ySolo = alturaVisualRecurso(rec.yBase)
 
         if (rec.tipo === 'arvore') {
           if (rec.hp <= 0) {
             return (
-              <mesh key={`rec-${rec.id}`} position={[rec.x, rec.yBase + 0.14, rec.z]} raycast={() => null}>
+              <mesh key={`rec-${rec.id}`} position={[rec.x, ySolo + 0.12, rec.z]} raycast={() => null}>
                 <cylinderGeometry args={[0.28, 0.34, 0.28, 8]} />
                 <meshStandardMaterial color="#78350f" />
               </mesh>
             )
           }
           return (
-            <group key={`rec-${rec.id}`} position={[rec.x, rec.yBase, rec.z]}>
-              <mesh position={[0, 0.65, 0]} raycast={() => null}>
+            <group key={`rec-${rec.id}`} position={[rec.x, ySolo, rec.z]}>
+              <mesh position={[0, 0.6, 0]} raycast={() => null}>
                 <cylinderGeometry args={[0.24, 0.32, 1.3, 8]} />
                 <meshStandardMaterial color="#78350f" />
               </mesh>
-              <mesh position={[0, 1.45, 0]} raycast={() => null}>
+              <mesh position={[0, 1.4, 0]} raycast={() => null}>
                 <coneGeometry args={[0.95, 1.15, 8]} />
                 <meshStandardMaterial color="#15803d" />
               </mesh>
-              <mesh position={[0, 2.05, 0]} raycast={() => null}>
+              <mesh position={[0, 2.0, 0]} raycast={() => null}>
                 <coneGeometry args={[0.72, 0.95, 8]} />
                 <meshStandardMaterial color="#22c55e" />
               </mesh>
@@ -128,23 +129,23 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         // Veio / Rocha de Ouro
         if (rec.hp <= 0) {
           return (
-            <mesh key={`rec-${rec.id}`} position={[rec.x, rec.yBase + 0.08, rec.z]} raycast={() => null}>
+            <mesh key={`rec-${rec.id}`} position={[rec.x, ySolo + 0.06, rec.z]} raycast={() => null}>
               <cylinderGeometry args={[0.42, 0.5, 0.16, 7]} />
               <meshStandardMaterial color="#44403c" />
             </mesh>
           )
         }
         return (
-          <group key={`rec-${rec.id}`} position={[rec.x, rec.yBase, rec.z]}>
-            <mesh position={[0, 0.38, 0]} raycast={() => null}>
+          <group key={`rec-${rec.id}`} position={[rec.x, ySolo, rec.z]}>
+            <mesh position={[0, 0.3, 0]} raycast={() => null}>
               <dodecahedronGeometry args={[0.58, 0]} />
               <meshStandardMaterial color="#57534e" roughness={0.85} />
             </mesh>
-            <mesh position={[0.18, 0.66, 0.1]} rotation={[0.3, 0.4, -0.2]} raycast={() => null}>
+            <mesh position={[0.18, 0.58, 0.1]} rotation={[0.3, 0.4, -0.2]} raycast={() => null}>
               <octahedronGeometry args={[0.26, 0]} />
               <meshStandardMaterial color="#facc15" emissive="#ca8a04" emissiveIntensity={0.45} metalness={0.5} roughness={0.25} />
             </mesh>
-            <mesh position={[-0.2, 0.56, -0.14]} rotation={[-0.2, 0.2, 0.35]} raycast={() => null}>
+            <mesh position={[-0.2, 0.48, -0.14]} rotation={[-0.2, 0.2, 0.35]} raycast={() => null}>
               <octahedronGeometry args={[0.22, 0]} />
               <meshStandardMaterial color="#fde047" emissive="#ca8a04" emissiveIntensity={0.35} metalness={0.5} roughness={0.25} />
             </mesh>
@@ -169,7 +170,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
             )}
             {obra.lado !== 'inimigo' && obra.tipo === 'mina' && (
               <group
-                position={[obra.x, 0.04, obra.z + 1.65]}
+                position={[obra.x, Y_SOLO_VISUAL + 0.06, obra.z + 1.65]}
                 onClick={(event) => {
                   event.stopPropagation()
                   onPedirSubsolo()

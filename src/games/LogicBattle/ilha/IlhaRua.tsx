@@ -1,7 +1,7 @@
 import { Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { Group, InstancedMesh, Mesh } from 'three'
+import type { Group, InstancedMesh, Mesh, MeshLambertMaterial } from 'three'
 import { ACESFilmicToneMapping, Object3D, Vector2 } from 'three'
 import { getRecentMathSignaturesSnapshot, hydrateSeenMathSignatures, resetSeenMathMemory } from './infiniteMathEngine'
 import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
@@ -18,6 +18,7 @@ import {
   type EstadoQualidadeGrafica,
   type SpecQualidadeGrafica,
 } from './visual/qualidadeGrafica'
+import { configVisualNuvem, Y_SOLO_VISUAL } from './visual/suporteFundacao'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 import {
   AlvoEdicaoUnificado,
@@ -335,9 +336,10 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
   const ultimoMiraAlvo = useRef(false)
   const ultimaBussolaImperio = useRef('')
   const nuvem = useRef<InstancedMesh>(null)
+  const nuvemMatRef = useRef<MeshLambertMaterial | null>(null)
   const penumbra = useRef<InstancedMesh>(null)
   const pedra = useRef<Mesh>(null)
-  const marcaNuvem = useRef({ versao: -1, olhar: '', mapa: '' })
+  const marcaNuvem = useRef({ versao: -1, olhar: '', mapa: '', semCorpo: false })
   const marcaPenumbra = useRef({ versao: -1, olhar: '', mapa: '', assinatura: '' })
   const moldeNuvem = useMemo(() => new Object3D(), [])
   useLayoutEffect(() => {
@@ -934,21 +936,28 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
       } else if (
         marcaNuvem.current.versao !== state.versaoChao ||
         marcaNuvem.current.olhar !== olharDesenho ||
-        marcaNuvem.current.mapa !== props.mapa
+        marcaNuvem.current.mapa !== props.mapa ||
+        marcaNuvem.current.semCorpo !== state.semCorpo
       ) {
-        const altura = olharDesenho === 'imperio' ? 4 : 3.2
+        const cfg = configVisualNuvem(olharDesenho, state.semCorpo)
         let n = 0
         for (const celula of CELULAS_DO_DISCO) {
           if (state.chaoVisto[celula.i] === 1) continue
-          moldeNuvem.position.set(celula.x, altura / 2, celula.z)
-          moldeNuvem.scale.set(1, altura, 1)
+          moldeNuvem.position.set(celula.x, cfg.centroY, celula.z)
+          moldeNuvem.scale.set(1, cfg.altura, 1)
           moldeNuvem.updateMatrix()
           malhaNuvem.setMatrixAt(n, moldeNuvem.matrix)
           n += 1
         }
         malhaNuvem.count = n
         malhaNuvem.instanceMatrix.needsUpdate = true
-        marcaNuvem.current = { versao: state.versaoChao, olhar: olharDesenho, mapa: props.mapa }
+        if (nuvemMatRef.current) {
+          nuvemMatRef.current.color.set(cfg.cor)
+          nuvemMatRef.current.opacity = cfg.opacidade
+          nuvemMatRef.current.depthWrite = cfg.depthWrite
+          nuvemMatRef.current.needsUpdate = true
+        }
+        marcaNuvem.current = { versao: state.versaoChao, olhar: olharDesenho, mapa: props.mapa, semCorpo: state.semCorpo }
         malhaNuvem.visible = true
       }
     }
@@ -1172,8 +1181,12 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
           <meshStandardMaterial color="#7d8ea3" />
         </mesh>
       )}
-      <mesh ref={pedra} position={[PARTIDA.pedraX, PARTIDA.pedraAltura / 2, PARTIDA.pedraZ]} raycast={() => null}>
-        <boxGeometry args={[PARTIDA.pedraMeio * 2, PARTIDA.pedraAltura, PARTIDA.pedraMeio * 2]} />
+      <mesh
+        ref={pedra}
+        position={[PARTIDA.pedraX, (PARTIDA.pedraAltura + Y_SOLO_VISUAL) / 2, PARTIDA.pedraZ]}
+        raycast={() => null}
+      >
+        <boxGeometry args={[PARTIDA.pedraMeio * 2, PARTIDA.pedraAltura - Y_SOLO_VISUAL, PARTIDA.pedraMeio * 2]} />
         <meshStandardMaterial color="#78716c" />
       </mesh>
       <group
@@ -1186,38 +1199,51 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
           props.onHeroi(event.nativeEvent.shiftKey)
         }}
       >
-        <mesh position={[0, 0.2, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
-          <boxGeometry args={[0.7, 1.1, 0.5]} />
-          <meshStandardMaterial color="#3b82f6" />
+        {/* Pés/botas do herói cravados sobre o solo visual (-0.45 - 0.90 = -1.35 local) */}
+        <mesh position={[0, -1.335, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+          <circleGeometry args={[0.48, 16]} />
+          <meshBasicMaterial color="#090d16" transparent opacity={0.28} depthWrite={false} />
         </mesh>
-        <mesh position={[0, 0.95, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
-          <sphereGeometry args={[0.28, 12, 12]} />
-          <meshStandardMaterial color="#f2b544" />
+        <mesh position={[0, -1.16, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
+          <boxGeometry args={[0.52, 0.38, 0.34]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.85} />
         </mesh>
-        <mesh ref={flash} position={[0, 0.35, 1.05]} visible={false}>
+        <mesh position={[0, -0.58, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
+          <boxGeometry args={[0.7, 0.82, 0.48]} />
+          <meshStandardMaterial color="#2563eb" roughness={0.65} />
+        </mesh>
+        <mesh position={[0, 0.06, 0]} raycast={raycastCondicional(Boolean(props.modoBloco))}>
+          <sphereGeometry args={[0.26, 12, 12]} />
+          <meshStandardMaterial color="#f2b544" roughness={0.5} />
+        </mesh>
+        <mesh ref={flash} position={[0, -0.45, 0.95]} visible={false}>
           <boxGeometry args={[0.12, 0.12, 0.45]} />
           <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={1.4} />
         </mesh>
         {props.heroiEscolhido && props.sim.current.olhar === 'imperio' && !props.sim.current.semCorpo && (
-          <mesh position={[0, -0.7, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+          <mesh position={[0, -1.325, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
             <ringGeometry args={[0.55, 0.75, 20]} />
             <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={0.6} />
           </mesh>
         )}
       </group>
       {OBSTACULOS.map((caixa) => (
-        <mesh key={`${caixa.x}-${caixa.z}`} position={[caixa.x, caixa.altura / 2, caixa.z]} raycast={() => null}>
-          <boxGeometry args={[caixa.hx * 2, caixa.altura, caixa.hz * 2]} />
+        <mesh
+          key={`${caixa.x}-${caixa.z}`}
+          position={[caixa.x, (caixa.altura + Y_SOLO_VISUAL) / 2, caixa.z]}
+          raycast={() => null}
+        >
+          <boxGeometry args={[caixa.hx * 2, caixa.altura - Y_SOLO_VISUAL, caixa.hz * 2]} />
           <meshStandardMaterial color="#c47a3a" />
         </mesh>
       ))}
       <group position={[0, 0, 20]}>
-        <mesh position={[-1.4, 1.2, 0]} raycast={() => null}>
-          <boxGeometry args={[0.4, 2.4, 0.4]} />
+        <mesh position={[-1.4, (2.4 + Y_SOLO_VISUAL) / 2, 0]} raycast={() => null}>
+          <boxGeometry args={[0.4, 2.4 - Y_SOLO_VISUAL, 0.4]} />
           <meshStandardMaterial color="#1a8f5c" />
         </mesh>
-        <mesh position={[1.4, 1.2, 0]} raycast={() => null}>
-          <boxGeometry args={[0.4, 2.4, 0.4]} />
+        <mesh position={[1.4, (2.4 + Y_SOLO_VISUAL) / 2, 0]} raycast={() => null}>
+          <boxGeometry args={[0.4, 2.4 - Y_SOLO_VISUAL, 0.4]} />
           <meshStandardMaterial color="#1a8f5c" />
         </mesh>
         <mesh position={[0, 2.3, 0]} raycast={() => null}>
@@ -1293,10 +1319,16 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         onUnit={props.onUnit}
       />
       {pisos.map((piso) => (
-        <mesh key={piso.nome} position={[piso.x, 0.05, piso.z]} raycast={() => null}>
-          <cylinderGeometry args={[0.7, 0.7, 0.12, 12]} />
-          <meshStandardMaterial color="#f8fafc" />
-        </mesh>
+        <group key={piso.nome} position={[piso.x, 0, piso.z]}>
+          <mesh position={[0, Y_SOLO_VISUAL / 2, 0]} raycast={() => null}>
+            <cylinderGeometry args={[0.74, 0.82, -Y_SOLO_VISUAL, 12]} />
+            <meshStandardMaterial color="#64748b" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.05, 0]} raycast={() => null}>
+            <cylinderGeometry args={[0.7, 0.7, 0.12, 12]} />
+            <meshStandardMaterial color="#f8fafc" />
+          </mesh>
+        </group>
       ))}
       <instancedMesh
         ref={penumbra}
@@ -1314,7 +1346,7 @@ materialBlocoRef: React.MutableRefObject<BlocoMaterial>
         raycast={() => null}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial color="#d5e2ea" transparent opacity={0.92} depthWrite />
+        <meshLambertMaterial ref={nuvemMatRef} color="#d5e2ea" transparent opacity={0.92} depthWrite />
       </instancedMesh>
     </>
   )

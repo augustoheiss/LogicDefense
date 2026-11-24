@@ -15,6 +15,7 @@ import {
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
 import { chaoRevelado, cobertoAgora, Obra, obraEmConstrucao, PartidaState } from './partidaSim'
 import { raycastCondicional, semRaycast } from './raycastCena'
+import { alturaSapataMuralha, Y_SOLO_VISUAL } from './visual/suporteFundacao'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 
 const MAX_BLOCOS_INST = 1024
@@ -56,7 +57,9 @@ export const BlocosMundoInstanced: React.FC<{
     pedra: null,
     ouro: null,
   })
+  const sapataRef = useRef<InstancedMesh | null>(null)
   const molde = useMemo(() => new Object3D(), [])
+  const sapata = useMemo(() => alturaSapataMuralha(), [])
 
   useLayoutEffect(() => {
     const porMat: Record<BlocoMaterial, IndiceBlocoMundo[]> = {
@@ -64,6 +67,7 @@ export const BlocosMundoInstanced: React.FC<{
       pedra: [],
       ouro: [],
     }
+    const basesTerreo: IndiceBlocoMundo[] = []
     const lista = Object.values(blocosMapa)
     for (const b of lista) {
       if (b.hp <= 0) continue
@@ -71,14 +75,16 @@ export const BlocosMundoInstanced: React.FC<{
       const bucket = porMat[b.material]
       if (bucket.length >= MAX_BLOCOS_INST) continue
       const centro = blocoMundoParaCentro(b.x, b.y, b.z)
-      bucket.push({
+      const item: IndiceBlocoMundo = {
         gx: b.x,
         gy: b.y,
         gz: b.z,
         material: b.material,
         lado: b.lado,
         centro,
-      })
+      }
+      bucket.push(item)
+      if (b.y === 0 && basesTerreo.length < MAX_BLOCOS_INST) basesTerreo.push(item)
     }
 
     for (const mat of MATERIAIS_BLOCO) {
@@ -97,10 +103,43 @@ export const BlocosMundoInstanced: React.FC<{
       mesh.instanceMatrix.needsUpdate = true
       if (itens.length > 0) mesh.computeBoundingSphere()
     }
-  }, [blocosMapa, versaoSolidos, versaoChao, molde, state])
 
+    const meshSapata = sapataRef.current
+    if (meshSapata) {
+      for (let i = 0; i < basesTerreo.length; i += 1) {
+        const c = basesTerreo[i].centro
+        molde.position.set(c.x, sapata.centroY, c.z)
+        molde.scale.set(1, 1, 1)
+        molde.updateMatrix()
+        meshSapata.setMatrixAt(i, molde.matrix)
+      }
+      meshSapata.count = basesTerreo.length
+      meshSapata.instanceMatrix.needsUpdate = true
+      if (basesTerreo.length > 0) meshSapata.computeBoundingSphere()
+    }
+  }, [blocosMapa, versaoSolidos, versaoChao, molde, state, sapata.centroY])
+
+  const texSapata = texturasBlocos?.fundacaoPedra
   return (
     <group ref={groupRef} name="blocos-mundo">
+      <instancedMesh
+        ref={sapataRef}
+        args={[undefined, undefined, MAX_BLOCOS_INST]}
+        receiveShadow={sombrasAtivas}
+        frustumCulled={false}
+        raycast={semRaycast}
+      >
+        <boxGeometry args={[PASSO_BLOCO_MUNDO * 1.06, sapata.altura, PASSO_BLOCO_MUNDO * 1.06]} />
+        <meshStandardMaterial
+          key={`sapata-mundo-${texSapata ? 'pbr' : 'solid'}-${texturasBlocos?.resolucao ?? 0}`}
+          color={texSapata ? '#cbd5e1' : '#94a3b8'}
+          map={texSapata?.map ?? null}
+          normalMap={texSapata?.normalMap ?? null}
+          roughnessMap={texSapata?.roughnessMap ?? null}
+          roughness={0.88}
+          metalness={0.06}
+        />
+      </instancedMesh>
       {MATERIAIS_BLOCO.map((mat) => {
         const spec = SPEC_BLOCO_MATERIAL[mat]
         const trio = texturasBlocos?.[mat]
@@ -150,7 +189,9 @@ export const ObrasLivresInstanced: React.FC<{
     pedra: null,
     ouro: null,
   })
+  const sapataRef = useRef<InstancedMesh | null>(null)
   const molde = useMemo(() => new Object3D(), [])
+  const sapata = useMemo(() => alturaSapataMuralha(), [])
 
   useLayoutEffect(() => {
     const porMat: Record<BlocoMaterial, IndiceBlocoMundo[]> = {
@@ -158,6 +199,7 @@ export const ObrasLivresInstanced: React.FC<{
       pedra: [],
       ouro: [],
     }
+    const basesTerreo: IndiceBlocoMundo[] = []
     for (const obra of state.obras) {
       const livres = (obra as Obra & { blocosLivres?: readonly BlocoMundo[] }).blocosLivres
       if (!livres || livres.length === 0 || obra.hp <= 0 || obraEmConstrucao(obra)) continue
@@ -167,7 +209,7 @@ export const ObrasLivresInstanced: React.FC<{
         const bucket = porMat[b.material]
         if (bucket.length >= MAX_BLOCOS_INST) continue
         const centro = blocoMundoParaCentro(b.x, b.y, b.z)
-        bucket.push({
+        const item: IndiceBlocoMundo = {
           gx: b.x,
           gy: b.y,
           gz: b.z,
@@ -175,7 +217,9 @@ export const ObrasLivresInstanced: React.FC<{
           lado: obra.lado,
           obraId: obra.id,
           centro,
-        })
+        }
+        bucket.push(item)
+        if (b.y === 0 && basesTerreo.length < MAX_BLOCOS_INST) basesTerreo.push(item)
       }
     }
 
@@ -195,10 +239,43 @@ export const ObrasLivresInstanced: React.FC<{
       mesh.instanceMatrix.needsUpdate = true
       if (itens.length > 0) mesh.computeBoundingSphere()
     }
-  }, [state, versaoSolidos, versaoChao, molde])
 
+    const meshSapata = sapataRef.current
+    if (meshSapata) {
+      for (let i = 0; i < basesTerreo.length; i += 1) {
+        const c = basesTerreo[i].centro
+        molde.position.set(c.x, sapata.centroY, c.z)
+        molde.scale.set(1, 1, 1)
+        molde.updateMatrix()
+        meshSapata.setMatrixAt(i, molde.matrix)
+      }
+      meshSapata.count = basesTerreo.length
+      meshSapata.instanceMatrix.needsUpdate = true
+      if (basesTerreo.length > 0) meshSapata.computeBoundingSphere()
+    }
+  }, [state, versaoSolidos, versaoChao, molde, sapata.centroY])
+
+  const texSapata = texturasBlocos?.fundacaoPedra
   return (
     <group ref={groupRef} name="obras-livres">
+      <instancedMesh
+        ref={sapataRef}
+        args={[undefined, undefined, MAX_BLOCOS_INST]}
+        receiveShadow={sombrasAtivas}
+        frustumCulled={false}
+        raycast={semRaycast}
+      >
+        <boxGeometry args={[PASSO_BLOCO_MUNDO * 1.06, sapata.altura, PASSO_BLOCO_MUNDO * 1.06]} />
+        <meshStandardMaterial
+          key={`sapata-livre-${texSapata ? 'pbr' : 'solid'}-${texturasBlocos?.resolucao ?? 0}`}
+          color={texSapata ? '#cbd5e1' : '#94a3b8'}
+          map={texSapata?.map ?? null}
+          normalMap={texSapata?.normalMap ?? null}
+          roughnessMap={texSapata?.roughnessMap ?? null}
+          roughness={0.88}
+          metalness={0.06}
+        />
+      </instancedMesh>
       {MATERIAIS_BLOCO.map((mat) => {
         const spec = SPEC_BLOCO_MATERIAL[mat]
         const trio = texturasBlocos?.[mat]
@@ -390,6 +467,7 @@ export const PreviewLinhaBlocos: React.FC<{
 }> = ({ plano, temRecurso }) => {
   const meshRef = useRef<InstancedMesh>(null)
   const wireRef = useRef<InstancedMesh>(null)
+  const baseRef = useRef<InstancedMesh>(null)
   const molde = useMemo(() => new Object3D(), [])
 
   useLayoutEffect(() => {
@@ -407,12 +485,41 @@ export const PreviewLinhaBlocos: React.FC<{
       alvo.count = qtd
       alvo.instanceMatrix.needsUpdate = true
     }
+
+    const alvoBase = baseRef.current
+    if (alvoBase) {
+      let nb = 0
+      for (let i = 0; i < qtd && nb < MAX_PREVIEW_LINHA; i += 1) {
+        if (celulas[i].y !== 0) continue
+        const c = blocoMundoParaCentro(celulas[i].x, 0, celulas[i].z)
+        molde.position.set(c.x, Y_SOLO_VISUAL + 0.225, c.z)
+        molde.scale.set(1, 1, 1)
+        molde.updateMatrix()
+        alvoBase.setMatrixAt(nb++, molde.matrix)
+      }
+      alvoBase.count = nb
+      alvoBase.instanceMatrix.needsUpdate = true
+    }
   }, [plano, molde])
 
   if (!plano || plano.celulas.length === 0) return null
 
   return (
     <group name="preview-linha-blocos">
+      <instancedMesh
+        ref={baseRef}
+        args={[undefined, undefined, MAX_PREVIEW_LINHA]}
+        frustumCulled={false}
+        raycast={semRaycast}
+      >
+        <boxGeometry args={[PASSO_BLOCO_MUNDO * 1.02, 0.45, PASSO_BLOCO_MUNDO * 1.02]} />
+        <meshBasicMaterial
+          color={temRecurso ? '#0ea5e9' : '#dc2626'}
+          transparent
+          opacity={0.28}
+          depthWrite={false}
+        />
+      </instancedMesh>
       <instancedMesh
         ref={meshRef}
         args={[undefined, undefined, MAX_PREVIEW_LINHA]}

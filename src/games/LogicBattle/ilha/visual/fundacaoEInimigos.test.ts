@@ -1,5 +1,16 @@
 import { DIMENSOES_OBRA, type Papel } from '../partidaPolicies'
-import { calcularCurvaConstrucao, classificarSuporteObra, posicoesEstacasPier } from './suporteFundacao'
+import { createPartida } from '../partidaSim'
+import {
+  alturaSapataMuralha,
+  alturaVisualRecurso,
+  calcularCurvaConstrucao,
+  classificarSuporteObra,
+  configVisualNuvem,
+  paisagemNaturalVisivel,
+  pegadaEfetivaFundacao,
+  posicoesEstacasPier,
+  Y_SOLO_VISUAL,
+} from './suporteFundacao'
 import { perfilVisualDaUnidade } from './perfilUnidadeVisual'
 
 function assert(condicao: unknown, mensagem: string): asserts condicao {
@@ -75,4 +86,81 @@ export function run(): void {
     const p = perfilVisualDaUnidade('inimigo', papel, false)
     assert(p.metalness >= 0 && p.roughness > 0, `material PBR válido para papel ${papel}`)
   }
+
+  // 5. Pegada efetiva Nível 5 (fortaleza 5,95 × 5,95 m) e blocosLivres
+  const pegadaNv1 = pegadaEfetivaFundacao({
+    tipo: 'torre',
+    x: 10,
+    z: 12,
+    hp: 40,
+    construindoRestante: 0,
+  })
+  assert(
+    pegadaNv1.dim[0] === DIMENSOES_OBRA.torre[0] && pegadaNv1.cx === 10 && pegadaNv1.cz === 12,
+    'obra Nível 1–4 preserva DIMENSOES_OBRA',
+  )
+
+  const pegadaNv5 = pegadaEfetivaFundacao({
+    tipo: 'torre',
+    x: 10,
+    z: 12,
+    hp: 100,
+    construindoRestante: 0,
+    blocosNv5: new Uint8Array(7 * 5 * 7),
+  })
+  assert(
+    pegadaNv5.dim[0] > 5.9 && pegadaNv5.dim[2] > 5.9,
+    `obra Nível 5 expande pegada da fundação para 5,95×5,95m (veio ${pegadaNv5.dim[0]}×${pegadaNv5.dim[2]})`,
+  )
+
+  const estacasNv5 = posicoesEstacasPier(pegadaNv5.dim)
+  assert(estacasNv5.length === 12, `píer Nível 5 usa 12 estacas de reforço (veio ${estacasNv5.length})`)
+
+  const pegadaLivres = pegadaEfetivaFundacao({
+    tipo: 'portao',
+    x: 0,
+    z: 0,
+    hp: 50,
+    blocosLivres: [
+      { x: 4, z: 6, hp: 20 },
+      { x: 6, z: 8, hp: 20 },
+      { x: 99, z: 99, hp: 0 },
+    ],
+  })
+  assert(
+    pegadaLivres.cx === 5 && pegadaLivres.cz === 7 && pegadaLivres.dim[0] === 3 && pegadaLivres.dim[2] === 3,
+    'blocosLivres calcula bounding box ignorando blocos destruídos',
+  )
+
+  // 6. Recursos naturais e sapatas de muralha encostam em Y_SOLO_VISUAL (-0.45)
+  assert(alturaVisualRecurso(0) === Y_SOLO_VISUAL, 'árvore/ouro na superfície ancora em Y_SOLO_VISUAL')
+  assert(alturaVisualRecurso(-3.2) === -3.2, 'veio de ouro no subsolo mantém yBase = -3.2')
+  const sapata = alturaSapataMuralha()
+  assert(
+    sapata.centroY - sapata.altura / 2 <= Y_SOLO_VISUAL + 0.001 && sapata.centroY + sapata.altura / 2 >= 0,
+    'sapata da muralha crava no chão (-0.45) e alcança o bloco térreo (y = 0)',
+  )
+
+  // 7. Névoa cartográfica translúcida e paisagem natural ao observar outro minimapa (`semCorpo: true`)
+  const nuvemObs = configVisualNuvem('imperio', true)
+  const nuvemCorpo = configVisualNuvem('imperio', false)
+  assert(
+    nuvemObs.opacidade < 0.5 && nuvemObs.depthWrite === false && nuvemObs.altura <= 0.4,
+    'ao observar outro minimapa, névoa vira véu translúcido rente ao chão',
+  )
+  assert(
+    nuvemCorpo.opacidade > 0.9 && nuvemCorpo.depthWrite === true && nuvemCorpo.altura === 4,
+    'no mapa do herói, névoa densa padrão em Império é preservada',
+  )
+
+  const semCorpo = createPartida(1, 0, true)
+  assert(
+    paisagemNaturalVisivel(semCorpo, 35, 35) === true,
+    'ao observar outro minimapa (`semCorpo: true`), bioma/árvores/lagos ficam visíveis sob o véu',
+  )
+  const comCorpo = createPartida(0, 0, false)
+  assert(
+    paisagemNaturalVisivel(comCorpo, 45, 45) === false,
+    'no mapa do herói (`semCorpo: false`), área não explorada permanece oculta',
+  )
 }

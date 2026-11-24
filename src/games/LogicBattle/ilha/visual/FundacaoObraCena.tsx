@@ -9,12 +9,12 @@ import {
   RingGeometry,
 } from 'three'
 import type { LagoaRasa } from '../biomaRecursos'
-import { DIMENSOES_OBRA } from '../partidaPolicies'
 import { chaoRevelado, cobertoAgora, obraEmConstrucao, type Obra, type PartidaState } from '../partidaSim'
 import { semRaycast } from '../raycastCena'
 import {
   calcularCurvaConstrucao,
   classificarSuporteObra,
+  pegadaEfetivaFundacao,
   posicoesEstacasPier,
   type TipoSuporteFundacao,
   Y_AGUA_VISUAL,
@@ -121,14 +121,15 @@ const AnimacaoChaoConstrucao: React.FC<{
 const FundacaoObraItem: React.FC<{
   obra: Obra
   suporte: TipoSuporteFundacao
+  pegada: { readonly cx: number; readonly cz: number; readonly dim: readonly [number, number, number] }
   texturasBlocos: PacoteTexturasBlocos | null
   sombrasAtivas: boolean
   geos: GeosFundacaoCompartilhadas
-}> = ({ obra, suporte, texturasBlocos, sombrasAtivas, geos }) => {
+}> = ({ obra, suporte, pegada, texturasBlocos, sombrasAtivas, geos }) => {
   const marolaRef = useRef<Mesh>(null)
   const baseGrupoRef = useRef<Group>(null)
 
-  const dim = DIMENSOES_OBRA[obra.tipo]
+  const dim = pegada.dim
   const ruina = obra.hp <= 0
   const construindo = obraEmConstrucao(obra)
   const total = Math.max(0.01, obra.construindoTotal ?? 1)
@@ -158,7 +159,7 @@ const FundacaoObraItem: React.FC<{
     const texMadeira = texturasBlocos?.madeiraPier
 
     return (
-      <group position={[obra.x, 0, obra.z]}>
+      <group position={[pegada.cx, 0, pegada.cz]}>
         {/* Marola na superfície da água ao redor das palafitas */}
         <mesh
           ref={marolaRef}
@@ -263,7 +264,7 @@ const FundacaoObraItem: React.FC<{
   const profCanteiro = dim[2] + 1.48
 
   return (
-    <group position={[obra.x, 0, obra.z]}>
+    <group position={[pegada.cx, 0, pegada.cz]}>
       {/* Chão alterado sob a obra (terraplanagem / calçamento com textura própria) */}
       <mesh position={[0, Y_SOLO_VISUAL + 0.014, 0]} receiveShadow={sombrasAtivas} raycast={semRaycast}>
         <boxGeometry args={[largCanteiro, 0.032, profCanteiro]} />
@@ -395,13 +396,14 @@ export const FundacoesObrasCena: React.FC<{
               : true
         if (!visivel) return null
 
-        const dim = DIMENSOES_OBRA[obra.tipo]
-        const suporte = classificarSuporteObra(lagoas, obra.x, obra.z, dim)
+        const pegada = pegadaEfetivaFundacao(obra)
+        const suporte = classificarSuporteObra(lagoas, pegada.cx, pegada.cz, pegada.dim)
         return (
           <FundacaoObraItem
             key={`fund-${obra.id}`}
             obra={obra}
             suporte={suporte}
+            pegada={pegada}
             texturasBlocos={texturasBlocos}
             sombrasAtivas={sombrasAtivas}
             geos={geos}
