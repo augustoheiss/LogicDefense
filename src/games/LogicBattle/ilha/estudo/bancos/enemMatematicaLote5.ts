@@ -650,7 +650,7 @@ const SPECS_LOTE5: readonly SpecEnemOficial[] = [
     alternativas: {
       A: {
         rotulo: 'Austrália.',
-        diagnosticoPt: 'Correto! $400 \\times 2{,}14 = \\text{R\\$ } 856{,}00$, superando por pouco o Canadá (R$ 861,00) como menor custo diário em real.',
+        diagnosticoPt: 'Correto! $400 \\times 2{,}14 =$ R$ 856,00, superando por pouco o Canadá (R$ 861,00) como menor custo diário em real.',
       },
       B: {
         rotulo: 'Canadá.',
@@ -659,17 +659,17 @@ const SPECS_LOTE5: readonly SpecEnemOficial[] = [
       },
       C: {
         rotulo: 'EUA.',
-        diagnosticoPt: '$390 \\times 2{,}78 = \\text{R\\$ } 1.084{,}20$, ultrapassando até mesmo o teto diário de R$ 1.000,00.',
+        diagnosticoPt: '$390 \\times 2{,}78 =$ R$ 1.084,20, ultrapassando até mesmo o teto diário de R$ 1.000,00.',
         tagErro: 'calculo_aritmetico',
       },
       D: {
         rotulo: 'França.',
-        diagnosticoPt: '$315 \\times 3{,}14 = \\text{R\\$ } 989{,}10$, bem mais caro que os destinos abaixo de R$ 870,00.',
+        diagnosticoPt: '$315 \\times 3{,}14 =$ R$ 989,10, bem mais caro que os destinos abaixo de R$ 870,00.',
         tagErro: 'calculo_aritmetico',
       },
       E: {
         rotulo: 'Reino Unido.',
-        diagnosticoPt: '$290 \\times 4{,}24 = \\text{R\\$ } 1.229{,}60$, o mais caro em reais entre todos os cinco países.',
+        diagnosticoPt: '$290 \\times 4{,}24 =$ R$ 1.229,60, o mais caro em reais entre todos os cinco países.',
         tagErro: 'leitura_interpretacao',
       },
     },
@@ -1095,7 +1095,7 @@ const SPECS_LOTE5: readonly SpecEnemOficial[] = [
       'Compare duas colunas quaisquer (por exemplo, 50 e 100 mochilas): toda a diferença em reais veio só das 50 mochilas extras!',
       'Achado o custo por unidade extra, some $30$ unidades ao custo de $50$ mochilas (ou subtraia $20$ do custo de $100$).',
     ],
-    solucaoCompletaPt: 'Taxa variável = $\\frac{3\\ 150 - 1\\ 650}{100 - 50} = \\frac{1\\ 500}{50} = \\text{R\\$ } 30{,}00/\\text{mochila}$. Partindo de 50 mochilas para 80: $1\\ 650 + 30 \\times 30 = 1\\ 650 + 900 = \\text{R\\$ } 2\\ 550{,}00$.',
+    solucaoCompletaPt: 'Taxa variável = $\\frac{3\\ 150 - 1\\ 650}{100 - 50} = \\frac{1\\ 500}{50} =$ R$ 30,00/mochila. Partindo de 50 mochilas para 80: $1\\ 650 + 30 \\times 30 = 1\\ 650 + 900 =$ R$ 2 550,00.',
     atalhoPt: 'Média entre $30$ e $100$? Não, $80 = 50 + 30$, e o custo para $30$ extras é $30 \\times 30 = 900$ (sem repetir o fixo).',
     outroCaminhoPt: 'Repare também que $50 + 30 = 80$: $C(50) + C(30) - \\text{fixo} = 1650 + 1050 - 150 = 2550$.',
     dicaVidaRealPt: 'Subtrair duas linhas numa função linear cancela automaticamente o valor fixo desconhecido.',

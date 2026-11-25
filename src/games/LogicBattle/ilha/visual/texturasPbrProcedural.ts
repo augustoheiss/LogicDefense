@@ -11,6 +11,9 @@ import type { BiomaId } from '../biomaRecursos'
 import { SPEC_QUALIDADE, type QualidadeEfetiva } from './qualidadeGrafica'
 import type { QualidadeGraficaPreset } from '../partidaPolicies'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
+import { campoDoSoloRapido } from './campoDoSolo'
+import { fbmTileable, hash2d } from './ruidoTileavel'
+import { campoDoLadrilho, REPETICAO_DO_LADRILHO } from './flagstone'
 import type { RecursoDescartavel } from './recursoGpuPool'
 
 export interface TrioPbrTextura extends RecursoDescartavel {
@@ -67,47 +70,6 @@ function mixCor(
 ): [number, number, number] {
   const f = Math.max(0, Math.min(1, t))
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]
-}
-
-function hash2d(ix: number, iy: number, periodo: number, seed: number): number {
-  const px = ((ix % periodo) + periodo) % periodo
-  const py = ((iy % periodo) + periodo) % periodo
-  let h = Math.imul(px ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(py ^ 0xc2b2ae35, 0x27d4eb2f) ^ seed
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b)
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35)
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967295
-}
-
-function noiseTileable(u: number, v: number, freq: number, seed: number): number {
-  const fx = u * freq
-  const fy = v * freq
-  const x0 = Math.floor(fx)
-  const y0 = Math.floor(fy)
-  const tx = fx - x0
-  const ty = fy - y0
-  const sx = tx * tx * (3 - 2 * tx)
-  const sy = ty * ty * (3 - 2 * ty)
-  const n00 = hash2d(x0, y0, freq, seed)
-  const n10 = hash2d(x0 + 1, y0, freq, seed)
-  const n01 = hash2d(x0, y0 + 1, freq, seed)
-  const n11 = hash2d(x0 + 1, y0 + 1, freq, seed)
-  const nx0 = n00 + (n10 - n00) * sx
-  const nx1 = n01 + (n11 - n01) * sx
-  return nx0 + (nx1 - nx0) * sy
-}
-
-function fbmTileable(u: number, v: number, baseFreq: number, oitavas: number, seed: number): number {
-  let soma = 0
-  let amp = 0.5
-  let norm = 0
-  let freq = baseFreq
-  for (let o = 0; o < oitavas; o += 1) {
-    soma += noiseTileable(u, v, freq, seed + o * 101) * amp
-    norm += amp
-    amp *= 0.5
-    freq *= 2
-  }
-  return soma / norm
 }
 
 function criarCanvas(res: number): HTMLCanvasElement | null {
@@ -312,6 +274,32 @@ function pedraLavradaSample(
   return { rgb, h, rough }
 }
 
+/**
+ * A estrada e a praça de lajes irregulares (F1 Task 9): a laje de Voronoi de `flagstone.ts` vira cor, altura e rugosidade. Cada laje tem o seu tom (±18% da cor base do bioma), a junta recebe a
+ * cor do rejunte, e a rugosidade sobe na junta (lama e musgo, sem brilho) e cai um pouco no topo da laje (a pedra gasta pelo uso). O grão fino vem de um ruído em escala MENOR que a laje.
+ */
+export function pisoDeLajesSample(
+  u: number,
+  v: number,
+  res: number,
+  corPedra: readonly [number, number, number],
+  corRejunte: readonly [number, number, number],
+  seed: number,
+): { rgb: [number, number, number]; h: number; rough: number } {
+  // O desenho das lajes (altura e tom por pixel) NÃO depende do bioma: sai do campo calculado UMA vez e guardado em cache (`campoDoLadrilho`); só a cor muda por bioma. `construirTrioPbr` chama o
+  // amostrador com `u = x / res`, então o pixel volta exato por `Math.round(u * res)`. Recalcular o Voronoi por pixel a cada troca de bioma custava ~121 ms a 512 px.
+  const campo = campoDoLadrilho(res, seed)
+  const px = Math.min(campo.res - 1, Math.round(u * campo.res))
+  const py = Math.min(campo.res - 1, Math.round(v * campo.res))
+  const laje = { altura: campo.altura[py * campo.res + px], tom: campo.tom[py * campo.res + px] }
+  // O GRÃO também sai do campo (era a maior fatia que sobrou do pacote do bioma: 33 ms a 512 px, o fBm de 3 oitavas por pixel): só depende de (u, v, semente), nunca do bioma. Mesma função, sem aproximação.
+  const grao = campo.grao[py * campo.res + px]
+  const fatorTom = 0.82 + laje.tom * 0.36 + (grao - 0.5) * 0.14
+  const base: [number, number, number] = [corPedra[0] * fatorTom, corPedra[1] * fatorTom, corPedra[2] * fatorTom]
+  const rgb = mixCor(corRejunte, base, Math.min(1, laje.altura * 1.15))
+  return { rgb, h: laje.altura * (0.7 + grao * 0.3), rough: 0.96 - laje.altura * 0.26 + grao * 0.06 }
+}
+
 export class ProceduralBiomaTextureProvider implements BiomaTextureProvider {
   gerarBioma(bioma: BiomaId, resolucao: 256 | 512 | 1024): PacoteTexturasBioma | null {
     const cat = BIOMA_VISUAL_CATALOG[bioma]
@@ -320,10 +308,16 @@ export class ProceduralBiomaTextureProvider implements BiomaTextureProvider {
 
     const soloA = hexParaRgb(cat.soloCorBase)
     const soloB = hexParaRgb(cat.soloCorDetalhe)
+    // O campo SUAVE do solo (`macro`, `micro` e a mistura) vem da grade grossa de `campoDoSolo.ts`: eram 50% das chamadas de ruído do pacote (fBm de 6 oitavas por pixel, medido em 24/11).
+    // As RACHADURAS e os VEIOS (limiar duro) abaixo seguem por pixel EXATO: interpolá-los borraria a borda. `construirTrioPbr` chama o amostrador com `u = x / res`: o pixel volta exato.
+    const campoSolo = campoDoSoloRapido(bioma, resChao)
     const solo = construirTrioPbr(resChao, 18, 18, 2.2, (u, v) => {
-      const macro = fbmTileable(u, v, 4, 4, 11 + bioma.length * 19)
-      const micro = fbmTileable(u, v, 16, 2, 77)
-      let mistura = macro * 0.72 + micro * 0.28
+      const pxSolo = Math.min(campoSolo.res - 1, Math.round(u * campoSolo.res))
+      const pySolo = Math.min(campoSolo.res - 1, Math.round(v * campoSolo.res))
+      const iSolo = pySolo * campoSolo.res + pxSolo
+      const macro = campoSolo.macro[iSolo]
+      const micro = campoSolo.micro[iSolo]
+      let mistura = campoSolo.mistura[iSolo]
       let h = mistura
       let rough = 0.88 - macro * 0.12
       if (bioma === 'serra_ouro') {
@@ -349,8 +343,8 @@ export class ProceduralBiomaTextureProvider implements BiomaTextureProvider {
 
     const estBase = hexParaRgb(cat.estradaCorBase)
     const estRej = hexParaRgb(cat.estradaCorRejunte)
-    const estrada = construirTrioPbr(resDetalhe, 3, 14, 2.8, (u, v) =>
-      pedraLavradaSample(u, v, estBase, estRej, 4, 6, 303),
+    const estrada = construirTrioPbr(resDetalhe, REPETICAO_DO_LADRILHO.largura, REPETICAO_DO_LADRILHO.comprimento, 2.8, (u, v) =>
+      pisoDeLajesSample(u, v, resDetalhe, estBase, estRej, 303),
     )
     if (!estrada) {
       solo.dispose()

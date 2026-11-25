@@ -20,6 +20,7 @@ import { cobertoAgora, obraEmConstrucao, PartidaState } from './partidaSim'
 import type { AlvoEdicaoVoxel } from './verticalidadeVoxel'
 import { FundacoesObrasCena } from './visual/FundacaoObraCena'
 import { alturaVisualRecurso, classificarSuporteObra, paisagemNaturalVisivel, Y_SOLO_VISUAL } from './visual/suporteFundacao'
+import type { CampoRelevo } from './relevo/campoRelevo'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 
 export interface MundoSandboxCenaProps {
@@ -43,6 +44,8 @@ export interface MundoSandboxCenaProps {
   /** O ponteiro tocou uma obra instanciada, antes do `click`. Só repasse: a decisão é de `IlhaRua`. */
   onTocarObraInstanced?: (obraId: number, pointerId: number, button: number) => boolean | void
   onPedirSubsolo: () => void
+  /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) tudo fica no plano de hoje (I1). Repassado à fundação e aos pontos de chão do sandbox. */
+  campo?: CampoRelevo
 }
 
 export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
@@ -65,6 +68,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
   onSelectObraInstanced,
   onTocarObraInstanced,
   onPedirSubsolo,
+  campo,
 }) => {
   const olharEfetivo = state.semCorpo ? 'imperio' : state.olhar
   const noSubsolo = !state.semCorpo && state.heroi.y < -0.9
@@ -247,6 +251,7 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         lagoas={lagoas}
         texturasBlocos={texturasBlocos}
         sombrasAtivas={sombrasAtivas}
+        campo={campo}
       />
       <ObrasNv5Instanced
         state={state}
@@ -258,6 +263,8 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         bloqueiaCliqueObra={bloqueiaCliqueObra}
         onSelectObra={onSelectObraInstanced}
         onTocarObra={onTocarObraInstanced}
+        campo={campo}
+        lagoas={lagoas}
       />
       <BlocosMundoInstanced
         blocosMapa={state.blocosMapa}
@@ -267,6 +274,8 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         groupRef={blocosMapaGroupRef}
         texturasBlocos={texturasBlocos}
         sombrasAtivas={sombrasAtivas}
+        campo={campo}
+        lagoas={lagoas}
       />
       <ObrasLivresInstanced
         state={state}
@@ -278,6 +287,8 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         bloqueiaCliqueObra={bloqueiaCliqueObra}
         onSelectObra={onSelectObraInstanced}
         onTocarObra={onTocarObraInstanced}
+        campo={campo}
+        lagoas={lagoas}
       />
 
       {/* 6. Ghost Blueprint de Fundação (Torre/Obra seguindo cursor ou toque) */}
@@ -288,12 +299,14 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
           z={ghostObra.z}
           valido={ghostObra.valido}
           sobreAgua={classificarSuporteObra(lagoas, ghostObra.x, ghostObra.z, DIMENSOES_OBRA[ghostObra.tipo]) === 'agua'}
+          campo={campo}
+          lagoas={lagoas}
         />
       )}
 
       {/* 7. Preview 360° da Linha de Blocos (Trincheira / Muralha) */}
       {previewLinha && (
-        <PreviewLinhaBlocos plano={previewLinha.plano} temRecurso={previewLinha.temRecurso} />
+        <PreviewLinhaBlocos plano={previewLinha.plano} temRecurso={previewLinha.temRecurso} campo={campo} lagoas={lagoas} />
       )}
 
       {/* 8. Ghost Highlight do Bloco/Voxel Alvo na Edição */}

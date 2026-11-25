@@ -99,26 +99,26 @@ def questoes_na_pagina(pagina: fitz.Page) -> list[tuple[int, float, float]]:
             while cursor < len(linha) and len(acumulado) < 7:
                 acumulado += sem_acento(linha[cursor][4])
                 cursor += 1
-                if acumulado == "QUESTAO":
+                if acumulado in ("QUESTAO", "UESA"):
                     if cursor < len(linha) and linha[cursor][4].isascii() and linha[cursor][4].isdigit():
                         valor = int(linha[cursor][4])
                         if 136 <= valor <= 180:
                             achados.append((valor, linha[inicio][0], linha[inicio][1]))
                     break
-                if not "QUESTAO".startswith(acumulado):
+                if not ("QUESTAO".startswith(acumulado) or "UESA".startswith(acumulado)):
                     break
     # Fallback somente se o titulo nao contiver palavra QUESTAO (provas 2009-2010 espaçadas)
-    por_linha_y = [item[2] for item in achados]
-    for linha in linhas_da_pagina(pagina):
-        if any(abs(linha[0][1] - yq) < 6 for yq in por_linha_y):
-            continue
-        if len(linha) <= 3:
-            for p in linha:
-                if p[4].isascii() and p[4].isdigit():
-                    val = int(p[4])
-                    if 136 <= val <= 180 and (p[0] < 110 or 270 < p[0] < 395) and 60 <= p[1] <= pagina.rect.height - 60:
-                        achados.append((val, max(20.0, p[0] - 40.0), p[1]))
-                        break
+    if not achados:
+        for linha in linhas_da_pagina(pagina):
+            if linha[0][4] in ("A", "B", "C", "D", "E"):
+                continue
+            if len(linha) <= 3:
+                for p in linha:
+                    if p[4].isascii() and p[4].isdigit():
+                        val = int(p[4])
+                        if 136 <= val <= 180 and (p[0] < 110 or 270 < p[0] < 395) and 60 <= p[1] <= pagina.rect.height - 60:
+                            achados.append((val, max(20.0, p[0] - 40.0), p[1]))
+                            break
     vistos: dict[int, tuple[int, float, float]] = {}
     for item in sorted(achados, key=lambda t: (t[2], t[1])):
         if item[0] not in vistos:

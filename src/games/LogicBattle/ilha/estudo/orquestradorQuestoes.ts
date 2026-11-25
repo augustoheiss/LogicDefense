@@ -1,12 +1,13 @@
 /**
- * Orquestrador adaptativo de questões (Fase Q4).
+ * Orquestrador adaptativo de questões (Fase Q4 + Onda 0 Acervo Indexado).
  *
  * Une:
  *  - Graus 1..4: `generateInfiniteChallenge` (`infiniteMathEngine.ts`) com foco em temas fracos
  *    (`preferredConceptId`), adaptado para `DesafioUnificado` via `adaptarDesafioMotor` com dicas
  *    100% livres de spoiler.
- *  - Graus 5..7: Lotes oficiais ENEM (`enemMatematicaLote1.ts`, `enemMatematicaLote2.ts` e
- *    `enemMatematicaLote3.ts` e `enemMatematicaLote4.ts`, carregados por `import()` dinâmico) + motores paramétricos ENEM-like.
+ *  - Graus 5..7: Seleção em 2 fases sobre `IndiceAcervoQuestoes` (`/questoes/indice.json`), buscando
+ *    sob demanda apenas o chunk JSON da prova escolhida via `carregadorAcervo.ts`, combinada aos
+ *    8 motores paramétricos ENEM-like (`GERADORES_ENEM_PARAMETRICOS`).
  *
  * Respeita anel anti-repetição, revisão espaçada (`proximaRevisaoEmMs`), falhas de rede/chunk
  * (cai para os motores paramétricos) e treino direcionado pelo botão "Treinar agora" do Caderno.
@@ -15,9 +16,17 @@ import type { ConceptId } from '../contaContratos'
 import { semente } from '../geradoresBase'
 import { generateInfiniteChallenge } from '../infiniteMathEngine'
 import {
+  carregarIndiceAcervo,
+  carregarQuestaoPorEntrada,
+  carregarTodasQuestoesAcervo,
+  limparCacheAcervo,
+} from './carregadorAcervo'
+import {
   adaptarDesafioMotor,
   type DesafioUnificado,
   type GrauDificuldade,
+  type OrigemOficial,
+  type OrigemQuestao,
 } from './contratosEstudo'
 import { gerarDiagnosticoEstudo } from './diagnosticoEstudo'
 import { GERADORES_ENEM_PARAMETRICOS } from './geradoresEnem'
@@ -66,26 +75,31 @@ export function resolverConceitoMotorParaTema(temaId: string | null | undefined)
 
 let cacheEnemLote1: Promise<readonly DesafioUnificado[]> | null = null
 
+async function carregarLotesTsLegados(): Promise<readonly DesafioUnificado[]> {
+  const [lote1, lote2, lote3, lote4, lote5, etec1, senai1] = await Promise.all([
+    import('./bancos/enemMatematicaLote1'),
+    import('./bancos/enemMatematicaLote2'),
+    import('./bancos/enemMatematicaLote3'),
+    import('./bancos/enemMatematicaLote4'),
+    import('./bancos/enemMatematicaLote5'),
+    import('./bancos/etecMatematicaLote1'),
+    import('./bancos/senaiMatematicaLote1'),
+  ])
+  return [
+    ...lote1.ENEM_MATEMATICA_LOTE1,
+    ...lote2.ENEM_MATEMATICA_LOTE2,
+    ...lote3.ENEM_MATEMATICA_LOTE3,
+    ...lote4.ENEM_MATEMATICA_LOTE4,
+    ...lote5.ENEM_MATEMATICA_LOTE5,
+    ...etec1.ETEC_MATEMATICA_LOTE1,
+    ...senai1.SENAI_MATEMATICA_LOTE1,
+  ]
+}
+
 export function carregarEnemLote1Lazy(): Promise<readonly DesafioUnificado[]> {
   if (!cacheEnemLote1) {
-    cacheEnemLote1 = Promise.all([
-      import('./bancos/enemMatematicaLote1'),
-      import('./bancos/enemMatematicaLote2'),
-      import('./bancos/enemMatematicaLote3'),
-      import('./bancos/enemMatematicaLote4'),
-      import('./bancos/enemMatematicaLote5'),
-      import('./bancos/etecMatematicaLote1'),
-      import('./bancos/senaiMatematicaLote1'),
-    ])
-      .then(([lote1, lote2, lote3, lote4, lote5, etec1, senai1]) => [
-        ...lote1.ENEM_MATEMATICA_LOTE1,
-        ...lote2.ENEM_MATEMATICA_LOTE2,
-        ...lote3.ENEM_MATEMATICA_LOTE3,
-        ...lote4.ENEM_MATEMATICA_LOTE4,
-        ...lote5.ENEM_MATEMATICA_LOTE5,
-        ...etec1.ETEC_MATEMATICA_LOTE1,
-        ...senai1.SENAI_MATEMATICA_LOTE1,
-      ])
+    cacheEnemLote1 = carregarTodasQuestoesAcervo()
+      .catch(() => carregarLotesTsLegados())
       .catch(() => {
         cacheEnemLote1 = null
         return [] as readonly DesafioUnificado[]
@@ -96,19 +110,34 @@ export function carregarEnemLote1Lazy(): Promise<readonly DesafioUnificado[]> {
 
 export function limparCacheEnemLazy(): void {
   cacheEnemLote1 = null
+  limparCacheAcervo()
 }
 
 export interface OpcoesSelecaoQuestao {
   readonly grau: GrauDificuldade
   readonly estadoEstudo: EstadoEstudoLocal
   readonly temaPreferido?: string | null
-  readonly preferirOrigem?: 'auto' | 'enem_oficial' | 'senai_oficial' | 'etec_oficial' | 'motor_parametrico'
+  readonly preferirOrigem?: 'auto' | OrigemOficial | 'motor_parametrico'
   readonly assinaturasVistas?: ReadonlySet<string> | readonly string[]
   readonly arquetiposRecentes?: readonly string[]
   readonly seed?: number
   readonly agoraMs?: number
   readonly carregarBancoEnem?: () => Promise<readonly DesafioUnificado[]>
 }
+
+interface ItemSelecionavel {
+  readonly id: string
+  readonly assinatura: string
+  readonly origem: OrigemQuestao
+  readonly grau: GrauDificuldade
+  readonly temaId: string
+  readonly arquetipoOuItemId: string
+}
+
+type ResultadoSelecaoCatalogo<T> =
+  | { readonly kind: 'motor' }
+  | { readonly kind: 'item'; readonly item: T }
+  | { readonly kind: 'vazio' }
 
 function hashDeterministico(seed: number, texto: string): number {
   let h = (seed ^ 0x811c9dc5) >>> 0
@@ -171,51 +200,21 @@ function sintetizarMotorEnem(
   return ultimoGerado
 }
 
-export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Promise<DesafioUnificado> {
-  const agoraMs = opcoes.agoraMs ?? Date.now()
-  const seed = Math.max(1, Math.floor(Math.abs(opcoes.seed ?? agoraMs)))
-  const vistosArr = opcoes.assinaturasVistas
-    ? Array.isArray(opcoes.assinaturasVistas)
-      ? opcoes.assinaturasVistas
-      : [...opcoes.assinaturasVistas]
-    : []
-  const vistosSet = new Set<string>(vistosArr)
-  const diag = gerarDiagnosticoEstudo(opcoes.estadoEstudo)
-
-  // Graus 1..4: motor paramétrico infinito com direcionamento opcional para o tema fraco
-  if (opcoes.grau <= 4) {
-    const temaAlvo = opcoes.temaPreferido ?? diag.ondePrecisaAjuda[0]?.temaId
-    const preferredConceptId = resolverConceitoMotorParaTema(temaAlvo)
-    const bruto = generateInfiniteChallenge({
-      tier: opcoes.grau as 1 | 2 | 3 | 4,
-      seed,
-      preferredConceptId,
-      excludeSignatures: vistosArr,
-      excludeArchetypes: opcoes.arquetiposRecentes,
-    })
-    return adaptarDesafioMotor(bruto)
-  }
-
-  // Graus 5..7: acervo oficial ENEM (lazy) + 8 motores paramétricos ENEM-like
+function selecionarCandidatoDoCatalogo<T extends ItemSelecionavel>(
+  catalogo: readonly T[],
+  opcoes: OpcoesSelecaoQuestao,
+  riscoPorTema: Map<string, number>,
+  vistosSet: ReadonlySet<string>,
+  vistasPos: ReadonlyMap<string, number>,
+  seed: number,
+  agoraMs: number,
+): ResultadoSelecaoCatalogo<T> {
   const recentes = opcoes.arquetiposRecentes ?? []
   const ultimoArquetipo = recentes[recentes.length - 1]
   const recentesSet = new Set(recentes)
   const ultimosTresSet = new Set(recentes.slice(-3))
   const ultimaPosRecente = new Map<string, number>()
   recentes.forEach((id, idx) => ultimaPosRecente.set(id, idx))
-  const vistasPos = new Map<string, number>()
-  vistosArr.forEach((sig, idx) => vistasPos.set(sig, idx))
-
-  const riscoPorTema = new Map(diag.ondePrecisaAjuda.map((p) => [p.temaId, p.pontuacaoRisco]))
-  let bancoEnem: readonly DesafioUnificado[] = []
-  if (opcoes.preferirOrigem !== 'motor_parametrico') {
-    try {
-      const loader = opcoes.carregarBancoEnem ?? carregarEnemLote1Lazy
-      bancoEnem = await loader()
-    } catch {
-      bancoEnem = []
-    }
-  }
 
   const origemExplicitaOficial =
     opcoes.preferirOrigem === 'enem_oficial' ||
@@ -224,7 +223,7 @@ export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Pr
       ? opcoes.preferirOrigem
       : null
 
-  const doGrauEnem = bancoEnem.filter(
+  const doGrauEnem = catalogo.filter(
     (d) => d.grau === opcoes.grau && (!origemExplicitaOficial || d.origem === origemExplicitaOficial),
   )
   const elegiveisEnem = doGrauEnem.filter((d) => {
@@ -251,30 +250,19 @@ export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Pr
   )
 
   const deveUsarMotor =
-    opcoes.preferirOrigem === 'motor_parametrico' ||
-    (!origemExplicitaOficial &&
-      ((elegiveisEnem.length === 0 && temMotorFresco) ||
-        (elegiveisEnem.length > 0 &&
-          temMotorFresco &&
-          !ultimoFoiMotor &&
-          ((Boolean(opcoes.temaPreferido) && !temEnemTemaPreferido && temGeradorTemaPreferidoFresco) ||
-            (!opcoes.temaPreferido && seed % 4 === 0)))))
+    !origemExplicitaOficial &&
+    ((elegiveisEnem.length === 0 && temMotorFresco) ||
+      (elegiveisEnem.length > 0 &&
+        temMotorFresco &&
+        !ultimoFoiMotor &&
+        ((Boolean(opcoes.temaPreferido) && !temEnemTemaPreferido && temGeradorTemaPreferidoFresco) ||
+          (!opcoes.temaPreferido && seed % 4 === 0))))
 
-  if (deveUsarMotor) {
-    const gerado = sintetizarMotorEnem(
-      opcoes.grau,
-      opcoes.temaPreferido,
-      riscoPorTema,
-      vistosSet,
-      recentes,
-      seed,
-    )
-    if (gerado) return gerado
-  }
+  if (deveUsarMotor) return { kind: 'motor' }
 
   if (elegiveisEnem.length > 0) {
     const ranqueados = [...elegiveisEnem].sort((a, b) => {
-      const pontuar = (d: DesafioUnificado): number => {
+      const pontuar = (d: T): number => {
         const hist = opcoes.estadoEstudo.historicoItens[d.id]
         let score = 0
         if (!recentesSet.has(d.arquetipoOuItemId)) score += 100_000
@@ -292,12 +280,12 @@ export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Pr
       if (diff !== 0) return diff
       return (hashDeterministico(seed, a.id) % 997) - (hashDeterministico(seed, b.id) % 997)
     })
-    return ranqueados[0]
+    return { kind: 'item', item: ranqueados[0] }
   }
 
-  // Quando o lote oficial + ciclo recente de motores paramétricos já rodaram, recicla questões oficiais
-  // ENEM (evitando a última e as 3 mais recentes) antes de repetir motores paramétricos indefinidamente.
-  if (opcoes.preferirOrigem !== 'motor_parametrico' && doGrauEnem.length > 0) {
+  // Quando o acervo oficial + ciclo recente de motores paramétricos já rodaram, recicla questões oficiais
+  // (evitando a última e as 3 mais recentes) antes de repetir motores paramétricos indefinidamente.
+  if (doGrauEnem.length > 0) {
     const semUltimo =
       doGrauEnem.length > 1 && ultimoArquetipo
         ? doGrauEnem.filter((d) => d.arquetipoOuItemId !== ultimoArquetipo)
@@ -330,17 +318,86 @@ export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Pr
 
       return (hashDeterministico(seed, a.id) % 997) - (hashDeterministico(seed, b.id) % 997)
     })
-    return recicladas[0]
+    return { kind: 'item', item: recicladas[0] }
   }
 
-  const fallbackMotor = sintetizarMotorEnem(
-    opcoes.grau,
-    opcoes.temaPreferido,
-    riscoPorTema,
-    vistosSet,
-    recentes,
-    seed,
-  )
+  return { kind: 'vazio' }
+}
+
+export async function selecionarProximoDesafio(opcoes: OpcoesSelecaoQuestao): Promise<DesafioUnificado> {
+  const agoraMs = opcoes.agoraMs ?? Date.now()
+  const seed = Math.max(1, Math.floor(Math.abs(opcoes.seed ?? agoraMs)))
+  const vistosArr = opcoes.assinaturasVistas
+    ? Array.isArray(opcoes.assinaturasVistas)
+      ? opcoes.assinaturasVistas
+      : [...opcoes.assinaturasVistas]
+    : []
+  const vistosSet = new Set<string>(vistosArr)
+  const diag = gerarDiagnosticoEstudo(opcoes.estadoEstudo)
+
+  // Graus 1..4: motor paramétrico infinito com direcionamento opcional para o tema fraco
+  if (opcoes.grau <= 4) {
+    const temaAlvo = opcoes.temaPreferido ?? diag.ondePrecisaAjuda[0]?.temaId
+    const preferredConceptId = resolverConceitoMotorParaTema(temaAlvo)
+    const bruto = generateInfiniteChallenge({
+      tier: opcoes.grau as 1 | 2 | 3 | 4,
+      seed,
+      preferredConceptId,
+      excludeSignatures: vistosArr,
+      excludeArchetypes: opcoes.arquetiposRecentes,
+    })
+    return adaptarDesafioMotor(bruto)
+  }
+
+  const recentes = opcoes.arquetiposRecentes ?? []
+  const vistasPos = new Map<string, number>()
+  vistosArr.forEach((sig, idx) => vistasPos.set(sig, idx))
+  const riscoPorTema = new Map(diag.ondePrecisaAjuda.map((p) => [p.temaId, p.pontuacaoRisco]))
+
+  const acionarMotor = () =>
+    sintetizarMotorEnem(opcoes.grau, opcoes.temaPreferido, riscoPorTema, vistosSet, recentes, seed)
+
+  if (opcoes.preferirOrigem === 'motor_parametrico') {
+    const gerado = acionarMotor()
+    if (gerado) return gerado
+  } else if (opcoes.carregarBancoEnem) {
+    let bancoEnem: readonly DesafioUnificado[] = []
+    try {
+      bancoEnem = await opcoes.carregarBancoEnem()
+    } catch {
+      bancoEnem = []
+    }
+    const sel = selecionarCandidatoDoCatalogo(bancoEnem, opcoes, riscoPorTema, vistosSet, vistasPos, seed, agoraMs)
+    if (sel.kind === 'motor') {
+      const gerado = acionarMotor()
+      if (gerado) return gerado
+    } else if (sel.kind === 'item') {
+      return sel.item
+    }
+  } else {
+    try {
+      const indice = await carregarIndiceAcervo()
+      const sel = selecionarCandidatoDoCatalogo(
+        indice.entradas,
+        opcoes,
+        riscoPorTema,
+        vistosSet,
+        vistasPos,
+        seed,
+        agoraMs,
+      )
+      if (sel.kind === 'motor') {
+        const gerado = acionarMotor()
+        if (gerado) return gerado
+      } else if (sel.kind === 'item') {
+        return await carregarQuestaoPorEntrada(sel.item)
+      }
+    } catch {
+      // Fallback silencioso para motor paramétrico ENEM-like se o índice ou pacote falhar offline
+    }
+  }
+
+  const fallbackMotor = acionarMotor()
   if (fallbackMotor) return fallbackMotor
 
   return adaptarDesafioMotor(

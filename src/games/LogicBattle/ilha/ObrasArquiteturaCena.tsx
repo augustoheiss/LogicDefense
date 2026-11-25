@@ -2,7 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import React, { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Group, InstancedMesh } from 'three'
 import { Object3D } from 'three'
-import { centroBlocoMundo, indiceVoxelLocal, VOXEL_NV5 } from './biomaRecursos'
+import { centroBlocoMundo, indiceVoxelLocal, type LagoaRasa, VOXEL_NV5 } from './biomaRecursos'
 import {
   BlocoMaterial,
   BlocoMundo,
@@ -14,6 +14,8 @@ import {
 } from './blocosMundo'
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
 import { chaoRevelado, cobertoAgora, Obra, obraEmConstrucao, PartidaState } from './partidaSim'
+import { desnivelDaObraNoChao, desnivelDoApoio } from './relevo/alturaVisual'
+import type { CampoRelevo } from './relevo/campoRelevo'
 import { raycastCondicional, semRaycast } from './raycastCena'
 import { alturaSapataMuralha, Y_SOLO_VISUAL } from './visual/suporteFundacao'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
@@ -51,7 +53,11 @@ export const BlocosMundoInstanced: React.FC<{
   groupRef?: React.RefObject<Group | null>
   texturasBlocos?: PacoteTexturasBlocos | null
   sombrasAtivas?: boolean
-}> = ({ blocosMapa, versaoSolidos, versaoChao, state, groupRef, texturasBlocos = null, sombrasAtivas = false }) => {
+  /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) os blocos ficam no plano de hoje (I1). */
+  campo?: CampoRelevo
+  /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
+  lagoas?: readonly LagoaRasa[]
+}> = ({ blocosMapa, versaoSolidos, versaoChao, state, groupRef, texturasBlocos = null, sombrasAtivas = false, campo, lagoas }) => {
   const refs = useRef<Record<BlocoMaterial, InstancedMesh | null>>({
     madeira: null,
     pedra: null,
@@ -93,7 +99,7 @@ export const BlocosMundoInstanced: React.FC<{
       const itens = porMat[mat]
       for (let i = 0; i < itens.length; i += 1) {
         const c = itens[i].centro
-        molde.position.set(c.x, c.y, c.z)
+        molde.position.set(c.x, c.y + desnivelDoApoio(campo, lagoas, c.x, c.z), c.z)
         molde.scale.set(1, 1, 1)
         molde.updateMatrix()
         mesh.setMatrixAt(i, molde.matrix)
@@ -108,7 +114,7 @@ export const BlocosMundoInstanced: React.FC<{
     if (meshSapata) {
       for (let i = 0; i < basesTerreo.length; i += 1) {
         const c = basesTerreo[i].centro
-        molde.position.set(c.x, sapata.centroY, c.z)
+        molde.position.set(c.x, sapata.centroY + desnivelDoApoio(campo, lagoas, c.x, c.z), c.z)
         molde.scale.set(1, 1, 1)
         molde.updateMatrix()
         meshSapata.setMatrixAt(i, molde.matrix)
@@ -117,7 +123,7 @@ export const BlocosMundoInstanced: React.FC<{
       meshSapata.instanceMatrix.needsUpdate = true
       if (basesTerreo.length > 0) meshSapata.computeBoundingSphere()
     }
-  }, [blocosMapa, versaoSolidos, versaoChao, molde, state, sapata.centroY])
+  }, [blocosMapa, versaoSolidos, versaoChao, molde, state, sapata.centroY, campo, lagoas])
 
   const texSapata = texturasBlocos?.fundacaoPedra
   return (
@@ -183,7 +189,11 @@ export const ObrasLivresInstanced: React.FC<{
   /** O ponteiro tocou esta obra (antes do `click`): quem decide se o container deve atirar é `IlhaRua`. */
   /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
   onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
-}> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
+  /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele os blocos ficam no plano de hoje (I1). */
+  campo?: CampoRelevo
+  /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
+  lagoas?: readonly LagoaRasa[]
+}> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra, campo, lagoas }) => {
   const refs = useRef<Record<BlocoMaterial, InstancedMesh | null>>({
     madeira: null,
     pedra: null,
@@ -229,7 +239,7 @@ export const ObrasLivresInstanced: React.FC<{
       const itens = porMat[mat]
       for (let i = 0; i < itens.length; i += 1) {
         const c = itens[i].centro
-        molde.position.set(c.x, c.y, c.z)
+        molde.position.set(c.x, c.y + desnivelDoApoio(campo, lagoas, c.x, c.z), c.z)
         molde.scale.set(1, 1, 1)
         molde.updateMatrix()
         mesh.setMatrixAt(i, molde.matrix)
@@ -244,7 +254,7 @@ export const ObrasLivresInstanced: React.FC<{
     if (meshSapata) {
       for (let i = 0; i < basesTerreo.length; i += 1) {
         const c = basesTerreo[i].centro
-        molde.position.set(c.x, sapata.centroY, c.z)
+        molde.position.set(c.x, sapata.centroY + desnivelDoApoio(campo, lagoas, c.x, c.z), c.z)
         molde.scale.set(1, 1, 1)
         molde.updateMatrix()
         meshSapata.setMatrixAt(i, molde.matrix)
@@ -253,7 +263,7 @@ export const ObrasLivresInstanced: React.FC<{
       meshSapata.instanceMatrix.needsUpdate = true
       if (basesTerreo.length > 0) meshSapata.computeBoundingSphere()
     }
-  }, [state, versaoSolidos, versaoChao, molde, sapata.centroY])
+  }, [state, versaoSolidos, versaoChao, molde, sapata.centroY, campo, lagoas])
 
   const texSapata = texturasBlocos?.fundacaoPedra
   return (
@@ -351,7 +361,11 @@ export const ObrasNv5Instanced: React.FC<{
   /** O ponteiro tocou esta obra (antes do `click`): quem decide se o container deve atirar é `IlhaRua`. */
   /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
   onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
-}> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra }) => {
+  /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele os prédios ficam no plano de hoje (I1). */
+  campo?: CampoRelevo
+  /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
+  lagoas?: readonly LagoaRasa[]
+}> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra, campo, lagoas }) => {
   const refs = useRef<Record<TomNv5, InstancedMesh | null>>({
     pedra: null,
     madeira: null,
@@ -366,10 +380,13 @@ export const ObrasNv5Instanced: React.FC<{
       coroa: [],
     }
     const { nx, ny, nz } = VOXEL_NV5
+    // O PRÉDIO é um corpo RÍGIDO de 7 × 5 × 7 voxels: sobe TODO junto pelo desnível do CENTRO da obra (um desnível por voxel o deformaria). UM por obra, num Map LOCAL: o `IndiceVoxelNv5`, que o clique lê, não ganha campo.
+    const desnivelDaObra = new Map<number, number>()
     for (const obra of state.obras) {
       const blocos = obra.blocosNv5
       if (!blocos || obra.hp <= 0 || obraEmConstrucao(obra)) continue
       if (obra.lado === 'inimigo' && PARTIDA.nuvem && !cobertoAgora(state, obra.x, obra.z)) continue
+      desnivelDaObra.set(obra.id, desnivelDoApoio(campo, lagoas, obra.x, obra.z))
       for (let by = 0; by < ny; by += 1) {
         for (let bz = 0; bz < nz; bz += 1) {
           for (let bx = 0; bx < nx; bx += 1) {
@@ -391,7 +408,7 @@ export const ObrasNv5Instanced: React.FC<{
       const itens = buckets[id]
       for (let i = 0; i < itens.length; i += 1) {
         const c = itens[i].centro
-        molde.position.set(c.x, c.y, c.z)
+        molde.position.set(c.x, c.y + (desnivelDaObra.get(itens[i].obraId) ?? 0), c.z)
         molde.scale.set(1, 1, 1)
         molde.updateMatrix()
         mesh.setMatrixAt(i, molde.matrix)
@@ -401,7 +418,7 @@ export const ObrasNv5Instanced: React.FC<{
       mesh.instanceMatrix.needsUpdate = true
       if (itens.length > 0) mesh.computeBoundingSphere()
     }
-  }, [state, versaoSolidos, versaoChao, molde])
+  }, [state, versaoSolidos, versaoChao, molde, campo, lagoas])
 
   return (
     <group ref={groupRef} name="voxeis-nv5">
@@ -464,7 +481,11 @@ export const ObrasNv5Instanced: React.FC<{
 export const PreviewLinhaBlocos: React.FC<{
   plano: PlanoLinhaBlocos | null
   temRecurso: boolean
-}> = ({ plano, temRecurso }) => {
+  /** O campo de relevo do quadrado (F2, Task 4): o fantasma sobe o MESMO desnível do bloco de verdade. OPCIONAL (I1). */
+  campo?: CampoRelevo
+  /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
+  lagoas?: readonly LagoaRasa[]
+}> = ({ plano, temRecurso, campo, lagoas }) => {
   const meshRef = useRef<InstancedMesh>(null)
   const wireRef = useRef<InstancedMesh>(null)
   const baseRef = useRef<InstancedMesh>(null)
@@ -477,7 +498,7 @@ export const PreviewLinhaBlocos: React.FC<{
       if (!alvo) continue
       for (let i = 0; i < qtd; i += 1) {
         const c = blocoMundoParaCentro(celulas[i].x, celulas[i].y, celulas[i].z)
-        molde.position.set(c.x, c.y, c.z)
+        molde.position.set(c.x, c.y + desnivelDoApoio(campo, lagoas, c.x, c.z), c.z)
         molde.scale.set(1, 1, 1)
         molde.updateMatrix()
         alvo.setMatrixAt(i, molde.matrix)
@@ -492,7 +513,7 @@ export const PreviewLinhaBlocos: React.FC<{
       for (let i = 0; i < qtd && nb < MAX_PREVIEW_LINHA; i += 1) {
         if (celulas[i].y !== 0) continue
         const c = blocoMundoParaCentro(celulas[i].x, 0, celulas[i].z)
-        molde.position.set(c.x, Y_SOLO_VISUAL + 0.225, c.z)
+        molde.position.set(c.x, Y_SOLO_VISUAL + 0.225 + desnivelDoApoio(campo, lagoas, c.x, c.z), c.z)
         molde.scale.set(1, 1, 1)
         molde.updateMatrix()
         alvoBase.setMatrixAt(nb++, molde.matrix)
@@ -500,7 +521,7 @@ export const PreviewLinhaBlocos: React.FC<{
       alvoBase.count = nb
       alvoBase.instanceMatrix.needsUpdate = true
     }
-  }, [plano, molde])
+  }, [plano, molde, campo, lagoas])
 
   if (!plano || plano.celulas.length === 0) return null
 
@@ -782,14 +803,20 @@ export const GhostBlueprintObra: React.FC<{
   z: number
   valido: boolean
   sobreAgua?: boolean
-}> = ({ tipo, x, z, valido, sobreAgua = false }) => {
+  /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) a obra fica no plano de hoje (I1). */
+  campo?: CampoRelevo
+  /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): um píer repousa na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
+  lagoas?: readonly LagoaRasa[]
+}> = ({ tipo, x, z, valido, sobreAgua = false, campo, lagoas }) => {
   const cor = valido ? (sobreAgua ? '#38bdf8' : '#22c55e') : '#ef4444'
   const corBorda = valido ? (sobreAgua ? '#bae6fd' : '#86efac') : '#fecaca'
   const dim = DIMENSOES_OBRA[tipo]
   const ySolo = sobreAgua ? -0.36 : -0.43
+  // O fantasma mostra ONDE a obra vai ficar: a mesma conta da fundação e da malha, sobre a obra PRONTA (hp 1, sem obra em andamento: a pegada do tipo).
+  const desnivel = desnivelDaObraNoChao({ tipo, x, z, hp: 1, construindoRestante: 0 }, campo, lagoas)
 
   return (
-    <group position={[x, 0, z]} name="ghost-blueprint-obra">
+    <group position={[x, desnivel, z]} name="ghost-blueprint-obra">
       <SilhuetaPeca
         tipo={tipo}
         nivel={1}
@@ -860,7 +887,11 @@ export const ObraArquiteturaMesh: React.FC<{
   onPointerDown: (event: ThreeEvent<PointerEvent>) => void
   onPointerUp: (event: ThreeEvent<PointerEvent>) => void
   onClick: (event: ThreeEvent<MouseEvent>) => void
-}> = ({ obra, visivel, modoBloco, onPointerDown, onPointerUp, onClick }) => {
+  /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) a obra fica no plano de hoje (I1). */
+  campo?: CampoRelevo
+  /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): um píer repousa na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
+  lagoas?: readonly LagoaRasa[]
+}> = ({ obra, visivel, modoBloco, onPointerDown, onPointerUp, onClick, campo, lagoas }) => {
   const ruina = obra.hp <= 0
   const construindo = obraEmConstrucao(obra)
   const temBlocosLivres = Boolean((obra as Obra & { blocosLivres?: readonly BlocoMundo[] }).blocosLivres?.length)
@@ -868,13 +899,15 @@ export const ObraArquiteturaMesh: React.FC<{
   if (usaMalhaBlocos || !visivel) return null
 
   const dim = DIMENSOES_OBRA[obra.tipo]
+  // A mesma conta da fundação e do fantasma: um prédio sobre o píer fica na lâmina junto com ele, e um em terra no chão. UMA vez, nos DOIS grupos pai (a ruína e a obra); os filhos são relativos a eles.
+  const desnivel = desnivelDaObraNoChao(obra, campo, lagoas)
   const total = Math.max(0.01, obra.construindoTotal ?? 1)
   const progresso = construindo ? Math.max(0.18, 1 - (obra.construindoRestante ?? 0) / total) : 1
   const pal = paletaObra(obra)
 
   if (ruina) {
     return (
-      <group position={[obra.x, 0, obra.z]}>
+      <group position={[obra.x, desnivel, obra.z]}>
         <mesh position={[0, -0.08, 0]} raycast={semRaycast}>
           <boxGeometry args={[dim[0] * 0.92, 0.28, dim[2] * 0.92]} />
           <meshStandardMaterial color={obra.lado === 'inimigo' ? '#292524' : '#57534e'} roughness={0.95} />
@@ -889,7 +922,7 @@ export const ObraArquiteturaMesh: React.FC<{
 
   return (
     <group
-      position={[obra.x, 0, obra.z]}
+      position={[obra.x, desnivel, obra.z]}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onClick={onClick}

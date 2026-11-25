@@ -54,9 +54,6 @@ function criarPrng(i: number, j: number, sal: number): () => number {
   }
 }
 
-function dentroEstradaCentral(x: number, z: number): boolean {
-  return Math.abs(x) < 5.0 && z > -6.5 && z < 44.5
-}
 
 function dentroLagoaComMargem(x: number, z: number, lagoas: readonly LagoaRasa[], folga = 0.8): boolean {
   return lagoas.some((l) => ((x - l.x) / (l.rx + folga)) ** 2 + ((z - l.z) / (l.rz + folga)) ** 2 <= 1)
@@ -77,8 +74,8 @@ function areaPermitidaDecoracao(
   recursos: readonly RecursoNatural[],
 ): boolean {
   if (Math.abs(x) > PARTIDA.radius - 2.2 || Math.abs(z) > PARTIDA.radius - 2.2) return false
+  // SEM A AVENIDA (25/11): a grama, as flores e as pedras decorativas ocupam onde a estrada ficava. Só o CLARO de nascimento (raio 3,4 m, o plano de 3,5 m do relevo) segue livre.
   if (Math.hypot(x, z) < 3.4) return false
-  if (dentroEstradaCentral(x, z)) return false
   if (dentroLagoaComMargem(x, z, lagoas, 0.75)) return false
   if (pertoDeRecurso(x, z, recursos)) return false
   return true

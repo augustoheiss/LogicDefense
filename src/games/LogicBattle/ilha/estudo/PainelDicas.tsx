@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
-import { protegerMarkdownInline, type DesafioUnificado } from './contratosEstudo'
+import { protegerCifraoMoeda, protegerMarkdownInline, type DesafioUnificado } from './contratosEstudo'
 
 export interface PainelDicasProps {
   readonly desafio: DesafioUnificado
@@ -31,6 +31,12 @@ const MarkdownDicaInline: React.FC<{ readonly texto: string }> = ({ texto }) => 
     components={{ p: ({ children }) => <>{children}</> }}
   >
     {protegerMarkdownInline(texto)}
+  </ReactMarkdown>
+)
+
+const MarkdownBlocoPosAcerto: React.FC<{ readonly texto: string }> = ({ texto }) => (
+  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+    {protegerCifraoMoeda(texto)}
   </ReactMarkdown>
 )
 
@@ -92,7 +98,7 @@ export const PainelDicas: React.FC<PainelDicasProps> = ({
             </p>
           )}
           <div className="ilha-pos-acerto-texto">
-            <MarkdownDicaInline texto={desafio.posAcerto.solucaoCompletaPt} />
+            <MarkdownBlocoPosAcerto texto={desafio.posAcerto.solucaoCompletaPt} />
           </div>
           {desafio.posAcerto.metodos.length > 0 && (
             <ul className="ilha-pos-acerto-metodos">

@@ -89,3 +89,8 @@ artifacts/
 test_artifacts_v10/
 **/test_artifacts_v10/
 test_artifacts*/
+
+# Pipeline de ingestao de questoes (staging, quarentena e PDFs temporarios)
+scripts/questoes/.staging/
+scripts/questoes/.quarentena/
+scripts/questoes/*.pdf

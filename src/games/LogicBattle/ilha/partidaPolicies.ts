@@ -355,6 +355,20 @@ export const PARTIDA = {
   orcamentoStepTodosMs: 9,
   maxLentosPorFrame: 2,
   visualPbrHabilitado: true as boolean,
+  // Névoa de guerra PINTADA no chão (relevo e visual AoE, F1): troca as 12.769 colunas cinza (141.120 triângulos) por um plano com textura 113×113. LIGADA por padrão desde 24/11/2026 (decisão do usuário, depois de ver as fotos; desligar volta às colunas de hoje: é a janela de rollback); ligada, o
+  // desenho das colunas (`nuvem`/`penumbra` em IlhaRua) não é montado. A REGRA de visão (`cobertoAgora`, `chaoRevelado`) é a mesma nos dois modos: só o desenho muda.
+  nevoaPintada: true as boolean,
+  // Pós-processamento HDR (relevo e visual AoE, F1): bloom seletivo, oclusão ambiente (Ultra) e o tom aplicado uma vez no fim, por `EffectComposer`. DESLIGADO por padrão até a foto aprovar. O Leve
+  // NUNCA o liga, com a chave ligada ou não (`configDoComposer`): é a rede de segurança de máquina fraca.
+  posProcessamento: false as boolean,
+  // Ambiente por IBL (relevo e visual AoE, F1 Task 8b): `scene.environment` gerado do céu do bioma (`ambientePmrem.ts`), só no Bonito e no Ultra. Muda a aparência de 60 materiais PBR de uma vez
+  // (ouro, água, pedra úmida, obras metálicas), por isso tem a sua chave: desligada = sem ambiente, o jogo de antes. DESLIGADA de propósito (24/11): medido na clareira, o ambiente GLOBAL a 0,55 soma
+  // +44% de luz à estrada e +40% à grama e esfria tudo (a estrada vai de azul/vermelho 1,47 a 2,04); o ganho só existe no metal e o fator por material (`fatorDeReflexo`) ainda não está aplicado à cena.
+  ambienteIbl: false as boolean,
+  // RELEVO (relevo e visual AoE, F2, 25/11/2026): o terreno de morros, vales e lagoas em bacia. `visual` liga o desenho SÓ (o chão, as obras, os props, as tropas, a câmera e o clique seguem o
+  // terreno); a SIMULAÇÃO continua plana (o herói e as tropas ainda atravessam o morro: as regras do relevo são a F3, com «ok» separado do usuário). DESLIGADA até as fotos da F2 serem
+  // aprovadas: desligada, cada ponto de desenho devolve o mesmo número de hoje (o chão em −0,45, I1) e o jogo não muda um pixel. É um objeto porque a F3 acrescentará `regras` ao lado, com a sua chave.
+  relevo: { visual: false as boolean },
   qualidadeGraficaPadrao: 'auto' as QualidadeGraficaPreset,
   capacidadePoolBiomasGpu: 2,
   mostrarFaixaTiroVisual: false as boolean,
@@ -366,7 +380,6 @@ export const PARTIDA = {
   limiarArrastoRmbPx: 12,
   altarPasso: 4,
   altarRaio: 1.15,
-  arch: { minX: -1.2, maxX: 1.2, minZ: 18, maxZ: 22 },
   asphaltEndZ: 40,
   celula: 1,
   espiral: 5,
@@ -415,8 +428,7 @@ export const PLUS_TEN: Gate = {
   readingTimeMs: 0,
 }
 
-export const OBSTACULOS: readonly { x: number; z: number; hx: number; hz: number; altura: number }[] = [
-  { x: -1.65, z: 12, hx: 1.15, hz: 0.7, altura: 1.4 },
-  { x: 1.65, z: 26, hx: 1.15, hz: 0.7, altura: 1.4 },
-  { x: -1.55, z: 33, hx: 1.05, hz: 0.65, altura: 1.4 },
-]
+// SEM OBSTÁCULOS FIXOS (25/11/2026, decisão do usuário: «essa rua não era pra existir, ela fazia parte de outro jogo»). As 3 caixas laranja do corredor de portões saíram do desenho e da regra: cada
+// minimapa é do seu bioma e do seu relevo, não uma pista igual em todos. A lista continua EXISTINDO (vazia) porque a colisão, o piso e o caminho a leem (8 usos em `partidaSim`, 1 em `verticalidadeVoxel`);
+// quem quiser um obstáculo fixo no futuro (uma estrutura por bioma) o põe aqui e tudo o mais já o respeita.
+export const OBSTACULOS: readonly { x: number; z: number; hx: number; hz: number; altura: number }[] = []

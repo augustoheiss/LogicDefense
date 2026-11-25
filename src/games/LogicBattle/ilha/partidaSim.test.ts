@@ -1,5 +1,6 @@
 import { contagemBuscas, zerarBuscas } from './caminho'
 import { chaveBlocoMundo, criarBlocoMundo } from './blocosMundo'
+import { pisoUniversalEm } from './verticalidadeVoxel'
 import { COTA_ESTORNO_BLUEPRINT_NV5 } from './obraBlocosLivres'
 import { DIMENSOES_OBRA, GRAU_PARTIDA, OBSTACULOS, PARTIDA, PecaId } from './partidaPolicies'
 import {
@@ -131,22 +132,23 @@ export function run(): void {
   assert(noChao.unidades.some((unidade) => unidade.hp <= 0), 'chão mata')
   assert(noChao.heroi.army === perto.heroi.army, 'tiro não muda exército')
 
+  // SEM O ARCO FIXO +10 (25/11, decisão do usuário: «essa rua não era pra existir, fazia parte de outro jogo»). O herói atravessa z de 18 a 22 e a vida NÃO muda; a flag do arco não existe mais.
   let arco = inicio
-  for (let i = 0; i < 80 && !arco.gateArchApplied; i++) arco = anda(arco, 0.1)
-  assert(arco.gateArchApplied && arco.heroi.army === 20, 'arco soma 10')
-  const segunda = anda(arco, 1, { forward: false, back: true, strafe: 0 })
-  const terceira = anda(segunda, 2)
-  assert(terceira.heroi.army === 20, 'arco segunda vez')
+  for (let i = 0; i < 80 && arco.heroi.z < 23; i++) arco = anda(arco, 0.1)
+  assert(arco.heroi.z >= 23, 'controle do teste: o herói de fato atravessou a faixa z de 18 a 22 (onde ficava o arco)')
+  assert(arco.heroi.army === 10, 'sem o arco fixo, atravessar z de 18 a 22 não soma vida (continua 10)')
+  assert(!('gateArchApplied' in arco), 'o estado não tem mais a flag gateArchApplied (o arco fixo saiu)')
+  assert(!('arch' in PARTIDA), 'a política não tem mais PARTIDA.arch')
 
   let lado = inicio
   lado = mira(lado, 0, 0)
   lado = anda(lado, 1, { forward: false, back: false, strafe: -1 })
   for (let i = 0; i < 50; i++) lado = anda(lado, 0.1)
-  assert(lado.heroi.x > 3 && lado.gateArchApplied === false && lado.heroi.army === 10, 'arco ao lado não soma')
+  assert(lado.heroi.x > 3 && lado.heroi.army === 10, 'andar para o lado não muda a vida')
 
   const frente = { forward: true, back: false, strafe: 0 as const }
   const longo = stepPartida(inicio, frente, 3)
-  assert(longo.gateArchApplied && longo.heroi.army === 20, 'passo longo soma uma vez')
+  assert(longo.heroi.army === 10 && longo.heroi.z > 18, 'um passo longo que cruza z de 18 a 22 também não soma vida')
   let fatiado = inicio
   for (let i = 0; i < 60; i++) fatiado = stepPartida(fatiado, frente, 0.05)
   assert(Math.abs(longo.heroi.z - fatiado.heroi.z) < 0.05, '3 s num passo equivalem a 60 fatias de 0,05')
@@ -169,23 +171,38 @@ export function run(): void {
   assert(subiu.heroi.y > 0.8, 'o corpo sobe')
   const caiu = stepPartida(subiu, INPUT_PARADO, 2)
   assert(caiu.heroi.y === 0 && caiu.heroi.vy === 0, 'o corpo volta ao chão')
-  const caixa = OBSTACULOS[0]
-  const junto = {
+  // SEM OBSTÁCULOS FIXOS (25/11): as 3 caixas laranja da rua saíram da regra e do desenho. Os DOIS mecanismos que elas provavam seguem provados, cada um com o objeto certo: a COLISÃO horizontal
+  // com uma obra de verdade (uma CASA, o núcleo de 2 × 1,6 × 2 m, no ponto onde a 1ª caixa ficava) e o POUSO num piso elevado com a PEDRA de 35 kg, que fica no jogo (a folga do pulo sobre uma
+  // obra é de só 5 a 10 cm; medido em 25/11 com `topos-das-obras.mjs`: pico do pulo 1,6457 m contra topo do núcleo 1,60 m).
+  assert(OBSTACULOS.length === 0, 'não há mais obstáculos fixos (as 3 caixas da rua saíram)')
+  const casaDeTeste = fundar(inicio, 'nucleo', -1.65, 12).obras.find((o) => o.lado !== 'inimigo' && o.tipo === 'nucleo')
+  assert(casaDeTeste !== undefined, 'controle do teste: a casa de teste foi fundada')
+  const casaMeia = DIMENSOES_OBRA.nucleo[2] / 2
+  const junto: PartidaState = {
     ...inicio,
-    heroi: { ...inicio.heroi, x: caixa.x, z: caixa.z - caixa.hz - PARTIDA.body - 0.3, yaw: 0 },
+    obras: [...inicio.obras, casaDeTeste],
+    heroi: { ...inicio.heroi, x: casaDeTeste.x, z: casaDeTeste.z - casaMeia - PARTIDA.body - 0.3, yaw: 0 },
   }
   let bloqueado = junto
   for (let i = 0; i < 20; i++) bloqueado = stepPartida(bloqueado, { forward: true, back: false, strafe: 0 }, 0.05)
-  assert(bloqueado.heroi.z < caixa.z - caixa.hz, 'sem pulo a caixa segura o corpo')
-  let salto = pular(junto)
-  let pousouNaCaixa = false
-  for (let i = 0; i < 40; i++) {
-    salto = stepPartida(salto, { forward: true, back: false, strafe: 0 }, 0.05)
-    if (Math.abs(salto.heroi.z - caixa.z) < 0.25 && salto.heroi.y === caixa.altura && salto.heroi.vy === 0) {
-      pousouNaCaixa = true
-    }
-  }
-  assert(pousouNaCaixa, 'o pulo sobe na caixa')
+  assert(bloqueado.heroi.z < casaDeTeste.z - casaMeia, 'sem pulo a casa segura o corpo')
+  // O PISO elevado sustenta os pés (o que a caixa provava): a PEDRA de 35 kg. Pousar nela pelo SALTO dinâmico não é provável (MEDIDO em 25/11, `medir-pulo-na-pedra.mjs`): a 0,4 m por quadro o herói
+  // passa por cima (ápice de 1,41 m em z≈10,6) e desce em z≈13, depois dela; e a 0,3 m da borda ele a RECOLHE (carregando 35). O piso se prova direto: com a pedra no chão os pés pousam em
+  // `pedraAltura` (0,7 m); sem ela (recolhida) o chão volta a ser 0; e fora dela não há piso elevado. Folga do pulo: 0,95 m sob o pico de 1,65 m (as obras só têm 5 a 10 cm).
+  const pesNaPedra = [PARTIDA.pedraX, 1.4, PARTIDA.pedraZ] as const
+  assert(
+    pisoUniversalEm(pesNaPedra[0], pesNaPedra[1], pesNaPedra[2], true, [], [], null) === PARTIDA.pedraAltura,
+    'com a pedra no chão, os pés em cima dela pousam em pedraAltura (0,7 m)',
+  )
+  assert(
+    pisoUniversalEm(pesNaPedra[0], pesNaPedra[1], pesNaPedra[2], false, [], [], null) === 0,
+    'sem a pedra (recolhida), o mesmo ponto volta a ser chão (0)',
+  )
+  assert(
+    pisoUniversalEm(PARTIDA.pedraX + PARTIDA.pedraMeio + PARTIDA.body + 0.5, 1.4, PARTIDA.pedraZ, true, [], [], null) === 0,
+    'fora da pedra não há piso elevado',
+  )
+  assert(PARTIDA.pedraAltura > 0.5 && PARTIDA.pedraAltura < 1.2, 'controle: a pedra é um degrau que um pulo alcança')
   const manche = stepPartida(inicio, { forward: false, back: false, strafe: 0, eixoX: 0, eixoY: 1 }, 0.5)
   assert(manche.heroi.z > 2 && Math.abs(manche.heroi.x) < 0.2, 'o manche anda para a frente')
 

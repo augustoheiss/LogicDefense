@@ -30,7 +30,7 @@ export function figurasPelaChave(chave: string): readonly FiguraOficial[] {
 export function figurasEfetivas(
   desafio: Pick<DesafioUnificado, 'figuras' | 'chaveFigura' | 'referenciaOficial'>,
 ): readonly FiguraOficial[] {
-  if (desafio.figuras && desafio.figuras.length > 0) return desafio.figuras
+  if (Array.isArray(desafio.figuras)) return desafio.figuras
   if (desafio.chaveFigura) return figurasPelaChave(desafio.chaveFigura)
   const ref = desafio.referenciaOficial
   if (!ref) return []

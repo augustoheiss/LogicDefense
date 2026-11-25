@@ -15,6 +15,8 @@ import { semRaycast } from '../raycastCena'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
 import { gerarPropsDecorativos } from './propsDecorativos'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
+import { desnivelDoApoio, desnivelDoChao } from '../relevo/alturaVisual'
+import type { CampoRelevo } from '../relevo/campoRelevo'
 import { alturaVisualRecurso, paisagemNaturalVisivel } from './suporteFundacao'
 import type { PacoteTexturasBioma } from './texturasPbrProcedural'
 
@@ -27,6 +29,11 @@ export interface PropsBiomaInstancedProps {
   readonly lagoas: readonly LagoaRasa[]
   readonly texturas: PacoteTexturasBioma | null
   readonly spec: SpecQualidadeGrafica
+  /**
+   * O campo de relevo do quadrado (F2, Task 4). OPCIONAL e de VALOR (não ref): o desenho é feito em `useLayoutEffect`, que só roda de novo quando uma dependência muda, e o campo termina de gerar
+   * alguns quadros DEPOIS do quadrado (geração fatiada). Ausente, ou ainda gerando, o desnível é 0 e o desenho é o de hoje (I1).
+   */
+  readonly campo?: CampoRelevo
 }
 
 const MAX_ARVORES = 32
@@ -67,8 +74,11 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
   lagoas,
   texturas,
   spec,
+  campo,
 }) => {
   const cat = BIOMA_VISUAL_CATALOG[bioma]
+  // O desnível do relevo no ponto (x, z): `y_novo = y_de_hoje + desnível`. Sem campo é 0 e tudo fica como era (I1).
+  const desnivelEm = (x: number, z: number): number => desnivelDoChao(campo, x, z)
   const noSubsolo = !state.semCorpo && state.heroi.y < -0.9
   const molde = useMemo(() => new Object3D(), [])
 
@@ -157,7 +167,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       if (!paisagemNaturalVisivel(state, rec.x, rec.z)) continue
       const rot = ((rec.id * 1.618) % (Math.PI * 2))
       const escala = 0.88 + ((rec.id * 37) % 30) / 100
-      const ySolo = alturaVisualRecurso(rec.yBase)
+      const ySolo = alturaVisualRecurso(rec.yBase, desnivelEm(rec.x, rec.z))
 
       if (rec.tipo === 'arvore') {
         if (rec.hp <= 0) {
@@ -243,7 +253,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
     atualizar(cristais1Ref.current, nOuro)
     atualizar(cristais2Ref.current, nOuro)
     atualizar(ouroVazioRef.current, nOuroVazio)
-  }, [recursos, state, state.versaoChao, state.versaoRecursos, state.semCorpo, cat.copaFormato, molde])
+  }, [recursos, state, state.versaoChao, state.versaoRecursos, state.semCorpo, cat.copaFormato, campo, molde])
 
   // 2. Atualiza instâncias de micro-natureza (grama, flores, pedras, margens)
   useLayoutEffect(() => {
@@ -254,7 +264,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       for (const g of decor.gramas) {
         if (n >= MAX_GRAMA) break
         if (!paisagemNaturalVisivel(state, g.x, g.z)) continue
-        molde.position.set(g.x, -0.45, g.z)
+        molde.position.set(g.x, -0.45 + desnivelEm(g.x, g.z), g.z)
         molde.rotation.set(0, g.rotY, 0)
         molde.scale.set(g.escala, g.altura, g.escala)
         molde.updateMatrix()
@@ -271,7 +281,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       for (const fl of decor.flores) {
         if (n >= MAX_FLORES) break
         if (!paisagemNaturalVisivel(state, fl.x, fl.z)) continue
-        molde.position.set(fl.x, -0.34, fl.z)
+        molde.position.set(fl.x, -0.34 + desnivelEm(fl.x, fl.z), fl.z)
         molde.rotation.set(0, fl.rotY, 0)
         molde.scale.set(fl.escala, fl.escala, fl.escala)
         molde.updateMatrix()
@@ -291,7 +301,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       for (const p of decor.pedras) {
         if (n >= MAX_PEDRAS) break
         if (!paisagemNaturalVisivel(state, p.x, p.z)) continue
-        molde.position.set(p.x, -0.42 + p.escalaY * 0.35, p.z)
+        molde.position.set(p.x, -0.42 + p.escalaY * 0.35 + desnivelEm(p.x, p.z), p.z)
         molde.rotation.set(0.15, p.rotY, 0.1)
         molde.scale.set(p.escalaX, p.escalaY, p.escalaZ)
         molde.updateMatrix()
@@ -308,13 +318,13 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       for (const m of decor.margens) {
         if (!paisagemNaturalVisivel(state, m.x, m.z)) continue
         if (m.tipo === 'junco' && nj < MAX_MARGENS) {
-          molde.position.set(m.x, -0.25, m.z)
+          molde.position.set(m.x, -0.25 + desnivelEm(m.x, m.z), m.z)
           molde.rotation.set(0.08, m.rotY, 0)
           molde.scale.set(m.escala, m.escala, m.escala)
           molde.updateMatrix()
           juncosRef.current.setMatrixAt(nj++, molde.matrix)
         } else if (m.tipo === 'vitoria' && nv < MAX_MARGENS) {
-          molde.position.set(m.x, -0.36, m.z)
+          molde.position.set(m.x, -0.36 + desnivelDoApoio(campo, lagoas, m.x, m.z), m.z)
           molde.rotation.set(0, m.rotY, 0)
           molde.scale.set(m.escala, 1, m.escala)
           molde.updateMatrix()
@@ -326,7 +336,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       vitoriasRef.current.count = nv
       vitoriasRef.current.instanceMatrix.needsUpdate = true
     }
-  }, [decor, noSubsolo, state, state.versaoChao, state.semCorpo, cat.coresFlores, molde])
+  }, [decor, noSubsolo, state, state.versaoChao, state.semCorpo, cat.coresFlores, campo, lagoas, molde])
 
   if (noSubsolo) return null
 

@@ -239,7 +239,6 @@ export interface PartidaState {
   obras: Obra[]
   unidades: Unidade[]
   nextId: number
-  gateArchApplied: boolean
   ruaPercorrida: boolean
   derrota: boolean
   credito: number
@@ -620,7 +619,6 @@ export function createPartida(mapaI = 0, mapaJ = 0, semCorpo = false): PartidaSt
     obras: [],
     unidades,
     nextId: unidades.length + 1,
-    gateArchApplied: false,
     ruaPercorrida: false,
     derrota: false,
     credito: PARTIDA.creditoInicial,
@@ -3702,25 +3700,7 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
     state.subsoloCentro,
     state.blocosMapa,
   )
-  let gateArchApplied = state.gateArchApplied
   let army = state.heroi.army
-  if (
-    !gateArchApplied &&
-    state.heroi.y >= -0.5 &&
-    cruzaCaixa(
-      state.heroi.x,
-      state.heroi.z,
-      x1,
-      z1,
-      PARTIDA.arch.minX,
-      PARTIDA.arch.maxX,
-      PARTIDA.arch.minZ,
-      PARTIDA.arch.maxZ,
-    )
-  ) {
-    army = clampVidaPartida(applyGateWithRemainder(army, PLUS_TEN).nextArmy)
-    gateArchApplied = true
-  }
   let carregandoKg = state.heroi.carregandoKg
   let pedraNoChao = state.pedraNoChao
   const pertoDaPedra = state.heroi.y >= -0.5 && Math.hypot(pos.x - PARTIDA.pedraX, pos.z - PARTIDA.pedraZ) < 1.3
@@ -3761,7 +3741,6 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
   )
   return {
     ...state,
-    gateArchApplied,
     ruaPercorrida,
     lingotes,
     resto,

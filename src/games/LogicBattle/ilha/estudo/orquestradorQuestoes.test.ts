@@ -8,6 +8,7 @@ import { semente } from '../geradoresBase'
 import { protegerCifraoMoeda, protegerMarkdownInline, type GrauDificuldade } from './contratosEstudo'
 import { validarDesafioZeroSpoiler } from './validadorDicas'
 import { ENEM_MATEMATICA_LOTE1 } from './bancos/enemMatematicaLote1'
+import { configurarAdaptadorAcervo, obterAdaptadorAcervo } from './carregadorAcervo'
 import { classificarFigurasParaApresentacao } from './figurasEnem'
 import { GERADORES_ENEM_PARAMETRICOS } from './geradoresEnem'
 import {
@@ -293,4 +294,115 @@ export async function run(): Promise<void> {
   assert(classificadasAlt.enunciado.length === 1, `esperava 1 figura de enunciado (sem tabela duplicada), veio ${classificadasAlt.enunciado.length}`)
   assert(classificadasAlt.modoAlternativaVisual === true, 'esperava modoAlternativaVisual ativo com 3 letras')
   assert(classificadasAlt.alternativasPorLetra.B?.src === '/altB.png', 'faltou alternativa visual B')
+
+  // 14. Seleção em 2 fases via indice.json busca APENAS 1 chunk de prova e faz fallback gracioso se índice/chunk falhar
+  const adaptadorAnterior = obterAdaptadorAcervo()
+  try {
+    const amostraA = ENEM_MATEMATICA_LOTE1.find((d) => d.grau === 5)
+    const amostraB = ENEM_MATEMATICA_LOTE1.find((d) => d.grau === 5 && d.id !== amostraA?.id)
+    assert(amostraA !== undefined && amostraB !== undefined, 'precisava de 2 amostras grau 5 do ENEM')
+
+    const chamadas: string[] = []
+    configurarAdaptadorAcervo(async (url) => {
+      chamadas.push(url)
+      if (url === '/questoes/indice.json') {
+        return {
+          versao: 1,
+          geradoEmIso: '2026-11-24T00:00:00.000Z',
+          totaisPorOrigem: { enem_oficial: 2, senai_oficial: 0, etec_oficial: 0 },
+          entradas: [
+            {
+              id: amostraA.id,
+              assinatura: amostraA.assinatura,
+              origem: 'enem_oficial',
+              grau: 5,
+              temaId: amostraA.temaId,
+              arquetipoOuItemId: amostraA.arquetipoOuItemId,
+              ano: amostraA.referenciaOficial?.ano ?? 2022,
+              questao: amostraA.referenciaOficial?.questao ?? 136,
+              provaCodigo: 'prova-a',
+              chunkUrl: '/questoes/enem/prova-a.json',
+              temFigura: false,
+              nivelCuradoria: 'completa',
+            },
+            {
+              id: amostraB.id,
+              assinatura: amostraB.assinatura,
+              origem: 'enem_oficial',
+              grau: 5,
+              temaId: amostraB.temaId,
+              arquetipoOuItemId: amostraB.arquetipoOuItemId,
+              ano: amostraB.referenciaOficial?.ano ?? 2023,
+              questao: amostraB.referenciaOficial?.questao ?? 137,
+              provaCodigo: 'prova-b',
+              chunkUrl: '/questoes/enem/prova-b.json',
+              temFigura: false,
+              nivelCuradoria: 'completa',
+            },
+          ],
+        }
+      }
+      if (url === '/questoes/enem/prova-a.json') {
+        return { versao: 1, origem: 'enem_oficial', provaCodigo: 'prova-a', itens: [amostraA] }
+      }
+      if (url === '/questoes/enem/prova-b.json') {
+        return { versao: 1, origem: 'enem_oficial', provaCodigo: 'prova-b', itens: [amostraB] }
+      }
+      throw new Error(`URL inesperada: ${url}`)
+    })
+
+    const escolhida = await selecionarProximoDesafio({
+      grau: 5,
+      estadoEstudo: estadoEstudoVazio(),
+      preferirOrigem: 'enem_oficial',
+      seed: 31,
+    })
+    assert(chamadas.length === 2, `esperava exatamente 2 chamadas (indice + 1 chunk), houve ${chamadas.length}: ${chamadas.join(', ')}`)
+    assert(chamadas[0] === '/questoes/indice.json', `1a chamada deveria ser indice.json, foi ${chamadas[0]}`)
+    assert(escolhida.id === amostraA.id || escolhida.id === amostraB.id, 'questão escolhida inesperada')
+
+    // Falha no índice cai para motor_parametrico sem erro
+    configurarAdaptadorAcervo(async () => {
+      throw new Error('offline no indice')
+    })
+    const fbIndice = await selecionarProximoDesafio({ grau: 6, estadoEstudo: estadoEstudoVazio(), seed: 77 })
+    assert(fbIndice.origem === 'motor_parametrico' && fbIndice.grau === 6, 'falha no índice devia cair no motor')
+
+    // Falha no chunk da prova também cai para motor_parametrico sem erro
+    configurarAdaptadorAcervo(async (url) => {
+      if (url === '/questoes/indice.json') {
+        return {
+          versao: 1,
+          geradoEmIso: '2026-11-24T00:00:00.000Z',
+          totaisPorOrigem: { enem_oficial: 1, senai_oficial: 0, etec_oficial: 0 },
+          entradas: [
+            {
+              id: amostraA.id,
+              assinatura: amostraA.assinatura,
+              origem: 'enem_oficial',
+              grau: 7,
+              temaId: amostraA.temaId,
+              arquetipoOuItemId: amostraA.arquetipoOuItemId,
+              ano: 2022,
+              questao: 136,
+              provaCodigo: 'quebrada',
+              chunkUrl: '/questoes/enem/quebrada.json',
+              temFigura: false,
+              nivelCuradoria: 'completa',
+            },
+          ],
+        }
+      }
+      throw new Error('chunk indisponivel')
+    })
+    const fbChunk = await selecionarProximoDesafio({
+      grau: 7,
+      estadoEstudo: estadoEstudoVazio(),
+      preferirOrigem: 'enem_oficial',
+      seed: 88,
+    })
+    assert(fbChunk.origem === 'motor_parametrico' && fbChunk.grau === 7, 'falha no chunk devia cair no motor')
+  } finally {
+    configurarAdaptadorAcervo(adaptadorAnterior)
+  }
 }

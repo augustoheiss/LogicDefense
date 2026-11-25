@@ -11,6 +11,8 @@ import {
 import type { LagoaRasa } from '../biomaRecursos'
 import { chaoRevelado, cobertoAgora, obraEmConstrucao, type Obra, type PartidaState } from '../partidaSim'
 import { semRaycast } from '../raycastCena'
+import { desnivelDaObraNoChao } from '../relevo/alturaVisual'
+import type { CampoRelevo } from '../relevo/campoRelevo'
 import {
   calcularCurvaConstrucao,
   classificarSuporteObra,
@@ -125,7 +127,9 @@ const FundacaoObraItem: React.FC<{
   texturasBlocos: PacoteTexturasBlocos | null
   sombrasAtivas: boolean
   geos: GeosFundacaoCompartilhadas
-}> = ({ obra, suporte, pegada, texturasBlocos, sombrasAtivas, geos }) => {
+  /** O desnível do relevo no CENTRO da pegada (Task 4). 0 sem campo: a fundação é a de hoje (I1). Entra UMA vez, no grupo pai: os filhos usam `Y_SOLO_VISUAL + k` relativos a ele. */
+  desnivel?: number
+}> = ({ obra, suporte, pegada, texturasBlocos, sombrasAtivas, geos, desnivel = 0 }) => {
   const marolaRef = useRef<Mesh>(null)
   const baseGrupoRef = useRef<Group>(null)
 
@@ -159,7 +163,7 @@ const FundacaoObraItem: React.FC<{
     const texMadeira = texturasBlocos?.madeiraPier
 
     return (
-      <group position={[pegada.cx, 0, pegada.cz]}>
+      <group position={[pegada.cx, desnivel, pegada.cz]}>
         {/* Marola na superfície da água ao redor das palafitas */}
         <mesh
           ref={marolaRef}
@@ -264,7 +268,7 @@ const FundacaoObraItem: React.FC<{
   const profCanteiro = dim[2] + 1.48
 
   return (
-    <group position={[pegada.cx, 0, pegada.cz]}>
+    <group position={[pegada.cx, desnivel, pegada.cz]}>
       {/* Chão alterado sob a obra (terraplanagem / calçamento com textura própria) */}
       <mesh position={[0, Y_SOLO_VISUAL + 0.014, 0]} receiveShadow={sombrasAtivas} raycast={semRaycast}>
         <boxGeometry args={[largCanteiro, 0.032, profCanteiro]} />
@@ -362,7 +366,9 @@ export const FundacoesObrasCena: React.FC<{
   lagoas: readonly LagoaRasa[]
   texturasBlocos?: PacoteTexturasBlocos | null
   sombrasAtivas?: boolean
-}> = ({ state, lagoas, texturasBlocos = null, sombrasAtivas = false }) => {
+  /** O campo de relevo do quadrado (Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) cada fundação fica no plano de hoje (I1). */
+  campo?: CampoRelevo
+}> = ({ state, lagoas, texturasBlocos = null, sombrasAtivas = false, campo }) => {
   const geos = useMemo<GeosFundacaoCompartilhadas>(
     () => ({
       estaca: new CylinderGeometry(0.11, 0.13, 0.58, 8),
@@ -407,6 +413,7 @@ export const FundacoesObrasCena: React.FC<{
             texturasBlocos={texturasBlocos}
             sombrasAtivas={sombrasAtivas}
             geos={geos}
+            desnivel={desnivelDaObraNoChao(obra, campo, lagoas)}
           />
         )
       })}

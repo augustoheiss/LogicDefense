@@ -138,6 +138,11 @@ try {
   diagnosticoEstudoTest.run()
   const geradoresEnemTest = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/geradoresEnem.test.ts')
   geradoresEnemTest.run()
+  const carregadorAcervo = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/carregadorAcervo.ts')
+  carregadorAcervo.configurarAdaptadorAcervo(async (urlRelativa) => {
+    const rel = urlRelativa.replace(/^\/+/, '')
+    return JSON.parse(readFileSync(path.join(root, 'public', rel), 'utf8'))
+  })
   const orquestradorQuestoesTest = await server.ssrLoadModule('/src/games/LogicBattle/ilha/estudo/orquestradorQuestoes.test.ts')
   await orquestradorQuestoesTest.run()
   const contratoDoHud = await server.ssrLoadModule('/src/games/LogicBattle/ilha/contratoDoHud.test.ts')
