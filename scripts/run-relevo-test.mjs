@@ -1,0 +1,69 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { createServer } from 'vite'
+
+// Runner PRÓPRIO do relevo e do visual AoE (24/11/2026). Não edita o `run-ilha-rua-test.mjs`, que a outra frente (estudo/ENEM) altera.
+// Cada módulo de teste exporta `run()` (síncrono ou assíncrono) e é carregado pelo Vite em modo SSR, como os outros runners da ilha.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const server = await createServer({
+  root,
+  server: { middlewareMode: true, hmr: false },
+  appType: 'custom',
+  logLevel: 'error',
+})
+
+const MODULOS = [
+  '/src/games/LogicBattle/ilha/relevo/relevo.test.ts',
+  '/src/games/LogicBattle/ilha/visual/nevoaDeGuerra.test.ts',
+  '/src/games/LogicBattle/ilha/visual/decisaoPosProcessamento.test.ts',
+  '/src/games/LogicBattle/ilha/visual/ceuEIbl.test.ts',
+  '/src/games/LogicBattle/ilha/visual/flagstone.test.ts',
+  '/src/games/LogicBattle/ilha/visual/cicloDePacote.test.ts',
+  '/src/games/LogicBattle/ilha/visual/tarefaFatiada.test.ts',
+  '/src/games/LogicBattle/ilha/visual/campoDoSolo.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/relevoVisual.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/relevoNoEstado.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/geometriaDoTerreno.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/misturaDoTerreno.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/materialTerrenoRelevo.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/terrenoRelevoCena.test.ts',
+  '/src/games/LogicBattle/ilha/visual/glslDaNevoa.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/nevoaNoTerreno.test.ts',
+  '/src/games/LogicBattle/ilha/sandboxViva.test.ts',
+  '/src/games/LogicBattle/ilha/visual/biomaVisual.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/propsNoTerreno.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/obrasNoTerreno.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/apoioNaAgua.test.ts',
+]
+
+// Os contratos de TEXTO (como `contratoDoHud`) recebem o fonte da cena e das políticas: o desenho vive no React e o runner roda no Node, sem GPU.
+const cena = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/IlhaRua.tsx'), 'utf8')
+const politicas = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/partidaPolicies.ts'), 'utf8')
+const componenteNevoa = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/NevoaPintada.tsx'), 'utf8')
+const atmosfera = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/AtmosferaBioma.tsx'), 'utf8')
+const cenaBioma = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/CenaBiomaVisual.tsx'), 'utf8')
+const texturas = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/texturasPbrProcedural.ts'), 'utf8')
+const terreno = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TerrenoBiomaCena.tsx'), 'utf8')
+const propsBioma = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/PropsBiomaInstanced.tsx'), 'utf8')
+const fundacaoObra = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/FundacaoObraCena.tsx'), 'utf8')
+const sandboxCena = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/MundoSandboxCena.tsx'), 'utf8')
+const obrasCena = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/ObrasArquiteturaCena.tsx'), 'utf8')
+const terrenoRelevo = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TerrenoRelevoCena.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TerrenoRelevoCena.tsx'), 'utf8') : ''
+
+// `RELEVO_SO=<trecho do nome>` roda SÓ os módulos que contêm o trecho (ciclo rápido de mutação: o `relevo.test.ts` sozinho leva ~100 s). Uma rodada parcial imprime OUTRA mensagem: só
+// `relevo: ok` vale como portão.
+const filtro = process.env.RELEVO_SO
+const escolhidos = filtro ? MODULOS.filter((m) => m.includes(filtro)) : MODULOS
+if (escolhidos.length === 0) throw new Error(`RELEVO_SO=${filtro} não casa com nenhum módulo`)
+
+try {
+  for (const modulo of escolhidos) {
+    const mod = await server.ssrLoadModule(modulo)
+    // cada módulo recebe só o que usa, por POSIÇÃO: `ceuEIbl.test.ts` lê só a atmosfera (1º argumento); os demais seguem a ordem de antes
+    await (modulo.endsWith('ceuEIbl.test.ts') ? mod.run(atmosfera, cenaBioma) : modulo.endsWith('flagstone.test.ts') ? mod.run(texturas, terreno, componenteNevoa, cenaBioma) : modulo.endsWith('cicloDePacote.test.ts') ? mod.run(cenaBioma) : modulo.endsWith('tarefaFatiada.test.ts') ? mod.run() : modulo.endsWith('campoDoSolo.test.ts') ? mod.run(texturas) : modulo.endsWith('terrenoRelevoCena.test.ts') ? mod.run(terrenoRelevo, cenaBioma, cena, componenteNevoa) : modulo.endsWith('propsNoTerreno.test.ts') ? mod.run(propsBioma, fundacaoObra, sandboxCena) : modulo.endsWith('obrasNoTerreno.test.ts') ? mod.run(obrasCena) : modulo.endsWith('relevoVisual.test.ts') || modulo.endsWith('relevoNoEstado.test.ts') || modulo.endsWith('geometriaDoTerreno.test.ts') || modulo.endsWith('misturaDoTerreno.test.ts') || modulo.endsWith('materialTerrenoRelevo.test.ts') || modulo.endsWith('glslDaNevoa.test.ts') || modulo.endsWith('nevoaNoTerreno.test.ts') || modulo.endsWith('sandboxViva.test.ts') || modulo.endsWith('biomaVisual.test.ts') ? mod.run() : mod.run(cena, politicas, componenteNevoa, atmosfera))
+  }
+  console.log(filtro ? `relevo (parcial: ${filtro}, ${escolhidos.length} de ${MODULOS.length} módulos): ok` : 'relevo: ok')
+} finally {
+  await server.close()
+}

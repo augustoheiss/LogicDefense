@@ -69,13 +69,25 @@ export function corDoChaoBioma(bioma: BiomaId): string {
   return '#7f9b72'
 }
 
-function livreDoCorredorCentral(x: number, z: number, i = 0, j = 0): boolean {
-  // Preserva a rua central z in [-6..48], x in [-6..6], a pedra (-8, 10), eixo z=0 em (0,0) e os cantos das bases inimigas
-  if (Math.abs(x) < 7.5 && z > -8 && z < 49) return false
-  if (i === 0 && j === 0 && Math.abs(z) < 4.5) return false
-  if (Math.hypot(x - -8, z - 10) < 4.5) return false
+/**
+ * O raio (m) em volta do ponto de nascimento (0, 0) onde nenhum recurso nasce. SEM A RUA (25/11/2026, decisão do usuário: «essa rua não era pra existir… tem que ser diferente cada minimapa»): a avenida
+ * de 15 × 57 m e o disco da praça (8,5 m) deixaram de ser reservados; o que sobra é o CLARO de nascimento, `RELEVO_REGRAS.claroDeNascimento` (3,5 m, plano) mais o raio de colisão de uma árvore ou
+ * rocha de ouro (0,55 + corpo 0,35 = 0,90 m) e 1,6 m de folga: 6 m. DECISÃO MINHA (o usuário veta). MEDIDO em 25/11: antes, o recurso mais perto do centro em 169 quadrados ficava a 8,54 m.
+ */
+export const RAIO_DO_NASCIMENTO_LIVRE = 6
+
+/** A pedra de 35 kg (`PARTIDA.pedraX/Z`): o raio em volta dela onde nenhum recurso nasce. A pedra FICA (decisão do usuário); `biomaRecursos` não importa `partidaPolicies`, então os números moram aqui. */
+const PEDRA_X = -8
+const PEDRA_Z = 10
+const RAIO_DA_PEDRA_LIVRE = 4.5
+/** O maior raio que uma lagoa gerada tem (`rx = 4,5 + (h1 % 3)`): o teste confere este número contra o gerador real. */
+const RAIO_MAIOR_DA_LAGOA = 6.5
+
+/** O ponto (x, z) pode receber um recurso? Reservados: o claro de nascimento, a pedra e o canto da base inimiga. A AVENIDA da rua (|x| < 7,5 e −8 < z < 49) NÃO é mais reservada. */
+function livreDoCorredorCentral(x: number, z: number): boolean {
+  if (Math.hypot(x - PEDRA_X, z - PEDRA_Z) < RAIO_DA_PEDRA_LIVRE) return false
   if (Math.abs(x) > 36 && Math.abs(z) > 36) return false
-  if (Math.hypot(x, z) < 8.5) return false
+  if (Math.hypot(x, z) < RAIO_DO_NASCIMENTO_LIVRE) return false
   return true
 }
 
@@ -127,7 +139,9 @@ export function gerarPaisagemBioma(
     const h2 = hashInt(i * 19 - k, j * 29 + k, 0x33cc99)
     const lx = i === 0 && j === 0 ? 20 : ((h1 % 68) - 34)
     const lz = i === 0 && j === 0 ? -16 : ((h2 % 68) - 34)
-    if (Math.abs(lx) < 10 && lz > -10 && lz < 48) continue
+    // SEM A AVENIDA (25/11): uma lagoa nasce onde a rua ficava. O que ela NÃO pode cobrir é o nascimento do herói nem a pedra. O raio maior de uma lagoa é `rx = 4,5 + (h1 % 3)` ≤ 6,5 m, então o
+    // centro fica a (6,5 + folga 2) = 8,5 m do nascimento e a (8,5 + o raio livre da pedra) dela.
+    if (Math.hypot(lx, lz) < RAIO_MAIOR_DA_LAGOA + 2 || Math.hypot(lx - PEDRA_X, lz - PEDRA_Z) < RAIO_MAIOR_DA_LAGOA + 2 + RAIO_DA_PEDRA_LIVRE) continue
     lagoas.push({
       x: lx,
       z: lz,
@@ -142,7 +156,7 @@ export function gerarPaisagemBioma(
     tentativas += 1
     const x = ((h % 92) - 46)
     const z = (((h >>> 8) % 92) - 46)
-    if (!livreDoCorredorCentral(x, z, i, j)) continue
+    if (!livreDoCorredorCentral(x, z)) continue
     if (lagoas.some((l) => ((x - l.x) / (l.rx + 1)) ** 2 + ((z - l.z) / (l.rz + 1)) ** 2 <= 1)) continue
     if (recursos.some((r) => Math.hypot(r.x - x, r.z - z) < 3.4)) continue
     recursos.push({
@@ -163,7 +177,7 @@ export function gerarPaisagemBioma(
     tentativas += 1
     const x = ((h % 88) - 44)
     const z = (((h >>> 9) % 88) - 44)
-    if (!livreDoCorredorCentral(x, z, i, j)) continue
+    if (!livreDoCorredorCentral(x, z)) continue
     if (lagoas.some((l) => ((x - l.x) / (l.rx + 1)) ** 2 + ((z - l.z) / (l.rz + 1)) ** 2 <= 1)) continue
     if (recursos.some((r) => Math.hypot(r.x - x, r.z - z) < 3.6)) continue
     recursos.push({

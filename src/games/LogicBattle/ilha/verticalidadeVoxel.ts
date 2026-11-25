@@ -104,7 +104,7 @@ export function pisoUniversalEm(
 
   let piso = 0
 
-  // 1. Obstáculos clássicos da pista
+  // 1. Obstáculos fixos (hoje nenhum: a rua com as 3 caixas saiu em 25/11; a lista `OBSTACULOS` fica para as estruturas por bioma)
   for (const caixa of OBSTACULOS) {
     if (cobreCaixa(x, z, caixa.x, caixa.z, caixa.hx, caixa.hz)) {
       piso = Math.max(piso, caixa.altura)
@@ -116,16 +116,7 @@ export function pisoUniversalEm(
     piso = Math.max(piso, PARTIDA.pedraAltura)
   }
 
-  // 3. Arco matemático (+10) em (0, 20): degrau lateral nos pilares (1,25m) + viga superior (2,50m)
-  if (
-    (cobreCaixa(x, z, -1.4, 20, 0.35, 0.35) || cobreCaixa(x, z, 1.4, 20, 0.35, 0.35)) &&
-    pesY >= 1.05
-  ) {
-    piso = Math.max(piso, 1.25)
-  }
-  if (cobreCaixa(x, z, 0, 20, 1.6, 0.25) && pesY >= 2.25) {
-    piso = Math.max(piso, 2.5)
-  }
+  // (o arco matemático +10 em (0, 20), item 3 de antes, saiu em 25/11 junto com a rua; o arco CONSTRUÍVEL é uma obra e entra pelo item 5)
 
   // 4. Recursos naturais vivos na superfície (rochas de ouro = 0,95m; árvores: galho 1,30m e copa 2,40m)
   for (const rec of recursos) {

@@ -42,8 +42,14 @@ export function configVisualNuvem(
   }
 }
 
-export function alturaVisualRecurso(yBase: number): number {
-  return yBase < -0.9 ? yBase : Y_SOLO_VISUAL
+/**
+ * A altura (Y do mundo) onde um recurso natural pousa. `desnivel` é a altura do relevo NAQUELE ponto (`alturaVisualDoChao(campo, x, z) − Y_SOLO_VISUAL`), um NÚMERO já calculado por quem chama: esta
+ * função não importa o campo, porque este módulo é importado por `relevo/alturaVisual.ts` e um import de volta fecharia um ciclo. SEM o segundo argumento (0) é EXATAMENTE a de hoje (I1). Um recurso do
+ * SUBSOLO (`yBase < −0,9`, estrito) IGNORA o desnível: a mina tem um chão só (`alturaDeReferencia`) e o terreno do ponto não a move. Um desnível que não é finito não eleva.
+ */
+export function alturaVisualRecurso(yBase: number, desnivel = 0): number {
+  if (yBase < -0.9) return yBase
+  return Number.isFinite(desnivel) ? Y_SOLO_VISUAL + desnivel : Y_SOLO_VISUAL
 }
 
 export function alturaSapataMuralha(): { readonly altura: number; readonly centroY: number } {

@@ -15,6 +15,18 @@ export interface SpecQualidadeGrafica {
   readonly aguaAnimada: boolean
   readonly ceuProcedural: boolean
   readonly suportaPackExternoUltra: boolean
+  /** Pós-processamento HDR (`EffectComposer`): o Leve NUNCA liga (é a rede de segurança de máquina fraca). */
+  readonly posProcessamento: boolean
+  /** Bloom seletivo (só o que passa de 1,1 de luminância HDR brilha: lava, tocha, cristal, sol na água). */
+  readonly bloom: boolean
+  /** Oclusão ambiente de tela (GTAO), a meia resolução: só o Ultra. */
+  readonly ao: boolean
+  /** Amostras de MSAA do alvo do composer (0 = sem pós-processamento). */
+  readonly msaa: 0 | 4
+  /** Filtragem anisotrópica das texturas do chão (o chão rasante deixa de borrar). Limitada em runtime por `getMaxAnisotropy()`. */
+  readonly anisotropia: 2 | 8 | 16
+  /** Ambiente por IBL (`scene.environment`, do céu do bioma): o ouro, a água e a pedra úmida refletem o céu. O Leve NUNCA o liga. Independente do pós-processamento. */
+  readonly ambiente: boolean
 }
 
 export const SPEC_QUALIDADE: Readonly<Record<QualidadeEfetiva, SpecQualidadeGrafica>> = {
@@ -31,6 +43,12 @@ export const SPEC_QUALIDADE: Readonly<Record<QualidadeEfetiva, SpecQualidadeGraf
     aguaAnimada: false,
     ceuProcedural: false,
     suportaPackExternoUltra: false,
+    posProcessamento: false,
+    bloom: false,
+    ao: false,
+    msaa: 0,
+    anisotropia: 2,
+    ambiente: false,
   },
   bonito: {
     efetiva: 'bonito',
@@ -45,6 +63,12 @@ export const SPEC_QUALIDADE: Readonly<Record<QualidadeEfetiva, SpecQualidadeGraf
     aguaAnimada: true,
     ceuProcedural: true,
     suportaPackExternoUltra: false,
+    posProcessamento: true,
+    bloom: true,
+    ao: false,
+    msaa: 4,
+    anisotropia: 8,
+    ambiente: true,
   },
   ultra: {
     efetiva: 'ultra',
@@ -59,6 +83,12 @@ export const SPEC_QUALIDADE: Readonly<Record<QualidadeEfetiva, SpecQualidadeGraf
     aguaAnimada: true,
     ceuProcedural: true,
     suportaPackExternoUltra: true,
+    posProcessamento: true,
+    bloom: true,
+    ao: true,
+    msaa: 4,
+    anisotropia: 16,
+    ambiente: true,
   },
 }
 

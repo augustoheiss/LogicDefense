@@ -1,12 +1,14 @@
-import { Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Group, InstancedMesh, Mesh, MeshLambertMaterial } from 'three'
-import { ACESFilmicToneMapping, Object3D, Vector2, Vector3 } from 'three'
+import { Object3D, Vector2, Vector3 } from 'three'
 import { getRecentMathSignaturesSnapshot, hydrateSeenMathSignatures, resetSeenMathMemory } from './infiniteMathEngine'
 import { corDoChaoBioma, VOXEL_NV5 } from './biomaRecursos'
 import { nomeDoBioma } from './visual/biomaVisualCatalog'
 import { CenaBiomaVisual } from './visual/CenaBiomaVisual'
+import { TOM_DO_JOGO } from './visual/decisaoPosProcessamento'
+import { NevoaPintada } from './visual/NevoaPintada'
+import { PosProcessamento } from './visual/PosProcessamento'
 import {
   aplicarContextLost,
   carregarPresetQualidadeSalvo,
@@ -41,7 +43,6 @@ import {
   type ClasseHeroi,
   GrauConta,
   limiteHeroisPorNivelNucleo,
-  OBSTACULOS,
   custoUpgradeEra,
   Olhar,
   PARTIDA,
@@ -54,6 +55,8 @@ import {
   type TipoTropaAliada,
   type TipoUpgradeEra,
 } from './partidaPolicies'
+import type { CampoRelevo } from './relevo/campoRelevo'
+import { criarRelevoDoMundo, ORCAMENTO_POR_QUADRO_MS, type RelevoDoMundo } from './relevo/relevoNoEstado'
 import {
   abrirAltar,
   alcanceDoTiro,
@@ -419,6 +422,19 @@ function Cena(props: {
   onResetCameraImperio: () => void
 }) {
   const avatar = useRef<Group>(null)
+  // O RELEVO DO MUNDO (F2, 25/11/2026): gera o campo de cada quadrado em fatias de 4 ms por quadro e o entrega pronto (nunca pela metade). Mora AQUI (um `useRef` por sessão), NÃO num singleton de
+  // módulo, que vazaria entre partidas e testes. O campo termina DENTRO do `useFrame` (fora do ciclo do React): sem um ESTADO que mude, a `Cena` não re-renderizaria e a `CenaBiomaVisual` nunca
+  // receberia a prop nova (o relevo não apareceria, sem erro). Por isso o campo pronto vai para o estado, e só quando a IDENTIDADE dele muda (no máximo uma vez por quadrado novo).
+  const relevoDoMundo = useRef<RelevoDoMundo | null>(null)
+  if (!relevoDoMundo.current) relevoDoMundo.current = criarRelevoDoMundo()
+  const ultimoCampoDoRelevo = useRef<CampoRelevo | undefined>(undefined)
+  const [campoDoRelevo, setCampoDoRelevo] = useState<CampoRelevo | undefined>(undefined)
+  // A névoa pintada precisa saber se o relevo está COBRINDO o quadrado (chave ligada E campo pronto) para o plano recortar o que o chão com relevo cuida. É uma REF lida DENTRO do `useFrame` da
+  // `NevoaPintada` (como `sim`): um valor guardado no render ficaria velho quando `Cena` não re-renderiza. Nasce `false` = o plano de hoje, inteiro (I1).
+  const relevoCobreRef = useRef(false)
+  // O CANAL das uniforms da névoa até o chão com relevo (passo (a4)): a `NevoaPintada` PUBLICA aqui as suas `material.uniforms` (o mesmo objeto) e o `TerrenoRelevoCena` as copia a cada quadro. É REF
+  // porque a `CenaBiomaVisual` monta ANTES da `NevoaPintada`: no 1º compile a ref ainda é `null`, e o chão tem de saber viver assim (o estado seguro dele é «tudo coberto»).
+  const nevoaUniformsRef = useRef<Record<string, { value: unknown }> | null>(null)
   const flash = useRef<Mesh>(null)
   const voxeisGroupRef = useRef<Group>(null)
   const blocosMapaGroupRef = useRef<Group>(null)
@@ -877,6 +893,18 @@ function Cena(props: {
   useFrame((_, dt) => {
     const keys = props.keys.current
     const bruto = Math.min(dt, 0.05)
+    // RELEVO (F2): com a chave DESLIGADA nada daqui roda (o jogo de hoje, sem gastar CPU: o relevo gerado em segredo custaria 4 ms por quadro por ~19 quadros a cada quadrado novo e ninguém o veria).
+    // Pede o quadrado da cena (a fila é FIFO: o que o jogador pisa vem primeiro; `pedir` de um quadrado já conhecido não faz nada, então chamar todo quadro é barato) e roda uma fatia.
+    if (PARTIDA.relevo.visual && relevoDoMundo.current) {
+      relevoDoMundo.current.pedir(props.atlas.current.cenaI, props.atlas.current.cenaJ)
+      relevoDoMundo.current.passo(ORCAMENTO_POR_QUADRO_MS)
+      const campoAgora = relevoDoMundo.current.campoDe(props.atlas.current.cenaI, props.atlas.current.cenaJ)
+      relevoCobreRef.current = campoAgora !== undefined
+      if (campoAgora !== ultimoCampoDoRelevo.current) {
+        ultimoCampoDoRelevo.current = campoAgora
+        setCampoDoRelevo(campoAgora)
+      }
+    }
     props.atlas.current = escreverCena(props.atlas.current, props.sim.current)
     props.atlas.current = stepAtlas(
       props.atlas.current,
@@ -1051,7 +1079,8 @@ function Cena(props: {
     }
     if (nuvem.current) {
       const malhaNuvem = nuvem.current
-      if (!PARTIDA.nuvem) {
+      if (!PARTIDA.nuvem || PARTIDA.nevoaPintada) {
+        // com a névoa PINTADA ligada o chão já mostra o que se vê (`NevoaPintada`): as 12.769 colunas ficam escondidas e nem são calculadas
         malhaNuvem.visible = false
       } else if (
         marcaNuvem.current.versao !== state.versaoChao ||
@@ -1084,7 +1113,9 @@ function Cena(props: {
     if (pedra.current) {
       pedra.current.visible = state.pedraNoChao && chaoRevelado(state, PARTIDA.pedraX, PARTIDA.pedraZ)
     }
-    if (penumbra.current && PARTIDA.nuvem) {
+    if (penumbra.current && PARTIDA.nevoaPintada) {
+      penumbra.current.visible = false
+    } else if (penumbra.current && PARTIDA.nuvem) {
       const malhaPenumbra = penumbra.current
       const assinatura = assinaturaPenumbra(state)
       const marca = marcaPenumbra.current
@@ -1268,6 +1299,8 @@ function Cena(props: {
           state={props.sim.current}
           mapaI={props.atlas.current.cenaI}
           mapaJ={props.atlas.current.cenaJ}
+          campoDoRelevo={PARTIDA.relevo.visual ? campoDoRelevo : undefined}
+          nevoaUniforms={nevoaUniformsRef}
           focoX={focoSombraX}
           focoZ={focoSombraZ}
           spec={props.specQualidade}
@@ -1293,6 +1326,9 @@ function Cena(props: {
           </mesh>
         </>
       )}
+      {PARTIDA.nevoaPintada && PARTIDA.nuvem && (
+        <NevoaPintada sim={props.sim} relevoCobre={relevoCobreRef} uniformsPublicas={nevoaUniformsRef} />
+      )}
       <BordaDoMapa
         visivel={
           props.sim.current.olhar === 'imperio' &&
@@ -1311,6 +1347,7 @@ function Cena(props: {
         visualAprimorado={visualPbr}
         texturasBlocos={texturasBlocos}
         sombrasAtivas={visualPbr && props.specQualidade.sombrasAtivas}
+        campo={PARTIDA.relevo.visual ? campoDoRelevo : undefined}
         voxeisGroupRef={voxeisGroupRef}
         blocosMapaGroupRef={blocosMapaGroupRef}
         obrasLivresGroupRef={obrasLivresGroupRef}
@@ -1476,35 +1513,6 @@ function Cena(props: {
             </group>
           )
         })}
-      {OBSTACULOS.map((caixa) => (
-        <mesh
-          key={`${caixa.x}-${caixa.z}`}
-          position={[caixa.x, (caixa.altura + Y_SOLO_VISUAL) / 2, caixa.z]}
-          raycast={() => null}
-        >
-          <boxGeometry args={[caixa.hx * 2, caixa.altura - Y_SOLO_VISUAL, caixa.hz * 2]} />
-          <meshStandardMaterial color="#c47a3a" />
-        </mesh>
-      ))}
-      <group position={[0, 0, 20]}>
-        <mesh position={[-1.4, (2.4 + Y_SOLO_VISUAL) / 2, 0]} raycast={() => null}>
-          <boxGeometry args={[0.4, 2.4 - Y_SOLO_VISUAL, 0.4]} />
-          <meshStandardMaterial color="#1a8f5c" />
-        </mesh>
-        <mesh position={[1.4, (2.4 + Y_SOLO_VISUAL) / 2, 0]} raycast={() => null}>
-          <boxGeometry args={[0.4, 2.4 - Y_SOLO_VISUAL, 0.4]} />
-          <meshStandardMaterial color="#1a8f5c" />
-        </mesh>
-        <mesh position={[0, 2.3, 0]} raycast={() => null}>
-          <boxGeometry args={[3.2, 0.4, 0.4]} />
-          <meshStandardMaterial color="#3ecf8e" />
-        </mesh>
-        {(props.sim.current.semCorpo || props.sim.current.heroi.y >= -0.9) && cobertoAgora(props.sim.current, 0, 20) && (
-          <Html position={[0, 2.8, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none' }}>
-            <div className="ilha-plate">+10</div>
-          </Html>
-        )}
-      </group>
       {props.sim.current.obras.map((obra) => {
         const atualCena = props.sim.current
         const ruina = obra.hp <= 0
@@ -1524,6 +1532,8 @@ function Cena(props: {
             visivel={visivel}
             modoBloco={Boolean(props.modoBloco || props.modoLinhaRef.current || props.modoConsagrarRef.current)}
             sombrasAtivas={visualPbr && props.specQualidade.sombrasAtivas}
+            campo={PARTIDA.relevo.visual ? campoDoRelevo : undefined}
+            lagoas={props.sim.current.lagoas}
             onPointerDown={(event) => {
               // Esta malha roda antes do `pointerdown` do container, que atiraria (medido: R3F vem antes).
               if (pointerdownDaObra(obra.id, event.pointerId, event.nativeEvent.button)) event.stopPropagation()
@@ -3489,7 +3499,7 @@ export const IlhaRua: React.FC = () => {
         gl={{
           antialias: true,
           powerPreference: 'high-performance',
-          toneMapping: ACESFilmicToneMapping,
+          toneMapping: TOM_DO_JOGO,
           toneMappingExposure: 1.06,
         }}
         camera={{ position: [0, 6, -8], fov: 55 }}
@@ -3507,6 +3517,7 @@ export const IlhaRua: React.FC = () => {
           )
         }}
       >
+        <PosProcessamento spec={specQualidade} tom={TOM_DO_JOGO} contextoPerdido={estadoQualidade.contextLost} />
         <Cena
           sim={sim}
           specQualidade={specQualidade}

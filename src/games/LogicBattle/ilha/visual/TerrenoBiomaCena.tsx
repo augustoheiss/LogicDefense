@@ -9,8 +9,17 @@ import type { PacoteTexturasBioma } from './texturasPbrProcedural'
 export interface TerrenoBiomaCenaProps {
   readonly bioma: BiomaId
   readonly texturas: PacoteTexturasBioma | null
-  readonly mostrarEstrada: boolean
+  /**
+   * Decide se o marco de fronteira em `(x, z)` pode aparecer. AUSENTE = todos aparecem, como sempre (I1). Com a névoa pintada ligada a cena passa `chaoRevelado`: os marcos a ±54,8 m eram
+   * escondidos «de graça» pelas colunas cinza, e sem elas revelariam as bordas do quadrado antes de o jogador chegar lá (visto na foto de 24/11: dois pontos pretos no horizonte).
+   */
+  readonly marcoVisivel?: (x: number, z: number) => boolean
   readonly sombrasAtivas: boolean
+  /**
+   * Sem o PLANO principal do chão (F2, 25/11/2026): com o relevo ligado o chão é a malha do `TerrenoRelevoCena`, e os marcos de fronteira continuam vindo daqui. AUSENTE = `false` = o terreno de hoje (I1),
+   * com o plano em −0,45.
+   */
+  readonly semPlano?: boolean
   readonly onPointerDown: (event: ThreeEvent<PointerEvent>) => void
   readonly onClick: (event: ThreeEvent<MouseEvent>) => void
 }
@@ -29,8 +38,9 @@ const MARCOS_FRONTEIRA: readonly [number, number][] = [
 export const TerrenoBiomaCena: React.FC<TerrenoBiomaCenaProps> = ({
   bioma,
   texturas,
-  mostrarEstrada,
+  marcoVisivel,
   sombrasAtivas,
+  semPlano = false,
   onPointerDown,
   onClick,
 }) => {
@@ -41,6 +51,7 @@ export const TerrenoBiomaCena: React.FC<TerrenoBiomaCenaProps> = ({
   return (
     <group name="terreno-bioma">
       {/* Plano principal interativo (preserva exatamente y = -0.45 e eventos de clique/arrasto) */}
+      {!semPlano && (
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.45, 0]}
@@ -60,49 +71,10 @@ export const TerrenoBiomaCena: React.FC<TerrenoBiomaCenaProps> = ({
         />
       </mesh>
 
-      {/* Estrada antiga de pedra lavrada + meio-fio + praça inicial (apenas visual, semRaycast) */}
-      {mostrarEstrada && (
-        <group>
-          <mesh position={[0, -0.35, 20]} receiveShadow={sombrasAtivas} raycast={semRaycast}>
-            <boxGeometry args={[8, 0.2, 42]} />
-            <meshStandardMaterial
-              key={`est-${matKey}`}
-              color={texturas ? '#ffffff' : cat.estradaCorBase}
-              map={texturas?.estrada.map ?? null}
-              normalMap={texturas?.estrada.normalMap ?? null}
-              roughnessMap={texturas?.estrada.roughnessMap ?? null}
-              roughness={0.86}
-              metalness={0.06}
-            />
-          </mesh>
-          {/* Meio-fios laterais da estrada */}
-          {([-4.12, 4.12] as const).map((mx) => (
-            <mesh key={`guia-${mx}`} position={[mx, -0.31, 20]} receiveShadow={sombrasAtivas} raycast={semRaycast}>
-              <boxGeometry args={[0.28, 0.28, 42.2]} />
-              <meshStandardMaterial
-                key={`guia-mat-${mx}-${matKey}`}
-                color={cat.estradaCorRejunte}
-                normalMap={texturas?.rocha.normalMap ?? null}
-                roughness={0.88}
-              />
-            </mesh>
-          ))}
-          {/* Praça circular de nascimento em (0, 0) */}
-          <mesh position={[0, -0.42, 0]} receiveShadow={sombrasAtivas} raycast={semRaycast}>
-            <cylinderGeometry args={[3.4, 3.65, 0.08, 24]} />
-            <meshStandardMaterial
-              key={`praca-${matKey}`}
-              color={texturas ? '#e2e8f0' : cat.estradaCorBase}
-              map={texturas?.estrada.map ?? null}
-              normalMap={texturas?.estrada.normalMap ?? null}
-              roughness={0.84}
-            />
-          </mesh>
-        </group>
       )}
 
       {/* Marcos rúnicos discretos nas fronteiras do quadrado */}
-      {MARCOS_FRONTEIRA.map(([bx, bz], idx) => (
+      {MARCOS_FRONTEIRA.map(([bx, bz], idx) => [bx, bz, idx] as const).filter(([bx, bz]) => !marcoVisivel || marcoVisivel(bx, bz)).map(([bx, bz, idx]) => (
         <group key={`marco-${idx}`} position={[bx, -0.45, bz]}>
           <mesh position={[0, 0.45, 0]} castShadow={sombrasAtivas} raycast={semRaycast}>
             <boxGeometry args={[0.42, 0.9, 0.42]} />

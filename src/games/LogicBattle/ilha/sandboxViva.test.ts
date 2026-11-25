@@ -7,6 +7,7 @@ import {
   gerarPaisagemBioma,
   gerarVeiosSubsolo,
   passoRecursosNaturais,
+  RAIO_DO_NASCIMENTO_LIVRE,
   SUBSOLO_CFG,
   VOXEL_NV5,
 } from './biomaRecursos'
@@ -33,11 +34,56 @@ export function run(): void {
   const m00 = gerarPaisagemBioma(0, 0)
   assert(m00.bioma === 'clareira', 'quadrado inicial é clareira')
   assert(m00.recursos.some((r) => r.tipo === 'arvore') && m00.recursos.some((r) => r.tipo === 'ouro'), 'há árvores e ouro no mapa')
-  assert(
-    m00.recursos.every((r) => !(Math.abs(r.x) < 7.5 && r.z > -8 && r.z < 49)),
-    'corredor central da pista nasce livre de árvores e rochas',
-  )
-
+  // SEM A AVENIDA (25/11, decisão do usuário: «essa rua não era pra existir… tem que ser diferente cada minimapa»). O corredor de 15 × 57 m (|x| < 7,5 e −8 < z < 49) NÃO é mais reservado:
+  // medido nos 169 quadrados (−6…6) com o gerador real, ele estava vazio em TODOS. Fica reservado só o que ainda existe no jogo: o CLARO de nascimento, a PEDRA de 35 kg e o canto da base.
+  const avenidaAntiga = (x: number, z: number): boolean => Math.abs(x) < 7.5 && z > -8 && z < 49
+  let recursosNaAvenidaAntiga = 0
+  let quadradosComRecursoNaAvenida = 0
+  let menorDistanciaAoNascimento = Number.POSITIVE_INFINITY
+  let menorDistanciaAPedra = Number.POSITIVE_INFINITY
+  let recursosNoCantoDaBase = 0
+  let recursosSoUmEixoFora = 0
+  let menorBordaDeLagoaAoNascimento = Number.POSITIVE_INFINITY
+  let menorBordaDeLagoaAPedra = Number.POSITIVE_INFINITY
+  let lagoasNaAvenidaAntiga = 0
+  let maiorRaioDeLagoa = 0
+  let totalDeLagoas = 0
+  for (let qi = -6; qi <= 6; qi += 1) {
+    for (let qj = -6; qj <= 6; qj += 1) {
+      const pais = gerarPaisagemBioma(qi, qj)
+      const naAvenida = pais.recursos.filter((r) => avenidaAntiga(r.x, r.z)).length
+      recursosNaAvenidaAntiga += naAvenida
+      if (naAvenida > 0) quadradosComRecursoNaAvenida += 1
+      for (const r of pais.recursos) {
+        menorDistanciaAoNascimento = Math.min(menorDistanciaAoNascimento, Math.hypot(r.x, r.z))
+        menorDistanciaAPedra = Math.min(menorDistanciaAPedra, Math.hypot(r.x - -8, r.z - 10))
+        if (Math.abs(r.x) > 36 && Math.abs(r.z) > 36) recursosNoCantoDaBase += 1
+        if ((Math.abs(r.x) > 36) !== (Math.abs(r.z) > 36)) recursosSoUmEixoFora += 1
+      }
+      for (const l of pais.lagoas) {
+        totalDeLagoas += 1
+        maiorRaioDeLagoa = Math.max(maiorRaioDeLagoa, l.rx, l.rz)
+        // a BORDA mais próxima da lagoa (centro menos o raio MAIOR) ao nascimento e à pedra: é o que cobre o herói
+        menorBordaDeLagoaAoNascimento = Math.min(menorBordaDeLagoaAoNascimento, Math.hypot(l.x, l.z) - Math.max(l.rx, l.rz))
+        menorBordaDeLagoaAPedra = Math.min(menorBordaDeLagoaAPedra, Math.hypot(l.x - -8, l.z - 10) - Math.max(l.rx, l.rz))
+        if (Math.abs(l.x) < 10 && l.z > -10 && l.z < 48) lagoasNaAvenidaAntiga += 1
+      }    }
+  }
+  assert(recursosNaAvenidaAntiga > 50 && quadradosComRecursoNaAvenida > 40, `sem a avenida, árvores e ouro NASCEM onde a rua ficava (${recursosNaAvenidaAntiga} recursos em ${quadradosComRecursoNaAvenida} dos 169 quadrados; antes: 0 em todos)`)
+  // O RAIO é ANCORADO em número medido (6,000 m), não comparado com a própria constante (o oráculo auto-referente deixava P2, P3 e P4 vivos): o recurso mais perto do nascimento nos 169 quadrados
+  // chega EXATAMENTE ao limite. Um raio maior (8,5, a praça de antes) o afastaria; um menor (0 ou 3) o deixaria entrar sobre o claro plano de 3,5 m do relevo.
+  assert(RAIO_DO_NASCIMENTO_LIVRE === 6, 'o raio livre do nascimento é 6 m (o claro plano de 3,5 m + o raio de colisão de um recurso de 0,9 m + 1,6 m de folga)')
+  assert(menorDistanciaAoNascimento >= 6 - 1e-9 && menorDistanciaAoNascimento < 6.2, `o recurso mais perto do nascimento fica a ~6,00 m (medido em 25/11: 6,000 m; veio ${menorDistanciaAoNascimento.toFixed(3)}): menos que isso invade o claro plano; mais, a rua (8,5 m) voltou`)
+  assert(menorDistanciaAPedra >= 4.5, `nenhum recurso nasce a menos de 4,5 m da pedra de 35 kg em (−8, 10) (o menor está a ${menorDistanciaAPedra.toFixed(2)} m)`)
+  assert(recursosNoCantoDaBase === 0, `nenhum recurso nasce nos cantos da base inimiga (|x| > 36 e |z| > 36): ${recursosNoCantoDaBase}`)
+  // P9 (`||` em vez de `&&` no canto): a faixa em que só UM dos eixos passa de 36 m tem recursos de verdade (783 medidos); se o canto virasse `||` ela esvaziaria e o quadrado perderia a borda inteira
+  assert(recursosSoUmEixoFora > 500, `a borda do quadrado (só um eixo além de 36 m) tem recursos (${recursosSoUmEixoFora}; medido em 25/11: 783): o descarte é só o CANTO (os dois eixos)`)
+  // A LAGOA (P10 a P13): sem a avenida ela nasce onde a rua ficava, mas NÃO pode cobrir o nascimento do herói nem a pedra. Medido: 169 lagoas, raio maior 6,5 m, centro mais perto do nascimento 8,94 m
+  // e da pedra 13,04 m. A BORDA mais próxima (centro − raio maior) fica a ≥ 2 m do nascimento e ≥ 8,5 m da pedra: abaixo disso o herói nasceria na água.
+  assert(maiorRaioDeLagoa === 6.5, `o maior raio de lagoa é 6,5 m (rx = 4,5 + h % 3): é o número que a folga do nascimento usa (veio ${maiorRaioDeLagoa})`)
+  assert(menorBordaDeLagoaAoNascimento >= 2, `nenhuma lagoa cobre o nascimento: a borda mais próxima fica a ${menorBordaDeLagoaAoNascimento.toFixed(2)} m dele (mínimo 2 m)`)
+  assert(menorBordaDeLagoaAPedra >= 4.5, `nenhuma lagoa cobre a pedra: a borda mais próxima fica a ${menorBordaDeLagoaAPedra.toFixed(2)} m dela (mínimo 4,5 m, o raio livre da pedra)`)
+  assert(lagoasNaAvenidaAntiga >= 5, `sem a avenida, lagoas NASCEM onde a rua ficava (${lagoasNaAvenidaAntiga} lagoas; medido em 25/11: 10; antes: 0)`)
   const lagoa = { x: 20, z: -16, rx: 5, rz: 4 }
   assert(emAguaRasa([lagoa], 20, -16, 0), 'superfície dentro da elipse está na água rasa')
   assert(!emAguaRasa([lagoa], 20, -16, 0.9), 'pulo acima da lâmina sai da água rasa')

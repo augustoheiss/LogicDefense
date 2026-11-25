@@ -11,6 +11,10 @@ export interface BiomaVisualResource {
   readonly corSol: string
   readonly intensidadeSol: number
   readonly posicaoSol: readonly [number, number, number]
+  /** Elevação do sol em graus acima do horizonte: a hora do dia deste bioma (fim de tarde: sombra mais longa, que dá volume ao relevo). 28°–40°: abaixo disso o chão plano escurece demais (medido: 22° tira 14% da luz da grama). O azimute vem de `posicaoSol`. */
+  readonly elevacaoSolGraus: number
+  /** Quanto o céu do bioma ilumina como reflexo (IBL, `scene.environment`): 0,4–1. Só o Bonito e o Ultra o usam. */
+  readonly intensidadeAmbiente: number
   readonly luzCeu: string
   readonly luzChao: string
   readonly intensidadeHemisf: number
@@ -53,6 +57,8 @@ export const BIOMA_VISUAL_CATALOG: Readonly<Record<BiomaId, BiomaVisualResource>
     corSol: '#fff5d6',
     intensidadeSol: 1.55,
     posicaoSol: [26, 38, 18],
+    elevacaoSolGraus: 36,
+    intensidadeAmbiente: 0.55,
     luzCeu: '#e0f2fe',
     luzChao: '#4d6b41',
     intensidadeHemisf: 0.72,
@@ -93,6 +99,8 @@ export const BIOMA_VISUAL_CATALOG: Readonly<Record<BiomaId, BiomaVisualResource>
     corSol: '#d9f99d',
     intensidadeSol: 1.32,
     posicaoSol: [20, 34, 24],
+    elevacaoSolGraus: 34,
+    intensidadeAmbiente: 0.5,
     luzCeu: '#bbf7d0',
     luzChao: '#1f3d2b',
     intensidadeHemisf: 0.68,
@@ -133,6 +141,8 @@ export const BIOMA_VISUAL_CATALOG: Readonly<Record<BiomaId, BiomaVisualResource>
     corSol: '#fde68a',
     intensidadeSol: 1.68,
     posicaoSol: [-32, 26, 22],
+    elevacaoSolGraus: 30,
+    intensidadeAmbiente: 0.7,
     luzCeu: '#ffedd5',
     luzChao: '#61482c',
     intensidadeHemisf: 0.66,
@@ -173,6 +183,8 @@ export const BIOMA_VISUAL_CATALOG: Readonly<Record<BiomaId, BiomaVisualResource>
     corSol: '#ffffff',
     intensidadeSol: 1.48,
     posicaoSol: [22, 42, -16],
+    elevacaoSolGraus: 38,
+    intensidadeAmbiente: 0.7,
     luzCeu: '#e0f2fe',
     luzChao: '#3d6952',
     intensidadeHemisf: 0.78,
@@ -213,6 +225,8 @@ export const BIOMA_VISUAL_CATALOG: Readonly<Record<BiomaId, BiomaVisualResource>
     corSol: '#e0f2fe',
     intensidadeSol: 1.45,
     posicaoSol: [28, 28, -24],
+    elevacaoSolGraus: 32,
+    intensidadeAmbiente: 0.65,
     luzCeu: '#dbeafe',
     luzChao: '#64748b',
     intensidadeHemisf: 0.8,
@@ -253,6 +267,8 @@ export const BIOMA_VISUAL_CATALOG: Readonly<Record<BiomaId, BiomaVisualResource>
     corSol: '#fdba74',
     intensidadeSol: 1.5,
     posicaoSol: [-26, 30, -20],
+    elevacaoSolGraus: 31,
+    intensidadeAmbiente: 0.45,
     luzCeu: '#fed7aa',
     luzChao: '#27272a',
     intensidadeHemisf: 0.62,
