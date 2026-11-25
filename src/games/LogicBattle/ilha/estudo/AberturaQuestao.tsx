@@ -22,7 +22,7 @@ export type BlocoEnunciado =
       readonly linhas: readonly (readonly string[])[]
     }
 
-const RE_SEPARADOR_TABELA = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/
+const RE_SEPARADOR_TABELA = /^\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?$/
 
 function quebrarLinhaTabela(linha: string): string[] {
   const aparada = linha.trim().replace(/^\|/, '').replace(/\|$/, '')
@@ -145,12 +145,17 @@ export const AberturaQuestao: React.FC<AberturaQuestaoProps> = ({
   const selo = SELO_POR_ORIGEM[desafio.origem]
   const temFiguraEnunciado = figurasClassificadas.enunciado.length > 0
   const modoVisualAlt = figurasClassificadas.modoAlternativaVisual
+  const temAlternativaLarga =
+    !modoVisualAlt &&
+    desafio.alternativas.some(
+      (alt) => (alt.rotulo.includes('\\frac') && alt.rotulo.length >= 45) || alt.rotulo.length >= 90,
+    )
 
   const renderAlternativas = () => (
     <div
       className={`ilha-choices${temFiguraEnunciado ? ' ilha-choices-palco' : ''}${
         modoVisualAlt ? ' ilha-choices-visuais' : ''
-      }`}
+      }${!temFiguraEnunciado && temAlternativaLarga ? ' ilha-choices-largas' : ''}`}
     >
       {desafio.alternativas.map((alt) => {
         const foiErrada = erradasSet.has(alt.id)

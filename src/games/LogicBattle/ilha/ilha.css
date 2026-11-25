@@ -932,6 +932,10 @@
   margin: 10px 0;
 }
 
+.ilha-choices-largas {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+}
+
 .ilha-tiers button,
 .ilha-choices button,
 .ilha-card .ilha-fechar,
@@ -959,6 +963,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
   text-align: left;
   font-size: 14px;
@@ -1106,6 +1112,26 @@
 .ilha-pos-acerto-real {
   margin: 4px 0;
   font-size: 13px;
+}
+
+.ilha-pos-acerto-texto p {
+  margin: 0 0 6px;
+}
+
+.ilha-pos-acerto-texto p:last-child {
+  margin-bottom: 0;
+}
+
+.ilha-pos-acerto-texto ul,
+.ilha-pos-acerto-texto ol {
+  margin: 4px 0 6px;
+  padding-left: 18px;
+}
+
+.ilha-pos-acerto-texto .katex-display {
+  margin: 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .ilha-pos-acerto-metodos {
@@ -2222,9 +2248,12 @@
 
 .ilha-passe-partout-btn {
   position: relative;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   width: 100%;
-  padding: 12px;
+  padding: 12px 12px 10px;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   background: #ffffff;
@@ -2260,9 +2289,9 @@
 }
 
 .ilha-passe-partout-zoom {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
   padding: 3px 9px;
   background: rgba(15, 23, 42, 0.78);
@@ -2306,6 +2335,17 @@
   align-items: baseline;
   gap: 8px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ilha-choice-texto {
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
 }
 
 .ilha-choice-visual {

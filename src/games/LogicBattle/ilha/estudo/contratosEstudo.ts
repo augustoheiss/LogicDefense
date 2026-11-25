@@ -14,7 +14,44 @@ import type { InfiniteMathChallenge } from '../infiniteMathEngine'
 
 export type GrauDificuldade = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
-export type OrigemQuestao = 'motor_parametrico' | 'enem_oficial' | 'senai_oficial' | 'etec_oficial'
+export type OrigemOficial = 'enem_oficial' | 'senai_oficial' | 'etec_oficial'
+
+export type OrigemQuestao = 'motor_parametrico' | OrigemOficial
+
+export type NivelCuradoria = 'completa' | 'essencial'
+
+export interface EntradaIndiceQuestao {
+  readonly id: string
+  readonly assinatura: string
+  readonly origem: OrigemOficial
+  readonly grau: 5 | 6 | 7
+  readonly temaId: string
+  readonly arquetipoOuItemId: string
+  readonly ano: number
+  readonly questao: number
+  readonly provaCodigo: string
+  readonly chunkUrl: string
+  readonly temFigura: boolean
+  readonly nivelCuradoria: NivelCuradoria
+}
+
+export interface IndiceAcervoQuestoes {
+  readonly versao: 1
+  readonly geradoEmIso: string
+  readonly totaisPorOrigem: {
+    readonly enem_oficial: number
+    readonly senai_oficial: number
+    readonly etec_oficial: number
+  }
+  readonly entradas: readonly EntradaIndiceQuestao[]
+}
+
+export interface PacoteProvaJson {
+  readonly versao: 1
+  readonly origem: OrigemOficial
+  readonly provaCodigo: string
+  readonly itens: readonly DesafioUnificado[]
+}
 
 export type TipoErroPedagogico =
   | 'leitura_interpretacao'
@@ -81,6 +118,8 @@ export interface DesafioUnificado {
   readonly figuras?: readonly FiguraOficial[]
   /** Chave do acervo visual: `senai:2018:2143:30` ou `etec:2019:1:12`. O ENEM usa ano e número. */
   readonly chaveFigura?: string
+  readonly nivelCuradoria?: NivelCuradoria
+  readonly disciplinaVerificada?: 'matematica'
   readonly alternativas: readonly AlternativaUnificada[]
   readonly altarFisicoCompativel: boolean
   readonly dicas: readonly [DicaProgressiva, DicaProgressiva, DicaProgressiva]
