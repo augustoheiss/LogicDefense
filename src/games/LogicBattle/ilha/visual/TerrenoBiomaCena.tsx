@@ -4,6 +4,7 @@ import { corDoChaoBioma, type BiomaId } from '../biomaRecursos'
 import { PARTIDA } from '../partidaPolicies'
 import { semRaycast } from '../raycastCena'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
+import { fatorDeReflexo } from './ceuEIbl'
 import type { PacoteTexturasBioma } from './texturasPbrProcedural'
 
 export interface TerrenoBiomaCenaProps {
@@ -68,6 +69,7 @@ export const TerrenoBiomaCena: React.FC<TerrenoBiomaCenaProps> = ({
           roughnessMap={texturas?.solo.roughnessMap ?? null}
           roughness={texturas ? 1 : 0.92}
           metalness={0.04}
+          envMapIntensity={fatorDeReflexo(0.04, 1)}
         />
       </mesh>
 
@@ -84,6 +86,7 @@ export const TerrenoBiomaCena: React.FC<TerrenoBiomaCenaProps> = ({
               map={texturas?.rocha.map ?? null}
               normalMap={texturas?.rocha.normalMap ?? null}
               roughness={0.85}
+              envMapIntensity={fatorDeReflexo(0, 0.85)}
             />
           </mesh>
           <mesh position={[0, 0.98, 0]} raycast={semRaycast}>
@@ -94,6 +97,7 @@ export const TerrenoBiomaCena: React.FC<TerrenoBiomaCenaProps> = ({
               emissiveIntensity={0.4}
               roughness={0.25}
               metalness={0.65}
+              envMapIntensity={fatorDeReflexo(0.65, 0.25)}
             />
           </mesh>
         </group>

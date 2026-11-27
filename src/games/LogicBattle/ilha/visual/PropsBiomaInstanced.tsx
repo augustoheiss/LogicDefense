@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry,
   Color,
@@ -8,17 +8,21 @@ import {
   type InstancedMesh,
   MeshLambertMaterial,
   Object3D,
+  Vector3,
+  type WebGLProgramParametersWithUniforms,
 } from 'three'
 import type { BiomaId, LagoaRasa, RecursoNatural } from '../biomaRecursos'
 import type { PartidaState } from '../partidaSim'
 import { semRaycast } from '../raycastCena'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
+import { fatorDeReflexo } from './ceuEIbl'
 import { gerarPropsDecorativos } from './propsDecorativos'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
 import { desnivelDoApoio, desnivelDoChao } from '../relevo/alturaVisual'
 import type { ChaoDoDesenho } from '../relevo/alturaVisual'
 import { alturaVisualRecurso, paisagemNaturalVisivel } from './suporteFundacao'
 import type { PacoteTexturasBioma } from './texturasPbrProcedural'
+import { injetarGramaInterativa, injetarVentoNaCopa } from './ventoVegetacao'
 
 export interface PropsBiomaInstancedProps {
   readonly state: PartidaState
@@ -34,6 +38,8 @@ export interface PropsBiomaInstancedProps {
    * alguns quadros DEPOIS do quadrado (geração fatiada). Ausente, ou ainda gerando, o desnível é 0 e o desenho é o de hoje (I1).
    */
   readonly campo?: ChaoDoDesenho
+  /** Ativa o vento nas copas/grama e interação radial com o herói (F4). Ausente = `false` (preserva I1). */
+  readonly ventoAtivo?: boolean
 }
 
 const MAX_ARVORES = 32
@@ -75,6 +81,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
   texturas,
   spec,
   campo,
+  ventoAtivo = false,
 }) => {
   const cat = BIOMA_VISUAL_CATALOG[bioma]
   // O desnível do relevo no ponto (x, z): `y_novo = y_de_hoje + desnível`. Sem campo é 0 e tudo fica como era (I1).
@@ -100,6 +107,22 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
 
   const gramaGeo = useMemo(() => criarGeometriaTufoGrama(), [])
   const ventoUniformRef = useRef({ value: 0 })
+  const ventoAtivoUniformRef = useRef({ value: ventoAtivo ? 1 : 0 })
+  const heroPosUniformRef = useRef({ value: new Vector3(9999, 0, 9999) })
+
+  useEffect(() => {
+    ventoAtivoUniformRef.current.value = ventoAtivo ? 1 : 0
+  }, [ventoAtivo])
+
+  const aoCompilarCopa = useCallback((shader: WebGLProgramParametersWithUniforms) => {
+    try {
+      shader.vertexShader = injetarVentoNaCopa(shader.vertexShader)
+      shader.uniforms.uTempoVento = ventoUniformRef.current
+      shader.uniforms.uVentoAtivo = ventoAtivoUniformRef.current
+    } catch (erro) {
+      console.warn('[LogicBattle] o vento nas copas não pôde ser injetado; seguindo estático', erro)
+    }
+  }, [])
 
   const gramaMat = useMemo(() => {
     const mat = new MeshLambertMaterial({
@@ -107,24 +130,16 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
       side: DoubleSide,
     })
     mat.onBeforeCompile = (shader) => {
-      shader.uniforms.uWindTime = ventoUniformRef.current
-      shader.vertexShader =
-        'uniform float uWindTime;\n' +
-        shader.vertexShader.replace(
-          '#include <begin_vertex>',
-          `
-          #include <begin_vertex>
-          float topo = clamp(position.y / 0.34, 0.0, 1.0);
-          vec3 worldSeed = vec3(0.0);
-          #ifdef USE_INSTANCING
-            worldSeed = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
-          #endif
-          float sway = sin(uWindTime * 2.3 + worldSeed.x * 0.45 + worldSeed.z * 0.35) * 0.09 * topo * topo;
-          transformed.x += sway;
-          transformed.z += sway * 0.55;
-          `,
-        )
+      try {
+        shader.vertexShader = injetarGramaInterativa(shader.vertexShader)
+        shader.uniforms.uTempoVento = ventoUniformRef.current
+        shader.uniforms.uVentoAtivo = ventoAtivoUniformRef.current
+        shader.uniforms.uHeroPos = heroPosUniformRef.current
+      } catch (erro) {
+        console.warn('[LogicBattle] o vento e amassamento da grama não puderam ser injetados', erro)
+      }
     }
+    mat.customProgramCacheKey = () => 'grama-viva-f4'
     return mat
   }, [])
 
@@ -150,8 +165,15 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
   )
 
   useFrame((_, dt) => {
-    if (spec.maxGrama > 0) {
+    if (ventoAtivo) {
       ventoUniformRef.current.value += Math.min(dt, 0.05)
+      if (!state.semCorpo) {
+        heroPosUniformRef.current.value.set(state.heroi.x, 0, state.heroi.z)
+      } else {
+        heroPosUniformRef.current.value.set(9999, 0, 9999)
+      }
+    } else {
+      heroPosUniformRef.current.value.set(9999, 0, 9999)
     }
   })
 
@@ -361,6 +383,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           map={texturas?.tronco.map ?? null}
           normalMap={texturas?.tronco.normalMap ?? null}
           roughness={0.88}
+          envMapIntensity={fatorDeReflexo(0, 0.88)}
         />
       </instancedMesh>
       <instancedMesh
@@ -378,6 +401,9 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           map={texturas?.copa.map ?? null}
           normalMap={texturas?.copa.normalMap ?? null}
           roughness={0.82}
+          envMapIntensity={fatorDeReflexo(0, 0.82)}
+          onBeforeCompile={aoCompilarCopa}
+          customProgramCacheKey={() => 'copa-vento-f4'}
         />
       </instancedMesh>
       <instancedMesh
@@ -394,11 +420,14 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           color={cat.copaCorSecundaria}
           normalMap={texturas?.copa.normalMap ?? null}
           roughness={0.78}
+          envMapIntensity={fatorDeReflexo(0, 0.78)}
+          onBeforeCompile={aoCompilarCopa}
+          customProgramCacheKey={() => 'copa-vento-f4'}
         />
       </instancedMesh>
       <instancedMesh ref={tocosRef} args={[undefined, undefined, MAX_ARVORES]} frustumCulled={false} raycast={semRaycast}>
         <cylinderGeometry args={[0.28, 0.34, 0.28, 8]} />
-        <meshStandardMaterial color={cat.troncoCor} roughness={0.9} />
+        <meshStandardMaterial color={cat.troncoCor} roughness={0.9} envMapIntensity={fatorDeReflexo(0, 0.9)} />
       </instancedMesh>
 
       {/* Veios de Ouro */}
@@ -417,6 +446,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           map={texturas?.rocha.map ?? null}
           normalMap={texturas?.rocha.normalMap ?? null}
           roughness={0.85}
+          envMapIntensity={fatorDeReflexo(0, 0.85)}
         />
       </instancedMesh>
       <instancedMesh ref={cristais1Ref} args={[undefined, undefined, MAX_OURO]} frustumCulled={false} raycast={semRaycast}>
@@ -427,6 +457,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           emissiveIntensity={0.48}
           metalness={0.72}
           roughness={0.22}
+          envMapIntensity={fatorDeReflexo(0.72, 0.22)}
         />
       </instancedMesh>
       <instancedMesh ref={cristais2Ref} args={[undefined, undefined, MAX_OURO]} frustumCulled={false} raycast={semRaycast}>
@@ -437,11 +468,12 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
           emissiveIntensity={0.38}
           metalness={0.72}
           roughness={0.22}
+          envMapIntensity={fatorDeReflexo(0.72, 0.22)}
         />
       </instancedMesh>
       <instancedMesh ref={ouroVazioRef} args={[undefined, undefined, MAX_OURO]} frustumCulled={false} raycast={semRaycast}>
         <cylinderGeometry args={[0.42, 0.5, 0.16, 7]} />
-        <meshStandardMaterial color="#44403c" roughness={0.95} />
+        <meshStandardMaterial color="#44403c" roughness={0.95} envMapIntensity={fatorDeReflexo(0, 0.95)} />
       </instancedMesh>
 
       {/* Grama animada por vento no vertex shader */}
@@ -467,7 +499,7 @@ export const PropsBiomaInstanced: React.FC<PropsBiomaInstancedProps> = ({
         raycast={semRaycast}
       >
         <dodecahedronGeometry args={[0.5, 0]} />
-        <meshStandardMaterial color={cat.rochaCor} roughness={0.9} />
+        <meshStandardMaterial color={cat.rochaCor} roughness={0.9} envMapIntensity={fatorDeReflexo(0, 0.9)} />
       </instancedMesh>
 
       {/* Juncos e vitórias-régias nas margens */}

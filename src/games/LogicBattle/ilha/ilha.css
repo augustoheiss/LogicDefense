@@ -3070,3 +3070,14 @@
     font-size: 11px;
   }
 }
+
+.ilha-minimapa .ilha-mini-hillshade {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.42;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  border-radius: inherit;
+}

@@ -49,6 +49,12 @@ const MODULOS = [
   '/src/games/LogicBattle/ilha/visual/fitaDoRio.test.ts',
   '/src/games/LogicBattle/ilha/relevo/geometriaDoHorizonte.test.ts',
   '/src/games/LogicBattle/ilha/relevo/sondaDeAlturas.test.ts',
+  '/src/games/LogicBattle/ilha/visual/efeitosAmbiente.test.ts',
+  '/src/games/LogicBattle/ilha/visual/nuvensFbm.test.ts',
+  '/src/games/LogicBattle/ilha/visual/ventoVegetacao.test.ts',
+  '/src/games/LogicBattle/ilha/visual/efeitosAmbienteCena.test.ts',
+  '/src/games/LogicBattle/ilha/visual/respostasDoMundo.test.ts',
+  '/src/games/LogicBattle/ilha/visual/minimapaRelevo.test.ts',
 ]
 
 // Os contratos de TEXTO (como `contratoDoHud`) recebem o fonte da cena e das políticas: o desenho vive no React e o runner roda no Node, sem GPU.
@@ -68,6 +74,12 @@ const aguaBioma = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visua
 const fitaDoRio = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/FitaDoRio.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/FitaDoRio.tsx'), 'utf8') : ''
 const tropasCena = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/TropasCena.tsx'), 'utf8')
 const terrenoRelevo = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TerrenoRelevoCena.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TerrenoRelevoCena.tsx'), 'utf8') : ''
+const nuvensBioma = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/NuvensBioma.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/NuvensBioma.tsx'), 'utf8') : ''
+const particulasBioma = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/ParticulasBioma.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/ParticulasBioma.tsx'), 'utf8') : ''
+const passarosBioma = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/PassarosBioma.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/PassarosBioma.tsx'), 'utf8') : ''
+const tochasObras = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TochasEFumacaObras.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TochasEFumacaObras.tsx'), 'utf8') : ''
+const efeitosJogo = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/EfeitosDeJogo.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/EfeitosDeJogo.tsx'), 'utf8') : ''
+const ilhaCss = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/ilha.css'), 'utf8')
 
 // Os insumos do `aguaNoGerador.test.ts`: o projeto não tem `@types/node`, então QUEM lê os arquivos e calcula o SHA-1 é o runner (os hashes do gerador de ANTES da água e os 13 rios medidos no protótipo).
 const insumosDoGerador = {
@@ -86,7 +98,7 @@ try {
   for (const modulo of escolhidos) {
     const mod = await server.ssrLoadModule(modulo)
     // cada módulo recebe só o que usa, por POSIÇÃO: `ceuEIbl.test.ts` lê só a atmosfera (1º argumento); os demais seguem a ordem de antes
-    await (modulo.endsWith('aguaNoGerador.test.ts') ? mod.run(insumosDoGerador) : modulo.endsWith('fitaDoRio.test.ts') ? mod.run(fitaDoRio, aguaBioma) : modulo.endsWith('ceuEIbl.test.ts') ? mod.run(atmosfera, cenaBioma) : modulo.endsWith('flagstone.test.ts') ? mod.run(texturas, terreno, componenteNevoa, cenaBioma) : modulo.endsWith('cicloDePacote.test.ts') ? mod.run(cenaBioma) : modulo.endsWith('tarefaFatiada.test.ts') ? mod.run() : modulo.endsWith('campoDoSolo.test.ts') ? mod.run(texturas) : modulo.endsWith('terrenoRelevoCena.test.ts') ? mod.run(terrenoRelevo, cenaBioma, cena, componenteNevoa, horizonteRelevo) : modulo.endsWith('ligacaoDoAtor.test.ts') ? mod.run(cena, tropasCena) : modulo.endsWith('chaoDoMundoNaCena.test.ts') ? mod.run(cena) : modulo.endsWith('propsNoTerreno.test.ts') ? mod.run(propsBioma, fundacaoObra, sandboxCena) : modulo.endsWith('obrasNoTerreno.test.ts') ? mod.run(obrasCena) : modulo.endsWith('relevoVisual.test.ts') || modulo.endsWith('relevoNoEstado.test.ts') || modulo.endsWith('geometriaDoTerreno.test.ts') || modulo.endsWith('misturaDoTerreno.test.ts') || modulo.endsWith('materialTerrenoRelevo.test.ts') || modulo.endsWith('glslDaNevoa.test.ts') || modulo.endsWith('nevoaNoTerreno.test.ts') || modulo.endsWith('sandboxViva.test.ts') || modulo.endsWith('biomaVisual.test.ts') || modulo.endsWith('alturaDoAtor.test.ts') || modulo.endsWith('raioTerreno.test.ts') || modulo.endsWith('irParaMapa.test.ts') || modulo.endsWith('segmentosDaPatrulha.test.ts') || modulo.endsWith('chaoDaMalha.test.ts') || modulo.endsWith('aguaDoMundo.test.ts') ? mod.run() : mod.run(cena, politicas, componenteNevoa, atmosfera))
+    await (modulo.endsWith('aguaNoGerador.test.ts') ? mod.run(insumosDoGerador) : modulo.endsWith('efeitosAmbienteCena.test.ts') ? mod.run(politicas, cenaBioma, nuvensBioma, particulasBioma, passarosBioma, tochasObras, propsBioma, efeitosJogo) : modulo.endsWith('minimapaRelevo.test.ts') ? mod.run(cena, ilhaCss) : modulo.endsWith('fitaDoRio.test.ts') ? mod.run(fitaDoRio, aguaBioma) : modulo.endsWith('ceuEIbl.test.ts') ? mod.run(atmosfera, cenaBioma) : modulo.endsWith('flagstone.test.ts') ? mod.run(texturas, terreno, componenteNevoa, cenaBioma) : modulo.endsWith('cicloDePacote.test.ts') ? mod.run(cenaBioma) : modulo.endsWith('tarefaFatiada.test.ts') ? mod.run() : modulo.endsWith('campoDoSolo.test.ts') ? mod.run(texturas) : modulo.endsWith('terrenoRelevoCena.test.ts') ? mod.run(terrenoRelevo, cenaBioma, cena, componenteNevoa, horizonteRelevo) : modulo.endsWith('ligacaoDoAtor.test.ts') ? mod.run(cena, tropasCena) : modulo.endsWith('chaoDoMundoNaCena.test.ts') ? mod.run(cena) : modulo.endsWith('propsNoTerreno.test.ts') ? mod.run(propsBioma, fundacaoObra, sandboxCena) : modulo.endsWith('obrasNoTerreno.test.ts') ? mod.run(obrasCena) : modulo.endsWith('relevoVisual.test.ts') || modulo.endsWith('relevoNoEstado.test.ts') || modulo.endsWith('geometriaDoTerreno.test.ts') || modulo.endsWith('misturaDoTerreno.test.ts') || modulo.endsWith('materialTerrenoRelevo.test.ts') || modulo.endsWith('glslDaNevoa.test.ts') || modulo.endsWith('nevoaNoTerreno.test.ts') || modulo.endsWith('sandboxViva.test.ts') || modulo.endsWith('biomaVisual.test.ts') || modulo.endsWith('alturaDoAtor.test.ts') || modulo.endsWith('raioTerreno.test.ts') || modulo.endsWith('irParaMapa.test.ts') || modulo.endsWith('segmentosDaPatrulha.test.ts') || modulo.endsWith('chaoDaMalha.test.ts') || modulo.endsWith('aguaDoMundo.test.ts') || modulo.endsWith('efeitosAmbiente.test.ts') || modulo.endsWith('nuvensFbm.test.ts') || modulo.endsWith('ventoVegetacao.test.ts') || modulo.endsWith('respostasDoMundo.test.ts') ? mod.run() : mod.run(cena, politicas, componenteNevoa, atmosfera))
   }
   console.log(filtro ? `relevo (parcial: ${filtro}, ${escolhidos.length} de ${MODULOS.length} módulos): ok` : 'relevo: ok')
 } finally {

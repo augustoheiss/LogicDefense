@@ -152,6 +152,7 @@ import {
 } from './atlas'
 import { ModalRessurreicao } from './ModalRessurreicao'
 import { escolherNucleoRessurreicao, ressuscitarHeroiNoNucleo } from './ressurreicaoHeroi'
+import { obterHillshadeDataUrl } from './visual/minimapaRelevo'
 import { IconeId, IconeSvg, META_INTENCOES } from './ilhaIcones'
 import { armazenamentoDoNavegador, carregarAssinaturas, salvarAssinaturas } from './memoriaDeContas'
 import { fatorDoBuff, textoDaContaComErros } from './buffPorErro'
@@ -5219,6 +5220,7 @@ export const IlhaRua: React.FC = () => {
                     Date.now() < pingAtaque.expiraEm &&
                     pingAtaque.mapaI === i &&
                     pingAtaque.mapaJ === j
+                  const hillshadeUrl = ficha && PARTIDA.relevo.visual ? obterHillshadeDataUrl(i, j, ficha.bioma) : null
                   return (
                     <button
                       key={`${i}-${j}`}
@@ -5254,6 +5256,9 @@ export const IlhaRua: React.FC = () => {
                         publicar(sim.current)
                       }}
                     >
+                      {hillshadeUrl ? (
+                        <span className="ilha-mini-hillshade" aria-hidden="true" style={{ backgroundImage: `url(${hillshadeUrl})` }} />
+                      ) : null}
                       {ficha ? <span className="ilha-mini-quadrado-bioma">{siglaDoBioma(ficha.bioma)}</span> : null}
                     </button>
                   )
