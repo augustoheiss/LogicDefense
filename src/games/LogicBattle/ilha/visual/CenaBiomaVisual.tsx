@@ -13,13 +13,19 @@ import { type AmbienteGpu, gerarAmbientePmrem } from './ambientePmrem'
 import { ambienteDeveExistir, chaveDoAmbiente } from './ceuEIbl'
 import { CicloDePacote } from './cicloDePacote'
 import { anisotropiaEfetiva } from './decisaoPosProcessamento'
+import { configEfeitosAmbiente } from './efeitosAmbiente'
+import { EfeitosDeJogo } from './EfeitosDeJogo'
 import { HorizonteRelevo } from './HorizonteRelevo'
+import { NuvensBioma } from './NuvensBioma'
+import { ParticulasBioma } from './ParticulasBioma'
+import { PassarosBioma } from './PassarosBioma'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
 import { PropsBiomaInstanced } from './PropsBiomaInstanced'
 import { BiomeGpuAssetPool } from './recursoGpuPool'
 import { paisagemNaturalVisivel } from './suporteFundacao'
 import { TerrenoBiomaCena } from './TerrenoBiomaCena'
 import { TerrenoRelevoCena } from './TerrenoRelevoCena'
+import { TochasEFumacaObras } from './TochasEFumacaObras'
 import {
   defaultBiomaTextureProvider,
   type PacoteTexturasBioma,
@@ -237,6 +243,27 @@ export const CenaBiomaVisual: React.FC<CenaBiomaVisualProps> = ({
   const olharEfetivo = state.semCorpo ? 'imperio' : state.olhar
   const noSubsolo = !state.semCorpo && state.heroi.y < -0.9
 
+  const [movimentoReduzido, setMovimentoReduzido] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setMovimentoReduzido(mq.matches)
+    const aoMudar = () => setMovimentoReduzido(mq.matches)
+    mq.addEventListener('change', aoMudar)
+    return () => mq.removeEventListener('change', aoMudar)
+  }, [])
+
+  const efeitosConfig = configEfeitosAmbiente(spec, {
+    ativo: PARTIDA.efeitos.ativo,
+    movimentoReduzido,
+    noSubsolo,
+    olhar: olharEfetivo,
+    subchaves: PARTIDA.efeitos,
+  })
+
   return (
     <group name="cena-bioma-visual">
       <AtmosferaBioma
@@ -297,7 +324,53 @@ export const CenaBiomaVisual: React.FC<CenaBiomaVisualProps> = ({
         texturas={texturasBioma}
         spec={spec}
         campo={chaoDaMalhaDaCena}
+        ventoAtivo={efeitosConfig.ventoArvores}
       />
+      {efeitosConfig.nuvens && (
+        <NuvensBioma
+          bioma={state.bioma}
+          focoX={focoX}
+          focoZ={focoZ}
+          velocidadeTempo={efeitosConfig.velocidadeTempo}
+        />
+      )}
+      {efeitosConfig.maxParticulas > 0 && (
+        <ParticulasBioma
+          mapaI={mapaI}
+          mapaJ={mapaJ}
+          bioma={state.bioma}
+          quantidade={efeitosConfig.maxParticulas}
+          campo={chaoDaMalhaDaCena}
+          nevoaUniforms={nevoaUniforms}
+        />
+      )}
+      {efeitosConfig.maxPassaros > 0 && (
+        <PassarosBioma
+          mapaI={mapaI}
+          mapaJ={mapaJ}
+          bioma={state.bioma}
+          quantidade={efeitosConfig.maxPassaros}
+          velocidadeTempo={efeitosConfig.velocidadeTempo}
+        />
+      )}
+      {efeitosConfig.tochasObras && (
+        <TochasEFumacaObras
+          state={state}
+          campo={chaoDaMalhaDaCena}
+          velocidadeTempo={efeitosConfig.velocidadeTempo}
+        />
+      )}
+      {efeitosConfig.respostas && (
+        <EfeitosDeJogo
+          state={state}
+          campo={chaoDaMalhaDaCena}
+          spec={spec}
+          ativo={PARTIDA.efeitos.ativo && efeitosConfig.respostas}
+          movimentoReduzido={movimentoReduzido}
+          noSubsolo={noSubsolo}
+          nevoaUniforms={nevoaUniforms}
+        />
+      )}
     </group>
   )
 }

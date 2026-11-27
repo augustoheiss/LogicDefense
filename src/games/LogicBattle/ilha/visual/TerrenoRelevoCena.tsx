@@ -7,6 +7,7 @@ import { geometriaDoTerreno, passoDaMalha, saiaDoTerreno } from '../relevo/geome
 import { ESCALA_DA_ROCHA, injetarMisturaDeRocha } from '../relevo/materialTerrenoRelevo'
 import { injetarNevoaNoTerreno } from '../relevo/nevoaNoTerreno'
 import { ALTURA_DO_PLANO } from './NevoaPintada'
+import { fatorDeReflexo } from './ceuEIbl'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
 import { semRaycast } from '../raycastCena'
 import { Y_SOLO_VISUAL } from './suporteFundacao'
@@ -121,6 +122,7 @@ export const TerrenoRelevoCena: React.FC<TerrenoRelevoCenaProps> = ({ bioma, cam
       roughnessMap: texturas?.solo.roughnessMap ?? null,
       roughness: texturas ? 1 : 0.92,
       metalness: 0.04,
+      envMapIntensity: fatorDeReflexo(0.04, 1),
     })
     const rocha = texturas?.rocha.map
     mat.onBeforeCompile = (shader) => {

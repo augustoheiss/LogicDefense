@@ -1,5 +1,7 @@
 import { biomaDoQuadrado, gerarPaisagemBioma } from '../biomaRecursos'
+import { PARTIDA } from '../partidaPolicies'
 import { lugarDaBaseInimiga } from '../partidaSim'
+import { limparMemoriaDaAgua } from './aguaDoMundo'
 import {
   alturaEm,
   inclinacaoEm,
@@ -34,7 +36,18 @@ export function run(): void {
   testarCampo()
   testarLaboratorio()
   testarGeracaoFatiada()
-  testarGerador()
+  const chaveAgua = PARTIDA.relevo as { agua: boolean }
+  const aguaAntes = chaveAgua.agua
+  chaveAgua.agua = false
+  limparCacheRelevo()
+  limparMemoriaDaAgua()
+  try {
+    testarGerador()
+  } finally {
+    chaveAgua.agua = aguaAntes
+    limparCacheRelevo()
+    limparMemoriaDaAgua()
+  }
 }
 
 /** O laboratório (Task 4): sombreado de relevo e PNG. Puro e sem dependência, para o preview rodar no Node sem pacote novo. */

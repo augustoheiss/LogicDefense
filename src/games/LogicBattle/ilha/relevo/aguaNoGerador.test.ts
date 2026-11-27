@@ -78,19 +78,28 @@ function geradoComAChave(ligada: boolean, i: number, j: number): Float32Array {
 export function run(insumos: InsumosDoGerador): void {
   const sha = insumos.sha1
   const HASHES = JSON.parse(insumos.hashes) as Hashes
-  assert(PARTIDA.relevo.agua === false && PARTIDA.relevo.visual === false, 'o teste parte das DUAS chaves desligadas (a política de hoje)')
-  assert(HASHES.politica.agua === false && HASHES.politica.visual === false, 'os hashes foram gravados com as duas chaves desligadas')
+  const politicaOriginal = PARTIDA.relevo.agua
+  assert(PARTIDA.relevo.agua === true && PARTIDA.relevo.visual === true, 'a política do jogo parte com relevo visual e rios ligados (decisão do usuário em 27/11/2026)')
+  assert(HASHES.politica.agua === false && HASHES.politica.visual === false, 'os hashes de referência I1 foram gravados com as duas chaves desligadas')
 
   // (1) I1 — O MAIS IMPORTANTE: com a chave DESLIGADA os 6 quadrados saem bit a bit como hoje, pelos DOIS caminhos (síncrono e fatiado)
-  for (const [chave, esperado] of Object.entries(HASHES.quadrados)) {
-    const [i, j] = chave.split(',').map(Number)
+  for (const [chaveMap, esperado] of Object.entries(HASHES.quadrados)) {
+    const [i, j] = chaveMap.split(',').map(Number)
     assert(sha(geradoComAChave(false, i, j)) === esperado, `I1: o quadrado (${i}, ${j}) com a chave desligada é BIT A BIT o de hoje (hash ${esperado})`)
-    limparCacheRelevo()
-    const g = gerarRelevoFatiado(i, j)
-    while (!g.passo(2)) {
-      /* fatias de 2 ms */
+    chave.agua = false
+    try {
+      limparCacheRelevo()
+      limparMemoriaDaAgua()
+      const g = gerarRelevoFatiado(i, j)
+      while (!g.passo(2)) {
+        /* fatias de 2 ms */
+      }
+      assert(sha(g.resultado().alturas) === HASHES.fatiado[chaveMap], `I1: o quadrado (${i}, ${j}) FATIADO com a chave desligada é bit a bit o de hoje`)
+    } finally {
+      chave.agua = politicaOriginal
+      limparCacheRelevo()
+      limparMemoriaDaAgua()
     }
-    assert(sha(g.resultado().alturas) === HASHES.fatiado[chave], `I1: o quadrado (${i}, ${j}) FATIADO com a chave desligada é bit a bit o de hoje`)
   }
   assert(hashDaMascara(sha) === HASHES.mascaraPlana2000, 'I1: `mascaraPlana` em 2.000 pontos é bit a bit a de hoje (o refactor de `zonasPlanasSemJanelas` não mudou um bit)')
   // `mascaraPlana` = max(zonas, janelas): as zonas SEM as janelas nunca passam da máscara inteira, e DENTRO de uma janela de passagem a máscara inteira vale 1 enquanto as zonas valem menos. Os pontos do controle são
@@ -117,22 +126,29 @@ export function run(insumos: InsumosDoGerador): void {
   assert(janelaViva >= janelas * 0.5, `CONTROLE: no centro de uma janela de passagem a máscara inteira vale 1 e as zonas valem < 0,5 (${janelaViva} de ${janelas} janelas): o rio não pode ser zerado ali`)
 
   // (2) a ALTURA DE BASE exportada é a conta do gerador: `alturaGlobal · (1 − mascaraPlana)`, igual ao `alturas` com a chave desligada nos pontos SEM bacia de lagoa
-  limparCacheRelevo()
-  const campo0 = gerarRelevo(3, 0)
+  chave.agua = false
   let comLagoa = 0
   let maiorDif = 0
-  for (let gz = -MEIA; gz <= MEIA; gz += 1) {
-    for (let gx = -MEIA; gx <= MEIA; gx += 1) {
-      const gerado = campo0.alturas[(gz + MEIA) * 113 + (gx + MEIA)]
-      const base = alturaDeBaseDoMundo(LADO * 3 + gx, gz)
-      const dif = Math.abs(gerado - base)
-      if (dif > 1e-5) comLagoa += 1
-      else maiorDif = Math.max(maiorDif, dif)
+  try {
+    limparCacheRelevo()
+    limparMemoriaDaAgua()
+    const campo0 = gerarRelevo(3, 0)
+    for (let gz = -MEIA; gz <= MEIA; gz += 1) {
+      for (let gx = -MEIA; gx <= MEIA; gx += 1) {
+        const gerado = campo0.alturas[(gz + MEIA) * 113 + (gx + MEIA)]
+        const base = alturaDeBaseDoMundo(LADO * 3 + gx, gz)
+        const dif = Math.abs(gerado - base)
+        if (dif > 1e-5) comLagoa += 1
+        else maiorDif = Math.max(maiorDif, dif)
+      }
     }
+  } finally {
+    chave.agua = politicaOriginal
+    limparCacheRelevo()
+    limparMemoriaDaAgua()
   }
   assert(maiorDif < 1e-5, `a altura de base exportada concorda com o gerador (Float32) onde não há leito de lagoa: maior diferença ${maiorDif.toExponential(2)}`)
   assert(comLagoa < 113 * 113 * 0.2, `só os pontos com leito de lagoa diferem da altura de base (${comLagoa} de ${113 * 113})`)
-  limparCacheRelevo()
 
   // (3) CHAVE LIGADA: o rio aparece. O quadrado (−1, 0) tem o rio V-1:-1:-2, e com a chave ligada o relevo dele MUDA; o quadrado (0, 0) (sem rio) NÃO muda
   const sem = geradoComAChave(false, -1, 0)
@@ -200,7 +216,7 @@ export function run(insumos: InsumosDoGerador): void {
     }
     assert(sha(g.resultado().alturas) === a, 'o caminho FATIADO com a chave ligada dá as mesmas alturas do síncrono')
   } finally {
-    chave.agua = false
+    chave.agua = politicaOriginal
     limparCacheRelevo()
     limparMemoriaDaAgua()
   }
@@ -209,14 +225,21 @@ export function run(insumos: InsumosDoGerador): void {
   const rio = riosDoQuadrado(-1, 0, alturaDeBaseDoMundo).find((r) => r.id === 'V-1:-1:-2')
   assert(rio !== undefined, 'o rio V-1:-1:-2 existe')
   const centro = rio.pontos[120]
-  assert(nivelDaAguaNoMundo(centro.X, centro.Z) === null, 'com a chave DESLIGADA o nível da água no mundo é null')
+  chave.agua = false
+  try {
+    limparMemoriaDaAgua()
+    assert(nivelDaAguaNoMundo(centro.X, centro.Z) === null, 'com a chave DESLIGADA o nível da água no mundo é null')
+  } finally {
+    chave.agua = politicaOriginal
+    limparMemoriaDaAgua()
+  }
   chave.agua = true
   try {
     const n = nivelDaAguaNoMundo(centro.X, centro.Z)
     assert(n !== null && Math.abs(n - rio.niveis[120]) < 0.05, `com a chave LIGADA o nível no centro do rio é o do rio (${n} contra ${rio.niveis[120]})`)
     assert(nivelDaAguaNoMundo(centro.X + 30, centro.Z) === null, 'a 30 m do rio não há água')
   } finally {
-    chave.agua = false
+    chave.agua = politicaOriginal
     limparMemoriaDaAgua()
   }
 
@@ -297,7 +320,7 @@ export function run(insumos: InsumosDoGerador): void {
       }
     }
   } finally {
-    chave.agua = false
+    chave.agua = politicaOriginal
     limparCacheRelevo()
     limparMemoriaDaAgua()
   }
@@ -353,7 +376,7 @@ export function run(insumos: InsumosDoGerador): void {
       }
     }
   } finally {
-    chave.agua = false
+    chave.agua = politicaOriginal
     limparCacheRelevo()
     limparMemoriaDaAgua()
   }
@@ -466,7 +489,7 @@ export function run(insumos: InsumosDoGerador): void {
       }
     }
   } finally {
-    chave.agua = false
+    chave.agua = politicaOriginal
     limparCacheRelevo()
     limparMemoriaDaAgua()
   }
@@ -540,7 +563,7 @@ export function run(insumos: InsumosDoGerador): void {
         }
       }
     } finally {
-      chave.agua = false
+      chave.agua = politicaOriginal
       limparCacheRelevo()
       limparMemoriaDaAgua()
     }
