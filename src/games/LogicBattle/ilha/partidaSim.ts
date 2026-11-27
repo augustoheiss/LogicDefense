@@ -25,6 +25,7 @@ import {
   dentroLimiteBlocoMundo,
   linhaVisaoLivre25D,
   MapaBlocos,
+  PASSO_BLOCO_MUNDO,
   planejarLinhaBlocos,
   PlanoLinhaBlocos,
   REQUISITOS_CONSAGRACAO,
@@ -77,6 +78,17 @@ import {
   type TipoTropaAliada,
 } from './partidaPolicies'
 import { alcanceDaTorreNoNivel, custoDeEvoluir, danoDaTorreNoNivel, fatorDoNivel, nivelDaBaseInimiga, quantidadeDaLevaNaOnda, tropaVidaNoNivel, vidaMaximaNoNivel } from './evolucaoObra'
+import { alturaEm, transitavelEm, type CampoRelevo } from './relevo/campoRelevo'
+import {
+  ajustarAoTransitavel,
+  alcanceComAltura,
+  custoDecliveCaminho,
+  fatorAltura,
+  pontoEmRio,
+  terrenoBloqueiaLinha,
+} from './relevo/regrasDoRelevo'
+import { aplicarPlataforma, podeAplainarObra } from './relevo/plataformas'
+import { temLinhaDeVisaoNoRelevo } from './relevo/visibilidadeRelevo'
 
 export { nivelDaBaseInimiga }
 
@@ -288,6 +300,10 @@ export interface PartidaState {
   formacao?: TipoFormacao
   upgradesEra?: UpgradesEra
   contatoInimigoHeroiCooldown?: number
+  /** Campo de relevo ativo do quadrado atual para F3 (opcional: ausente = chão plano I1). */
+  campoRelevo?: CampoRelevo
+  mapaI?: number
+  mapaJ?: number
 }
 
 /**
@@ -413,6 +429,36 @@ export function alturasLoSDoEstado(state: PartidaState): Map<string, number> {
   return mapa
 }
 
+function campoRelevoAtivo(state: PartidaState): CampoRelevo | undefined {
+  return PARTIDA.relevo.regras ? state.campoRelevo : undefined
+}
+
+function terrenoAguaNoPonto(state: PartidaState, x: number, z: number, y = 0): boolean {
+  if (emAguaRasa(state.lagoas, x, z, y)) return true
+  return Boolean(campoRelevoAtivo(state)) && PARTIDA.relevo.agua && y >= -0.9 && pontoEmRio(state.mapaI, state.mapaJ, x, z)
+}
+
+function opcoesCaminhoTerreno(state: PartidaState): {
+  readonly custoExtra: ((px: number, pz: number) => number) | undefined
+  readonly bloqueadoExtra: ((px: number, pz: number) => boolean) | undefined
+} {
+  const campo = campoRelevoAtivo(state)
+  const temAgua = state.lagoas.length > 0 || (Boolean(campo) && PARTIDA.relevo.agua && PARTIDA.relevo.regras)
+  const custoExtra =
+    temAgua || campo
+      ? (px: number, pz: number) => {
+          const naAgua =
+            emAguaRasa(state.lagoas, px, pz, 0) ||
+            (Boolean(campo) && PARTIDA.relevo.agua && pontoEmRio(state.mapaI, state.mapaJ, px, pz))
+          const multAgua = naAgua ? PARTIDA.custoAguaCaminho : 1
+          const multDecl = campo ? custoDecliveCaminho(campo, px, pz) : 1
+          return Math.max(multAgua, multDecl)
+        }
+      : undefined
+  const bloqueadoExtra = campo ? (px: number, pz: number) => !transitavelEm(campo, px, pz) : undefined
+  return { custoExtra, bloqueadoExtra }
+}
+
 export function visaoLivreNoEstado(
   state: PartidaState,
   origemX: number,
@@ -422,6 +468,21 @@ export function visaoLivreNoEstado(
   alvoZ: number,
   alvoY = 0,
 ): boolean {
+  const campo = campoRelevoAtivo(state)
+  if (
+    campo &&
+    terrenoBloqueiaLinha(
+      campo,
+      origemX,
+      origemZ,
+      Math.max(PARTIDA.eyeY, cotaObservadorBlocos),
+      alvoX,
+      alvoZ,
+      Math.max(0.9, alvoY),
+    )
+  ) {
+    return false
+  }
   if (!PARTIDA.usarLoSPorAltura) return true
   const alturas = alturasLoSDoEstado(state)
   if (alturas.size === 0) return true
@@ -429,17 +490,35 @@ export function visaoLivreNoEstado(
 }
 
 function dentroDaUniao(state: PartidaState, x: number, z: number): boolean {
-  if (!state.semCorpo && Math.hypot(x - state.heroi.x, z - state.heroi.z) <= PARTIDA.visao.heroi) return true
+  const campo = campoRelevoAtivo(state)
+  if (
+    !state.semCorpo &&
+    Math.hypot(x - state.heroi.x, z - state.heroi.z) <= PARTIDA.visao.heroi &&
+    (!campo || temLinhaDeVisaoNoRelevo(campo, state.heroi.x, state.heroi.z, x, z))
+  ) {
+    return true
+  }
   if (state.herois) {
     const ativoId = state.heroiAtivoId ?? 0
     for (const h of state.herois) {
-      if (h.id !== ativoId && h.vivo && h.army > 0 && Math.hypot(x - h.x, z - h.z) <= PARTIDA.visao.heroi) {
+      if (
+        h.id !== ativoId &&
+        h.vivo &&
+        h.army > 0 &&
+        Math.hypot(x - h.x, z - h.z) <= PARTIDA.visao.heroi &&
+        (!campo || temLinhaDeVisaoNoRelevo(campo, h.x, h.z, x, z))
+      ) {
         return true
       }
     }
   }
   for (const unidade of state.unidades) {
-    if (unidade.lado === 'aliado' && unidade.hp > 0 && Math.hypot(x - unidade.x, z - unidade.z) <= PARTIDA.visao.tropa) {
+    if (
+      unidade.lado === 'aliado' &&
+      unidade.hp > 0 &&
+      Math.hypot(x - unidade.x, z - unidade.z) <= PARTIDA.visao.tropa &&
+      (!campo || temLinhaDeVisaoNoRelevo(campo, unidade.x, unidade.z, x, z))
+    ) {
       return true
     }
   }
@@ -448,6 +527,8 @@ function dentroDaUniao(state: PartidaState, x: number, z: number): boolean {
     if (Math.hypot(x - obra.x, z - obra.z) > raioDaObra(obra)) continue
     if (obra.tipo === 'torre' && !obraEmConstrucao(obra)) {
       if (!visaoLivreNoEstado(state, obra.x, obra.z, cotaVisaoTorreBlocos(obra.nivel), x, z, 0)) continue
+    } else if (campo && !temLinhaDeVisaoNoRelevo(campo, obra.x, obra.z, x, z)) {
+      continue
     }
     return true
   }
@@ -456,6 +537,7 @@ function dentroDaUniao(state: PartidaState, x: number, z: number): boolean {
 
 export function marcarChao(state: PartidaState): PartidaState {
   if (!PARTIDA.nuvem) return state
+  const campo = campoRelevoAtivo(state)
   const base = state.chaoVisto
   let copia: Uint8Array | null = null
   const acender = (indice: number) => {
@@ -472,6 +554,7 @@ export function marcarChao(state: PartidaState): PartidaState {
         const cx = gx * PARTIDA.celula
         const cz = gz * PARTIDA.celula
         if ((cx - x) ** 2 + (cz - z) ** 2 > raio * raio) continue
+        if (campo && !temLinhaDeVisaoNoRelevo(campo, x, z, cx, cz)) continue
         const indice = indiceChao(gx, gz)
         if (indice !== null) acender(indice)
       }
@@ -644,6 +727,8 @@ export function createPartida(mapaI = 0, mapaJ = 0, semCorpo = false): PartidaSt
     versaoRecursos: 0,
     subsoloCentro: null,
     blocosMapa: {},
+    mapaI,
+    mapaJ,
   }
   return marcarChao(plantarBaseInimiga(vazia, mapaI, mapaJ))
 }
@@ -861,13 +946,15 @@ function escorrega(
   recursos: readonly RecursoNatural[] = [],
   subsoloCentro: { x: number; z: number } | null = null,
   blocosMapa?: MapaBlocos,
+  campo?: CampoRelevo,
 ): { x: number; z: number } {
   let x = x1
   let z = z1
   const bloqueia = (px: number, pz: number) =>
     bateObstaculo(px, pz, pes) ||
     bateObra(px, pz, obras, -1, pes, blocosMapa) ||
-    bateRecursoSuperficie(px, pz, pes, recursos)
+    bateRecursoSuperficie(px, pz, pes, recursos) ||
+    (campo !== undefined && pes >= -0.9 && !transitavelEm(campo, px, pz))
   if (bloqueia(x, z)) {
     if (!bloqueia(x0, z)) x = x0
     else if (!bloqueia(x, z0)) z = z0
@@ -943,6 +1030,10 @@ export function podeFundarEm(
   if (state.unidades.some((unidade) => unidade.hp > 0 && Math.hypot(unidade.x - x, unidade.z - z) < 1.4)) {
     return { ok: false, motivo: 'Unidade ocupando o terreno' }
   }
+  const campo = campoRelevoAtivo(state)
+  if (campo && !podeAplainarObra(campo, x, z).ok) {
+    return { ok: false, motivo: 'Terreno íngreme demais para construir' }
+  }
   if (opcoes?.cobrarRecursos) {
     const qtdMesmo = state.obras.filter((o) => nossa(o) && o.tipo === tipo && o.hp > 0).length
     const custoMad = custoMadeiraObra(tipo, qtdMesmo)
@@ -1004,6 +1095,7 @@ export function fundar(
     construindoTotal: duracao,
     ...(custoBaseMadeiraPago !== undefined ? { custoBaseMadeiraPago } : {}),
   }
+  const campo = campoRelevoAtivo(state)
   return marcarChao({
     ...state,
     madeira,
@@ -1013,6 +1105,7 @@ export function fundar(
     obras: [...state.obras, obra],
     nextId: state.nextId + 1,
     versaoSolidos: tipo === 'portao' ? state.versaoSolidos : state.versaoSolidos + 1,
+    ...(campo ? { campoRelevo: aplicarPlataforma(campo, x, z) } : {}),
   })
 }
 
@@ -1586,6 +1679,19 @@ export function podeConsagrarEm(
   if (tipo !== 'nucleo' && state.credito < 1 && state.ouro < 2) {
     return { ok: false, motivo: 'Precisa 1 licença ou 2 ouros para consagrar' }
   }
+  const campo = campoRelevoAtivo(state)
+  if (campo && res.blocos.length > 0) {
+    let minH = Infinity
+    let maxH = -Infinity
+    for (const b of res.blocos) {
+      const h = alturaEm(campo, b.x * PASSO_BLOCO_MUNDO, b.z * PASSO_BLOCO_MUNDO)
+      if (h < minH) minH = h
+      if (h > maxH) maxH = h
+    }
+    if (maxH - minH > 0.6) {
+      return { ok: false, motivo: 'Terreno desigual sob a estrutura' }
+    }
+  }
   return { ok: true, totalBlocos: res.blocos.length, altura: res.altura }
 }
 
@@ -1796,6 +1902,7 @@ function separarAliados(
   recursos: readonly RecursoNatural[],
   dt: number,
   blocosMapa?: MapaBlocos,
+  campo?: CampoRelevo,
 ): Unidade[] {
   const aliadas = unidades.filter((u) => u.lado === 'aliado' && u.hp > 0)
   if (aliadas.length < 2) return unidades
@@ -1834,7 +1941,7 @@ function separarAliados(
   return unidades.map((u) => {
     const push = empuxos.get(u.id)
     if (!push) return u
-    const pos = escorrega(u.x, u.z, u.x + push.x, u.z + push.z, obras, solto, 0, recursos, null, blocosMapa)
+    const pos = escorrega(u.x, u.z, u.x + push.x, u.z + push.z, obras, solto, 0, recursos, null, blocosMapa, campo)
     return { ...u, x: pos.x, z: pos.z }
   })
 }
@@ -2268,6 +2375,7 @@ function executarTarefaConstrutor(
         [],
         state.subsoloCentro,
         state.blocosMapa,
+        campoRelevoAtivo(state),
       )
       return { state, construtor: { ...atualizado, x: prox.x, z: prox.z, yaw: yawAte(atualizado.x, atualizado.z, rec.x, rec.z) } }
     }
@@ -2318,6 +2426,7 @@ function executarTarefaConstrutor(
       state.recursos,
       state.subsoloCentro,
       state.blocosMapa,
+      campoRelevoAtivo(state),
     )
     return { state, construtor: { ...atualizado, x: prox.x, z: prox.z, yaw: yawAte(atualizado.x, atualizado.z, obra.x, obra.z) } }
   }
@@ -2552,10 +2661,7 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
     )
     idsElegiveis.forEach((id, i) => slotsPorId.set(id, slots[i]))
   }
-  const custoAgua =
-    state.lagoas.length > 0
-      ? (px: number, pz: number) => (emAguaRasa(state.lagoas, px, pz, 0) ? PARTIDA.custoAguaCaminho : 1)
-      : undefined
+  const { custoExtra: custoAgua, bloqueadoExtra } = opcoesCaminhoTerreno(state)
   const unidades = state.unidades.map((unidade) => {
     if (!quer.has(unidade.id) || unidade.lado !== 'aliado' || unidade.hp <= 0) return unidade
     const posturaBase = baseGuardada(unidade)
@@ -2580,7 +2686,7 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
     }
     if (ordem.tipo === 'attackMove') {
       const destino = slotsPorId.get(unidade.id) ?? puxaLimite(ordem.x, ordem.z)
-      const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua)
+      const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua, bloqueadoExtra)
       return {
         ...unidade,
         postura: 'ordens' as const,
@@ -2598,7 +2704,7 @@ export function ordenar(state: PartidaState, ids: readonly number[], ordem: Orde
     }
     if (ordem.tipo !== 'mover') return { ...unidade, postura: 'ordens' as const, posturaBase, ordem, rota: null }
     const destino = slotsPorId.get(unidade.id) ?? { x: ordem.x, z: ordem.z }
-    const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua)
+    const marcos = encontrarCaminho(unidade.x, unidade.z, destino.x, destino.z, bloqueios, custoAgua, bloqueadoExtra)
     return {
       ...unidade,
       postura: 'ordens' as const,
@@ -2712,12 +2818,34 @@ export function fecharAltar(state: PartidaState): PartidaState {
 
 export function abrirAltar(state: PartidaState, tier: GrauConta, correta: 0 | 1 | 2 | 3, placasAtivas = true): PartidaState {
   if (state.derrota) return state
+  const campo = campoRelevoAtivo(state)
+  let placasAtivasEfetivas = placasAtivas
+  if (campo && placasAtivasEfetivas) {
+    const cx = state.heroi.x
+    const cz = state.heroi.z
+    const p = PARTIDA.altarPasso
+    const pontos = [
+      [cx, cz + p],
+      [cx + p, cz],
+      [cx, cz - p],
+      [cx - p, cz],
+    ] as const
+    for (const [px, pz] of pontos) {
+      if (!transitavelEm(campo, px, pz)) {
+        const aj = ajustarAoTransitavel(campo, px, pz, 2)
+        if (!transitavelEm(campo, aj.x, aj.z) || Math.hypot(aj.x - px, aj.z - pz) > 2 + 1e-6) {
+          placasAtivasEfetivas = false
+          break
+        }
+      }
+    }
+  }
   return {
     ...state,
     altar: {
       tier,
       correta,
-      placasAtivas,
+      placasAtivas: placasAtivasEfetivas,
       cx: state.heroi.x,
       cz: state.heroi.z,
       resolvido: false,
@@ -3035,6 +3163,8 @@ function dispararDoAtor(
   const fz = Math.cos(ator.yaw)
   const olhar = vetorDoOlhar(ator.yaw, ator.pitch)
   const origemY = PARTIDA.eyeY + ator.y
+  const campo = campoRelevoAtivo(state)
+  const hAtor = campo ? alturaEm(campo, ator.x, ator.z) + ator.y : 0
   const alcance = ator.alcance
   let alvo: Unidade | null = null
   let obraAlvo: Obra | null = null
@@ -3046,7 +3176,9 @@ function dispararDoAtor(
       const dx = ponto.x - ator.x
       const dz = ponto.z - ator.z
       const alongChao = dx * fx + dz * fz
-      if (alongChao < 0.35 || alongChao > alcance + 0.05) continue
+      const hAlvo = campo ? alturaEm(campo, ponto.x, ponto.z) : 0
+      const alcanceEf = campo ? alcanceComAltura(alcance, hAtor, hAlvo) : alcance
+      if (alongChao < 0.35 || alongChao > alcanceEf + 0.05) continue
       if (!visaoLivreNoEstado(state, ator.x, ator.z, cotaHeroi, ponto.x, ponto.z, 0)) continue
       const corpo = aproximaCorpo(
         ator.x,
@@ -3067,7 +3199,9 @@ function dispararDoAtor(
   }
   for (const obra of state.obras) {
     if (nossa(obra) || obra.hp <= 0 || !cobertoAgora(state, obra.x, obra.z)) continue
-    if (Math.hypot(obra.x - ator.x, obra.z - ator.z) > alcance) continue
+    const hObra = campo ? alturaEm(campo, obra.x, obra.z) : 0
+    const alcanceEfObra = campo ? alcanceComAltura(alcance, hAtor, hObra) : alcance
+    if (Math.hypot(obra.x - ator.x, obra.z - ator.z) > alcanceEfObra) continue
     if (!visaoLivreNoEstado(state, ator.x, ator.z, cotaHeroi, obra.x, obra.z, 0)) continue
     const entrada = entradaNaObra(state, obra, olhar, origemY)
     if (!Number.isFinite(entrada) || entrada > melhor + 1e-8) continue
@@ -3075,7 +3209,9 @@ function dispararDoAtor(
     melhor = entrada
   }
   if (obraAlvo) {
-    const ferida = aplicarDanoObra(obraAlvo, ator.dano)
+    const fatorObra = campo ? fatorAltura(hAtor - alturaEm(campo, obraAlvo.x, obraAlvo.z)) : 1
+    const danoObra = campo ? Math.round(ator.dano * fatorObra * 100) / 100 : ator.dano
+    const ferida = aplicarDanoObra(obraAlvo, danoObra)
     return {
       ...gasto,
       obras: gasto.obras.map((obra) => (obra.id === obraAlvo.id ? ferida : obra)),
@@ -3102,9 +3238,11 @@ function dispararDoAtor(
     }
   }
   const id = alvo.id
-  const danoEfetivo = ator.tipoAtacante
+  const danoBase = ator.tipoAtacante
     ? Math.round(ator.dano * multiplicadorTrianguloAoE(ator.tipoAtacante, alvo.papel) * 100) / 100
     : ator.dano
+  const fatorAlt = campo ? fatorAltura(hAtor - alturaEm(campo, alvo.x, alvo.z)) : 1
+  const danoEfetivo = campo ? Math.round(danoBase * fatorAlt * 100) / 100 : danoBase
   return {
     ...gasto,
     unidades: gasto.unidades.map((unidade) =>
@@ -3184,12 +3322,18 @@ function moverUnidade(
   obras: readonly Obra[],
   lagoas: readonly LagoaRasa[] = [],
   blocosMapa?: MapaBlocos,
+  campo?: CampoRelevo,
+  mapaI?: number,
+  mapaJ?: number,
 ): Unidade {
   const dx = tx - unidade.x
   const dz = tz - unidade.z
   const dist = Math.hypot(dx, dz)
   if (dist < 0.08) return unidade
-  const fatorAgua = emAguaRasa(lagoas, unidade.x, unidade.z, 0) ? PARTIDA.aguaFatorVelocidade : 1
+  const emAgua =
+    emAguaRasa(lagoas, unidade.x, unidade.z, 0) ||
+    (campo !== undefined && PARTIDA.relevo.agua && pontoEmRio(mapaI, mapaJ, unidade.x, unidade.z))
+  const fatorAgua = emAgua ? PARTIDA.aguaFatorVelocidade : 1
   const passo = Math.min(velocidade * fatorAgua * dt, dist)
   const prox = escorrega(
     unidade.x,
@@ -3202,6 +3346,7 @@ function moverUnidade(
     [],
     null,
     blocosMapa,
+    campo,
   )
   return { ...unidade, x: prox.x, z: prox.z }
 }
@@ -3238,6 +3383,9 @@ function prepararRota(
   bloqueios: readonly Bloqueio[],
   modo: 'fixo' | 'vivo',
   lagoas: readonly LagoaRasa[] = [],
+  campo?: CampoRelevo,
+  mapaI?: number,
+  mapaJ?: number,
 ): Unidade {
   const rota = unidade.rota
   const venceu =
@@ -3246,11 +3394,20 @@ function prepararRota(
     rota.versao !== versao ||
     (modo === 'vivo' && tempo >= rota.renovarEm)
   if (!venceu) return unidade
+  const temAgua = lagoas.length > 0 || (campo !== undefined && PARTIDA.relevo.agua && PARTIDA.relevo.regras)
   const custoAgua =
-    lagoas.length > 0
-      ? (px: number, pz: number) => (emAguaRasa(lagoas, px, pz, 0) ? PARTIDA.custoAguaCaminho : 1)
+    temAgua || campo !== undefined
+      ? (px: number, pz: number) => {
+          const naAgua =
+            emAguaRasa(lagoas, px, pz, 0) ||
+            (campo !== undefined && PARTIDA.relevo.agua && pontoEmRio(mapaI, mapaJ, px, pz))
+          const multAgua = naAgua ? PARTIDA.custoAguaCaminho : 1
+          const multDecl = campo ? custoDecliveCaminho(campo, px, pz) : 1
+          return Math.max(multAgua, multDecl)
+        }
       : undefined
-  const marcos = encontrarCaminho(unidade.x, unidade.z, tx, tz, bloqueios, custoAgua)
+  const bloqueadoExtra = campo ? (px: number, pz: number) => !transitavelEm(campo, px, pz) : undefined
+  const marcos = encontrarCaminho(unidade.x, unidade.z, tx, tz, bloqueios, custoAgua, bloqueadoExtra)
   return {
     ...unidade,
     rota: {
@@ -3276,15 +3433,18 @@ function avancarRota(
   modo: 'fixo' | 'vivo',
   lagoas: readonly LagoaRasa[] = [],
   blocosMapa?: MapaBlocos,
+  campo?: CampoRelevo,
+  mapaI?: number,
+  mapaJ?: number,
 ): Unidade {
-  const atual = prepararRota(unidade, tx, tz, tempo, versao, bloqueios, modo, lagoas)
+  const atual = prepararRota(unidade, tx, tz, tempo, versao, bloqueios, modo, lagoas, campo, mapaI, mapaJ)
   if (atual.rota?.semCaminho) return atual
   let marcos = atual.rota?.marcos ?? [{ x: tx, z: tz }]
   while (marcos.length > 0 && Math.hypot(atual.x - marcos[0].x, atual.z - marcos[0].z) < 0.5) {
     marcos = marcos.slice(1)
   }
   const meta = marcos[0] ?? { x: tx, z: tz }
-  const moved = moverUnidade(atual, meta.x, meta.z, velocidade, dt, obras, lagoas, blocosMapa)
+  const moved = moverUnidade(atual, meta.x, meta.z, velocidade, dt, obras, lagoas, blocosMapa, campo, mapaI, mapaJ)
   const chegou = modo === 'fixo' && moved.ordem?.tipo === 'mover' && Math.hypot(moved.x - tx, moved.z - tz) < 0.5
   const devolve = chegou && moved.lado === 'aliado'
   return {
@@ -3354,11 +3514,8 @@ export function ordenarHeroi(state: PartidaState, ordem: Ordem): PartidaState {
     }
   }
   if (ordem.tipo === 'mover') {
-    const custoAgua =
-      limpo.lagoas.length > 0
-        ? (px: number, pz: number) => (emAguaRasa(limpo.lagoas, px, pz, 0) ? PARTIDA.custoAguaCaminho : 1)
-        : undefined
-    const marcos = encontrarCaminho(limpo.heroi.x, limpo.heroi.z, ordem.x, ordem.z, bloqueiosDe(limpo), custoAgua)
+    const { custoExtra: custoAgua, bloqueadoExtra } = opcoesCaminhoTerreno(limpo)
+    const marcos = encontrarCaminho(limpo.heroi.x, limpo.heroi.z, ordem.x, ordem.z, bloqueiosDe(limpo), custoAgua, bloqueadoExtra)
     return {
       ...limpo,
       heroiOrdem: {
@@ -3420,12 +3577,17 @@ function vigiarHeroi(state: PartidaState): PartidaState {
   if (Math.abs(state.heroi.pitch) >= PARTIDA.pitchTetoTiro) return state
   if (state.heroi.shootCooldown > 0) return state
   let melhor: Unidade | null = null
-  let distMelhor: number = PARTIDA.visao.heroi
+  const campo = campoRelevoAtivo(state)
+  const hHeroi = campo ? alturaEm(campo, state.heroi.x, state.heroi.z) + state.heroi.y : 0
+  let distMelhor: number = campo ? PARTIDA.visao.heroi + 4 : PARTIDA.visao.heroi
   const cota = cotaVisaoHeroiBlocos(state.heroi.y)
   for (const unidade of state.unidades) {
     if (unidade.lado !== 'inimigo' || unidade.hp <= 0 || unidade.papel === 'isca') continue
     const dist = Math.hypot(unidade.x - state.heroi.x, unidade.z - state.heroi.z)
-    if (dist > distMelhor) continue
+    const alcEf = campo
+      ? alcanceComAltura(PARTIDA.visao.heroi, hHeroi, alturaEm(campo, unidade.x, unidade.z))
+      : PARTIDA.visao.heroi
+    if (dist > alcEf || dist > distMelhor) continue
     if (!visaoLivreNoEstado(state, state.heroi.x, state.heroi.z, cota, unidade.x, unidade.z, 0)) continue
     distMelhor = dist
     melhor = unidade
@@ -3438,6 +3600,7 @@ function vigiarHeroi(state: PartidaState): PartidaState {
 function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
   const ordem = state.heroiOrdem
   if (!ordem || state.derrota) return state
+  const campo = campoRelevoAtivo(state)
   const bloqueios = bloqueiosDe(state)
   if (ordem.tipo === 'mover') {
     const andou = avancarRota(
@@ -3453,6 +3616,9 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
       'fixo',
       state.lagoas,
       state.blocosMapa,
+      campo,
+      state.mapaI,
+      state.mapaJ,
     )
     const chegou = Math.hypot(andou.x - ordem.x, andou.z - ordem.z) < 0.5
     return {
@@ -3473,8 +3639,12 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
     // Só aqui: no corpo o pitch é do jogador, e a vigia nunca o mexe.
     if (!obra) return { ...state, heroiOrdem: null, heroi: { ...state.heroi, pitch: 0 } }
     const dist = Math.hypot(state.heroi.x - obra.x, state.heroi.z - obra.z)
+    const hObra = campo ? alturaEm(campo, obra.x, obra.z) : 0
+    const alcAntes = campo
+      ? alcanceComAltura(PARTIDA.shootRange, alturaEm(campo, state.heroi.x, state.heroi.z) + state.heroi.y, hObra)
+      : PARTIDA.shootRange
     let atual = state
-    if (dist > PARTIDA.shootRange * 0.8) {
+    if (dist > alcAntes * 0.8) {
       const peri = aproximacaoDaObra(obra, state.heroi.x, state.heroi.z)
       const andou = avancarRota(
         sombraDoHeroi(state, ordem.rota),
@@ -3489,6 +3659,9 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
         'vivo',
         state.lagoas,
         state.blocosMapa,
+        campo,
+        state.mapaI,
+        state.mapaJ,
       )
       atual = {
         ...state,
@@ -3500,14 +3673,18 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
     const distAtual = Math.max(0.5, Math.hypot(atual.heroi.x - obra.x, atual.heroi.z - obra.z))
     const pitch = clampPitch(Math.atan2(OBRA_CENTRO_Y - (PARTIDA.eyeY + atual.heroi.y), distAtual))
     atual = { ...atual, heroi: { ...atual.heroi, yaw, pitch } }
-    if (Math.hypot(atual.heroi.x - obra.x, atual.heroi.z - obra.z) <= PARTIDA.shootRange) return atirar(atual)
+    const alcDepois = campo
+      ? alcanceComAltura(PARTIDA.shootRange, alturaEm(campo, atual.heroi.x, atual.heroi.z) + atual.heroi.y, hObra)
+      : PARTIDA.shootRange
+    if (Math.hypot(atual.heroi.x - obra.x, atual.heroi.z - obra.z) <= alcDepois) return atirar(atual)
     return atual
   }
   if (ordem.tipo === 'patrulhar' || ordem.tipo === 'attackMove') {
     const alcHeroi = SPEC_HEROI[state.heroi.classe ?? 'ataque'].alcance
+    const hHeroi = campo ? alturaEm(campo, state.heroi.x, state.heroi.z) + state.heroi.y : 0
     const cota = cotaVisaoHeroiBlocos(state.heroi.y)
     let melhorIni: Unidade | null = null
-    let melhorDist: number = Math.max(PARTIDA.visao.heroi, alcHeroi)
+    let melhorDist: number = Math.max(PARTIDA.visao.heroi, alcHeroi + (campo ? 4 : 0))
     for (const u of state.unidades) {
       if (u.lado !== 'inimigo' || u.hp <= 0 || u.papel === 'isca') continue
       const d = Math.hypot(u.x - state.heroi.x, u.z - state.heroi.z)
@@ -3518,7 +3695,8 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
     }
     if (melhorIni) {
       const yaw = yawAte(state.heroi.x, state.heroi.z, melhorIni.x, melhorIni.z)
-      if (melhorDist <= alcHeroi) {
+      const alcEf = campo ? alcanceComAltura(alcHeroi, hHeroi, alturaEm(campo, melhorIni.x, melhorIni.z)) : alcHeroi
+      if (melhorDist <= alcEf) {
         return atirar({ ...state, heroi: { ...state.heroi, yaw, pitch: 0 } })
       }
       const andou = avancarRota(
@@ -3534,6 +3712,9 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
         'vivo',
         state.lagoas,
         state.blocosMapa,
+        campo,
+        state.mapaI,
+        state.mapaJ,
       )
       return {
         ...state,
@@ -3566,6 +3747,9 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
         'fixo',
         state.lagoas,
         state.blocosMapa,
+        campo,
+        state.mapaI,
+        state.mapaJ,
       )
       return {
         ...state,
@@ -3594,6 +3778,9 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
       'fixo',
       state.lagoas,
       state.blocosMapa,
+      campo,
+      state.mapaI,
+      state.mapaJ,
     )
     return {
       ...state,
@@ -3610,8 +3797,12 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
   const alvo = state.unidades.find((unidade) => unidade.id === ordem.alvoId && unidade.hp > 0)
   if (!alvo) return { ...state, heroiOrdem: null }
   const dist = Math.hypot(state.heroi.x - alvo.x, state.heroi.z - alvo.z)
+  const hAlvo = campo ? alturaEm(campo, alvo.x, alvo.z) : 0
+  const alcAlvoAntes = campo
+    ? alcanceComAltura(PARTIDA.shootRange, alturaEm(campo, state.heroi.x, state.heroi.z) + state.heroi.y, hAlvo)
+    : PARTIDA.shootRange
   let atual = state
-  if (dist > PARTIDA.shootRange * 0.8) {
+  if (dist > alcAlvoAntes * 0.8) {
     const andou = avancarRota(
       sombraDoHeroi(state, ordem.rota),
       alvo.x,
@@ -3625,6 +3816,9 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
       'vivo',
       state.lagoas,
       state.blocosMapa,
+      campo,
+      state.mapaI,
+      state.mapaJ,
     )
     atual = {
       ...state,
@@ -3634,7 +3828,10 @@ function seguirOrdemHeroi(state: PartidaState, dt: number): PartidaState {
   }
   const yaw = yawAte(atual.heroi.x, atual.heroi.z, alvo.x, alvo.z)
   atual = { ...atual, heroi: { ...atual.heroi, yaw, pitch: 0 } }
-  if (Math.hypot(atual.heroi.x - alvo.x, atual.heroi.z - alvo.z) <= PARTIDA.shootRange) return atirar(atual)
+  const alcAlvoDepois = campo
+    ? alcanceComAltura(PARTIDA.shootRange, alturaEm(campo, atual.heroi.x, atual.heroi.z) + atual.heroi.y, hAlvo)
+    : PARTIDA.shootRange
+  if (Math.hypot(atual.heroi.x - alvo.x, atual.heroi.z - alvo.z) <= alcAlvoDepois) return atirar(atual)
   return atual
 }
 
@@ -3682,7 +3879,7 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
     mx /= mag
     mz /= mag
   }
-  const fatorAgua = emAguaRasa(state.lagoas, state.heroi.x, state.heroi.z, state.heroi.y)
+  const fatorAgua = terrenoAguaNoPonto(state, state.heroi.x, state.heroi.z, state.heroi.y)
     ? PARTIDA.aguaFatorVelocidade
     : 1
   const dist = PARTIDA.heroSpeed * fatorAgua * dt
@@ -3699,6 +3896,7 @@ function passoHeroi(state: PartidaState, input: PartidaInput, dt: number): Parti
     state.recursos,
     state.subsoloCentro,
     state.blocosMapa,
+    campoRelevoAtivo(state),
   )
   let army = state.heroi.army
   let carregandoKg = state.heroi.carregandoKg
@@ -3879,7 +4077,12 @@ function specDeTropa(unidade: Unidade, upgrades?: UpgradesEra): SpecTropaAliada 
 }
 
 function emAlcanceDeUnidade(state: PartidaState, unidade: Unidade, alvo: Unidade, spec: SpecTropaAliada): boolean {
-  if (Math.hypot(alvo.x - unidade.x, alvo.z - unidade.z) > spec.alcance) return false
+  const campo = campoRelevoAtivo(state)
+  const alcEf =
+    campo && spec.alcance > PARTIDA.melee + 0.5
+      ? alcanceComAltura(spec.alcance, alturaEm(campo, unidade.x, unidade.z), alturaEm(campo, alvo.x, alvo.z))
+      : spec.alcance
+  if (Math.hypot(alvo.x - unidade.x, alvo.z - unidade.z) > alcEf) return false
   if (spec.alcance <= PARTIDA.melee + 0.5) return true
   return visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), alvo.x, alvo.z, 0)
 }
@@ -3887,8 +4090,12 @@ function emAlcanceDeUnidade(state: PartidaState, unidade: Unidade, alvo: Unidade
 function emAlcanceDeObra(state: PartidaState, unidade: Unidade, obra: Obra, spec: SpecTropaAliada): boolean {
   if (emContatoComObra(unidade.x, unidade.z, obra)) return true
   if (spec.alcance <= PARTIDA.melee + 0.5) return false
+  const campo = campoRelevoAtivo(state)
+  const alcEf = campo
+    ? alcanceComAltura(spec.alcance + 1.5, alturaEm(campo, unidade.x, unidade.z), alturaEm(campo, obra.x, obra.z))
+    : spec.alcance + 1.5
   return (
-    Math.hypot(obra.x - unidade.x, obra.z - unidade.z) <= spec.alcance + 1.5 &&
+    Math.hypot(obra.x - unidade.x, obra.z - unidade.z) <= alcEf &&
     visaoLivreNoEstado(state, unidade.x, unidade.z, cotaVisaoHeroiBlocos(0), obra.x, obra.z, 0)
   )
 }
@@ -3963,6 +4170,7 @@ function passoVigiaUnidade(
   }
   const spec = specDeTropa(unidade, state.upgradesEra)
   const alvo = alvoId === null ? undefined : inimigos.find((item) => item.id === alvoId)
+  const campo = campoRelevoAtivo(state)
   if (alvo) {
     if (!ancora) ancora = { x: unidade.x, z: unidade.z }
     else if (Math.hypot(alvo.x - ancora.x, alvo.z - ancora.z) > PARTIDA.acquireAliado) {
@@ -3983,6 +4191,9 @@ function passoVigiaUnidade(
       'vivo',
       state.lagoas,
       blocosMapa,
+      campo,
+      state.mapaI,
+      state.mapaJ,
     )
   }
   const obrasHostis = obras.filter(
@@ -4036,6 +4247,9 @@ function passoVigiaUnidade(
     'vivo',
     state.lagoas,
     blocosMapa,
+    campo,
+    state.mapaI,
+    state.mapaJ,
   )
 }
 
@@ -4044,6 +4258,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
   const alvosObra = obrasVivas.map((obra) => ({ id: obra.id, x: obra.x, z: obra.z }))
   const bloqueios = bloqueiosDe(state)
   const versao = state.versaoSolidos
+  const campo = campoRelevoAtivo(state)
   let obras: Obra[] = state.obras.map((obra) => ({
     ...obra,
     cooldown: Math.max(0, obra.cooldown - dt),
@@ -4106,10 +4321,13 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         'vivo',
         state.lagoas,
         blocosMapa,
+        campo,
+        state.mapaI,
+        state.mapaJ,
       )
       if (ido.rota?.semCaminho) {
         const muro = blocoMaisProximo(unidade.x, unidade.z)
-        if (muro) return { ...moverUnidade(ido, muro.x, muro.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa), alerta: true }
+        if (muro) return { ...moverUnidade(ido, muro.x, muro.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa, campo, state.mapaI, state.mapaJ), alerta: true }
       }
       return { ...ido, alerta: true }
     }
@@ -4136,6 +4354,9 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
           'vivo',
           state.lagoas,
           blocosMapa,
+          campo,
+          state.mapaI,
+          state.mapaJ,
         )
         if (!ido.rota?.semCaminho) return registrarTrilha(unidade, ido)
         const muro = blocoMaisProximo(unidade.x, unidade.z)
@@ -4143,10 +4364,10 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         const id = maisPerto(unidade.x, unidade.z, solidos)
         const alvoObra = solidos.find((obra) => obra.id === id)
         if (muro && (!alvoObra || Math.hypot(muro.x - unidade.x, muro.z - unidade.z) <= Math.hypot(alvoObra.x - unidade.x, alvoObra.z - unidade.z))) {
-          return registrarTrilha(unidade, moverUnidade(ido, muro.x, muro.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa))
+          return registrarTrilha(unidade, moverUnidade(ido, muro.x, muro.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa, campo, state.mapaI, state.mapaJ))
         }
         if (!alvoObra) return registrarTrilha(unidade, ido)
-        return registrarTrilha(unidade, moverUnidade(ido, alvoObra.x, alvoObra.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa))
+        return registrarTrilha(unidade, moverUnidade(ido, alvoObra.x, alvoObra.z, PARTIDA.enemySpeed, dt, obras, state.lagoas, blocosMapa, campo, state.mapaI, state.mapaJ))
       }
     }
     if (unidade.lado === 'inimigo') {
@@ -4162,7 +4383,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       if (!alvo) return registrarTrilha(unidade, unidade)
       return registrarTrilha(
         unidade,
-        avancarRota(unidade, alvo.x, alvo.z, PARTIDA.enemySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa),
+        avancarRota(unidade, alvo.x, alvo.z, PARTIDA.enemySpeed, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa, campo, state.mapaI, state.mapaJ),
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'mover') {
@@ -4179,6 +4400,9 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         'fixo',
         state.lagoas,
         blocosMapa,
+        campo,
+        state.mapaI,
+        state.mapaJ,
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacarObra') {
@@ -4211,6 +4435,9 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         'vivo',
         state.lagoas,
         blocosMapa,
+        campo,
+        state.mapaI,
+        state.mapaJ,
       )
     }
     if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacar') {
@@ -4249,6 +4476,9 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         'vivo',
         state.lagoas,
         blocosMapa,
+        campo,
+        state.mapaI,
+        state.mapaJ,
       )
     }
     if (unidade.postura === 'ordens' && (unidade.ordem?.tipo === 'patrulhar' || unidade.ordem?.tipo === 'attackMove')) {
@@ -4269,7 +4499,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         const ancora = baseEngaj ?? { x: unidade.x, z: unidade.z }
         const comAncora = { ...unidade, ancora }
         if (emAlcanceDeUnidade(state, unidade, alvo, spec)) return comAncora
-        return avancarRota(comAncora, alvo.x, alvo.z, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
+        return avancarRota(comAncora, alvo.x, alvo.z, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa, campo, state.mapaI, state.mapaJ)
       }
       const obrasHostis = obras.filter(
         (item) =>
@@ -4289,7 +4519,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         const comObra = { ...unidade, ancora }
         if (emAlcanceDeObra(state, unidade, alvoObra, spec)) return comObra
         const peri = aproximacaoDaObra(alvoObra, unidade.x, unidade.z)
-        return avancarRota(comObra, peri.x, peri.z, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa)
+        return avancarRota(comObra, peri.x, peri.z, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'vivo', state.lagoas, blocosMapa, campo, state.mapaI, state.mapaJ)
       }
       const retomando = unidade.ancora ? { ...unidade, ancora: null } : unidade
       if (retomando.ordem?.tipo === 'patrulhar') {
@@ -4313,9 +4543,12 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
             'fixo',
             state.lagoas,
             blocosMapa,
+            campo,
+            state.mapaI,
+            state.mapaJ,
           )
         }
-        return avancarRota(retomando, alvoX, alvoZ, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'fixo', state.lagoas, blocosMapa)
+        return avancarRota(retomando, alvoX, alvoZ, spec.vel, dt, obras, state.tempo, versao, bloqueios, 'fixo', state.lagoas, blocosMapa, campo, state.mapaI, state.mapaJ)
       }
       if (retomando.ordem?.tipo === 'attackMove') {
         if (Math.hypot(retomando.ordem.x - retomando.x, retomando.ordem.z - retomando.z) < 0.9) {
@@ -4334,6 +4567,9 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
           'fixo',
           state.lagoas,
           blocosMapa,
+          campo,
+          state.mapaI,
+          state.mapaJ,
         )
       }
     }
@@ -4343,7 +4579,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     return unidade
   })
 
-  unidades = separarAliados(unidades, obras, state.recursos, dt, blocosMapa)
+  unidades = separarAliados(unidades, obras, state.recursos, dt, blocosMapa, campo)
 
   const fere = (id: number, dano: number) => {
     unidades = unidades.map((unidade) => (unidade.id === id ? fereDragaoOuCorpo(unidade, dano) : unidade))
@@ -4368,22 +4604,30 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     }
   }
 
+  const fatorTiro = (ax: number, az: number, bx: number, bz: number, ranged: boolean) =>
+    campo && ranged ? fatorAltura(alturaEm(campo, ax, az) - alturaEm(campo, bx, bz)) : 1
   const agressores = new Set<number>()
   for (const unidade of unidades) {
     if (unidade.hp <= 0 || unidade.cooldown > 0) continue
     if (state.posse && unidade.id === state.posse.unidadeId) continue
     if (unidade.lado === 'aliado') {
       const spec = specDeTropa(unidade, state.upgradesEra)
+      const ranged = spec.alcance > PARTIDA.melee + 0.5
       const tipoAtacante = unidade.tipoTropa ?? 'soldado'
       if (unidade.postura === 'calado') continue
       if (unidade.postura === 'noLugar') {
         const inimigosParados = unidades.filter(
-          (item) => item.lado === 'inimigo' && item.hp > 0 && Math.hypot(item.x - unidade.x, item.z - unidade.z) <= spec.alcance,
+          (item) => item.lado === 'inimigo' && item.hp > 0 && emAlcanceDeUnidade(state, unidade, item, spec),
         )
         const paradoId = maisPerto(unidade.x, unidade.z, inimigosParados)
         const parado = paradoId === null ? undefined : unidades.find((item) => item.id === paradoId && item.hp > 0)
         if (parado && emAlcanceDeUnidade(state, unidade, parado, spec)) {
-          fere(parado.id, spec.danoBase * multiplicadorTrianguloAoE(tipoAtacante, parado.papel))
+          fere(
+            parado.id,
+            spec.danoBase *
+              multiplicadorTrianguloAoE(tipoAtacante, parado.papel) *
+              fatorTiro(unidade.x, unidade.z, parado.x, parado.z, ranged),
+          )
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -4393,7 +4637,7 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacarObra') {
         const alvoObra = obraInimigaViva(unidade.ordem.obraId)
         if (alvoObra && emAlcanceDeObra(state, unidade, alvoObra, spec)) {
-          fereObra(alvoObra.id, spec.danoOrdem)
+          fereObra(alvoObra.id, spec.danoOrdem * fatorTiro(unidade.x, unidade.z, alvoObra.x, alvoObra.z, ranged))
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -4408,13 +4652,17 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       if (unidade.postura === 'ordens' && unidade.ordem?.tipo === 'atacar') alvoId = unidade.ordem.alvoId
       if (emBuscaAtiva) {
         const inimigos = unidades.filter((item) => item.lado === 'inimigo' && item.hp > 0)
-        alvoId = maisPerto(unidade.x, unidade.z, inimigos.filter((item) => Math.hypot(item.x - unidade.x, item.z - unidade.z) <= spec.alcance + 0.2))
+        const alcBusca = campo && ranged ? spec.alcance + 4 : spec.alcance + 0.2
+        alvoId = maisPerto(unidade.x, unidade.z, inimigos.filter((item) => Math.hypot(item.x - unidade.x, item.z - unidade.z) <= alcBusca))
       }
       if (alvoId !== null) {
         const alvo = unidades.find((item) => item.id === alvoId && item.hp > 0)
         if (alvo && emAlcanceDeUnidade(state, unidade, alvo, spec)) {
           const base = unidade.postura === 'ordens' ? spec.danoOrdem : spec.danoBase
-          const dano = base * multiplicadorTrianguloAoE(tipoAtacante, alvo.papel)
+          const dano =
+            base *
+            multiplicadorTrianguloAoE(tipoAtacante, alvo.papel) *
+            fatorTiro(unidade.x, unidade.z, alvo.x, alvo.z, ranged)
           fere(alvo.id, dano)
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
@@ -4426,7 +4674,11 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
         const obrasEmContato = obras.filter((item) => !nossa(item) && item.hp > 0 && emAlcanceDeObra(state, unidade, item, spec))
         const obraId = maisPerto(unidade.x, unidade.z, obrasEmContato)
         if (obraId !== null) {
-          fereObra(obraId, unidade.postura === 'ordens' ? spec.danoOrdem : spec.danoBase)
+          const alvoObra = obrasEmContato.find((o) => o.id === obraId)
+          const danoObra =
+            (unidade.postura === 'ordens' ? spec.danoOrdem : spec.danoBase) *
+            (alvoObra ? fatorTiro(unidade.x, unidade.z, alvoObra.x, alvoObra.z, ranged) : 1)
+          fereObra(obraId, danoObra)
           unidades = unidades.map((item) =>
             item.id === unidade.id ? { ...item, cooldown: PARTIDA.golpeCooldown } : item,
           )
@@ -4491,36 +4743,42 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
     const alcance = alcanceDaTorre(torre)
     const danoTorre = danoDaTorreNoNivel(torre.nivel)
     const cotaTorre = cotaVisaoTorreBlocos(torre.nivel)
+    const hTorre = campo ? alturaEm(campo, torre.x, torre.z) : 0
 
     // 1º: Prioridade tática máxima — abater em 1 tiro qualquer construção rival ainda em andaime no alcance (respeitando LoS 2.5D)!
     let andaimeId: number | null = null
-    let melhorAndaime = alcance
+    let melhorAndaime = Number.POSITIVE_INFINITY
     for (const rival of obras) {
       const hostil = torre.lado === 'inimigo' ? nossa(rival) : !nossa(rival)
       if (!hostil || !obraEmConstrucao(rival)) continue
       if (torre.lado !== 'inimigo' && !cobertoAgora(state, rival.x, rival.z)) continue
       if (!visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, rival.x, rival.z, 0)) continue
+      const alcEf = campo ? alcanceComAltura(alcance, hTorre, alturaEm(campo, rival.x, rival.z)) : alcance
       const dist = Math.hypot(rival.x - torre.x, rival.z - torre.z)
-      if (dist <= alcance && dist <= melhorAndaime) {
+      if (dist <= alcEf && dist <= melhorAndaime) {
         melhorAndaime = dist
         andaimeId = rival.id
       }
     }
     if (andaimeId !== null) {
-      fereObra(andaimeId, danoTorre)
+      const andaimeAlvo = obras.find((o) => o.id === andaimeId)
+      const danoEf =
+        campo && andaimeAlvo ? danoTorre * fatorAltura(hTorre - alturaEm(campo, andaimeAlvo.x, andaimeAlvo.z)) : danoTorre
+      fereObra(andaimeId, danoEf)
       obras = obras.map((item) => (item.id === torre.id ? { ...item, cooldown: PARTIDA.torreCooldown } : item))
       continue
     }
 
     // 2º: Unidades hostis vivas (e herói presente para torre inimiga), respeitando LoS 2.5D por altura da torre
-    let melhor = alcance
+    let melhor = Number.POSITIVE_INFINITY
     let id: number | null = null
     for (const item of unidades) {
       const hostil = torre.lado === 'inimigo' ? item.lado === 'aliado' : item.lado === 'inimigo'
       if (!hostil || item.hp <= 0 || jaAlvo.has(item.id)) continue
       for (const ponto of pontosDoCorpo(item)) {
+        const alcEf = campo ? alcanceComAltura(alcance, hTorre, alturaEm(campo, ponto.x, ponto.z)) : alcance
         const dist = Math.hypot(ponto.x - torre.x, ponto.z - torre.z)
-        if (dist <= alcance && dist <= melhor && visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, ponto.x, ponto.z, 0)) {
+        if (dist <= alcEf && dist <= melhor && visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, ponto.x, ponto.z, 0)) {
           melhor = dist
           id = item.id
         }
@@ -4534,8 +4792,10 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       (state.heroi.invulneravelRestante ?? 0) <= 0 &&
       !jaAlvo.has(-1)
     ) {
+      const hHeroi = campo ? alturaEm(campo, state.heroi.x, state.heroi.z) + state.heroi.y : 0
+      const alcEfHeroi = campo ? alcanceComAltura(alcance, hTorre, hHeroi) : alcance
       const dist = Math.hypot(state.heroi.x - torre.x, state.heroi.z - torre.z)
-      if (dist <= alcance && dist <= melhor && visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, state.heroi.x, state.heroi.z, state.heroi.y)) {
+      if (dist <= alcEfHeroi && dist <= melhor && visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, state.heroi.x, state.heroi.z, state.heroi.y)) {
         id = -1
       }
     }
@@ -4544,14 +4804,19 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
       // A vida do HERÓI é um inteiro (`clampVidaPartida` faz `floor`, o HUD mostra o número exato). O dano da torre agora é fracionário a partir do nível 3 (13,5), e `army − 13,5` com `floor` já tiraria 14 por acaso
       // do arredondamento: o `ceil` explícito diz a regra em voz alta (um golpe nunca tira «meio ponto» a menos) e não depende do `floor` de outra função. Unidades e obras têm vida fracionária: o dano vale inteiro.
       if (id === -1) {
-        army = clampVidaPartida(army - aplicarReducaoHeroi(Math.ceil(danoTorre), state.heroi.classe))
+        const danoHeroiEf = campo
+          ? danoTorre * fatorAltura(hTorre - (alturaEm(campo, state.heroi.x, state.heroi.z) + state.heroi.y))
+          : danoTorre
+        army = clampVidaPartida(army - aplicarReducaoHeroi(Math.ceil(danoHeroiEf), state.heroi.classe))
       } else {
         const alvoUn = unidades.find((u) => u.id === id)
         const mult =
           torre.lado === 'inimigo' && alvoUn?.lado === 'aliado' && alvoUn.tipoTropa
             ? multiplicadorTrianguloAoE('torre', alvoUn.tipoTropa)
             : 1
-        fere(id, danoTorre * mult)
+        const danoUnEf =
+          campo && alvoUn ? danoTorre * fatorAltura(hTorre - alturaEm(campo, alvoUn.x, alvoUn.z)) : danoTorre
+        fere(id, danoUnEf * mult)
       }
       obras = obras.map((item) => (item.id === torre.id ? { ...item, cooldown: PARTIDA.torreCooldown } : item))
       continue
@@ -4559,20 +4824,24 @@ function passoUnidades(state: PartidaState, dt: number): PartidaState {
 
     // 3º: Duelo entre construções — se não houver unidade hostil no alcance, alvejar a construção rival viva com LoS livre!
     let obraRivalId: number | null = null
-    let melhorObra = alcance
+    let melhorObra = Number.POSITIVE_INFINITY
     for (const rival of obras) {
       const hostil = torre.lado === 'inimigo' ? nossa(rival) : !nossa(rival)
       if (!hostil || rival.hp <= 0) continue
       if (torre.lado !== 'inimigo' && !cobertoAgora(state, rival.x, rival.z)) continue
       if (!visaoLivreNoEstado(state, torre.x, torre.z, cotaTorre, rival.x, rival.z, 0)) continue
+      const alcEf = campo ? alcanceComAltura(alcance, hTorre, alturaEm(campo, rival.x, rival.z)) : alcance
       const dist = Math.hypot(rival.x - torre.x, rival.z - torre.z)
-      if (dist <= alcance && dist <= melhorObra) {
+      if (dist <= alcEf && dist <= melhorObra) {
         melhorObra = dist
         obraRivalId = rival.id
       }
     }
     if (obraRivalId !== null) {
-      fereObra(obraRivalId, danoTorre)
+      const obraAlvo = obras.find((o) => o.id === obraRivalId)
+      const danoObraEf =
+        campo && obraAlvo ? danoTorre * fatorAltura(hTorre - alturaEm(campo, obraAlvo.x, obraAlvo.z)) : danoTorre
+      fereObra(obraRivalId, danoObraEf)
       obras = obras.map((item) => (item.id === torre.id ? { ...item, cooldown: PARTIDA.torreCooldown } : item))
     }
   }
@@ -4732,7 +5001,7 @@ function passoPosse(state: PartidaState, input: PartidaInput, dt: number): Parti
     mz /= mag
   }
   const spec = specDeTropa(alvo, state.upgradesEra)
-  const fatorAgua = emAguaRasa(state.lagoas, alvo.x, alvo.z, state.posse.y) ? PARTIDA.aguaFatorVelocidade : 1
+  const fatorAgua = terrenoAguaNoPonto(state, alvo.x, alvo.z, state.posse.y) ? PARTIDA.aguaFatorVelocidade : 1
   const dist = spec.vel * fatorAgua * dt
   const x1 = alvo.x + mx * dist
   const z1 = alvo.z + mz * dist
@@ -4747,6 +5016,7 @@ function passoPosse(state: PartidaState, input: PartidaInput, dt: number): Parti
     state.recursos,
     state.subsoloCentro,
     state.blocosMapa,
+    campoRelevoAtivo(state),
   )
   const clamped = puxaLimite(pos.x, pos.z)
   const queda = cair(

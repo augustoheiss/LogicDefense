@@ -378,6 +378,14 @@ export function riosDoQuadrado(i: number, j: number, alturaBase: AlturaDeBase): 
   return cadeiasDoQuadrado(i, j).map((c) => rioDaCadeia(c, alturaBase))
 }
 
+/** As poligonais globais dos rios que tocam `(i, j)`, sem tocar na `memoriaDeRios`. */
+export function poligonaisDosRiosNoQuadrado(
+  i: number,
+  j: number,
+): ReadonlyArray<ReadonlyArray<{ readonly X: number; readonly Z: number }>> {
+  return cadeiasDoQuadrado(i, j).map(poligonal)
+}
+
 const funcaoDoRio = new WeakMap<Rio, AlturaDeBase>()
 function rioDaCadeia(c: Cadeia, alturaBase: AlturaDeBase): Rio {
   const id = `${c.eixo}${c.lane}:${c.s}:${c.edges[0].k}`

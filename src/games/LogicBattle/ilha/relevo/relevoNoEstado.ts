@@ -22,6 +22,8 @@ export const ORCAMENTO_POR_QUADRO_MS = 4
 export interface RelevoDoMundo {
   /** O campo pronto do quadrado, ou `undefined` enquanto não terminou (o chão fica plano). Nunca um campo pela metade. */
   campoDe(i: number, j: number): CampoRelevo | undefined
+  /** Atualiza o campo em cache desta instância (ex.: plataformas criadas em F3) sem alterar o cache global do gerador. */
+  atualizarCampo(campo: CampoRelevo): void
   /** Pede o campo de um quadrado. Pedir de novo (em andamento, na fila ou pronto) não faz nada. */
   pedir(i: number, j: number): void
   /** O jogador saiu de vista: descarta a geração em andamento ou na fila (não gasta mais orçamento). Um campo pronto continua em cache. */
@@ -73,6 +75,14 @@ export function criarRelevoDoMundo(opcoes: OpcoesDoRelevoDoMundo = {}): RelevoDo
 
   return {
     campoDe: (i, j) => prontos.get(chave(i, j)),
+
+    atualizarCampo(campo) {
+      const k = chave(campo.i, campo.j)
+      const atual = prontos.get(k)
+      if (!atual || campo.versao > atual.versao) {
+        prontos.set(k, campo)
+      }
+    },
 
     pedir(i, j) {
       const k = chave(i, j)

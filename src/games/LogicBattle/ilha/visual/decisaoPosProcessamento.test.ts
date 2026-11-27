@@ -46,8 +46,8 @@ export function contratoDasChaves(politicas: string): void {
   // O AMBIENTE (IBL) é a terceira chave: ligada em 27/11/2026 junto com `fatorDeReflexo` por material na cena.
   assert(/\bambienteIbl: true as boolean,/.test(codigo), 'PARTIDA.ambienteIbl está LIGADA com reflexo por material aplicado (decisão do usuário, 27/11/2026)')
   assert((codigo.match(/\bambienteIbl:/g) ?? []).length === 1, 'a chave do ambiente é declarada uma única vez')
-  // O RELEVO VISUAL e os RIOS (F2, 27/11/2026): ligados por pedido do usuário («Sim pode ligar tudo mermão»); as regras e os lagos nas bordas seguem fora até a F3.
-  assert(/\brelevo: \{\s*visual: true as boolean,\s*agua: true as boolean,?\s*\},/.test(codigo), 'PARTIDA.relevo.visual E PARTIDA.relevo.agua estão LIGADAS (decisão do usuário, 27/11/2026)')
+  // O RELEVO VISUAL, os RIOS e as REGRAS (F2+F3, 27/11/2026): ligados por autorização explícita do usuário (inclui o «ok» separado para F3).
+  assert(/\brelevo: \{\s*visual: true as boolean,\s*agua: true as boolean,\s*regras: true as boolean,?\s*\},/.test(codigo), 'PARTIDA.relevo.{visual, agua, regras} estão LIGADAS (decisão do usuário, 27/11/2026)')
   assert((codigo.match(/\bagua: /g) ?? []).length === 1, 'a propriedade `agua` do relevo é declarada uma única vez (nenhum outro `agua:` solto na política)')
   assert((codigo.match(/\brelevo:/g) ?? []).length === 1, 'a chave do relevo é declarada uma única vez')
   assert((codigo.match(/\bvisual: /g) ?? []).length === 1, 'a propriedade `visual` do relevo é declarada uma única vez (nenhum outro `visual:` solto na política)')
