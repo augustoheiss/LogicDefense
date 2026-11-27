@@ -1,6 +1,10 @@
 import { emAguaRasa, type LagoaRasa } from '../biomaRecursos'
 import { classificarSuporteObra, pegadaEfetivaFundacao, type TipoSuporteFundacao, Y_AGUA_VISUAL, Y_SOLO_VISUAL } from '../visual/suporteFundacao'
 import { alturaEm, type CampoRelevo } from './campoRelevo'
+import { desnivelDaMalha, type ChaoDaMalha } from './chaoDaMalha'
+
+/** O chão que o DESENHO consulta: o campo cru (a altura bilinear de hoje) ou o chão visto (a malha que o GPU desenha). Um tipo só para os 44 pontos que repassam o que recebem. */
+export type ChaoDoDesenho = CampoRelevo | ChaoDaMalha
 
 /**
  * A FONTE ÚNICA da altura do chão DESENHADO (F2, 24/11/2026). Lógica PURA, testada no Node (`relevoVisual.test.ts`).
@@ -20,7 +24,7 @@ import { alturaEm, type CampoRelevo } from './campoRelevo'
  * diferente de zero. Um objeto com a posição corrompida apareceria elevado (medido em 24/11: dá 0 em (0,0) só porque a praça é plana). Um valor finito fora do quadrado prende na borda, como `alturaEm`:
  * um objeto na emenda entre dois quadrados não pula.
  */
-export function alturaVisualDoChao(campo: CampoRelevo | undefined, x: number, z: number): number {
+export function alturaVisualDoChao(campo: ChaoDoDesenho | undefined, x: number, z: number): number {
   return Y_SOLO_VISUAL + desnivelDoChao(campo, x, z)
 }
 
@@ -30,8 +34,11 @@ export function alturaVisualDoChao(campo: CampoRelevo | undefined, x: number, z:
  * `campo ? alturaVisualDoChao(campo, x, z) − Y_SOLO_VISUAL : 0` já aparecia copiada em 2 lugares e as obras a repetiriam: uma cópia é onde alguém esquece o `− Y_SOLO_VISUAL` e o chão sobe 0,45 m
  * num plano.
  */
-export function desnivelDoChao(campo: CampoRelevo | undefined, x: number, z: number): number {
+export function desnivelDoChao(campo: ChaoDoDesenho | undefined, x: number, z: number): number {
   if (!campo || !Number.isFinite(x) || !Number.isFinite(z)) return 0
+  // O CHÃO VISTO (a malha que o GPU desenha) e o campo CRU (a altura bilinear de hoje) são DOIS tipos: um `ChaoDaMalha` tem `campo` e `passo`, um `CampoRelevo` tem `alturas`. Quem produz o objeto escolhe qual chão
+  // o desenho usa (F2, 26/11, decisão do usuário: amostrar a malha); os 44 pontos só repassam o que recebem.
+  if ('passo' in campo) return desnivelDaMalha(campo, x, z)
   return alturaEm(campo, x, z)
 }
 
@@ -41,7 +48,7 @@ export function desnivelDoChao(campo: CampoRelevo | undefined, x: number, z: num
  * de uma lagoa (a MESMA `emAguaRasa` que a regra e a água desenhada usam) o apoio é a LÂMINA, medida a partir do plano de hoje (`Y_AGUA_VISUAL − Y_SOLO_VISUAL`); se o chão ali estiver ACIMA dela (uma
  * ilhota), vale o maior dos dois. Fora de qualquer lagoa é o `desnivelDoChao`. Sem campo (ou `x`/`z` que não são números finitos) é EXATAMENTE 0 (I1).
  */
-export function desnivelDoApoio(campo: CampoRelevo | undefined, lagoas: readonly LagoaRasa[] | undefined, x: number, z: number): number {
+export function desnivelDoApoio(campo: ChaoDoDesenho | undefined, lagoas: readonly LagoaRasa[] | undefined, x: number, z: number): number {
   const chao = desnivelDoChao(campo, x, z)
   if (!campo || !lagoas || !emAguaRasa(lagoas, x, z, 0)) return chao
   return Math.max(chao, Y_AGUA_VISUAL - Y_SOLO_VISUAL)
@@ -55,7 +62,7 @@ export function desnivelDoApoio(campo: CampoRelevo | undefined, lagoas: readonly
  */
 export function desnivelDaFundacao(
   suporte: TipoSuporteFundacao,
-  campo: CampoRelevo | undefined,
+  campo: ChaoDoDesenho | undefined,
   lagoas: readonly LagoaRasa[] | undefined,
   x: number,
   z: number,
@@ -72,7 +79,7 @@ export function desnivelDaFundacao(
  */
 export function desnivelDaObraNoChao(
   obra: Parameters<typeof pegadaEfetivaFundacao>[0],
-  campo: CampoRelevo | undefined,
+  campo: ChaoDoDesenho | undefined,
   lagoas: readonly LagoaRasa[] | undefined,
 ): number {
   const pegada = pegadaEfetivaFundacao(obra)
@@ -89,7 +96,7 @@ const LIMITE_DO_SUBSOLO = -0.9
  * mina; senão, o do ponto. Sem mina cavada (`subsoloCentro` null) cai no ponto: não explode.
  */
 export function alturaDeReferencia(
-  campo: CampoRelevo | undefined,
+  campo: ChaoDoDesenho | undefined,
   subsoloCentro: { readonly x: number; readonly z: number } | null,
   x: number,
   z: number,

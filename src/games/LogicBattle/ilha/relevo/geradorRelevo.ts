@@ -1,5 +1,7 @@
 import { biomaDoQuadrado, gerarPaisagemBioma, type BiomaId } from '../biomaRecursos'
+import { PARTIDA } from '../partidaPolicies'
 import { lugarDaBaseInimiga } from '../partidaSim'
+import { escavacaDoRioComBase, nivelDaAguaEm } from './aguaDoMundo'
 import { type CampoRelevo, LADO_RELEVO, MEIA_RELEVO, RELEVO_REGRAS } from './campoRelevo'
 import { fbm, ridged, suave } from './ruidoRelevo'
 
@@ -127,7 +129,7 @@ function mascaraDisco(dist: number, plano: number, rampa: number): number {
  */
 // Exportada SÓ para o teste (`relevo.test.ts`): a rampa da praça (e das outras zonas) não se prova pelo campo, porque o relevo bruto é tão áspero que nenhuma medida estatística separa «com rampa»
 // de «sem rampa» (medido em 25/11); a máscara é determinística, sem estado, função do ponto global.
-export function mascaraPlana(X: number, Z: number): number {
+export function zonasPlanasSemJanelas(X: number, Z: number): number {
   let m = 0
   const i0 = Math.round(X / LADO_QUADRADO)
   const j0 = Math.round(Z / LADO_QUADRADO)
@@ -149,6 +151,14 @@ export function mascaraPlana(X: number, Z: number): number {
       m = Math.max(m, mascaraDisco(Math.hypot(x - base.x, z - base.z), RELEVO_REGRAS.raioBaseInimiga, 12))
     }
   }
+  return m
+}
+
+/**
+ * A máscara COMPLETA: as zonas (`zonasPlanasSemJanelas`) e as janelas de passagem. É o que o relevo usa para achatar o chão.
+ */
+export function mascaraPlana(X: number, Z: number): number {
+  let m = zonasPlanasSemJanelas(X, Z)
   // janelas de passagem: as arestas ficam em X, Z ≡ ±56 (mod 112). Cada janela é um «vão» plano de 14 m a cada 28 m ao longo da aresta, com rampa de 12 m. Como a aresta é DOS DOIS quadrados,
   // a distância à aresta e a posição ao longo dela vêm do ponto global: os dois lados veem a mesma janela.
   const meia = RELEVO_REGRAS.janelaPassagem / 2
@@ -166,6 +176,20 @@ export function mascaraPlana(X: number, Z: number): number {
   m = Math.max(m, mascaraDisco(Math.hypot(aoLongo(Z), distAresta(X)), 0, 12 + meia))
   m = Math.max(m, mascaraDisco(Math.hypot(aoLongo(X), distAresta(Z)), 0, 12 + meia))
   return m
+}
+
+/**
+ * A altura do relevo SEM rio e SEM lagoa no ponto GLOBAL `(X, Z)`: `alturaGlobal · (1 − mascaraPlana)`. É o `h0` que o módulo da água recebe (`aguaDoMundo.ts`) e a função com que ele calcula o NÍVEL d'água de cada rio
+ * (o mínimo corrente do chão em volta). Uma só função com UMA referência estável: a memória dos rios só reaproveita um rio calculado com a MESMA referência.
+ */
+export function alturaDeBaseDoMundo(X: number, Z: number): number {
+  return alturaGlobal(X, Z, SAL_DO_MUNDO) * (1 - mascaraPlana(X, Z))
+}
+
+/** O nível d'água (m) no ponto GLOBAL `(X, Z)` para o DESENHO, ou `null` fora da água e com `PARTIDA.relevo.agua` desligada (o jogo de hoje não tem rio). */
+export function nivelDaAguaNoMundo(X: number, Z: number): number | null {
+  if (!PARTIDA.relevo.agua) return null
+  return nivelDaAguaEm(X, Z, alturaDeBaseDoMundo, zonasPlanasSemJanelas)
 }
 
 /** Escava o leito das lagoas: 0,5–0,9 m abaixo da água, suave até a margem. Devolve a altura de leito desejada ou `undefined` fora das lagoas. */
@@ -197,6 +221,10 @@ function calcularLinha(
     let h = alturaGlobal(X, Z, sal)
     const plano = mascaraPlana(X, Z)
     h *= 1 - plano
+    // OS RIOS (F2, 26/11/2026): valetas escavadas, só com a chave `PARTIDA.relevo.agua` LIGADA (desligada, nada do módulo da água é chamado e o relevo é o de hoje, bit a bit). O módulo recebe o `h0` JÁ calculado
+    // (recalculá-lo custava 185 ms por quadrado) e a MESMA função de altura de base em todo ponto (a memória dos rios a reconhece pela referência). A escavação CEDE às zonas planas SEM as janelas de passagem: com a
+    // máscara inteira o rio seria zerado justamente nos vaus por onde ele tem de passar.
+    if (PARTIDA.relevo.agua) h = escavacaDoRioComBase(X, Z, h, alturaDeBaseDoMundo, zonasPlanasSemJanelas).altura
     // a bacia da lagoa escava o leito 0,5–0,9 m abaixo da água, MAS CEDE às zonas planas (a rua, a praça e sobretudo o disco da base inimiga): a base cresce em anéis sem teto e uma peça
     // inimiga nunca pode nascer dentro d'água. Medido em 24/11: em 4 de 2.028 pontos a 13 m da base uma lagoa invadia o disco (até 0,93 m de desnível). A lagoa invasora fica SEM leito
     // (F2 deve desenhá-la como um brejo raso ou omiti-la; `gerarPaisagemBioma` é de outra frente e não a muda).

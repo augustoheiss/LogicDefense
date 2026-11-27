@@ -1,7 +1,11 @@
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PARTIDA } from '../partidaPolicies'
+import { riosDoQuadrado } from '../relevo/aguaDoMundo'
 import type { CampoRelevo } from '../relevo/campoRelevo'
+import { chaoDaMalha } from '../relevo/chaoDaMalha'
+import { alturaDeBaseDoMundo } from '../relevo/geradorRelevo'
+import { passoDaMalha } from '../relevo/geometriaDoTerreno'
 import type { PartidaState } from '../partidaSim'
 import { AguaBiomaShader } from './AguaBiomaShader'
 import { AtmosferaBioma } from './AtmosferaBioma'
@@ -9,6 +13,7 @@ import { type AmbienteGpu, gerarAmbientePmrem } from './ambientePmrem'
 import { ambienteDeveExistir, chaveDoAmbiente } from './ceuEIbl'
 import { CicloDePacote } from './cicloDePacote'
 import { anisotropiaEfetiva } from './decisaoPosProcessamento'
+import { HorizonteRelevo } from './HorizonteRelevo'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
 import { PropsBiomaInstanced } from './PropsBiomaInstanced'
 import { BiomeGpuAssetPool } from './recursoGpuPool'
@@ -222,6 +227,13 @@ export const CenaBiomaVisual: React.FC<CenaBiomaVisualProps> = ({
   // O RELEVO só aparece com a chave LIGADA e o campo PRONTO. Antes de o campo chegar (a geração fatiada leva ~19 quadros a cada quadrado novo) o chão é o PLANO de hoje: o plano só some (`semPlano`)
   // quando a malha existe, nunca antes, senão o jogador ficaria sem chão por ~19 quadros.
   const relevoVisivel = PARTIDA.relevo.visual && campoDoRelevo !== undefined
+  // O CHÃO QUE OS PROPS PISAM é a MALHA que o GPU desenha (F2, 26/11, decisão do usuário): o campo `alturaEm` é bilinear e a malha (passo 1/2/4 m pela qualidade EM USO) é linear por partes; entre os vértices diferem até 1,08 m.
+  // O terreno continua com o campo CRU (a malha é construída dele); só quem POSICIONA um objeto no chão lê a malha. Sem campo (chave desligada ou campo ainda não pronto) é `undefined`: o plano de hoje, +0 exato.
+  const chaoDaMalhaDaCena = chaoDaMalha(relevoVisivel ? campoDoRelevo : undefined, passoDaMalha(spec.efetiva))
+  // OS RIOS (F2, 26/11/2026): só com a chave `PARTIDA.relevo.agua` LIGADA E o relevo DESENHADO (`relevoVisivel`: a chave `visual` ligada E o campo já chegou). A guarda é `agua && relevoVisivel`, NUNCA só a chave: com `visual` desligada,
+  // ou nos ~19 quadros em que o campo fatiado ainda gera, a fita seria desenhada sobre o plano de hoje, SEM valeta, flutuando. `alturaDeBaseDoMundo` é a MESMA referência em todo lugar: a memória dos rios só reaproveita um
+  // rio calculado com a mesma função. O `useMemo` evita refazer a lista (e recriar as fitas) a cada quadro.
+  const rios = useMemo(() => (PARTIDA.relevo.agua && relevoVisivel ? riosDoQuadrado(mapaI, mapaJ, alturaDeBaseDoMundo) : undefined), [relevoVisivel, mapaI, mapaJ])
   const olharEfetivo = state.semCorpo ? 'imperio' : state.olhar
   const noSubsolo = !state.semCorpo && state.heroi.y < -0.9
 
@@ -254,6 +266,15 @@ export const CenaBiomaVisual: React.FC<CenaBiomaVisualProps> = ({
           onClick={onClickGround}
         />
       )}
+      {/* O HORIZONTE (F2, Task 8 + decisão 26/11): o anel de terra em volta do quadrado, só com o relevo VISÍVEL (a MESMA guarda do chão), fora do subsolo e fora do Império (no Império o anel fora do quadrado deve ser névoa preta e furava na serra (3,0), foto 34). */}
+      {relevoVisivel && !noSubsolo && olharEfetivo !== 'imperio' && (
+        <HorizonteRelevo
+          bioma={state.bioma}
+          i={mapaI}
+          j={mapaJ}
+          spec={spec}
+        />
+      )}
       {!noSubsolo && (
         <AguaBiomaShader
           state={state}
@@ -261,6 +282,9 @@ export const CenaBiomaVisual: React.FC<CenaBiomaVisualProps> = ({
           lagoas={state.lagoas}
           texturas={texturasBioma}
           spec={spec}
+          rios={rios}
+          quadrado={{ i: mapaI, j: mapaJ }}
+          nevoaUniforms={nevoaUniforms}
         />
       )}
       <PropsBiomaInstanced
@@ -272,7 +296,7 @@ export const CenaBiomaVisual: React.FC<CenaBiomaVisualProps> = ({
         lagoas={state.lagoas}
         texturas={texturasBioma}
         spec={spec}
-        campo={relevoVisivel ? campoDoRelevo : undefined}
+        campo={chaoDaMalhaDaCena}
       />
     </group>
   )

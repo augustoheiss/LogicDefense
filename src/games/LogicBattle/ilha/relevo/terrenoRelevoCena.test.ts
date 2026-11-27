@@ -32,6 +32,22 @@ export function contratoDoTerrenoRelevo(terreno: string): void {
   assert(/new BufferGeometry\(\)/.test(codigo) && /setAttribute\('position'/.test(codigo) && /setAttribute\('normal'/.test(codigo) && /setAttribute\('uv'/.test(codigo) && /setIndex\(/.test(codigo), 'a geometria recebe posição, normal, UV e índices')
   // o grupo fica em Y_SOLO_VISUAL: a malha guarda a altura acima da rua; o chão plano é −0,45 exatos
   assert(/position=\{\[0, Y_SOLO_VISUAL, 0\]\}/.test(codigo) && /import \{[^}]*\bY_SOLO_VISUAL\b[^}]*\} from '\.\/suporteFundacao'/.test(codigo), 'o terreno fica em `Y_SOLO_VISUAL` (campo plano ⇒ chão em −0,45 exatos, I1)')
+  // ── As 3 lacunas que a MUTACAO TOTAL achou em 26/11 (Task 9): `terreno-relevo-cena` T6, T8 e T15 SOBREVIVIAM porque cada contrato abaixo era «a ocorrencia de QUALQUER lugar do arquivo» e o arquivo tem
+  // DUAS malhas (o terreno e a saia): a outra satisfazia o regex. Cada asserção agora isola o BLOCO CERTO, como `blocoDaSaia` já fazia para a saia.
+  // T6 (a posicao do terreno em `[0, 0, 0]`, o chao do relevo 0,45 m acima do certo): o `<mesh name="terreno-relevo">` tem de estar em `Y_SOLO_VISUAL`.
+  const blocoDoTerreno = /<mesh\s+name="terreno-relevo"\s([\s\S]*?)\/>/.exec(codigo)?.[1] ?? ''
+  assert(blocoDoTerreno.length > 0, 'achei o bloco `<mesh name="terreno-relevo" ... />` (o terreno, NAO a saia)')
+  assert(/position=\{\[0, Y_SOLO_VISUAL, 0\]\}/.test(blocoDoTerreno), 'o TERRENO (e nao so a saia) fica em `Y_SOLO_VISUAL`: sem isso o chao do relevo sobe 0,45 m (campo plano ⇒ chao em −0,45 exatos, I1)')
+  assert(/geometry=\{geometria\}/.test(blocoDoTerreno) && /material=\{material\}/.test(blocoDoTerreno), 'o terreno usa a geometria e o material DELE (nao os da saia)')
+  // T15 (sem os indices da malha do terreno: o chao some, 0 triangulos): o `setIndex` tem de estar dentro do `useMemo` da GEOMETRIA DO TERRENO, nao so no da saia.
+  const construcaoDoTerreno = codigo.slice(codigo.indexOf('const geometria = useMemo('), codigo.indexOf('}, [campo, spec.efetiva])', codigo.indexOf('const geometria = useMemo(')))
+  assert(construcaoDoTerreno.length > 40 && !/saiaDoTerreno/.test(construcaoDoTerreno), 'isolei a construcao da geometria do TERRENO (nao a da saia)')
+  assert(/setIndex\(new Uint32BufferAttribute\(g\.indices, 1\)\)/.test(construcaoDoTerreno), 'a malha do TERRENO recebe os indices (`g.indices`): sem eles o chao nao tem triangulos e some')
+  // T8 (o `console.warn` da rocha calado): o RISCO 11 («a ancora que o three renomeou») so e visivel se a falha AVISAR. As DUAS injecoes (rocha e nevoa) tem de ter o aviso, cada uma no SEU catch.
+  const catchDaRocha = /try \{\s*const injetado = injetarMisturaDeRocha[\s\S]*?\} catch \(erro\) \{([\s\S]*?)\}\s*\}/.exec(codigo)?.[1] ?? ''
+  assert(/console\.warn\(/.test(catchDaRocha) && /rocha/.test(catchDaRocha), 'a falha da injecao da ROCHA AVISA na console (`console.warn` no catch dela): silencio seria o risco 11')
+  const catchDaNevoa = /try \{\s*const injetado = injetarNevoaNoTerreno[\s\S]*?\} catch \(erro\) \{([\s\S]*?)\}\s*\}/.exec(codigo)?.[1] ?? ''
+  assert(/console\.warn\(/.test(catchDaNevoa) && /névoa/.test(catchDaNevoa), 'a falha da injecao da NEVOA AVISA na console (`console.warn` no catch dela)')
   // a injeção do shader: em try/catch, com a rocha do bioma
   assert(/onBeforeCompile/.test(codigo) && /injetarMisturaDeRocha\(/.test(codigo), 'o material injeta a rocha por `onBeforeCompile` com `injetarMisturaDeRocha`')
   assert(/try \{[\s\S]*?injetarMisturaDeRocha\([\s\S]*?\} catch/.test(codigo), 'a injeção está num try/catch: âncora perdida NÃO derruba o jogo (o terreno fica sem rocha e avisa)')
@@ -111,8 +127,65 @@ export function contratoDaIntegracaoDoRelevo(cenaBioma: string): void {
   // os props ficam no plano, nunca flutuam nem afundam em relação a ele. Uma prop opcional ESQUECIDA compila, passa o teste do componente e o jogo ignora o relevo: sem este contrato ninguém veria.
   const blocoDosProps = /<PropsBiomaInstanced([\s\S]*?)\/>/.exec(codigo)?.[1] ?? ''
   assert((codigo.match(/<PropsBiomaInstanced/g) ?? []).length === 1, 'os props de bioma são montados UMA vez')
-  assert(/campo=\{relevoVisivel \? campoDoRelevo : undefined\}/.test(blocoDosProps), 'os props recebem `campo={relevoVisivel ? campoDoRelevo : undefined}`: a MESMA condição do chão (plano até o campo chegar)')
-  assert(!/campo=\{campoDoRelevo\}/.test(blocoDosProps), 'os props NÃO recebem o campo cru (`campo={campoDoRelevo}`): com a chave desligada o campo é `undefined` por outro caminho, mas a condição tem de ser a do chão')
+  // OS PROPS PISAM A MALHA (F2, 26/11, decisão do usuário): a cena DERIVA o chão da malha do campo e do passo da qualidade em uso (`spec.efetiva`) e o entrega aos props; o terreno continua com o campo CRU (a malha é construída dele).
+  assert(/const chaoDaMalhaDaCena = chaoDaMalha\(relevoVisivel \? campoDoRelevo : undefined, passoDaMalha\(spec\.efetiva\)\)/.test(codigo), 'a cena deriva `chaoDaMalhaDaCena = chaoDaMalha(relevoVisivel ? campoDoRelevo : undefined, passoDaMalha(spec.efetiva))`: a MESMA condição do chão e o passo da qualidade EM USO (um passo fixo enterraria os props no Leve)')
+  assert(/campo=\{chaoDaMalhaDaCena\}/.test(blocoDosProps), 'os props recebem `campo={chaoDaMalhaDaCena}`: o chão da MALHA que o GPU desenha (a condição do chão já está dentro dele: sem campo é `undefined`)')
+  assert(!/passoDaMalha\(\s*['"`\d]/.test(codigo), '`passoDaMalha` nunca recebe um literal: o passo é o da qualidade')
+  assert(!/campo=\{campoDoRelevo\}/.test(blocoDosProps) && !/campo=\{relevoVisivel \? campoDoRelevo : undefined\}/.test(blocoDosProps), 'os props NÃO recebem o campo cru (`campo={campoDoRelevo}` nem `relevoVisivel ? campoDoRelevo : undefined`): ficariam no campo bilinear e enterrados pela malha no Leve')
+}
+
+/**
+ * CONTRATO DE TEXTO da ÁGUA na cena (F2, Task 5, 26/11/2026). A guarda tem 3 RAMOS e o plano insiste em que a condição seja `agua && relevoVisivel`, a MESMA `relevoVisivel` que decide o chão do relevo: nunca só
+ * `PARTIDA.relevo.agua`, senão, com `visual` desligada ou nos ~19 quadros em que o campo fatiado ainda gera, a fita seria desenhada sobre o plano de hoje, SEM valeta, flutuando. Os 3 ramos: (1) `agua` desligada →
+ * `undefined`; (2) `agua` ligada e `visual` desligada → `undefined`; (3) as duas ligadas MAS o campo ainda não chegou → `undefined`. Como `relevoVisivel` já é `visual && campo !== undefined`, a guarda `agua && relevoVisivel`
+ * cobre os três. O mutante que a auditoria previu é a guarda reduzida a `PARTIDA.relevo.agua`.
+ */
+export function contratoDaAguaNaCena(cenaBioma: string): void {
+  const codigo = soCodigo(cenaBioma)
+  assert(/PARTIDA\.relevo\.agua/.test(codigo), 'a cena lê a chave `PARTIDA.relevo.agua`')
+  assert(/riosDoQuadrado\(/.test(codigo) && /from '\.\.\/relevo\/aguaDoMundo'/.test(codigo), 'a cena obtém os rios de `riosDoQuadrado` (de `../relevo/aguaDoMundo`)')
+  // a guarda: `agua && relevoVisivel ? riosDoQuadrado(mapaI, mapaJ, alturaDeBaseDoMundo) : undefined`, e NADA mais barato (nunca só a chave)
+  assert(/PARTIDA\.relevo\.agua && relevoVisivel \? riosDoQuadrado\(mapaI, mapaJ, alturaDeBaseDoMundo\) : undefined/.test(codigo), 'a guarda é `PARTIDA.relevo.agua && relevoVisivel ? riosDoQuadrado(mapaI, mapaJ, alturaDeBaseDoMundo) : undefined`: os 3 ramos (chave desligada, relevo não visível, campo ainda não chegou) dão `undefined`')
+  assert(!/PARTIDA\.relevo\.agua \? riosDoQuadrado/.test(codigo), 'a guarda NUNCA é só a chave da água (desenharia a fita sobre o plano de hoje, sem valeta, flutuando)')
+  assert(/import \{[^}]*\balturaDeBaseDoMundo\b[^}]*\} from '\.\.\/relevo\/geradorRelevo'/.test(codigo), '`alturaDeBaseDoMundo` vem do gerador (a MESMA referência em todo lugar: a memória dos rios só reaproveita um rio calculado com a mesma função)')
+  // as props do `AguaBiomaShader`
+  const blocoDaAgua = /<AguaBiomaShader([\s\S]*?)\/>/.exec(codigo)?.[1] ?? ''
+  assert((codigo.match(/<AguaBiomaShader/g) ?? []).length === 1, 'o `AguaBiomaShader` é montado UMA vez')
+  assert(/rios=\{rios\}/.test(blocoDaAgua), 'o `AguaBiomaShader` recebe `rios={rios}` (a variável da guarda)')
+  assert(/quadrado=\{\{ i: mapaI, j: mapaJ \}\}/.test(blocoDaAgua), 'o `AguaBiomaShader` recebe `quadrado={{ i: mapaI, j: mapaJ }}` (as coordenadas da fita são LOCAIS ao quadrado dos rios)')
+  assert(/nevoaUniforms=\{nevoaUniforms\}/.test(blocoDaAgua), 'o `AguaBiomaShader` recebe `nevoaUniforms={nevoaUniforms}`: a MESMA ref que o terreno lê (sem ela a fita brilharia sobre a área preta)')
+  // a variável `rios` é calculada com a guarda (e NÃO é recalculada a cada quadro sem memória: `useMemo`)
+  assert(/const rios = useMemo\(/.test(codigo), '`rios` é calculada num `useMemo` (uma nova lista a cada render recriaria as fitas a cada quadro)')
+}
+
+/**
+ * CONTRATO DE TEXTO do HORIZONTE na cena (F2, Task 8, 26/11/2026). O anel de terra em volta do quadrado só é desenhado quando o RELEVO está visível (`relevoVisivel`: a chave `visual` ligada E o campo do quadrado já chegou): com a chave
+ * desligada, ou nos ~19 quadros em que o campo fatiado ainda gera, o chão é o PLANO de hoje e um anel de morros ao redor de um plano flutuaria sobre o vazio (I1: com a chave desligada o jogo é o de hoje). O anel segue o passo da MALHA
+ * da qualidade em uso (é com ele que a emenda com o terreno fecha) e NÃO recebe clique.
+ */
+export function contratoDoHorizonteNaCena(cenaBioma: string, horizonte: string): void {
+  const codigo = soCodigo(cenaBioma)
+  const h = soCodigo(horizonte)
+  assert(/<HorizonteRelevo/.test(codigo) && (codigo.match(/<HorizonteRelevo/g) ?? []).length === 1, 'a cena monta o `HorizonteRelevo` UMA vez')
+  // F2, decisão do usuário (26/11): o horizonte NÃO é montado no Império nem no subsolo. MEDIDO (com e sem o mesh na mesma página, controle de ruído 0 e positivo 960/960): na serra (3,0) sem o mesh há 0 px de terra fora da ilha e com ele ~293–298
+  // (duas cunhas nos cantos superiores, iguais nas 3 qualidades); nos outros 6 quadrados o anel já estava coberto (0–2 px). Esconder custa 0 px e poupa 1 chamada e ~1,1 mil triângulos. A guarda é a do chão E fora do subsolo E fora do Império.
+  assert(/\{relevoVisivel && !noSubsolo && olharEfetivo !== 'imperio' && \(\s*<HorizonteRelevo/.test(codigo), 'o horizonte só é montado com `relevoVisivel` (a MESMA guarda do chão) E fora do subsolo E fora do Império: `{relevoVisivel && !noSubsolo && olharEfetivo !== \'imperio\' && (<HorizonteRelevo …/>)}` (no Império o anel furava o preto da névoa na serra (3,0))')
+  assert(/const olharEfetivo = state\.semCorpo \? 'imperio' : state\.olhar/.test(codigo), 'o `olharEfetivo` que a guarda lê é o MESMO que a névoa usa (`semCorpo` conta como Império): senão o herói sem corpo veria o anel')
+  assert(/const noSubsolo = !state\.semCorpo && state\.heroi\.y < -0\.9/.test(codigo), 'o `noSubsolo` que a guarda lê é o MESMO que a água usa (`!state.semCorpo && state.heroi.y < -0.9`): no subsolo o horizonte não é montado')
+  const bloco = /<HorizonteRelevo([\s\S]*?)\/>/.exec(codigo)?.[1] ?? ''
+  assert(/bioma=\{state\.bioma\}/.test(bloco) && /i=\{mapaI\}/.test(bloco) && /j=\{mapaJ\}/.test(bloco) && /spec=\{spec\}/.test(bloco), 'o horizonte recebe o bioma, o quadrado (`i={mapaI} j={mapaJ}`, NESSA ordem) e a spec da cena')
+  assert(/from '\.\/HorizonteRelevo'/.test(codigo), 'a cena importa o `HorizonteRelevo`')
+  // o componente
+  assert(/export const HorizonteRelevo: React\.FC<HorizonteRelevoProps>/.test(h), 'o componente `HorizonteRelevo` é exportado com o tipo das suas props')
+  assert(/geometriaDoHorizonte\(alturaDeBaseDoMundo, \{ i, j \}, passo\)/.test(h) && /const passo = passoDaMalha\(spec\.efetiva\)/.test(h), 'a geometria vem de `geometriaDoHorizonte(alturaDeBaseDoMundo, { i, j }, passo)` com o `passo = passoDaMalha(spec.efetiva)`: o passo da primeira fileira é o da MALHA em uso (com outro, a emenda abre 5–15 cm)')
+  assert(/\[i, j, passo\]/.test(h), 'a geometria é refeita quando o quadrado OU o passo mudam (`[i, j, passo]`): trocar a qualidade troca a malha')
+  assert(/raycast=\{semRaycast\}/.test(h) && /import \{ semRaycast \} from '\.\.\/raycastCena'/.test(h), 'o horizonte NÃO recebe o clique (`raycast={semRaycast}`): o clique vai para o chão')
+  assert(/position=\{\[0, Y_SOLO_VISUAL, 0\]\}/.test(h) && /import \{ Y_SOLO_VISUAL \} from '\.\/suporteFundacao'/.test(h) && !/Y_AGUA_VISUAL/.test(h), 'o anel fica em `Y_SOLO_VISUAL`, como o terreno (as duas alturas são «acima da rua»)')
+  assert(/geometria\.dispose\(\)/.test(h) && /material\.dispose\(\)/.test(h), 'a geometria e o material são DESCARTADOS no cleanup')
+  assert(/useEffect\(\(\) => \{\s*return \(\) => \{\s*geometria\.dispose\(\)\s*\}\s*\}, \[geometria\]\)/.test(h) && /useEffect\(\(\) => \{\s*return \(\) => \{\s*material\.dispose\(\)\s*\}\s*\}, \[material\]\)/.test(h), 'cada um tem o seu efeito com a sua dependência (`[geometria]` e `[material]`)')
+  assert(/computeVertexNormals\(\)/.test(h), 'a geometria calcula as normais (a luz do sol dá a forma do morro)')
+  assert(/corDoChaoBioma\(bioma\)/.test(h) && /new MeshStandardMaterial\(/.test(h), 'o material é um `MeshStandardMaterial` com a cor do chão do bioma: o `scene.fog` do `AtmosferaBioma` o desbota sozinho (a perspectiva atmosférica)')
+  assert(!/castShadow/.test(h) && !/receiveShadow/.test(h), 'o horizonte NÃO projeta nem recebe sombra (fica fora da caixa de sombra do sol: só desenho de longe)')
 }
 
 /**
@@ -128,13 +201,13 @@ export function contratoDaLigacaoNaCena(cena: string): void {
   // prop opcional ESQUECIDA compila, passa o teste do componente e o jogo ignora o relevo, sem erro nenhum.
   const blocoDoSandbox = /<MundoSandboxCena([\s\S]*?)\/>/.exec(codigo)?.[1] ?? ''
   assert((codigo.match(/<MundoSandboxCena/g) ?? []).length === 1, 'o sandbox é montado UMA vez')
-  assert(/campo=\{PARTIDA\.relevo\.visual \? campoDoRelevo : undefined\}/.test(blocoDoSandbox), 'o sandbox recebe `campo={PARTIDA.relevo.visual ? campoDoRelevo : undefined}`: a mesma condição do chão (plano até o campo chegar)')
+  assert(/campo=\{PARTIDA\.relevo\.visual \? chaoDaMalhaDoDesenho : undefined\}/.test(blocoDoSandbox), 'o sandbox recebe `campo={PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined}`: a mesma condição do chão, agora a MALHA (plano até o campo chegar)')
   // A MALHA DA OBRA (`ObraArquiteturaMesh`, as obras pequenas) mora em `Cena` e NÃO no sandbox: recebe o MESMO `campo` com a MESMA condição e as MESMAS lagoas que o sandbox (a água é a mesma). Uma das duas esquecida
   // deixa a obra no plano (ou o píer no leito) sem erro nenhum, porque as duas props são opcionais.
   const blocoDaMalha = /<ObraArquiteturaMesh([\s\S]*?)\n          \/>/.exec(codigo)?.[1] ?? ''
   assert((codigo.match(/<ObraArquiteturaMesh/g) ?? []).length === 1, 'a malha da obra é montada UMA vez')
   assert(blocoDaMalha.length > 0, 'controle do instrumento: o recorte da malha da obra achou o elemento (até o `/>` da indentação dele)')
-  assert(/campo=\{PARTIDA\.relevo\.visual \? campoDoRelevo : undefined\}/.test(blocoDaMalha), 'a malha da obra recebe `campo={PARTIDA.relevo.visual ? campoDoRelevo : undefined}`: a mesma condição do sandbox')
+  assert(/campo=\{PARTIDA\.relevo\.visual \? chaoDaMalhaDoDesenho : undefined\}/.test(blocoDaMalha), 'a malha da obra recebe `campo={PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined}`: a mesma condição do sandbox, a MALHA')
   assert(/lagoas=\{props\.sim\.current\.lagoas\}/.test(blocoDaMalha), 'a malha da obra recebe as MESMAS lagoas do sandbox (`lagoas={props.sim.current.lagoas}`)')
   assert(/lagoas=\{props\.sim\.current\.lagoas\}/.test(blocoDoSandbox), 'controle: o sandbox recebe `lagoas={props.sim.current.lagoas}` (a fonte que a malha da obra também usa)')
   assert(/import \{[^}]*\bcriarRelevoDoMundo\b[^}]*\} from '\.\/relevo\/relevoNoEstado'/.test(codigo), '`IlhaRua` importa `criarRelevoDoMundo` de `./relevo/relevoNoEstado`')
@@ -181,9 +254,11 @@ export function contratoDaAlturaCompartilhada(nevoa: string): void {
   assert(/position=\{\[0, Y_SOLO_VISUAL \+ ALTURA_DO_PLANO, 0\]\}/.test(codigo), 'o plano da névoa é posicionado POR `ALTURA_DO_PLANO` (a saia fecha até onde o plano está)')
 }
 
-export function run(terreno?: string, cenaBioma?: string, cena?: string, nevoa?: string): void {
+export function run(terreno?: string, cenaBioma?: string, cena?: string, nevoa?: string, horizonte?: string): void {
   if (terreno !== undefined) contratoDoTerrenoRelevo(terreno)
   if (nevoa !== undefined) contratoDaAlturaCompartilhada(nevoa)
   if (cenaBioma !== undefined) contratoDaIntegracaoDoRelevo(cenaBioma)
+  if (cenaBioma !== undefined) contratoDaAguaNaCena(cenaBioma)
+  if (cenaBioma !== undefined && horizonte !== undefined) contratoDoHorizonteNaCena(cenaBioma, horizonte)
   if (cena !== undefined) contratoDaLigacaoNaCena(cena)
 }

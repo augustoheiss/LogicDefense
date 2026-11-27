@@ -17,7 +17,7 @@ function soCodigo(texto: string): string {
 export function contratoDosPropsNoTerreno(props: string): void {
   const codigo = soCodigo(props)
   // (1) a prop é OPCIONAL: sem ela o componente é o de hoje
-  assert(/readonly campo\?: CampoRelevo/.test(codigo), 'o componente recebe a prop OPCIONAL `campo?: CampoRelevo` (sem ela o desenho é o de hoje: I1)')
+  assert(/readonly campo\?: ChaoDoDesenho/.test(codigo), 'o componente recebe a prop OPCIONAL `campo?: ChaoDoDesenho` (o campo cru OU a malha; sem ela o desenho é o de hoje: I1)')
   assert(/import \{[^}]*\bdesnivelDoChao\b[^}]*\} from '\.\.\/relevo\/alturaVisual'/.test(codigo), 'o desnível vem de `desnivelDoChao` (a ÚNICA conta, de `../relevo/alturaVisual`)')
   // (5) I1: a função local do desnível devolve 0 SEM campo
   assert(/const desnivelEm = \(x: number, z: number\): number => desnivelDoChao\(campo, x, z\)/.test(codigo), 'o desnível local é `desnivelDoChao(campo, x, z)`: a ÚNICA conta (0 sem campo: I1), sem copiar a fórmula')
@@ -66,8 +66,8 @@ export function contratoDaFundacaoNoTerreno(fundacao: string): void {
   assert(/^\s*desnivel=\{desnivelDaObraNoChao\(obra, campo, lagoas\)\}$/m.test(codigo), 'o ponto de chamada calcula o desnível da OBRA com `desnivelDaObraNoChao(obra, campo, lagoas)`: a MESMA conta da malha e do fantasma (píer na lâmina, terra no chão; 0 sem campo)')
   assert(!/\bdesnivelDoChao\b/.test(codigo) && !/\bdesnivelDoApoio\b/.test(codigo) && !/\bdesnivelDaFundacao\b/.test(codigo), 'a fundação NÃO decide a água sozinha (`desnivelDoChao`/`desnivelDoApoio`/`desnivelDaFundacao` no centro): a conta é UMA, `desnivelDaObraNoChao`, para a fundação, a malha e o fantasma não divergirem')
   assert(!/alturaVisualDoChao/.test(codigo), 'a fundação NÃO repete a fórmula `alturaVisualDoChao(…) − Y_SOLO_VISUAL`')
-  assert(/^\s*campo\?: CampoRelevo$/m.test(codigo), 'o componente recebe `campo?: CampoRelevo` (opcional: sem ele é o de hoje)')
-  assert(/import type \{ CampoRelevo \} from '\.\.\/relevo\/campoRelevo'/.test(codigo), 'o tipo `CampoRelevo` vem de `../relevo/campoRelevo`')
+  assert(/^\s*campo\?: ChaoDoDesenho$/m.test(codigo), 'o componente recebe `campo?: ChaoDoDesenho` (opcional: sem ele é o de hoje)')
+  assert(/import type \{ ChaoDoDesenho \} from '\.\.\/relevo\/alturaVisual'/.test(codigo), 'o tipo `ChaoDoDesenho` vem de `../relevo/alturaVisual`')
   assert(/import \{ desnivelDaObraNoChao \} from '\.\.\/relevo\/alturaVisual'/.test(codigo), 'o desnível vem de `desnivelDaObraNoChao` (a ÚNICA conta, de `../relevo/alturaVisual`)')
   assert(/desnivel=\{/.test(codigo), 'cada item recebe o desnível calculado')
 }
@@ -83,9 +83,9 @@ function elementoJsx(codigo: string, nome: string): string {
  */
 export function contratoDoSandboxNoTerreno(sandbox: string): void {
   const codigo = soCodigo(sandbox)
-  assert(/^\s*campo\?: CampoRelevo$/m.test(codigo), 'o sandbox declara a prop opcional `campo?: CampoRelevo`')
+  assert(/^\s*campo\?: ChaoDoDesenho$/m.test(codigo), 'o sandbox declara a prop opcional `campo?: ChaoDoDesenho`')
   assert(/^\s*campo,$/m.test(codigo), 'o sandbox recebe `campo` nos parâmetros')
-  assert(/import type \{ CampoRelevo \} from '\.\/relevo\/campoRelevo'/.test(codigo), 'o tipo `CampoRelevo` vem de `./relevo/campoRelevo`')
+  assert(/import type \{ ChaoDoDesenho \} from '\.\/relevo\/alturaVisual'/.test(codigo), 'o tipo `ChaoDoDesenho` vem de `./relevo/alturaVisual`')
   for (const nome of ['FundacoesObrasCena', 'ObrasNv5Instanced', 'BlocosMundoInstanced', 'ObrasLivresInstanced', 'PreviewLinhaBlocos', 'GhostBlueprintObra']) {
     assert((codigo.match(new RegExp(`<${nome}\\b`, 'g')) ?? []).length === 1, `${nome} é montada UMA vez no sandbox`)
     assert(/\bcampo=\{campo\}/.test(elementoJsx(codigo, nome)), `o sandbox REPASSA o campo a ${nome}: \`<${nome} … campo={campo} />\` (sem isso ela fica no plano sem erro nenhum)`)
@@ -95,6 +95,19 @@ export function contratoDoSandboxNoTerreno(sandbox: string): void {
   for (const nome of ['ObrasNv5Instanced', 'BlocosMundoInstanced', 'ObrasLivresInstanced', 'PreviewLinhaBlocos', 'GhostBlueprintObra']) {
     assert(/\blagoas=\{lagoas\}/.test(elementoJsx(codigo, nome)), `o sandbox REPASSA as lagoas a ${nome}: \`<${nome} … lagoas={lagoas} />\` (sem isso ela afunda no leito da lagoa sem erro nenhum)`)
   }
+  // OS DOIS PONTOS DE CHÃO QUE SOBRAVAM NO PRÓPRIO SANDBOX (Task 4, resto, 26/11/2026), cada um com a SUA conta (medido em `medir-escotilha-da-mina.mjs`, 169 quadrados, controles verdes):
+  //  (a) o PEITORIL de escalada (`[obra.x, 1,04, obra.z]`) repousa sobre uma torre/portão PEQUENO cuja malha já usa `desnivelDaObraNoChao`: o peitoril usa a MESMA conta (senão flutuaria sobre o píer);
+  //  (b) o BOTÃO DA MINA (`Y_SOLO_VISUAL + 0,06`, em `obra.z + 1,65`, FORA da pegada) é uma escotilha no CHÃO: usar a conta da obra erra 4–13 cm (mediana), 11–41 cm (p90) e até 1,9 m; usar `desnivelDoChao` no
+  //      ponto afundaria no leito em 0–2,3 % das posições (a escotilha na água). `desnivelDoApoio` no PONTO resolve os dois (chão em terra, lâmina na água).
+  assert(/import \{[^}]*\bdesnivelDaObraNoChao\b[^}]*\bdesnivelDoApoio\b[^}]*\} from '\.\/relevo\/alturaVisual'|import \{[^}]*\bdesnivelDoApoio\b[^}]*\bdesnivelDaObraNoChao\b[^}]*\} from '\.\/relevo\/alturaVisual'/.test(codigo), 'o sandbox importa `desnivelDaObraNoChao` e `desnivelDoApoio` de `./relevo/alturaVisual` (a ÚNICA conta, não uma cópia)')
+  assert(!/\bdesnivelDoChao\b/.test(codigo) && !/alturaVisualDoChao/.test(codigo), 'o sandbox NÃO usa `desnivelDoChao` nem `alturaVisualDoChao` direto: a escotilha na água afundaria no leito')
+  const peitoril = /<mesh position=\{\[obra\.x, ([^\]]*), obra\.z\]\} raycast=\{\(\) => null\}>\s*<boxGeometry args=\{\[dim\[0\] \+ 0\.62/.exec(codigo)?.[1] ?? ''
+  assert(peitoril.length > 0, 'controle do instrumento: o recorte achou o PEITORIL de escalada (`position={[obra.x, …, obra.z]}` seguido da `boxGeometry` de `dim[0] + 0,62`)')
+  assert(/^1\.04 \+ desnivelDaObraNoChao\(obra, campo, lagoas\)$/.test(peitoril), `o peitoril fica em \`1.04 + desnivelDaObraNoChao(obra, campo, lagoas)\` (a MESMA conta da malha da obra) (veio: ${peitoril})`)
+  const botao = /<group\s+position=\{\[obra\.x, ([^\]]*), obra\.z \+ 1\.65\]\}/.exec(codigo)?.[1] ?? ''
+  assert(botao.length > 0, 'controle do instrumento: o recorte achou o BOTÃO DA MINA (`position={[obra.x, …, obra.z + 1.65]}`)')
+  assert(/^Y_SOLO_VISUAL \+ 0\.06 \+ desnivelDoApoio\(campo, lagoas, obra\.x, obra\.z \+ 1\.65\)$/.test(botao), `o botão da mina fica em \`Y_SOLO_VISUAL + 0.06 + desnivelDoApoio(campo, lagoas, obra.x, obra.z + 1.65)\`: o apoio NO PONTO DA ESCOTILHA, não no centro da obra (veio: ${botao})`)
+  assert((codigo.match(/desnivelDaObraNoChao\(/g) ?? []).length === 1 && (codigo.match(/desnivelDoApoio\(/g) ?? []).length === 1, '`desnivelDaObraNoChao(` e `desnivelDoApoio(` aparecem UMA vez cada no sandbox (nenhum outro ponto somou o terreno)')
   // o controle do instrumento: o leitor de elementos acha a prop onde ela está e NÃO a acha onde falta (nem a empresta de um vizinho)
   const amostra = '<A x={1} campo={campo} lagoas={lagoas} />\n<B x={2} />'
   assert(/\bcampo=\{campo\}/.test(elementoJsx(amostra, 'A')) && !/\bcampo=\{campo\}/.test(elementoJsx(amostra, 'B')), 'controle do instrumento: `elementoJsx` separa o elemento COM o campo do que não tem')

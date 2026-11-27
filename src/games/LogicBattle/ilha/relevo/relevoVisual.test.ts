@@ -2,6 +2,7 @@ import { alturaVisualRecurso, Y_SOLO_VISUAL } from '../visual/suporteFundacao'
 import { alturaEm, LADO_RELEVO, MEIA_RELEVO, type CampoRelevo } from './campoRelevo'
 import { alturaDeReferencia, alturaVisualDoChao, desnivelDoChao } from './alturaVisual'
 import { gerarRelevo } from './geradorRelevo'
+import { chaoDaMalha, desnivelDaMalha } from './chaoDaMalha'
 
 function assert(condicao: unknown, mensagem: string): asserts condicao {
   if (!condicao) throw new Error(mensagem)
@@ -108,6 +109,55 @@ function contratoDaComposicaoDoRecurso(): void {
  * `desnivelDoChao(campo, x, z)`: o DESNÍVEL do relevo no ponto (a altura do campo acima do plano de hoje), 0 sem campo. É a conta que `PropsBiomaInstanced` e `FundacaoObraCena` copiavam e que as obras
  * repetiriam: uma cópia é onde alguém esquece o `− Y_SOLO_VISUAL` (o chão sobe 0,45 m em plano). Extraída para UM lugar, provada uma vez.
  */
+/**
+ * `desnivelDoChao` aceita DOIS argumentos de chão (F2, 26/11/2026, decisão do usuário: o desenho amostra a malha que o GPU desenha): o campo CRU (`CampoRelevo`, a altura bilinear `alturaEm`, de hoje) e o
+ * `ChaoDaMalha` (o campo + o passo da malha em uso). Os 44 pontos do desenho já passam adiante o que recebem, então só quem PRODUZ o objeto escolhe o chão; nenhum chamador muda de assinatura.
+ * O oráculo da malha é `desnivelDaMalha` (provado contra o `three` real em `chaoDaMalha.test.ts`); aqui se prova que `desnivelDoChao` ENCAMINHA para ele e que o campo cru NÃO mudou.
+ */
+function contratoDoDesnivelNoChaoDaMalha(): void {
+  const colina = campoComColina()
+  const alto = campoComCentroAlto()
+  const rng = semente(2612)
+  // (1) o campo CRU continua dando `alturaEm`, bit a bit (quem não migrou não pode mudar: o `laboratorio`, os testes e o que vier)
+  for (let k = 0; k < 500; k += 1) {
+    const x = (rng() - 0.5) * 112
+    const z = (rng() - 0.5) * 112
+    assert(desnivelDoChao(colina, x, z) === alturaEm(colina, x, z), `o campo CRU segue dando alturaEm em (${x.toFixed(2)}, ${z.toFixed(2)})`)
+  }
+  // (2) o ChaoDaMalha dá a altura da MALHA, em 3 passos, na colina (um campo com altura de verdade)
+  for (const passo of [1, 2, 4] as const) {
+    const chao = chaoDaMalha(colina, passo)
+    for (let k = 0; k < 500; k += 1) {
+      const x = (rng() - 0.5) * 60
+      const z = (rng() - 0.5) * 60
+      assert(desnivelDoChao(chao, x, z) === desnivelDaMalha(chao, x, z), `passo ${passo}: desnivelDoChao(ChaoDaMalha) é a altura da malha em (${x.toFixed(2)}, ${z.toFixed(2)})`)
+    }
+  }
+  // (3) e a diferença EXISTE (controle positivo do instrumento): na encosta da colina a malha de 4 m erra o campo em mais de 1 cm, então um `desnivelDoChao` que ignorasse o ChaoDaMalha seria pego pela asserção (2)
+  let maiorDiferenca = 0
+  for (let k = 0; k < 500; k += 1) {
+    const x = (rng() - 0.5) * 20
+    const z = (rng() - 0.5) * 20
+    maiorDiferenca = Math.max(maiorDiferenca, Math.abs(desnivelDoChao(chaoDaMalha(colina, 4), x, z) - alturaEm(colina, x, z)))
+  }
+  assert(maiorDiferenca > 0.01, `controle: na colina a malha de 4 m difere do campo (${maiorDiferenca.toFixed(4)} m), senão o teste não separaria nada`)
+  // (4) SEM chão (undefined) é +0 exato; entrada não finita COM chão visto dá 0 (e não a altura do centro)
+  assert(Object.is(desnivelDoChao(undefined, 3, 4), 0), 'sem chão o desnível é +0 exato')
+  const chaoAlto = chaoDaMalha(alto, 2)
+  for (const ruim of [Number.NaN, Infinity, -Infinity]) {
+    assert(desnivelDoChao(chaoAlto, ruim, 0) === 0 && desnivelDoChao(chaoAlto, 0, ruim) === 0, `com ChaoDaMalha, ${String(ruim)} NÃO eleva: dá 0 (e não a altura do centro)`)
+  }
+  // (5) `alturaVisualDoChao` é o plano de hoje + o MESMO desnível, para os dois tipos de chão
+  for (const passo of [2, 4] as const) {
+    const chao = chaoDaMalha(colina, passo)
+    for (let k = 0; k < 200; k += 1) {
+      const x = (rng() - 0.5) * 20
+      const z = (rng() - 0.5) * 20
+      assert(Math.abs(alturaVisualDoChao(chao, x, z) - (Y_SOLO_VISUAL + desnivelDoChao(chao, x, z))) < 1e-12, `passo ${passo}: chão desenhado = Y_SOLO_VISUAL + desnível do ChaoDaMalha`)
+    }
+  }
+}
+
 function contratoDoDesnivelDoChao(): void {
   // (1) I1: sem campo é 0, em qualquer ponto, inclusive os que quebram contas
   for (const [x, z] of [[0, 0], [10, -7], [-56, 56], [1e9, -1e9]] as const) {
@@ -144,6 +194,7 @@ function contratoDoDesnivelDoChao(): void {
 
 export function run(): void {
   contratoDoDesnivelDoChao()
+  contratoDoDesnivelNoChaoDaMalha()
   contratoDaAlturaDoRecurso()
   contratoDaComposicaoDoRecurso()
   const rnd = semente(0xc0ffee)

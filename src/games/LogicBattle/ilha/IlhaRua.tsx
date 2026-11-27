@@ -56,6 +56,14 @@ import {
   type TipoUpgradeEra,
 } from './partidaPolicies'
 import type { CampoRelevo } from './relevo/campoRelevo'
+import type { ChaoDaMalha } from './relevo/chaoDaMalha'
+import { cameraDoImperio, desnivelDoAtor, posicaoDaCamera1p, posicaoDaCamera3p } from './relevo/alturaDoAtor'
+import { desnivelDoChao } from './relevo/alturaVisual'
+import { chaoDaMalha } from './relevo/chaoDaMalha'
+import { passoDaMalha } from './relevo/geometriaDoTerreno'
+import { irParaMapa } from './relevo/irParaMapa'
+import { elevacaoDaLinha, elevacaoDoAnel, inclinarSegmento, segmentosDaPatrulha } from './relevo/segmentosDaPatrulha'
+import { raioContraTerreno } from './relevo/raioTerreno'
 import { criarRelevoDoMundo, ORCAMENTO_POR_QUADRO_MS, type RelevoDoMundo } from './relevo/relevoNoEstado'
 import {
   abrirAltar,
@@ -204,7 +212,6 @@ import {
   girarCameraImperioPorArrasto,
   normalizarYaw,
   passoCameraImperio,
-  posicaoCameraImperio,
   resetarCameraImperio,
   yawDaBussolaNoImperio,
   type CameraImperioState,
@@ -429,6 +436,13 @@ function Cena(props: {
   if (!relevoDoMundo.current) relevoDoMundo.current = criarRelevoDoMundo()
   const ultimoCampoDoRelevo = useRef<CampoRelevo | undefined>(undefined)
   const [campoDoRelevo, setCampoDoRelevo] = useState<CampoRelevo | undefined>(undefined)
+  // O CHÃO QUE O GPU DESENHA (F2, 26/11, decisão do usuário): o campo `alturaEm` é bilinear e a malha (passo 1/2/4 m conforme a qualidade) é linear por partes, então entre os vértices as duas alturas DIVERGEM (até 1,08 m).
+  // Quem POSICIONA um objeto no chão tem de ler a malha. Derivado no render do campo E do passo da qualidade EM USO: quando o preset muda a `Cena` re-renderiza e a malha do `TerrenoRelevoCena` é reconstruída no MESMO quadro.
+  const chaoDaMalhaDoDesenho = chaoDaMalha(PARTIDA.relevo.visual ? campoDoRelevo : undefined, passoDaMalha(props.specQualidade.efetiva))
+  // A MESMA malha, por REF, para quem roda DENTRO do `useFrame` (o herói, as tropas, o dragão, as 3 câmeras): o `useFrame` não re-captura o render, então lê a REF. Escrita AQUI, no render, porque o PRESET muda por prop
+  // (`props.specQualidade`) e só o render o vê: quando a qualidade muda esta REF muda no MESMO quadro em que a malha do terreno é reconstruída, e o ator nunca pisa uma malha que não está na tela.
+  const ultimoChaoDaMalha = useRef<ChaoDaMalha | undefined>(undefined)
+  ultimoChaoDaMalha.current = chaoDaMalhaDoDesenho
   // A névoa pintada precisa saber se o relevo está COBRINDO o quadrado (chave ligada E campo pronto) para o plano recortar o que o chão com relevo cuida. É uma REF lida DENTRO do `useFrame` da
   // `NevoaPintada` (como `sim`): um valor guardado no render ficaria velho quando `Cena` não re-renderiza. Nasce `false` = o plano de hoje, inteiro (I1).
   const relevoCobreRef = useRef(false)
@@ -491,22 +505,18 @@ function Cena(props: {
   const { camera, gl, raycaster } = useThree()
   props.projetarNdcRef.current = (x: number, z: number) => {
     camera.updateMatrixWorld()
-    const v = new Vector3(x, 0.8, z).project(camera)
+    const v = new Vector3(x, 0.8 + desnivelDoChao(ultimoChaoDaMalha.current, x, z), z).project(camera)
     return { x: v.x, y: v.y, z: v.z }
   }
 
   const soloNoNdc = (ndcX: number, ndcY: number, planoY = 0) => {
     camera.updateMatrixWorld()
     raycaster.setFromCamera(new Vector2(ndcX, ndcY), camera)
-    const dirY = raycaster.ray.direction.y
-    if (Math.abs(dirY) < 1e-5) return null
-    const t = (planoY - raycaster.ray.origin.y) / dirY
-    if (t < 0) return null
-    return {
-      x: raycaster.ray.origin.x + raycaster.ray.direction.x * t,
-      z: raycaster.ray.origin.z + raycaster.ray.direction.z * t,
-      t,
-    }
+    // O CLIQUE CONTRA O TERRENO (F2, Task 6): com o relevo ligado e pronto o raio acha o terreno VISÍVEL; sem campo é o plano `planoY` de hoje, bit a bit. O campo vem da REF (esta função é guardada por
+    // `callbacksCenaRef` no 1º render: o ESTADO `campoDoRelevo` ficaria `undefined` para sempre).
+    const acerto = raioContraTerreno(ultimoCampoDoRelevo.current, { origem: raycaster.ray.origin, direcao: raycaster.ray.direction }, planoY, Infinity)
+    if (!acerto) return null
+    return { x: acerto.x, y: acerto.y, z: acerto.z, t: acerto.t }
   }
 
   const contextoBlocoMundo = (state: PartidaState) => ({
@@ -604,7 +614,8 @@ function Cena(props: {
       }
     }
 
-    const heroiEye = { x: state.heroi.x, y: PARTIDA.eyeY + state.heroi.y, z: state.heroi.z }
+    // O olho do editor está ONDE A CÂMERA DE 1ª PESSOA ESTÁ: com o relevo o desenho sobe com o terreno e o alcance de 7 m tem de ser medido no MESMO referencial (medido: 0,4–2,1 % dos cliques decidiam errado).
+    const heroiEye = { x: state.heroi.x, y: PARTIDA.eyeY + state.heroi.y + desnivelDoAtor(ultimoCampoDoRelevo.current, state.heroi.x, state.heroi.z, state.heroi.y), z: state.heroi.z }
     const material = props.materialBlocoRef.current
     const escolhido = filtrarHitEdicao(
       hitsMapeados,
@@ -717,7 +728,7 @@ function Cena(props: {
           (heroiEye.z - camera.position.z) * raycaster.ray.direction.z,
         )
         if (chao.t < tPlanoHeroi - 0.15) return null
-        if (Math.hypot(chao.x - heroiEye.x, 0 - heroiEye.y, chao.z - heroiEye.z) > PARTIDA.alcanceEdicaoBlocos) {
+        if (Math.hypot(chao.x - heroiEye.x, chao.y - heroiEye.y, chao.z - heroiEye.z) > PARTIDA.alcanceEdicaoBlocos) {
           return null
         }
       }
@@ -769,14 +780,9 @@ function Cena(props: {
       ),
       camera,
     )
-    const dirY = raycaster.ray.direction.y
-    if (Math.abs(dirY) < 1e-5) return null
-    const t = (-0.45 - raycaster.ray.origin.y) / dirY
-    if (t < 0) return null
-    return {
-      x: raycaster.ray.origin.x + raycaster.ray.direction.x * t,
-      z: raycaster.ray.origin.z + raycaster.ray.direction.z * t,
-    }
+    const acerto = raioContraTerreno(ultimoCampoDoRelevo.current, { origem: raycaster.ray.origin, direcao: raycaster.ray.direction }, Y_SOLO_VISUAL, Infinity)
+    if (!acerto) return null
+    return { x: acerto.x, z: acerto.z }
   }
   const callbacksCenaRef = useRef({
     onCaixa: props.onCaixa,
@@ -923,8 +929,11 @@ function Cena(props: {
     props.sim.current = estadoCena(props.atlas.current)
     const state = props.sim.current
     const olharDesenho = state.posse ? state.posse.modo : state.semCorpo ? 'imperio' : state.olhar
+    // O RELEVO NO ATOR (F2, Task 5 + 7): o campo vem da REF `ultimoCampoDoRelevo`, escrita SÓ no bloco da chave acima. Com a chave desligada ela é `undefined` e todo desnível abaixo é +0 exato (I1).
+    // É REF e é lida AQUI porque o ator ANDA: o ESTADO `campoDoRelevo` fica velho dentro do `useFrame`.
+    const campoDoAtor = ultimoChaoDaMalha.current
     if (avatar.current) {
-      avatar.current.position.set(state.heroi.x, 0.9 + state.heroi.y, state.heroi.z)
+      avatar.current.position.set(state.heroi.x, 0.9 + state.heroi.y + desnivelDoAtor(campoDoAtor, state.heroi.x, state.heroi.z, state.heroi.y), state.heroi.z)
       yawDoHeroi(avatar.current, { yaw: state.heroi.yaw })
       avatar.current.visible =
         !state.semCorpo &&
@@ -943,7 +952,8 @@ function Cena(props: {
       const ocultaPosse = possuidaAgora && olharDesenho === 'primeira'
       const mostra = !ocultaPosse && (unidade.lado === 'inimigo' ? inimigoVisivel(state, unidade) : unidade.hp > 0)
       group.visible = mostra
-      group.position.set(unidade.x, possuidaAgora && state.posse ? state.posse.y : 0, unidade.z)
+      const yDaUnidade = possuidaAgora && state.posse ? state.posse.y : 0
+      group.position.set(unidade.x, yDaUnidade + desnivelDoAtor(campoDoAtor, unidade.x, unidade.z, yDaUnidade), unidade.z)
       group.scale.set(1, 1, 1)
       if (possuidaAgora && state.posse) {
         group.rotation.y = -state.posse.yaw
@@ -960,7 +970,11 @@ function Cena(props: {
           if (!segmento || !ponto) return
           const esticado = Math.hypot(ponto.x - unidade.x, ponto.z - unidade.z) > 0.6
           segmento.visible = mostra
-          segmento.position.set(ponto.x, esticado ? 0.25 : 0.95 + indice * 0.36, ponto.z)
+          segmento.position.set(
+            ponto.x,
+            (esticado ? 0.25 : 0.95 + indice * 0.36) + desnivelDoAtor(campoDoAtor, ponto.x, ponto.z, 0),
+            ponto.z,
+          )
         })
       }
     })
@@ -992,27 +1006,23 @@ function Cena(props: {
       const pan = combinarEntradaPan({ frente: frenteTeclado, lado: ladoTeclado }, borda)
       const girar = ((keys.girarDir ? 1 : 0) - (keys.girarEsq ? 1 : 0)) || props.rotacaoBotaoRef.current
       props.cam.current = passoCameraImperio(props.cam.current, { frente: pan.frente, lado: pan.lado, girar }, bruto)
-      const posCam = posicaoCameraImperio(props.cam.current)
-      camera.position.set(posCam.x, posCam.y, posCam.z)
-      camera.lookAt(props.cam.current.x, 0, props.cam.current.z)
+      const vista = cameraDoImperio(campoDoAtor, props.cam.current)
+      camera.position.set(vista.pos.x, vista.pos.y, vista.pos.z)
+      camera.lookAt(vista.alvo.x, vista.alvo.y, vista.alvo.z)
       const letraImperio = compassLetter(yawDaBussolaNoImperio(props.cam.current.yaw))
       if (letraImperio !== ultimaBussolaImperio.current) {
         ultimaBussolaImperio.current = letraImperio
         props.onBussolaImperio(letraImperio)
       }
     } else if (olharDesenho === 'primeira') {
-      camera.position.set(atorX, PARTIDA.eyeY + atorY, atorZ)
-      camera.lookAt(atorX + olhar.x, PARTIDA.eyeY + atorY + olhar.y, atorZ + olhar.z)
+      const vista = posicaoDaCamera1p(campoDoAtor, { x: atorX, y: atorY, z: atorZ }, olhar)
+      camera.position.set(vista.pos.x, vista.pos.y, vista.pos.z)
+      camera.lookAt(vista.alvo.x, vista.alvo.y, vista.alvo.z)
     } else {
       const dist = distanciaTerceira(pitch, confinado)
-      const ombro = Math.min(0.8, dist * 0.14)
-      const direitaX = -Math.cos(yaw)
-      const direitaZ = -Math.sin(yaw)
-      const camX = atorX - olhar.x * dist + direitaX * ombro
-      const camY = PARTIDA.eyeY + atorY - olhar.y * dist
-      const camZ = atorZ - olhar.z * dist + direitaZ * ombro
-      camera.position.set(camX, camY, camZ)
-      camera.lookAt(camX + olhar.x, camY + olhar.y, camZ + olhar.z)
+      const vista = posicaoDaCamera3p(campoDoAtor, { x: atorX, y: atorY, z: atorZ }, olhar, yaw, dist)
+      camera.position.set(vista.pos.x, vista.pos.y, vista.pos.z)
+      camera.lookAt(vista.alvo.x, vista.alvo.y, vista.alvo.z)
     }
     if (olharDesenho !== 'imperio' && (!state.semCorpo || Boolean(unidadePossuida))) {
       const alcance = unidadePossuida
@@ -1347,7 +1357,7 @@ function Cena(props: {
         visualAprimorado={visualPbr}
         texturasBlocos={texturasBlocos}
         sombrasAtivas={visualPbr && props.specQualidade.sombrasAtivas}
-        campo={PARTIDA.relevo.visual ? campoDoRelevo : undefined}
+        campo={PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined}
         voxeisGroupRef={voxeisGroupRef}
         blocosMapaGroupRef={blocosMapaGroupRef}
         obrasLivresGroupRef={obrasLivresGroupRef}
@@ -1436,7 +1446,7 @@ function Cena(props: {
       {heroisSecundarios.map((hSec) => (
         <group
           key={`heroi-sec-${hSec.id}`}
-          position={[hSec.x, 0.9 + hSec.y, hSec.z]}
+          position={[hSec.x, 0.9 + hSec.y + desnivelDoAtor(PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined, hSec.x, hSec.z, hSec.y), hSec.z]}
           rotation={[0, -hSec.yaw, 0]}
           onClick={(event) => {
             if (props.modoBlocoRef.current) return
@@ -1471,7 +1481,7 @@ function Cena(props: {
         </group>
       ))}
       {obraRallyVisivel?.rallyPoint && (
-        <group position={[obraRallyVisivel.rallyPoint.x, -0.42, obraRallyVisivel.rallyPoint.z]}>
+        <group position={[obraRallyVisivel.rallyPoint.x, -0.42 + desnivelDoChao(PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined, obraRallyVisivel.rallyPoint.x, obraRallyVisivel.rallyPoint.z), obraRallyVisivel.rallyPoint.z]}>
           <mesh position={[0, 0.7, 0]} raycast={semRaycast}>
             <cylinderGeometry args={[0.05, 0.05, 1.4, 8]} />
             <meshStandardMaterial color="#f8fafc" />
@@ -1480,7 +1490,7 @@ function Cena(props: {
             <boxGeometry args={[0.45, 0.28, 0.06]} />
             <meshStandardMaterial color="#22c55e" emissive="#22c55e" emissiveIntensity={0.4} />
           </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+          <mesh position={[0, elevacaoDoAnel(PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined), 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
             <ringGeometry args={[0.4, 0.56, 20]} />
             <meshBasicMaterial color="#22c55e" depthWrite={false} />
           </mesh>
@@ -1496,20 +1506,35 @@ function Cena(props: {
           const mz = (az + bz) / 2
           const comp = Math.max(0.2, Math.hypot(bx - ax, bz - az))
           const ang = Math.atan2(bx - ax, bz - az)
+          // o campo UMA vez: a MESMA condição do chão (chave ligada E campo pronto). Sem campo a linha é UMA caixa, a de hoje (I1); com campo é a fileira de segmentos, cada um no desnível do SEU ponto
+          const campoDaPatrulha = PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined
           return (
             <group key={`patrulha-${u.id}`}>
-              <mesh position={[ax, -0.42, az]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+              <mesh position={[ax, -0.42 + desnivelDoChao(campoDaPatrulha, ax, az) + elevacaoDoAnel(campoDaPatrulha), az]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
                 <ringGeometry args={[0.3, 0.44, 16]} />
                 <meshBasicMaterial color="#38bdf8" depthWrite={false} />
               </mesh>
-              <mesh position={[bx, -0.42, bz]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
+              <mesh position={[bx, -0.42 + desnivelDoChao(campoDaPatrulha, bx, bz) + elevacaoDoAnel(campoDaPatrulha), bz]} rotation={[-Math.PI / 2, 0, 0]} raycast={semRaycast}>
                 <ringGeometry args={[0.3, 0.44, 16]} />
                 <meshBasicMaterial color="#facc15" depthWrite={false} />
               </mesh>
-              <mesh position={[mx, -0.41, mz]} rotation={[0, ang, 0]} raycast={semRaycast}>
-                <boxGeometry args={[0.09, 0.03, comp]} />
-                <meshBasicMaterial color="#38bdf8" transparent opacity={0.6} depthWrite={false} />
-              </mesh>
+              {campoDaPatrulha ? (
+                segmentosDaPatrulha(ax, az, bx, bz).map((s, k) => {
+                  // cada segmento é INCLINADO pelo chão das suas DUAS pontas (medido: horizontais, 59 % tinham uma ponta enterrada e a linha ficava com lacunas na foto 30); 'YXZ' é a ordem de Euler que põe as pontas no lugar
+                  const inclinado = inclinarSegmento(s, (x, z) => desnivelDoChao(campoDaPatrulha, x, z))
+                  return (
+                    <mesh key={k} position={[s.x, -0.41 + inclinado.y + elevacaoDaLinha(campoDaPatrulha), s.z]} rotation={[inclinado.inclinacao, s.ang, 0, 'YXZ']} raycast={semRaycast}>
+                      <boxGeometry args={[0.09, 0.03, inclinado.comprimento]} />
+                      <meshBasicMaterial color="#38bdf8" transparent opacity={0.6} depthWrite={false} />
+                    </mesh>
+                  )
+                })
+              ) : (
+                <mesh position={[mx, -0.41, mz]} rotation={[0, ang, 0]} raycast={semRaycast}>
+                  <boxGeometry args={[0.09, 0.03, comp]} />
+                  <meshBasicMaterial color="#38bdf8" transparent opacity={0.6} depthWrite={false} />
+                </mesh>
+              )}
             </group>
           )
         })}
@@ -1532,7 +1557,7 @@ function Cena(props: {
             visivel={visivel}
             modoBloco={Boolean(props.modoBloco || props.modoLinhaRef.current || props.modoConsagrarRef.current)}
             sombrasAtivas={visualPbr && props.specQualidade.sombrasAtivas}
-            campo={PARTIDA.relevo.visual ? campoDoRelevo : undefined}
+            campo={PARTIDA.relevo.visual ? chaoDaMalhaDoDesenho : undefined}
             lagoas={props.sim.current.lagoas}
             onPointerDown={(event) => {
               // Esta malha roda antes do `pointerdown` do container, que atiraria (medido: R3F vem antes).
@@ -1563,6 +1588,7 @@ function Cena(props: {
         unidades={props.sim.current.unidades}
         selectedIds={props.selectedIds}
         unidadesRef={unidades}
+        campoRef={ultimoChaoDaMalha}
         corposRef={corpos}
         modoBloco={props.modoBloco}
         modoBlocoRef={props.modoBlocoRef}
@@ -1833,6 +1859,8 @@ export const IlhaRua: React.FC = () => {
         spawnarTropas: (qtd: number, tipo?: TipoTropaAliada) => number
         simularPing: (mapaI?: number, mapaJ?: number) => void
         abrirCaderno: () => void
+        /** Leva o herói e a cena a `(x, z)` do quadrado `(i, j)` (relevo F2: fotografar um quadrado FORTE sem andar minutos). Devolve onde o herói ficou DE VERDADE. */
+        irPara: (i: number, j: number, x?: number, z?: number) => { i: number; j: number; x: number; z: number }
       }
     }
     w.__ILHA_BENCH__ = {
@@ -1875,6 +1903,13 @@ export const IlhaRua: React.FC = () => {
       },
       abrirCaderno: () => {
         alternarCadernoRef.current()
+      },
+      irPara: (i: number, j: number, x = 0, z = 0) => {
+        atlasRef.current = irParaMapa(atlasRef.current, i, j, x, z)
+        sim.current = estadoCena(atlasRef.current)
+        setHud(sim.current)
+        const corpo = estadoCorpo(atlasRef.current)
+        return { i: atlasRef.current.heroiI, j: atlasRef.current.heroiJ, x: corpo.heroi.x, z: corpo.heroi.z }
       },
     }
     return () => {
