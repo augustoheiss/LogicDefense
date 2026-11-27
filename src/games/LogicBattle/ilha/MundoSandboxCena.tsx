@@ -20,7 +20,8 @@ import { cobertoAgora, obraEmConstrucao, PartidaState } from './partidaSim'
 import type { AlvoEdicaoVoxel } from './verticalidadeVoxel'
 import { FundacoesObrasCena } from './visual/FundacaoObraCena'
 import { alturaVisualRecurso, classificarSuporteObra, paisagemNaturalVisivel, Y_SOLO_VISUAL } from './visual/suporteFundacao'
-import type { CampoRelevo } from './relevo/campoRelevo'
+import { desnivelDaObraNoChao, desnivelDoApoio } from './relevo/alturaVisual'
+import type { ChaoDoDesenho } from './relevo/alturaVisual'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
 
 export interface MundoSandboxCenaProps {
@@ -45,7 +46,7 @@ export interface MundoSandboxCenaProps {
   onTocarObraInstanced?: (obraId: number, pointerId: number, button: number) => boolean | void
   onPedirSubsolo: () => void
   /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) tudo fica no plano de hoje (I1). Repassado à fundação e aos pontos de chão do sandbox. */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
 }
 
 export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
@@ -167,14 +168,14 @@ export const MundoSandboxCena: React.FC<MundoSandboxCenaProps> = ({
         return (
           <group key={`extra-obra-${obra.id}`}>
             {!temVoxel && (obra.tipo === 'torre' || obra.tipo === 'portao') && (
-              <mesh position={[obra.x, 1.04, obra.z]} raycast={() => null}>
+              <mesh position={[obra.x, 1.04 + desnivelDaObraNoChao(obra, campo, lagoas), obra.z]} raycast={() => null}>
                 <boxGeometry args={[dim[0] + 0.62, 0.12, dim[2] + 0.62]} />
                 <meshStandardMaterial color={obra.lado === 'inimigo' ? '#881337' : '#38bdf8'} />
               </mesh>
             )}
             {obra.lado !== 'inimigo' && obra.tipo === 'mina' && (
               <group
-                position={[obra.x, Y_SOLO_VISUAL + 0.06, obra.z + 1.65]}
+                position={[obra.x, Y_SOLO_VISUAL + 0.06 + desnivelDoApoio(campo, lagoas, obra.x, obra.z + 1.65), obra.z + 1.65]}
                 onClick={(event) => {
                   event.stopPropagation()
                   onPedirSubsolo()

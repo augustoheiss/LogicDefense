@@ -368,7 +368,9 @@ export const PARTIDA = {
   // RELEVO (relevo e visual AoE, F2, 25/11/2026): o terreno de morros, vales e lagoas em bacia. `visual` liga o desenho SÓ (o chão, as obras, os props, as tropas, a câmera e o clique seguem o
   // terreno); a SIMULAÇÃO continua plana (o herói e as tropas ainda atravessam o morro: as regras do relevo são a F3, com «ok» separado do usuário). DESLIGADA até as fotos da F2 serem
   // aprovadas: desligada, cada ponto de desenho devolve o mesmo número de hoje (o chão em −0,45, I1) e o jogo não muda um pixel. É um objeto porque a F3 acrescentará `regras` ao lado, com a sua chave.
-  relevo: { visual: false as boolean },
+  // A ÁGUA (relevo e visual AoE, F2, 26/11/2026): `agua` liga os RIOS (valetas escavadas com água dentro, só desenho). PRÓPRIA e DESLIGADA, separada de `visual`: ligar uma NÃO liga a outra. A água só é DESENHADA com as duas
+  // ligadas E o campo do quadrado pronto (`agua && relevoVisivel`): sem o relevo não há valeta. O rio NÃO entra em `state.lagoas`: não desacelera nem muda o caminho (vadear a 0,55× e os lagos nas bordas são a F3, com «ok» separado).
+  relevo: { visual: false as boolean, agua: false as boolean },
   qualidadeGraficaPadrao: 'auto' as QualidadeGraficaPreset,
   capacidadePoolBiomasGpu: 2,
   mostrarFaixaTiroVisual: false as boolean,

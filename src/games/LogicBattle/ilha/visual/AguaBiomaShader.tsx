@@ -4,7 +4,9 @@ import { Color, ShaderMaterial } from 'three'
 import type { BiomaId, LagoaRasa } from '../biomaRecursos'
 import type { PartidaState } from '../partidaSim'
 import { semRaycast } from '../raycastCena'
+import type { Rio } from '../relevo/aguaDoMundo'
 import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
+import { FitaDoRio } from './FitaDoRio'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
 import { paisagemNaturalVisivel } from './suporteFundacao'
 import type { PacoteTexturasBioma } from './texturasPbrProcedural'
@@ -15,6 +17,12 @@ export interface AguaBiomaShaderProps {
   readonly lagoas: readonly LagoaRasa[]
   readonly texturas: PacoteTexturasBioma | null
   readonly spec: SpecQualidadeGrafica
+  /** Os RIOS que tocam o quadrado (F2, 26/11/2026): OPCIONAL, e sem ele o desenho é o de hoje (I1). Só chega com a chave `PARTIDA.relevo.agua` ligada E o relevo desenhado (a guarda mora em `CenaBiomaVisual`). */
+  readonly rios?: readonly Rio[]
+  /** O quadrado dos rios (as coordenadas da fita são LOCAIS a ele). */
+  readonly quadrado?: { readonly i: number; readonly j: number }
+  /** As uniforms da névoa pintada: a MESMA ref que o terreno lê (nenhuma cópia). */
+  readonly nevoaUniforms?: React.MutableRefObject<Record<string, { value: unknown }> | null>
 }
 
 export const AguaBiomaShader: React.FC<AguaBiomaShaderProps> = ({
@@ -23,6 +31,9 @@ export const AguaBiomaShader: React.FC<AguaBiomaShaderProps> = ({
   lagoas,
   texturas,
   spec,
+  rios,
+  quadrado,
+  nevoaUniforms,
 }) => {
   const cat = BIOMA_VISUAL_CATALOG[bioma]
 
@@ -150,6 +161,7 @@ export const AguaBiomaShader: React.FC<AguaBiomaShaderProps> = ({
           </group>
         )
       })}
+      {rios?.map((rio) => (quadrado ? <FitaDoRio key={rio.id} rio={rio} i={quadrado.i} j={quadrado.j} bioma={bioma} spec={spec} nevoaUniforms={nevoaUniforms} /> : null))}
     </group>
   )
 }

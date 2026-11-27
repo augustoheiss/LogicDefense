@@ -12,7 +12,7 @@ import type { LagoaRasa } from '../biomaRecursos'
 import { chaoRevelado, cobertoAgora, obraEmConstrucao, type Obra, type PartidaState } from '../partidaSim'
 import { semRaycast } from '../raycastCena'
 import { desnivelDaObraNoChao } from '../relevo/alturaVisual'
-import type { CampoRelevo } from '../relevo/campoRelevo'
+import type { ChaoDoDesenho } from '../relevo/alturaVisual'
 import {
   calcularCurvaConstrucao,
   classificarSuporteObra,
@@ -367,7 +367,7 @@ export const FundacoesObrasCena: React.FC<{
   texturasBlocos?: PacoteTexturasBlocos | null
   sombrasAtivas?: boolean
   /** O campo de relevo do quadrado (Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) cada fundação fica no plano de hoje (I1). */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
 }> = ({ state, lagoas, texturasBlocos = null, sombrasAtivas = false, campo }) => {
   const geos = useMemo<GeosFundacaoCompartilhadas>(
     () => ({

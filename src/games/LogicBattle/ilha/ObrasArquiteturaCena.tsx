@@ -15,7 +15,7 @@ import {
 import { DIMENSOES_OBRA, PARTIDA, PecaId } from './partidaPolicies'
 import { chaoRevelado, cobertoAgora, Obra, obraEmConstrucao, PartidaState } from './partidaSim'
 import { desnivelDaObraNoChao, desnivelDoApoio } from './relevo/alturaVisual'
-import type { CampoRelevo } from './relevo/campoRelevo'
+import type { ChaoDoDesenho } from './relevo/alturaVisual'
 import { raycastCondicional, semRaycast } from './raycastCena'
 import { alturaSapataMuralha, Y_SOLO_VISUAL } from './visual/suporteFundacao'
 import type { PacoteTexturasBlocos } from './visual/texturasPbrProcedural'
@@ -54,7 +54,7 @@ export const BlocosMundoInstanced: React.FC<{
   texturasBlocos?: PacoteTexturasBlocos | null
   sombrasAtivas?: boolean
   /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) os blocos ficam no plano de hoje (I1). */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
   /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
   lagoas?: readonly LagoaRasa[]
 }> = ({ blocosMapa, versaoSolidos, versaoChao, state, groupRef, texturasBlocos = null, sombrasAtivas = false, campo, lagoas }) => {
@@ -190,7 +190,7 @@ export const ObrasLivresInstanced: React.FC<{
   /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
   onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
   /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele os blocos ficam no plano de hoje (I1). */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
   /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
   lagoas?: readonly LagoaRasa[]
 }> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra, campo, lagoas }) => {
@@ -362,7 +362,7 @@ export const ObrasNv5Instanced: React.FC<{
   /** Devolve `true` para a malha parar a propagação do raycast (obra inimiga à frente: nada atrás captura o clique, OBS-F2-5). */
   onTocarObra?: (obraId: number, pointerId: number, button: number) => boolean | void
   /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele os prédios ficam no plano de hoje (I1). */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
   /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
   lagoas?: readonly LagoaRasa[]
 }> = ({ state, versaoSolidos, versaoChao, groupRef, texturasBlocos = null, sombrasAtivas = false, bloqueiaCliqueObra, onSelectObra, onTocarObra, campo, lagoas }) => {
@@ -482,7 +482,7 @@ export const PreviewLinhaBlocos: React.FC<{
   plano: PlanoLinhaBlocos | null
   temRecurso: boolean
   /** O campo de relevo do quadrado (F2, Task 4): o fantasma sobe o MESMO desnível do bloco de verdade. OPCIONAL (I1). */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
   /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): quem repousa na água fica na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
   lagoas?: readonly LagoaRasa[]
 }> = ({ plano, temRecurso, campo, lagoas }) => {
@@ -804,7 +804,7 @@ export const GhostBlueprintObra: React.FC<{
   valido: boolean
   sobreAgua?: boolean
   /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) a obra fica no plano de hoje (I1). */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
   /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): um píer repousa na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
   lagoas?: readonly LagoaRasa[]
 }> = ({ tipo, x, z, valido, sobreAgua = false, campo, lagoas }) => {
@@ -888,7 +888,7 @@ export const ObraArquiteturaMesh: React.FC<{
   onPointerUp: (event: ThreeEvent<PointerEvent>) => void
   onClick: (event: ThreeEvent<MouseEvent>) => void
   /** O campo de relevo do quadrado (F2, Task 4). OPCIONAL: sem ele (chave desligada, ou campo ainda gerando) a obra fica no plano de hoje (I1). */
-  campo?: CampoRelevo
+  campo?: ChaoDoDesenho
   /** As lagoas do quadrado (a MESMA lista que a regra e a água desenhada usam): um píer repousa na LÂMINA, não no leito. OPCIONAL: sem ela é o desnível do chão (I1). */
   lagoas?: readonly LagoaRasa[]
 }> = ({ obra, visivel, modoBloco, onPointerDown, onPointerUp, onClick, campo, lagoas }) => {

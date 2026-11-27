@@ -35,13 +35,13 @@ export function contratoDasObrasNoTerreno(obras: string): void {
   assert(/import \{[^}]*\bdesnivelDoApoio\b[^}]*\} from '\.\/relevo\/alturaVisual'/.test(codigo), 'as obras usam `desnivelDoApoio` (a ÚNICA conta, de `./relevo/alturaVisual`: a água é a lâmina, não o leito)')
   assert(!/\bdesnivelDoChao\b/.test(codigo), 'as obras NÃO usam `desnivelDoChao` direto: quem repousa numa lagoa afundaria no leito (medido nos 169 quadrados)')
   assert(/import type \{ LagoaRasa \} from '\.\/biomaRecursos'/.test(codigo) || /LagoaRasa/.test(codigo), 'o tipo `LagoaRasa` vem de `./biomaRecursos`')
-  assert(/import type \{ CampoRelevo \} from '\.\/relevo\/campoRelevo'/.test(codigo), 'o tipo `CampoRelevo` vem de `./relevo/campoRelevo`')
+  assert(/import type \{ ChaoDoDesenho \} from '\.\/relevo\/alturaVisual'/.test(codigo), 'o tipo `ChaoDoDesenho` vem de `./relevo/alturaVisual`')
   assert(!/alturaVisualDoChao/.test(codigo), 'as obras NÃO repetem a fórmula `alturaVisualDoChao(…) − Y_SOLO_VISUAL`')
 
   for (const nome of ['BlocosMundoInstanced', 'ObrasLivresInstanced', 'ObrasNv5Instanced', 'PreviewLinhaBlocos']) {
     const c = componente(codigo, nome)
     assert(c.length > 0, `o componente ${nome} existe`)
-    assert(/campo\?: CampoRelevo/.test(c), `${nome} recebe \`campo?: CampoRelevo\` (opcional: sem ele é o de hoje, I1)`)
+    assert(/campo\?: ChaoDoDesenho/.test(c), `${nome} recebe \`campo?: ChaoDoDesenho\` (opcional: sem ele é o de hoje, I1)`)
     assert(/lagoas\?: readonly LagoaRasa\[\]/.test(c), `${nome} recebe \`lagoas?: readonly LagoaRasa[]\` (a água é a MESMA que a regra e o desenho usam: sem ela cada obra decidiria sozinha)`)
     assert(/\}> = \(\{[^}]*\blagoas\b[^}]*\}\) =>/.test(c), `${nome} LÊ a prop \`lagoas\` nos parâmetros`)
     // declarar o TIPO sem LER o valor nos parâmetros deixa o `campo` indefinido no corpo (o `tsc` também pega; o contrato não depende dele)
@@ -93,7 +93,7 @@ export function contratoDasObrasNoTerreno(obras: string): void {
   for (const nome of ['GhostBlueprintObra', 'ObraArquiteturaMesh']) {
     const c = componente(codigo, nome)
     assert(c.length > 0, `o componente ${nome} existe`)
-    assert(/campo\?: CampoRelevo/.test(c), `${nome} recebe \`campo?: CampoRelevo\` (opcional: sem ele é o de hoje, I1)`)
+    assert(/campo\?: ChaoDoDesenho/.test(c), `${nome} recebe \`campo?: ChaoDoDesenho\` (opcional: sem ele é o de hoje, I1)`)
     assert(/lagoas\?: readonly LagoaRasa\[\]/.test(c), `${nome} recebe \`lagoas?: readonly LagoaRasa[]\``)
     assert(/\}> = \(\{[^}]*\bcampo\b[^}]*\}\) =>/.test(c) && /\}> = \(\{[^}]*\blagoas\b[^}]*\}\) =>/.test(c), `${nome} LÊ \`campo\` e \`lagoas\` nos parâmetros`)
     // o desnível é UM `const` calculado uma vez e usado SÓ no(s) grupo(s) pai: contado por ocorrência de `desnivelDaObra` (a variável) para nenhum filho o somar de novo

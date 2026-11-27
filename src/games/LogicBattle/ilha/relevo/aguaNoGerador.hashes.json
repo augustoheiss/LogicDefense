@@ -1,0 +1,23 @@
+{
+  "quadrados": {
+    "0,0": "2ddd4d7a80b99c552fccb91fd8786214bb30e236",
+    "-1,-3": "e267796a15898d22429c8746700b3eccd63fde57",
+    "1,2": "46e7d72984b0e0dbd4453bfdcb7b0f07e669cc5a",
+    "3,0": "e3afa8c319b04a76e6a6e36ffe949bbf59407a39",
+    "1,-1": "4d7e819e672f31e9f60a44969c28c370906d96e5",
+    "0,-2": "7f79b2b7684aed36415f58b0fc27197d66efd469"
+  },
+  "fatiado": {
+    "0,0": "2ddd4d7a80b99c552fccb91fd8786214bb30e236",
+    "-1,-3": "e267796a15898d22429c8746700b3eccd63fde57",
+    "1,2": "46e7d72984b0e0dbd4453bfdcb7b0f07e669cc5a",
+    "3,0": "e3afa8c319b04a76e6a6e36ffe949bbf59407a39",
+    "1,-1": "4d7e819e672f31e9f60a44969c28c370906d96e5",
+    "0,-2": "7f79b2b7684aed36415f58b0fc27197d66efd469"
+  },
+  "mascaraPlana2000": "8369b835fdb4885feb1294abf35d10e6efe3b212",
+  "politica": {
+    "visual": false,
+    "agua": false
+  }
+}

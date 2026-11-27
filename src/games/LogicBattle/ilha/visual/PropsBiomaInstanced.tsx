@@ -16,7 +16,7 @@ import { BIOMA_VISUAL_CATALOG } from './biomaVisualCatalog'
 import { gerarPropsDecorativos } from './propsDecorativos'
 import type { SpecQualidadeGrafica } from './qualidadeGrafica'
 import { desnivelDoApoio, desnivelDoChao } from '../relevo/alturaVisual'
-import type { CampoRelevo } from '../relevo/campoRelevo'
+import type { ChaoDoDesenho } from '../relevo/alturaVisual'
 import { alturaVisualRecurso, paisagemNaturalVisivel } from './suporteFundacao'
 import type { PacoteTexturasBioma } from './texturasPbrProcedural'
 
@@ -33,7 +33,7 @@ export interface PropsBiomaInstancedProps {
    * O campo de relevo do quadrado (F2, Task 4). OPCIONAL e de VALOR (não ref): o desenho é feito em `useLayoutEffect`, que só roda de novo quando uma dependência muda, e o campo termina de gerar
    * alguns quadros DEPOIS do quadrado (geração fatiada). Ausente, ou ainda gerando, o desnível é 0 e o desenho é o de hoje (I1).
    */
-  readonly campo?: CampoRelevo
+  readonly campo?: ChaoDoDesenho
 }
 
 const MAX_ARVORES = 32

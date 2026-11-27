@@ -51,7 +51,10 @@ export function contratoDasChaves(politicas: string): void {
   // O RELEVO VISUAL é a quarta chave (F2, 25/11/2026): `PARTIDA.relevo.visual` liga o terreno de morros e vales SÓ no que se vê (a simulação continua plana: as regras do relevo são a F3, com «ok»
   // separado do usuário). DESLIGADA até as fotos da F2 serem aprovadas; desligada, o jogo é o de hoje (o chão é um plano em −0,45, I1). Quando o usuário a ligar, esta linha muda DE PROPÓSITO, junto
   // com o ledger. É um OBJETO (`relevo: { visual: … }`) porque a F3 acrescenta `regras` ao lado, com chave própria: uma flag só não distinguiria «vejo o relevo» de «o relevo vale».
-  assert(/\brelevo: \{\s*visual: false as boolean,?\s*\},/.test(codigo), 'PARTIDA.relevo.visual está DESLIGADA até as fotos da F2 serem aprovadas (o relevo só desenha; as regras são a F3)')
+  // A ÁGUA é a SEGUNDA chave do relevo (F2, 26/11/2026, decisão do usuário: «rio sem lentidão na F2, chave própria»): `PARTIDA.relevo.agua` liga os RIOS (valetas com água, só desenho); os lagos nas bordas e a lentidão de vadear são a F3.
+  // PRÓPRIA e DESLIGADA, separada de `visual`: ligar uma NÃO liga a outra. A água só é DESENHADA com as duas ligadas E o campo pronto (`PARTIDA.relevo.agua && relevoVisivel`): isso é uma condição de desenho, não uma terceira chave.
+  assert(/\brelevo: \{\s*visual: false as boolean,\s*agua: false as boolean,?\s*\},/.test(codigo), 'PARTIDA.relevo.visual E PARTIDA.relevo.agua estão DESLIGADAS, nessa ordem (o relevo só desenha; os rios são desenho; as regras e os lagos nas bordas são a F3)')
+  assert((codigo.match(/\bagua: /g) ?? []).length === 1, 'a propriedade `agua` do relevo é declarada uma única vez (nenhum outro `agua:` solto na política)')
   assert((codigo.match(/\brelevo:/g) ?? []).length === 1, 'a chave do relevo é declarada uma única vez')
   assert((codigo.match(/\bvisual: /g) ?? []).length === 1, 'a propriedade `visual` do relevo é declarada uma única vez (nenhum outro `visual:` solto na política)')
 }

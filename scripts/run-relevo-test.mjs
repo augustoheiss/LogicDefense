@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,6 +36,19 @@ const MODULOS = [
   '/src/games/LogicBattle/ilha/relevo/propsNoTerreno.test.ts',
   '/src/games/LogicBattle/ilha/relevo/obrasNoTerreno.test.ts',
   '/src/games/LogicBattle/ilha/relevo/apoioNaAgua.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/alturaDoAtor.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/ligacaoDoAtor.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/raioTerreno.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/irParaMapa.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/segmentosDaPatrulha.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/chaoDoMundoNaCena.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/chaoDaMalha.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/aguaDoMundo.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/aguaNoGerador.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/geometriaDaAgua.test.ts',
+  '/src/games/LogicBattle/ilha/visual/fitaDoRio.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/geometriaDoHorizonte.test.ts',
+  '/src/games/LogicBattle/ilha/relevo/sondaDeAlturas.test.ts',
 ]
 
 // Os contratos de TEXTO (como `contratoDoHud`) recebem o fonte da cena e das políticas: o desenho vive no React e o runner roda no Node, sem GPU.
@@ -49,7 +63,18 @@ const propsBioma = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visu
 const fundacaoObra = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/FundacaoObraCena.tsx'), 'utf8')
 const sandboxCena = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/MundoSandboxCena.tsx'), 'utf8')
 const obrasCena = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/ObrasArquiteturaCena.tsx'), 'utf8')
+const horizonteRelevo = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/HorizonteRelevo.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/HorizonteRelevo.tsx'), 'utf8') : ''
+const aguaBioma = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/AguaBiomaShader.tsx'), 'utf8')
+const fitaDoRio = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/FitaDoRio.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/FitaDoRio.tsx'), 'utf8') : ''
+const tropasCena = readFileSync(path.join(root, 'src/games/LogicBattle/ilha/TropasCena.tsx'), 'utf8')
 const terrenoRelevo = existsSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TerrenoRelevoCena.tsx')) ? readFileSync(path.join(root, 'src/games/LogicBattle/ilha/visual/TerrenoRelevoCena.tsx'), 'utf8') : ''
+
+// Os insumos do `aguaNoGerador.test.ts`: o projeto não tem `@types/node`, então QUEM lê os arquivos e calcula o SHA-1 é o runner (os hashes do gerador de ANTES da água e os 13 rios medidos no protótipo).
+const insumosDoGerador = {
+  hashes: readFileSync(path.join(root, 'src/games/LogicBattle/ilha/relevo/aguaNoGerador.hashes.json'), 'utf8'),
+  prototipo: readFileSync(path.join(root, '.superpowers/agua/rios-do-prototipo.json'), 'utf8'),
+  sha1: (a) => createHash('sha1').update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)).digest('hex'),
+}
 
 // `RELEVO_SO=<trecho do nome>` roda SÓ os módulos que contêm o trecho (ciclo rápido de mutação: o `relevo.test.ts` sozinho leva ~100 s). Uma rodada parcial imprime OUTRA mensagem: só
 // `relevo: ok` vale como portão.
@@ -61,7 +86,7 @@ try {
   for (const modulo of escolhidos) {
     const mod = await server.ssrLoadModule(modulo)
     // cada módulo recebe só o que usa, por POSIÇÃO: `ceuEIbl.test.ts` lê só a atmosfera (1º argumento); os demais seguem a ordem de antes
-    await (modulo.endsWith('ceuEIbl.test.ts') ? mod.run(atmosfera, cenaBioma) : modulo.endsWith('flagstone.test.ts') ? mod.run(texturas, terreno, componenteNevoa, cenaBioma) : modulo.endsWith('cicloDePacote.test.ts') ? mod.run(cenaBioma) : modulo.endsWith('tarefaFatiada.test.ts') ? mod.run() : modulo.endsWith('campoDoSolo.test.ts') ? mod.run(texturas) : modulo.endsWith('terrenoRelevoCena.test.ts') ? mod.run(terrenoRelevo, cenaBioma, cena, componenteNevoa) : modulo.endsWith('propsNoTerreno.test.ts') ? mod.run(propsBioma, fundacaoObra, sandboxCena) : modulo.endsWith('obrasNoTerreno.test.ts') ? mod.run(obrasCena) : modulo.endsWith('relevoVisual.test.ts') || modulo.endsWith('relevoNoEstado.test.ts') || modulo.endsWith('geometriaDoTerreno.test.ts') || modulo.endsWith('misturaDoTerreno.test.ts') || modulo.endsWith('materialTerrenoRelevo.test.ts') || modulo.endsWith('glslDaNevoa.test.ts') || modulo.endsWith('nevoaNoTerreno.test.ts') || modulo.endsWith('sandboxViva.test.ts') || modulo.endsWith('biomaVisual.test.ts') ? mod.run() : mod.run(cena, politicas, componenteNevoa, atmosfera))
+    await (modulo.endsWith('aguaNoGerador.test.ts') ? mod.run(insumosDoGerador) : modulo.endsWith('fitaDoRio.test.ts') ? mod.run(fitaDoRio, aguaBioma) : modulo.endsWith('ceuEIbl.test.ts') ? mod.run(atmosfera, cenaBioma) : modulo.endsWith('flagstone.test.ts') ? mod.run(texturas, terreno, componenteNevoa, cenaBioma) : modulo.endsWith('cicloDePacote.test.ts') ? mod.run(cenaBioma) : modulo.endsWith('tarefaFatiada.test.ts') ? mod.run() : modulo.endsWith('campoDoSolo.test.ts') ? mod.run(texturas) : modulo.endsWith('terrenoRelevoCena.test.ts') ? mod.run(terrenoRelevo, cenaBioma, cena, componenteNevoa, horizonteRelevo) : modulo.endsWith('ligacaoDoAtor.test.ts') ? mod.run(cena, tropasCena) : modulo.endsWith('chaoDoMundoNaCena.test.ts') ? mod.run(cena) : modulo.endsWith('propsNoTerreno.test.ts') ? mod.run(propsBioma, fundacaoObra, sandboxCena) : modulo.endsWith('obrasNoTerreno.test.ts') ? mod.run(obrasCena) : modulo.endsWith('relevoVisual.test.ts') || modulo.endsWith('relevoNoEstado.test.ts') || modulo.endsWith('geometriaDoTerreno.test.ts') || modulo.endsWith('misturaDoTerreno.test.ts') || modulo.endsWith('materialTerrenoRelevo.test.ts') || modulo.endsWith('glslDaNevoa.test.ts') || modulo.endsWith('nevoaNoTerreno.test.ts') || modulo.endsWith('sandboxViva.test.ts') || modulo.endsWith('biomaVisual.test.ts') || modulo.endsWith('alturaDoAtor.test.ts') || modulo.endsWith('raioTerreno.test.ts') || modulo.endsWith('irParaMapa.test.ts') || modulo.endsWith('segmentosDaPatrulha.test.ts') || modulo.endsWith('chaoDaMalha.test.ts') || modulo.endsWith('aguaDoMundo.test.ts') ? mod.run() : mod.run(cena, politicas, componenteNevoa, atmosfera))
   }
   console.log(filtro ? `relevo (parcial: ${filtro}, ${escolhidos.length} de ${MODULOS.length} módulos): ok` : 'relevo: ok')
 } finally {

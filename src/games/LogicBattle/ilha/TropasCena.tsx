@@ -16,6 +16,9 @@ import {
 } from 'three'
 import { haloDoInimigo, RAIO_DO_HALO } from './haloInimigo'
 import { PARTIDA } from './partidaPolicies'
+import { desnivelDoAtor } from './relevo/alturaDoAtor'
+import { elevacaoDaLinha, elevacaoDoAnel } from './relevo/segmentosDaPatrulha'
+import type { ChaoDoDesenho } from './relevo/alturaVisual'
 import type { PartidaState, Unidade } from './partidaSim'
 import { inimigoVisivel } from './partidaSim'
 import { raycastCondicional, semRaycast } from './raycastCena'
@@ -29,6 +32,10 @@ interface TropasCenaProps {
   unidades: readonly Unidade[]
   selectedIds: readonly number[]
   unidadesRef: React.MutableRefObject<Map<number, Group>>
+  /**
+   * O campo do relevo do quadrado (F2, Task 5), por REF e lido no `useFrame`: a tropa ANDA, e a ref que a `Cena` já mantém só guarda um campo com a chave LIGADA e pronto. OPCIONAL: sem ela, ou com `undefined`, o desnível é +0 exato e o jogo é o de hoje (I1).
+   */
+  campoRef?: React.MutableRefObject<ChaoDoDesenho | undefined>
   corposRef: React.MutableRefObject<Map<string, Mesh>>
   modoBloco: 'adicionar' | 'remover' | null
   modoBlocoRef: React.MutableRefObject<'adicionar' | 'remover' | null>
@@ -50,6 +57,7 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
   unidades,
   selectedIds,
   unidadesRef,
+  campoRef,
   corposRef,
   modoBloco,
   modoBlocoRef,
@@ -157,7 +165,9 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
       const perfil = perfilVisualDaUnidade(unidade.lado, unidade.papel, selecionada)
       const fase = t * perfil.frequenciaMarcha + unidade.id * 1.13
       const marchY = Math.abs(Math.sin(fase)) * perfil.amplitudeMarcha
-      const baseY = Y_SOLO_VISUAL + (possuidaAgora && state.posse ? state.posse.y : 0)
+      // O chão da tropa (a MALHA que o GPU desenha, por REF) lido UMA vez por tropa por quadro: o `baseY` e a elevação dos DOIS discos horizontais (a sombra e o anel) usam a MESMA leitura.
+      const chaoDaTropa = campoRef?.current
+      const baseY = Y_SOLO_VISUAL + (possuidaAgora && state.posse ? state.posse.y : 0) + desnivelDoAtor(chaoDaTropa, unidade.x, unidade.z, possuidaAgora && state.posse ? state.posse.y : 0)
 
       let yaw = 0
       if (possuidaAgora && state.posse) {
@@ -189,14 +199,14 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
       }
 
       // 1. Sombra de contato (sem marchY)
-      dummy.position.set(unidade.x, baseY + 0.015, unidade.z)
+      dummy.position.set(unidade.x, baseY + 0.015 + elevacaoDaLinha(chaoDaTropa), unidade.z)
       dummy.rotation.set(-Math.PI / 2, 0, 0)
       dummy.scale.set(sx * 1.05, sz * 1.05, 1)
       dummy.updateMatrix()
       instSombraRef.current?.setMatrixAt(n, dummy.matrix)
 
       // 2. Anel de seleção
-      dummy.position.set(unidade.x, baseY + 0.025, unidade.z)
+      dummy.position.set(unidade.x, baseY + 0.025 + elevacaoDoAnel(chaoDaTropa), unidade.z)
       dummy.rotation.set(-Math.PI / 2, 0, 0)
       if (selecionada) dummy.scale.set(1, 1, 1)
       else dummy.scale.set(0, 0, 0)
@@ -368,7 +378,8 @@ export const TropasCena: React.FC<TropasCenaProps> = ({
       <instancedMesh ref={instSombraRef} args={[geos.sombraContato, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} raycast={semRaycast}>
         <meshBasicMaterial color="#090d16" transparent opacity={0.28} depthWrite={false} />
       </instancedMesh>
-      <instancedMesh ref={instAnelRef} args={[geos.anelSel, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} raycast={semRaycast}>
+      {/* O ANEL de seleção é OPACO e, com o relevo LIGADO, a névoa pintada (renderOrder 4, transparente) o cobria: ele NUNCA aparecia (foto `12-comparacao-anel.png`). Só com o relevo ligado é desenhado depois dela; sem relevo é 0, o de hoje (I1). */}
+      <instancedMesh ref={instAnelRef} args={[geos.anelSel, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} raycast={semRaycast} renderOrder={PARTIDA.relevo.visual ? 5 : 0}>
         <meshBasicMaterial color="#facc15" depthWrite={false} />
       </instancedMesh>
       <instancedMesh ref={instBotasRef} args={[geos.botas, undefined, MAX_TROPAS_INSTANCIADAS]} frustumCulled={false} castShadow={sombrasAtivas} raycast={semRaycast}>
