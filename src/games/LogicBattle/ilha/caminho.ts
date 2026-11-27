@@ -49,7 +49,10 @@ interface GradeBloqueios {
   celulas: Uint8Array
 }
 
-function construirGradeBloqueios(bloqueios: readonly Bloqueio[]): GradeBloqueios {
+function construirGradeBloqueios(
+  bloqueios: readonly Bloqueio[],
+  bloqueadoExtra?: (x: number, z: number) => boolean,
+): GradeBloqueios {
   const lim = limite()
   const lado = lim * 2 + 1
   const celulas = new Uint8Array(lado * lado)
@@ -63,6 +66,9 @@ function construirGradeBloqueios(bloqueios: readonly Bloqueio[]): GradeBloqueios
       if (PARTIDA.atlas === 'grade') {
         if (Math.abs(px) > borda || Math.abs(pz) > borda) celulas[row + gx + lim] = 1
       } else if (Math.hypot(px, pz) > borda) {
+        celulas[row + gx + lim] = 1
+      }
+      if (bloqueadoExtra && celulas[row + gx + lim] === 0 && bloqueadoExtra(px, pz)) {
         celulas[row + gx + lim] = 1
       }
     }
@@ -185,12 +191,14 @@ function segmentoLivre(
   bloqueios: readonly Bloqueio[],
   custoExtra?: (x: number, z: number) => number,
   grade?: GradeBloqueios,
+  bloqueadoExtra?: (x: number, z: number) => boolean,
 ): boolean {
   for (let t = 0; t <= 8; t++) {
     const p = t / 8
     const x = a.x + (b.x - a.x) * p
     const z = a.z + (b.z - a.z) * p
     if (!livre(Math.round(x / PARTIDA.celula), Math.round(z / PARTIDA.celula), bloqueios, grade)) return false
+    if (bloqueadoExtra && bloqueadoExtra(x, z)) return false
     if (custoExtra && custoExtra(x, z) > 1.01) return false
   }
   return true
@@ -220,6 +228,7 @@ function reconstruir(
   bloqueios: readonly Bloqueio[],
   custoExtra?: (x: number, z: number) => number,
   grade?: GradeBloqueios,
+  bloqueadoExtra?: (x: number, z: number) => boolean,
 ): Marco[] {
   const bruto: [number, number][] = []
   let atual: string | undefined = fim
@@ -249,7 +258,7 @@ function reconstruir(
   const origem = centro(inicioGx, inicioGz)
   const pontos = [origem, ...liso]
   for (let i = 1; i < pontos.length; i++) {
-    if (!segmentoLivre(pontos[i - 1], pontos[i], bloqueios, custoExtra, grade)) return cheio
+    if (!segmentoLivre(pontos[i - 1], pontos[i], bloqueios, custoExtra, grade, bloqueadoExtra)) return cheio
   }
   return liso
 }
@@ -261,14 +270,17 @@ export function encontrarCaminho(
   alvoZ: number,
   bloqueios: readonly Bloqueio[],
   custoExtra?: (x: number, z: number) => number,
+  bloqueadoExtra?: (x: number, z: number) => boolean,
 ): Marco[] | null {
   if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(alvoX) || !Number.isFinite(alvoZ)) {
     return null
   }
-  if ((bloqueios.length === 0 && !custoExtra) || PARTIDA.caminho === 'reto') return [limitaAlvo({ x: alvoX, z: alvoZ })]
+  if ((bloqueios.length === 0 && !custoExtra && !bloqueadoExtra) || PARTIDA.caminho === 'reto') {
+    return [limitaAlvo({ x: alvoX, z: alvoZ })]
+  }
 
   contagemBuscas += 1
-  const grade = construirGradeBloqueios(bloqueios)
+  const grade = construirGradeBloqueios(bloqueios, bloqueadoExtra)
   const celula = PARTIDA.celula
   let sgx = Math.round(x / celula)
   let sgz = Math.round(z / celula)
@@ -299,7 +311,7 @@ export function encontrarCaminho(
     const ck = chave(atual.gx, atual.gz)
     if (ck === fim) {
       visitasUltima = visitas
-      return reconstruir(veio, ck, sgx, sgz, bloqueios, custoExtra, grade)
+      return reconstruir(veio, ck, sgx, sgz, bloqueios, custoExtra, grade, bloqueadoExtra)
     }
     if (fechado.has(ck)) continue
     fechado.add(ck)

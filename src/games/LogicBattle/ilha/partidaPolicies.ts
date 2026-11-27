@@ -365,8 +365,9 @@ export const PARTIDA = {
   ambienteIbl: true as boolean,
   // RELEVO (relevo e visual AoE, F2, 25/11/2026): o terreno de morros, vales e lagoas em bacia. `visual` liga o desenho SÓ (o chão, as obras, os props, as tropas, a câmera e o clique seguem o
   // terreno); a SIMULAÇÃO continua plana (o herói e as tropas ainda atravessam o morro: as regras do relevo são a F3, com «ok» separado do usuário). Ligada em 27/11/2026 por pedido do usuário.
-  // A ÁGUA (relevo e visual AoE, F2, 26/11/2026): `agua` liga os RIOS (valetas escavadas com água dentro, só desenho). Ligada em 27/11/2026. O rio NÃO entra em `state.lagoas`: não desacelera nem muda o caminho (vadear a 0,55× e os lagos nas bordas são a F3, com «ok» separado).
-  relevo: { visual: true as boolean, agua: true as boolean },
+  // A ÁGUA (relevo e visual AoE, F2, 26/11/2026): `agua` liga os RIOS (valetas escavadas com água dentro, só desenho). Ligada em 27/11/2026.
+  // AS REGRAS DO RELEVO (F3, 27/11/2026, «ok» separado do usuário): `regras` liga bloqueio por penhasco (declMaxAndar), A* por declive e rio, plataformas em obras, linha de visão na névoa/combate, dano ±25% e alcance ±0,5 m/m. Desligada = plano I1.
+  relevo: { visual: true as boolean, agua: true as boolean, regras: true as boolean },
   // EFEITOS DE AMBIENTE E RESPOSTAS (relevo e visual AoE, F4/F5, 27/11/2026): nuvens FBM, partículas por bioma, bando de pássaros, vento em árvores/grama, tochas HDR nas obras e respostas visuais do mundo (F5).
   // Só visual (não toca em `partidaSim.ts`). O Leve, o subsolo e `prefers-reduced-motion` desligam ou congelam os efeitos automaticamente.
   efeitos: {

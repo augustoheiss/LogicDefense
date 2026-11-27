@@ -912,6 +912,19 @@ function Cena(props: {
         setCampoDoRelevo(campoAgora)
       }
     }
+    if (PARTIDA.relevo.regras && ultimoCampoDoRelevo.current) {
+      const simAtual = props.sim.current
+      if (
+        !simAtual.campoRelevo ||
+        simAtual.campoRelevo.i !== ultimoCampoDoRelevo.current.i ||
+        simAtual.campoRelevo.j !== ultimoCampoDoRelevo.current.j ||
+        simAtual.campoRelevo.versao < ultimoCampoDoRelevo.current.versao
+      ) {
+        simAtual.campoRelevo = ultimoCampoDoRelevo.current
+      }
+      simAtual.mapaI = props.atlas.current.cenaI
+      simAtual.mapaJ = props.atlas.current.cenaJ
+    }
     props.atlas.current = escreverCena(props.atlas.current, props.sim.current)
     props.atlas.current = stepAtlas(
       props.atlas.current,
@@ -928,6 +941,22 @@ function Cena(props: {
       dt * 1000,
     )
     props.sim.current = estadoCena(props.atlas.current)
+    if (
+      PARTIDA.relevo.visual &&
+      PARTIDA.relevo.regras &&
+      props.sim.current.campoRelevo &&
+      ultimoCampoDoRelevo.current &&
+      relevoDoMundo.current
+    ) {
+      const campoSim = props.sim.current.campoRelevo
+      if (
+        campoSim.i === ultimoCampoDoRelevo.current.i &&
+        campoSim.j === ultimoCampoDoRelevo.current.j &&
+        campoSim.versao > ultimoCampoDoRelevo.current.versao
+      ) {
+        relevoDoMundo.current.atualizarCampo(campoSim)
+      }
+    }
     const state = props.sim.current
     const olharDesenho = state.posse ? state.posse.modo : state.semCorpo ? 'imperio' : state.olhar
     // O RELEVO NO ATOR (F2, Task 5 + 7): o campo vem da REF `ultimoCampoDoRelevo`, escrita SÓ no bloco da chave acima. Com a chave desligada ela é `undefined` e todo desnível abaixo é +0 exato (I1).
